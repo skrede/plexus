@@ -16,6 +16,8 @@
 #include "plexus/stream/datagram_socket.h"
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/pump.h"
+
 #include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
@@ -45,17 +47,7 @@ inline plexus::node_options make_opts()
     return opts;
 }
 
-template<typename Pred>
-inline void pump_until(::asio::io_context &io, Pred pred)
-{
-    const auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
+inline constexpr std::chrono::seconds k_pump_bound{3};
 
 // A wiring datagram_socket: send_multicast posts each payload onto the io_context as an inbound
 // delivery to its paired peer's on_datagram, with a synthesized loopback source endpoint. It

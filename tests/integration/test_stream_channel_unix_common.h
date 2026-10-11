@@ -28,6 +28,7 @@
 #include "plexus/wire/frame_codec.h"
 #include "plexus/stream/stream_inbound.h"
 
+#include "plexus/testing/pump.h"
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -121,9 +122,7 @@ struct loopback
     template<typename Pred>
     void pump_until(Pred pred)
     {
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-            io.poll();
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(5));
     }
 
     void write_raw(std::span<const std::byte> bytes)

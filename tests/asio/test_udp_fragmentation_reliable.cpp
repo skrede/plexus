@@ -119,12 +119,12 @@ TEST_CASE("udp fragment reliable: a large payload reassembles byte-equal with a 
                     accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         relay link{io, server.port()};
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
         REQUIRE(dialed->mode() == plexus::datagram::detail::udp_channel_mode::reliable_datagram);
@@ -138,7 +138,7 @@ TEST_CASE("udp fragment reliable: a large payload reassembles byte-equal with a 
         REQUIRE(payload.size() + wire::udp_envelope_overhead + 1 > budget); // genuinely oversize
         dialed->send(payload);
 
-        pump_until(io, [&] { return !got.empty(); });
+        plexus::testing::pump_until(io, [&] { return !got.empty(); }, k_pump_bound);
         REQUIRE(got.size() == 1);                   // ONE reassembled message
         REQUIRE(equal_bytes(got.front(), payload)); // byte-equal over loss
         REQUIRE(link.data_seen >= 4);               // genuinely lossy (>=1 retransmit)

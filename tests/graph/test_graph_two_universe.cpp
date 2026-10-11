@@ -15,6 +15,7 @@
 #include "plexus/graph/topic_record.h"
 #include "plexus/graph/participant_record.h"
 
+#include "plexus/testing/pump.h"
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -79,19 +80,6 @@ discovery_options universe_opts(std::string_view label, std::string group)
     return opts;
 }
 
-template<typename Pred>
-bool pump_until(::asio::io_context &io, Pred pred, std::chrono::milliseconds bound)
-{
-    const auto deadline = std::chrono::steady_clock::now() + bound;
-    while(!pred() && std::chrono::steady_clock::now() < deadline)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-    return pred();
-}
-
 bool snapshot_sees(asio_node &node, const plexus::node_id &id)
 {
     std::array<plexus::graph::participant_record, 16> buffer{};
@@ -150,7 +138,7 @@ TEST_CASE("two_universe: a foreign-universe peer and its topic stay out of enume
 
     // Positive control, participant leg: if the same-universe pair never rendezvous the host has no
     // usable multicast loopback, so every exclusion below would be a dead socket, not the compare.
-    const bool participant_control = pump_until(io, [&] { return snapshot_sees(a1, id_a2) && snapshot_sees(a2, id_a1); }, k_bound);
+    const bool participant_control = plexus::testing::pump_until(io, [&] { return snapshot_sees(a1, id_a2) && snapshot_sees(a2, id_a1); }, k_bound);
     if(!participant_control)
         SKIP("multicast loopback unavailable on this host: the same-universe participant control reached no awareness within the bound");
 
@@ -158,13 +146,13 @@ TEST_CASE("two_universe: a foreign-universe peer and its topic stay out of enume
     // over the dialed session into a1's by-node view. This proves cross-node topic propagation is live,
     // so the foreign topic's absence below is the universe compare, not an inert propagation path.
     const std::byte payload[1]{std::byte{0x7}};
-    const bool topic_control = pump_until(io, [&] { pub_control.publish(std::span<const std::byte>{payload, 1}); return published_count(a1, id_a2) >= 1; }, k_bound);
+    const bool topic_control = plexus::testing::pump_until(io, [&] { pub_control.publish(std::span<const std::byte>{payload, 1}); return published_count(a1, id_a2) >= 1; }, k_bound);
     if(!topic_control)
         SKIP("cross-node topic propagation unavailable on this host: a2's publisher edge reached no snapshot within the bound");
 
     // Give the beta node several announce periods on the shared base group; its datagrams ARE delivered
     // on-host and only the inbound universe compare keeps it — and any topic hanging off it — out.
-    pump_until(io, [] { return false; }, k_settle);
+    plexus::testing::pump_until(io, [] { return false; }, k_settle);
 
     // Participant leg.
     REQUIRE(snapshot_sees(a1, id_a2));

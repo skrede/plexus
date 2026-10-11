@@ -16,6 +16,8 @@
 
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -68,17 +70,5 @@ enum class action
     pass,
     drop
 };
-
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
 
 } // namespace udp_reliable_datagram_fixture

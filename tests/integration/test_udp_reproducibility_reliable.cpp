@@ -23,12 +23,12 @@ TEST_CASE("integration udp reproducibility: reliable-ARQ delivers in order over 
                     accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
         relay link{io, server.port()};
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
 
         // Drop the 2nd and 4th segments once each: the ARQ must retransmit and the
@@ -42,7 +42,7 @@ TEST_CASE("integration udp reproducibility: reliable-ARQ delivers in order over 
             sent.push_back(p);
             dialed->send(bytes_of(p)); // reliable mode: send() drives the ARQ
         }
-        pump_until(io, [&] { return delivered.size() == 5; });
+        plexus::testing::pump_until(io, [&] { return delivered.size() == 5; });
         REQUIRE(delivered == sent); // in order, complete, over loss — every iteration
         ++proven;
     }

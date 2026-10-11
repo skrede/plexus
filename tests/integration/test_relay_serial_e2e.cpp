@@ -78,7 +78,7 @@ TEST_CASE("a relay lifts a serial-attached origin's real-wire declaration into a
         origin_messages.declare("sensor/temp", plexus::topic_qos{}, std::optional<std::uint64_t>{42}, false, "Temp");
         origin.start();
         relay.start();
-        pump_until(io, [&] { return origin.is_complete() && relay.is_complete() && folded; });
+        plexus::testing::pump_until(io, [&] { return origin.is_complete() && relay.is_complete() && folded; }, k_pump_bound);
         REQUIRE(origin.is_complete());
         REQUIRE(relay.is_complete());
         REQUIRE(folded);
@@ -102,7 +102,7 @@ TEST_CASE("a relay lifts a serial-attached origin's real-wire declaration into a
         std::optional<std::vector<std::byte>> withdrawn;
         relay.on_transport_drop([&] { emitter.withdraw(origin_id, [&](const wire::peer_report &pr) { withdrawn = wire::encode_peer_report(pr); }); });
         origin_ctx.channel->close();
-        pump_until(io, [&] { return withdrawn.has_value(); });
+        plexus::testing::pump_until(io, [&] { return withdrawn.has_value(); }, k_pump_bound);
         REQUIRE(withdrawn.has_value());
         const auto retired = wire::decode_peer_report(*withdrawn);
         REQUIRE(retired.has_value());

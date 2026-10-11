@@ -24,6 +24,8 @@
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -72,18 +74,6 @@ inline std::string str_of(std::span<const std::byte> b)
     return s;
 }
 
-template<typename Pred>
-inline void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
-
 // A listen+dial best_effort pair on one io_context (handshake established).
 struct pair_fixture
 {
@@ -103,11 +93,11 @@ struct pair_fixture
                     accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [this] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [this] { return server.port() != 0; });
 
         client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [this] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [this] { return dialed && accepted; });
     }
 };
 

@@ -28,7 +28,7 @@ TEST_CASE("udp burst: N best_effort datagrams queued in one turn each arrive int
             h.dialed->send(bytes_of(p)); // queued; the scratch is reused on the next iteration
         }
 
-        pump_until(h.io, [&] { return h.received.size() == sent.size(); });
+        plexus::testing::pump_until(h.io, [&] { return h.received.size() == sent.size(); });
         REQUIRE(h.received == sent); // each distinct payload, intact, in publish order
         ++proven;
     }
@@ -55,7 +55,7 @@ TEST_CASE("udp burst: two channels over one server each send in the same turn wi
         std::vector<std::string> dialer_seen; // every payload the two dialers receive
         server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted.push_back(std::move(ch)); });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
         const std::string ep = "udp", host = "127.0.0.1:" + std::to_string(server.port());
         client_a.on_dialed(
@@ -72,7 +72,7 @@ TEST_CASE("udp burst: two channels over one server each send in the same turn wi
                 });
         client_a.dial({ep, host});
         client_b.dial({ep, host});
-        pump_until(io, [&] { return accepted.size() == 2 && dia_a && dia_b; });
+        plexus::testing::pump_until(io, [&] { return accepted.size() == 2 && dia_a && dia_b; });
         REQUIRE(accepted.size() == 2);
 
         // The two accepted channels (sharing the listening server's ONE outbound socket)
@@ -84,7 +84,7 @@ TEST_CASE("udp burst: two channels over one server each send in the same turn wi
         accepted[0]->send(bytes_of(pa));
         accepted[1]->send(bytes_of(pb));
 
-        pump_until(io, [&] { return dialer_seen.size() == 2; });
+        plexus::testing::pump_until(io, [&] { return dialer_seen.size() == 2; });
         // Both payloads arrive intact across the two dialers — neither overwritten by the
         // other's in-flight datagram (order across peers is not guaranteed; the SET is).
         std::sort(dialer_seen.begin(), dialer_seen.end());

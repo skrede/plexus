@@ -32,6 +32,8 @@
 
 #include "plexus/policy.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -128,17 +130,11 @@ inline std::uint16_t reserve_closed_port()
     return port;
 }
 
-template<typename Pred>
-inline void pump_until(::asio::io_context &io, Pred pred)
-{
-    // A GENEROUS wall-clock backstop, not a tight deadline: the happy path exits the
-    // instant the predicate holds, so a wide bound only keeps a contended host from
-    // slipping the clock before the (completed-anyway) work is observed; a real
-    // regression still fails on the predicate never coming true.
-    auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-        io.poll();
-}
+// A GENEROUS wall-clock backstop, not a tight deadline: the happy path exits the
+// instant the predicate holds, so a wide bound only keeps a contended host from
+// slipping the clock before the (completed-anyway) work is observed; a real
+// regression still fails on the predicate never coming true.
+inline constexpr std::chrono::seconds k_pump_bound{30};
 
 inline void settle(::asio::io_context &io, std::chrono::milliseconds window = std::chrono::milliseconds(30))
 {

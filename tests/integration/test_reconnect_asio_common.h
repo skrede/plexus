@@ -29,6 +29,8 @@
 
 #include "plexus/policy.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -152,9 +154,7 @@ struct tcp_reconnect
     template<typename Pred>
     void pump_until(Pred pred)
     {
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-            io.poll();
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(5));
     }
 
     void settle(std::chrono::milliseconds window = std::chrono::milliseconds(50))

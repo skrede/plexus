@@ -52,7 +52,7 @@ TEST_CASE("default_discovery_sweep announce period/jitter empirical grid", "[.sw
 
             // Drain a's immediate emit + self-echo so the late joiner b MISSES it and must wait
             // out a's next re-announce — isolating the period/jitter cadence cost.
-            pump_until(io, [] { return false; }, std::chrono::milliseconds{60});
+            plexus::testing::pump_until(io, [] { return false; }, std::chrono::milliseconds{60});
 
             const auto t0 = std::chrono::steady_clock::now();
             pasio::default_discovery disc_b{io, snd};
@@ -60,7 +60,7 @@ TEST_CASE("default_discovery_sweep announce period/jitter empirical grid", "[.sw
             asio_node b{io, disc_b.discovery(), make_id(0xB2), tp_b, make_opts()};
             b.listen({"tcp", "127.0.0.1:" + std::to_string(port_a + 1)});
 
-            const bool aware = pump_until(io, [&] { return b.router().known().contains(make_id(0xA1)); }, std::chrono::seconds(10));
+            const bool aware = plexus::testing::pump_until(io, [&] { return b.router().known().contains(make_id(0xA1)); }, std::chrono::seconds(10));
             if(!aware && run == 0 && &g == &grid.front())
                 SKIP("multicast loopback unavailable on this host");
             REQUIRE(aware);
@@ -89,7 +89,7 @@ TEST_CASE("default_discovery_sweep announce period/jitter empirical grid", "[.sw
         x.listen({"tcp", "127.0.0.1:" + std::to_string(base_port + 100)});
         y.listen({"tcp", "127.0.0.1:" + std::to_string(base_port + 101)});
 
-        pump_until(io, [] { return false; }, std::chrono::milliseconds{3000});
+        plexus::testing::pump_until(io, [] { return false; }, std::chrono::milliseconds{3000});
 
         std::sort(arrivals_us.begin(), arrivals_us.end());
         constexpr std::int64_t k_collision_us = 1500;

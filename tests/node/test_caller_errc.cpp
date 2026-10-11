@@ -70,7 +70,7 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // an unbounded sleep; the budget caps it so a never-firing path is a bounded failure, not
 // a hang.
 template<typename Pred>
-bool pump_until(inproc_executor<> &ex, Pred done, std::chrono::milliseconds budget)
+bool step_until(inproc_executor<> &ex, Pred done, std::chrono::milliseconds budget)
 {
     const auto deadline = std::chrono::steady_clock::now() + budget;
     while(!done())
@@ -153,6 +153,6 @@ TEST_CASE("caller errc: a provider that never replies resolves timeout through t
                   REQUIRE_FALSE(static_cast<bool>(r));
                   err = r.error();
               });
-    REQUIRE(pump_until(ex, [&] { return err.has_value(); }, std::chrono::milliseconds(2000)));
+    REQUIRE(step_until(ex, [&] { return err.has_value(); }, std::chrono::milliseconds(2000)));
     REQUIRE(*err == plexus::call_errc::timeout);
 }

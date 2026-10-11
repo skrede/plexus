@@ -18,6 +18,8 @@
 
 #include "plexus/datagram/detail/udp_reliable_arq.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -150,22 +152,12 @@ cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs
                 accepted->on_data([&](std::span<const std::byte> b) { got.push_back(static_cast<int>(b.size())); });
             });
     server.listen({"udp", "127.0.0.1:0"});
-    auto pump = [&](auto pred, ms budget)
-    {
-        auto bound = std::chrono::steady_clock::now() + budget;
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-        {
-            io.poll();
-            if(io.stopped())
-                io.restart();
-        }
-    };
-    pump([&] { return server.port() != 0; }, ms{1000});
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; }, ms{1000});
 
     prob_relay relay{io, server.port(), loss, seed};
     client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &) { dialed = std::move(ch); });
     client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
-    pump([&] { return dialed && accepted; }, ms{2000});
+    plexus::testing::pump_until(io, [&] { return dialed && accepted; }, ms{2000});
     if(!dialed || !accepted)
         return {};
 
@@ -176,9 +168,9 @@ cell_result run_cell(double loss, std::size_t window, ms initial_rto, int n_msgs
         if(dialed->send_reliable(payload_of(submitted)) == pasio::udp_channel::submit_result::admitted)
             ++submitted;
         else
-            pump([&] { return false; }, ms{5}); // let acks slide the window, then retry
+            plexus::testing::pump_until(io, [&] { return false; }, ms{5}); // let acks slide the window, then retry
     }
-    pump([&] { return static_cast<int>(got.size()) >= n_msgs; }, ms{8000});
+    plexus::testing::pump_until(io, [&] { return static_cast<int>(got.size()) >= n_msgs; }, ms{8000});
 
     return {static_cast<int>(got.size()) >= n_msgs, static_cast<int>(got.size()), relay.dropped};
 }

@@ -71,15 +71,15 @@ struct spin_loopback
                     accepted->on_data([this](std::span<const std::byte> b) { received.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until([this] { return server.port() != 0; });
+        spin_until([this] { return server.port() != 0; });
 
         client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const plexus::io::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until([this] { return dialed != nullptr && accepted != nullptr; });
+        spin_until([this] { return dialed != nullptr && accepted != nullptr; });
     }
 
     template<typename Pred>
-    void pump_until(Pred pred)
+    void spin_until(Pred pred)
     {
         auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
         while(!pred() && std::chrono::steady_clock::now() < bound)
@@ -101,7 +101,7 @@ void round_trips_at(std::uint32_t spin_budget)
         auto frame                = bytes_of(payload);
         h.dialed->send(frame);
 
-        h.pump_until([&] { return !h.received.empty(); });
+        h.spin_until([&] { return !h.received.empty(); });
         REQUIRE(h.received.size() == 1);
         REQUIRE(h.received.front() == payload);
         ++proven;

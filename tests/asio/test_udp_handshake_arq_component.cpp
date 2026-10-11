@@ -20,14 +20,14 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
 
         arq.start(); // transmit #1 fires immediately
         REQUIRE(transmits == 1);
-        pump_until(io, [&] { return transmits >= 2; }); // the 20ms timer fires transmit #2
+        plexus::testing::pump_until(io, [&] { return transmits >= 2; }, k_pump_bound); // the 20ms timer fires transmit #2
         REQUIRE(transmits >= 2);
 
         arq.on_paired_frame(); // the response arrives
         REQUIRE(established);
         int at_pairing = transmits;
-        pump_until(io, [&] { return false; }, ms{120}); // let the would-be ladder elapse
-        REQUIRE(transmits == at_pairing);               // no further transmit after resolution
+        plexus::testing::pump_until(io, [&] { return false; }, ms{120}); // let the would-be ladder elapse
+        REQUIRE(transmits == at_pairing);                                // no further transmit after resolution
         REQUIRE_FALSE(timed_out);
     }
 
@@ -42,7 +42,7 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
         arq.on_timeout([&] { timed_out = true; });
 
         arq.start();
-        pump_until(io, [&] { return timed_out; });
+        plexus::testing::pump_until(io, [&] { return timed_out; }, k_pump_bound);
         REQUIRE(timed_out);
         REQUIRE(transmits == 3); // the three ladder attempts, then surrender
     }

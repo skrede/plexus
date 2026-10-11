@@ -146,12 +146,12 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
                                                                        // this assertion
             });
     server.listen({"udp", "127.0.0.1:0"});
-    pump_until(io, [&] { return server.port() != 0; });
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
     fragment_observer obs{io, server.port()};
     client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
     client.dial({"udp", "127.0.0.1:" + std::to_string(obs.port())}); // best-effort: fragments are wire-visible
-    pump_until(io, [&] { return dialed && accepted; });
+    plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
     REQUIRE(dialed != nullptr);
     REQUIRE(accepted != nullptr);
 
@@ -159,9 +159,9 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
     auto first  = make_payload(payload, 0x11);
     auto second = make_payload(payload, 0x22);
     dialed->send(first);
-    pump_until(io, [&] { return obs.msg_ids.size() >= 1; }, ms{4000});
+    plexus::testing::pump_until(io, [&] { return obs.msg_ids.size() >= 1; }, ms{4000});
     dialed->send(second);
-    pump_until(io, [&] { return obs.msg_ids.size() >= 2; }, ms{4000});
+    plexus::testing::pump_until(io, [&] { return obs.msg_ids.size() >= 2; }, ms{4000});
 
     REQUIRE(obs.max_frag_cnt > 0xFFFFu); // a single message's fragment count exceeds uint16
     REQUIRE(obs.msg_ids.size() == 2);    // exactly one msg_id per message

@@ -115,12 +115,12 @@ TEST_CASE("udp burst: a reliable retransmit interleaved with fresh sends deliver
                     accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
         relay link{io, server.port()};
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
 
         // Drop the 1st segment once: its RTO-driven retransmit then races the fresh sends
@@ -136,7 +136,7 @@ TEST_CASE("udp burst: a reliable retransmit interleaved with fresh sends deliver
             sent.push_back(p);
             dialed->send(bytes_of(p)); // reliable mode: a burst of submits in one turn
         }
-        pump_until(io, [&] { return delivered.size() == sent.size(); });
+        plexus::testing::pump_until(io, [&] { return delivered.size() == sent.size(); });
         REQUIRE(delivered == sent); // in order, complete, retransmit-interleaved
         ++proven;
     }

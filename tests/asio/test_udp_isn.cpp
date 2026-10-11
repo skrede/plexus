@@ -61,11 +61,11 @@ TEST_CASE("udp isn: a normal udpr session round-trips with a non-zero negotiated
                     accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
@@ -76,7 +76,7 @@ TEST_CASE("udp isn: a normal udpr session round-trips with a non-zero negotiated
             sent.push_back(p);
             dialed->send(bytes_of(p));
         }
-        pump_until(io, [&] { return delivered.size() == 4; });
+        plexus::testing::pump_until(io, [&] { return delivered.size() == 4; });
 
         REQUIRE(delivered == sent); // in-order, exactly once, with a non-zero ISN
         ++proven;

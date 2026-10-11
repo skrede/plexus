@@ -15,6 +15,8 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/security/peer_cred_policy.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -67,13 +69,7 @@ struct temp_dir
     return st.st_mode & 07777;
 }
 
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred)
-{
-    auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-        io.poll();
-}
+constexpr std::chrono::seconds k_pump_bound{5};
 
 // A peer-credential policy that refuses every local peer (the restrictive end of the seam).
 struct deny_all_peer_cred final : public pio::security::peer_cred_policy
@@ -97,7 +93,7 @@ TEST_CASE("unix_permissions: the socket file is created owner-only 0700 by defau
     pasio::unix_listener listener{io};
     listener.start(pio::endpoint{"unix", t.path});
 
-    pump_until(io, [&] { return mode_of(t.path) != 0; });
+    plexus::testing::pump_until(io, [&] { return mode_of(t.path) != 0; }, k_pump_bound);
     REQUIRE((mode_of(t.path) & 0777) == 0700); // owner-only fail-closed default
 }
 
@@ -111,7 +107,7 @@ TEST_CASE("unix_permissions: a widened socket mode is honored", "[integration][u
     pasio::unix_listener listener{io, {}, widened};
     listener.start(pio::endpoint{"unix", t.path});
 
-    pump_until(io, [&] { return mode_of(t.path) != 0; });
+    plexus::testing::pump_until(io, [&] { return mode_of(t.path) != 0; }, k_pump_bound);
     REQUIRE((mode_of(t.path) & 0777) == widened);
 }
 
@@ -126,7 +122,7 @@ TEST_CASE("unix_permissions: the unlink-before-bind window is closed under a res
     ::asio::io_context io;
     pasio::unix_listener listener{io};
     listener.start(pio::endpoint{"unix", t.path});
-    pump_until(io, [&] { return mode_of(t.path) != 0; });
+    plexus::testing::pump_until(io, [&] { return mode_of(t.path) != 0; }, k_pump_bound);
     (void)::umask(prev);
 
     REQUIRE((mode_of(t.path) & 0777) == 0700); // never widened by the permissive umask
@@ -150,7 +146,7 @@ TEST_CASE("unix_permissions: accept_any admits a local peer while a deny-all pol
 
         ::asio::local::stream_protocol::socket client{io};
         client.connect(::asio::local::stream_protocol::endpoint(t.path));
-        pump_until(io, [&] { return accepted > 0; });
+        plexus::testing::pump_until(io, [&] { return accepted > 0; }, k_pump_bound);
         REQUIRE(accepted == 1);
     }
 

@@ -47,7 +47,7 @@ namespace graph = plexus::graph;
 using plexus::node_id;
 using serial_fixture::pty_pair;
 using serial_fixture::adopt_channel;
-using serial_fixture::pump_until;
+using serial_fixture::k_pump_bound;
 
 using origin_node   = plexus::node<pasio::serial_policy, pasio::serial_transport>;
 using relay_node    = plexus::node<plexus::relay<pasio::asio_policy>, pasio::serial_transport, pasio::asio_transport>;
@@ -179,7 +179,7 @@ struct cold_cluster
     template<typename Pred>
     void pump(Pred pred)
     {
-        pump_until(io, pred);
+        plexus::testing::pump_until(io, pred, k_pump_bound);
     }
 
     // Session A: the relay dials the slave by its ptsname (the slave is the only path-addressable end),
@@ -315,7 +315,7 @@ struct dualhome_cluster
     template<typename Pred>
     void pump(Pred pred)
     {
-        pump_until(io, pred);
+        plexus::testing::pump_until(io, pred, k_pump_bound);
     }
 
     // The relay dials the origin and lifts it, replaying its report onto any consumer session.

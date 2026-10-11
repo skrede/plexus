@@ -43,7 +43,7 @@ TEST_CASE("serial channel: a framed message round-trips over an openpty pair, lo
         const auto frame = make_data_frame(payload, /*session_id=*/1);
         tx->send(frame);
 
-        pump_until(io, [&] { return received.has_value(); });
+        plexus::testing::pump_until(io, [&] { return received.has_value(); }, k_pump_bound);
 
         REQUIRE(received.has_value());
         REQUIRE(*received == payload); // the exact opaque bytes, every iteration
@@ -89,7 +89,7 @@ TEST_CASE("serial channel: a peer_session pair completes the point-at-port hands
         requester.start();
         responder.start();
 
-        pump_until(io, [&] { return requester.is_complete() && responder.is_complete(); });
+        plexus::testing::pump_until(io, [&] { return requester.is_complete() && responder.is_complete(); }, k_pump_bound);
 
         REQUIRE(requester.is_complete());
         REQUIRE(responder.is_complete());

@@ -17,6 +17,8 @@
 
 #include "plexus/discovery/static_discovery.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -67,20 +69,8 @@ std::string to_string(std::span<const std::byte> b)
     return std::string{reinterpret_cast<const char *>(b.data()), b.size()};
 }
 
-// Step the executor until `done` holds or a bounded step budget is spent. The inproc
-// executor is deterministic (no wall-clock dependence in this gate — there is no pending
-// timer), so the budget is a step count: a converged scenario exits the instant the
-// predicate holds, and a regression fails on the bound rather than hanging. step() is
-// called BEFORE the predicate re-check so a one-step settle (e.g. flushing a posted fan)
-// makes real progress rather than returning on the initial state.
-template<typename Pred>
-bool pump_until(inproc_executor<> &ex, Pred done, int step_budget = 100000)
-{
-    for(int i = 0; i < step_budget && !done(); ++i)
-        if(!ex.step() && !done())
-            return false;
-    return done();
-}
+// The inproc executor here is deterministic (no pending timer), so the bound is a step count rather than wall time.
+constexpr std::int32_t k_step_budget = 100000;
 
 }
 
@@ -126,14 +116,14 @@ TEST_CASE("late join: a publisher that joins after the subscriber's standing dem
         // re-dials it and the standing demand re-fans with zero user action on join timing.
         inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
         b.listen({"inproc", "host-b:6000"});
-        REQUIRE(pump_until(ex, [&] { return a.router().is_connected(id_b); }));
+        REQUIRE(plexus::testing::pump_steps_until(ex, [&] { return a.router().is_connected(id_b); }, k_step_budget));
 
         inproc_publisher p{b, "topic"};
         ex.drain();
 
         const std::string payload = "late-pub-" + std::to_string(iter);
         p.publish(as_bytes(payload));
-        REQUIRE(pump_until(ex, [&] { return !got.empty(); }));
+        REQUIRE(plexus::testing::pump_steps_until(ex, [&] { return !got.empty(); }, k_step_budget));
 
         REQUIRE(got.size() == 1);
         REQUIRE(got.front() == payload);
@@ -175,14 +165,14 @@ TEST_CASE("late join: a subscriber that joins after the publisher is already pre
         std::vector<std::string> got;
         inproc_subscriber s{a, "topic", [&](std::span<const std::byte> b) { got.push_back(to_string(b)); }};
         a.listen({"inproc", "host-a:5000"});
-        REQUIRE(pump_until(ex, [&] { return a.router().is_connected(id_b); }));
+        REQUIRE(plexus::testing::pump_steps_until(ex, [&] { return a.router().is_connected(id_b); }, k_step_budget));
         // Let A's standing subscribe demand round-trip to B and register the fanout before
         // the publish — the connection being up precedes the wire-subscribe arriving.
         ex.drain();
 
         const std::string payload = "late-sub-" + std::to_string(iter);
         p.publish(as_bytes(payload));
-        REQUIRE(pump_until(ex, [&] { return !got.empty(); }));
+        REQUIRE(plexus::testing::pump_steps_until(ex, [&] { return !got.empty(); }, k_step_budget));
 
         REQUIRE(got.size() == 1);
         REQUIRE(got.front() == payload);

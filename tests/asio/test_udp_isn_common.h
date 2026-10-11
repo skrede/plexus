@@ -16,6 +16,8 @@
 
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -63,18 +65,6 @@ inline std::string str_of(std::span<const std::byte> b)
     for(std::size_t i = 0; i < b.size(); ++i)
         s[i] = static_cast<char>(std::to_integer<unsigned char>(b[i]));
     return s;
-}
-
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
 }
 
 } // namespace udp_isn_fixture

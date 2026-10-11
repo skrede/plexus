@@ -86,18 +86,18 @@ large_result roundtrip_large(std::size_t budget, std::size_t payload_size, std::
                     accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
         auto payload  = make_payload(payload_size, static_cast<std::uint8_t>(iter));
         const auto t0 = clock::now();
         dialed->send(payload);
-        pump_until(io, [&] { return !got.empty(); }, ms{55000});
+        plexus::testing::pump_until(io, [&] { return !got.empty(); }, ms{55000});
         last_wall = std::chrono::duration_cast<std::chrono::milliseconds>(clock::now() - t0);
 
         REQUIRE(got.size() == 1);

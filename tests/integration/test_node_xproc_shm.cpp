@@ -20,6 +20,7 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/topic_qos.h"
 
+#include "plexus/testing/pump.h"
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -214,17 +215,7 @@ bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std
     return false;
 }
 
-// Pump until the predicate holds or the wall-clock backstop expires.
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, std::chrono::seconds bound)
-{
-    const auto deadline = std::chrono::steady_clock::now() + bound;
-    while(!pred() && std::chrono::steady_clock::now() < deadline)
-        io.poll();
-}
-
-// Reap one child, retrying ONLY on EINTR (a non-EINTR waitpid failure — ECHILD, an invalid
-// pid — exits rather than spinning forever, the no-deadline hang WR-02 flagged).
+// waitpid is retried only on EINTR; any other failure (ECHILD, an invalid pid) returns -1 instead of retrying forever.
 int reap(pid_t pid)
 {
     int status = 0;
@@ -325,14 +316,14 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
                                          (void)w;
                                      }};
             node.listen({"tcp", "127.0.0.1:" + std::to_string(sub_port)});
-            pump_until(io, [&] { return node.router().is_connected(pub_id); }, std::chrono::seconds(10));
+            plexus::testing::pump_until(io, [&] { return node.router().is_connected(pub_id); }, std::chrono::seconds(10));
 
             // Once the publisher has minted the companion ring (same-host only), run the raw
             // SHM consumer to observe the fitting payload on the ring while pumping the node
             // so the wire-side over-cap message still flows.
             if(same_host)
             {
-                pump_until(io, [&] { return c->ring_ready.load(std::memory_order_acquire) != 0; }, std::chrono::seconds(10));
+                plexus::testing::pump_until(io, [&] { return c->ring_ready.load(std::memory_order_acquire) != 0; }, std::chrono::seconds(10));
                 const bool seen = ring_carries(fqn, as_bytes(small), std::chrono::seconds(10));
                 c->shm_seen.store(seen ? 1u : 0u, std::memory_order_release);
             }

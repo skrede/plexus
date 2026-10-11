@@ -29,6 +29,8 @@
 
 #include "plexus/policy.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -165,9 +167,7 @@ struct multipeer_net
         // instant the predicate holds, so a wide bound only keeps a contended host from
         // slipping the clock before the (completed-anyway) work is observed; a real
         // regression still fails on the predicate never coming true.
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-            io.poll();
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(30));
     }
 
     void settle(std::chrono::milliseconds window = std::chrono::milliseconds(30))

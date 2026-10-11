@@ -13,11 +13,11 @@ TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
     server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted = std::move(ch); });
     server.listen({"udp", "127.0.0.1:0"});
-    pump_until(io, [&] { return server.port() != 0; });
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
     client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
     client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
-    pump_until(io, [&] { return dialed && accepted; });
+    plexus::testing::pump_until(io, [&] { return dialed && accepted; });
 
     REQUIRE(dialed != nullptr);
     REQUIRE(accepted != nullptr);
@@ -38,11 +38,11 @@ TEST_CASE("udp reliable_datagram: a 'udp' dial stays best_effort (the opt-in is 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
     server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted = std::move(ch); });
     server.listen({"udp", "127.0.0.1:0"});
-    pump_until(io, [&] { return server.port() != 0; });
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
     client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
     client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-    pump_until(io, [&] { return dialed && accepted; });
+    plexus::testing::pump_until(io, [&] { return dialed && accepted; });
 
     REQUIRE(dialed != nullptr);
     REQUIRE(accepted != nullptr);
@@ -68,7 +68,7 @@ TEST_CASE("udp reliable_datagram: a message beyond the max-message size is rejec
     std::optional<pio::io_error> dialed_error;
     server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted = std::move(ch); });
     server.listen({"udp", "127.0.0.1:0"});
-    pump_until(io, [&] { return server.port() != 0; });
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
     client.on_dialed(
             [&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &)
@@ -77,7 +77,7 @@ TEST_CASE("udp reliable_datagram: a message beyond the max-message size is rejec
                 dialed->on_error([&](pio::io_error e) { dialed_error = e; });
             });
     client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
-    pump_until(io, [&] { return dialed && accepted; });
+    plexus::testing::pump_until(io, [&] { return dialed && accepted; });
     REQUIRE(dialed != nullptr);
 
     // A payload beyond the bounded max-MESSAGE size is rejected at publish via
@@ -85,7 +85,7 @@ TEST_CASE("udp reliable_datagram: a message beyond the max-message size is rejec
     // best_effort. A merely-oversize-but-fragmentable payload is split, not rejected.
     std::vector<std::byte> too_big(pio::global_default_max_message_bytes + 1, std::byte{0x5A});
     dialed->send(too_big); // reliable-mode send dispatches to send_reliable -> oversize reject
-    pump_until(io, [&] { return dialed_error.has_value(); });
+    plexus::testing::pump_until(io, [&] { return dialed_error.has_value(); });
 
     REQUIRE(dialed_error.has_value());
     REQUIRE(*dialed_error == pio::io_error::message_too_large);

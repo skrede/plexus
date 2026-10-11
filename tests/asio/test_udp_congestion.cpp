@@ -24,6 +24,8 @@
 #include "plexus/io/congestion.h"
 #include "plexus/datagram/detail/udp_reliable_arq.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -185,18 +187,6 @@ struct relay
     }
 };
 
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
-
 // A reliable-datagram channel pair behind a programmable relay, handshake established.
 // The channel mode is reliable_datagram (its send() drives the ARQ); the congestion mode
 // and window depth are configurable so the congestion path is exercised deterministically.
@@ -221,12 +211,12 @@ struct fixture
                     accepted->on_data([this](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [this] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [this] { return server.port() != 0; });
 
         link = std::make_unique<relay>(io, server.port());
         client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link->port())}); // reliable-datagram mode
-        pump_until(io, [this] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [this] { return dialed && accepted; });
     }
 };
 
@@ -262,7 +252,7 @@ TEST_CASE("udp congestion block: a full window back-pressures and every frame ar
         // The queue must have absorbed the overrun (more than the window was published).
         REQUIRE(f.dialed->backpressured() > 0);
 
-        pump_until(f.io, [&] { return f.delivered.size() == static_cast<std::size_t>(n); });
+        plexus::testing::pump_until(f.io, [&] { return f.delivered.size() == static_cast<std::size_t>(n); });
         REQUIRE(f.delivered == sent);            // ALL arrive, in publish order
         REQUIRE(f.dialed->backpressured() == 0); // the queue fully drained
         REQUIRE(f.dialed->dropped_count() == 0); // block sheds NOTHING
@@ -296,10 +286,10 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
                     be_acc->on_data([&](std::span<const std::byte> b) { be_got = str_of(b); });
                 });
         be_server.listen({"udp", "127.0.0.1:0"});
-        pump_until(f.io, [&] { return be_server.port() != 0; });
+        plexus::testing::pump_until(f.io, [&] { return be_server.port() != 0; });
         be_client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { be_dialed = std::move(ch); });
         be_client.dial({"udp", "127.0.0.1:" + std::to_string(be_server.port())});
-        pump_until(f.io, [&] { return be_dialed && be_acc; });
+        plexus::testing::pump_until(f.io, [&] { return be_dialed && be_acc; });
         REQUIRE(be_dialed != nullptr);
 
         // Saturate the reliable window: publish many frames into a window of 1, so all but
@@ -311,12 +301,12 @@ TEST_CASE("udp congestion block does NOT stall the io_context: a concurrent flow
         // WHILE the reliable channel is saturated, the best_effort flow must complete —
         // if congestion=block had blocked the io_context, this would never be serviced.
         be_dialed->send(bytes_of("concurrent-alive"));
-        pump_until(f.io, [&] { return be_got.has_value(); });
+        plexus::testing::pump_until(f.io, [&] { return be_got.has_value(); });
         REQUIRE(be_got.has_value()); // the loop kept servicing other work
         REQUIRE(*be_got == "concurrent-alive");
 
         // And the reliable flow still completes (back-pressure delivers, never deadlocks).
-        pump_until(f.io, [&] { return f.delivered.size() == 16; });
+        plexus::testing::pump_until(f.io, [&] { return f.delivered.size() == 16; });
         REQUIRE(f.delivered.size() == 16);
         ++proven;
     }
@@ -348,8 +338,8 @@ TEST_CASE("udp congestion drop: a window-full frame is shed at the publisher", "
         // The admitted (windowed) frames still deliver; the shed ones never arrive. Give
         // the path time to settle, then assert fewer than n were delivered (the guarantee
         // was opted out of for the shed segments).
-        pump_until(f.io, [&] { return f.delivered.size() >= 2; });
-        pump_until(f.io, [&] { return false; }, ms{60});
+        plexus::testing::pump_until(f.io, [&] { return f.delivered.size() >= 2; });
+        plexus::testing::pump_until(f.io, [&] { return false; }, ms{60});
         REQUIRE(f.delivered.size() < static_cast<std::size_t>(n)); // the shed frames are gone
         REQUIRE(f.delivered.size() >= 2);                          // the windowed frames delivered
         ++proven;
@@ -454,7 +444,7 @@ TEST_CASE("udp_server send: a transient per-datagram send error is counted, neve
         for(int i = 0; i < n; ++i)
             server.send_to(oversized, dest);
 
-        pump_until(io, [&] { return server.send_error_count() == static_cast<std::size_t>(n); });
+        plexus::testing::pump_until(io, [&] { return server.send_error_count() == static_cast<std::size_t>(n); });
 
         REQUIRE(server.send_error_count() == static_cast<std::size_t>(n)); // every oversized send counted
         REQUIRE_FALSE(err.has_value());                                    // on_error NEVER fired per datagram
@@ -490,7 +480,7 @@ TEST_CASE("udp congestion block: a sustained reliable load completes within a bo
     }
 
     const auto start = std::chrono::steady_clock::now();
-    pump_until(f.io, [&] { return f.delivered.size() == static_cast<std::size_t>(n); }, ms{8000});
+    plexus::testing::pump_until(f.io, [&] { return f.delivered.size() == static_cast<std::size_t>(n); }, ms{8000});
     const auto elapsed = std::chrono::steady_clock::now() - start;
 
     REQUIRE(f.delivered.size() == static_cast<std::size_t>(n)); // every frame arrived
@@ -529,12 +519,12 @@ TEST_CASE("udp congestion block: a windowed reliable burst stays byte-bounded an
 
     // Drive the io_context: each ack advances the window and drains the byte queue by
     // re-submitting admissible parked frames, observing the occupancy stays bounded.
-    pump_until(f.io,
-               [&]
-               {
-                   peak_queued = std::max(peak_queued, f.dialed->backpressured());
-                   return f.delivered.size() == static_cast<std::size_t>(n);
-               });
+    plexus::testing::pump_until(f.io,
+                                [&]
+                                {
+                                    peak_queued = std::max(peak_queued, f.dialed->backpressured());
+                                    return f.delivered.size() == static_cast<std::size_t>(n);
+                                });
 
     REQUIRE_FALSE(err.has_value());                             // the bounded byte budget never overflowed
     REQUIRE(f.delivered.size() == static_cast<std::size_t>(n)); // FULL delivery, never partial

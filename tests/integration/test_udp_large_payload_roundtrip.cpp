@@ -26,11 +26,11 @@ int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_
                     accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({scheme, "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
@@ -38,7 +38,7 @@ int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_
         REQUIRE(payload.size() > budget); // genuinely fragmented
         dialed->send(payload);
 
-        pump_until(io, [&] { return !got.empty(); });
+        plexus::testing::pump_until(io, [&] { return !got.empty(); }, k_pump_bound);
         REQUIRE(got.size() == 1);                   // exactly ONE reassembled message
         REQUIRE(equal_bytes(got.front(), payload)); // byte-equal end-to-end
         ++proven;
@@ -132,12 +132,12 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured -
                             });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         ptest::loss_reorder_relay link{io, server.port(), loss};
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({scheme, "127.0.0.1:" + std::to_string(link.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
@@ -146,7 +146,7 @@ TEST_CASE("udp_large_payload: the injected-loss policy is recorded as measured -
 
         // Pump well past the reassembly timeout so the best-effort drop-whole verdict settles
         // and the reliable retransmits complete.
-        pump_until(io, [&] { return deliveries > 0; }, ms{8000});
+        plexus::testing::pump_until(io, [&] { return deliveries > 0; }, ms{8000});
         return std::tuple{deliveries, std::move(last), std::move(payload), link.dropped()};
     };
 

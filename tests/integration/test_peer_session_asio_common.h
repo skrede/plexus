@@ -20,6 +20,8 @@
 
 #include "plexus/wire/handshake.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -154,9 +156,7 @@ struct tcp_link
     template<typename Pred>
     void pump_until(Pred pred)
     {
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-            io.poll();
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(5));
     }
 
     // Drain the io_context for a short bounded window — used to prove the ABSENCE of

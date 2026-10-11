@@ -113,13 +113,13 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over mutual-TLS at shipped def
         server.listen({"tls", "127.0.0.1:0"});
         client.dial({"tls", "127.0.0.1:" + std::to_string(server.port())});
 
-        pump_until(io, [&] { return (accepted && dialed) || dial_failed; }, ms{8000});
+        plexus::testing::pump_until(io, [&] { return (accepted && dialed) || dial_failed; }, ms{8000});
         REQUIRE_FALSE(dial_failed);
         REQUIRE(accepted != nullptr);
         REQUIRE(dialed != nullptr);
 
         dialed->send(std::span<const std::byte>{frame});
-        pump_until(io, [&] { return got.size() == frame.size() || closed.has_value(); });
+        plexus::testing::pump_until(io, [&] { return got.size() == frame.size() || closed.has_value(); }, k_pump_bound);
         REQUIRE_FALSE(closed.has_value()); // the default receive ceiling admitted the 8 MiB frame
         REQUIRE(got.size() == frame.size());
         REQUIRE(equal_bytes(got, frame)); // byte-equal at the shipped ceiling, default caps

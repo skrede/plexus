@@ -33,6 +33,8 @@
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/frame_codec.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -166,13 +168,7 @@ inline std::unique_ptr<pasio::serial_channel> adopt_channel(::asio::io_context &
     return std::make_unique<pasio::serial_channel>(io, ::asio::serial_port{io, fd}, cfg);
 }
 
-template<typename Pred>
-inline void pump_until(::asio::io_context &io, Pred pred)
-{
-    auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-        io.poll();
-}
+inline constexpr std::chrono::seconds k_pump_bound{5};
 
 inline void settle(::asio::io_context &io, std::chrono::milliseconds window = std::chrono::milliseconds(20))
 {

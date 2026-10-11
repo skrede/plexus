@@ -120,7 +120,7 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
 
         relay.start();
         peer.start();
-        pump_until(io, [&] { return relay.is_complete() && peer.is_complete(); });
+        plexus::testing::pump_until(io, [&] { return relay.is_complete() && peer.is_complete(); }, k_pump_bound);
         REQUIRE(relay.is_complete());
         REQUIRE(peer.is_complete());
 
@@ -134,7 +134,7 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
         REQUIRE(pio::detail::channel_frame_ceiling(relay.msg_peer().channel) == k_ceiling);
 
         const bool attached = relay_messages.attach_for_fanout(serial_msg_fwd::peer{relay.msg_peer().channel, "narrow"}, "gated");
-        pump_until(io, [&] { return true; });
+        plexus::testing::pump_until(io, [&] { return true; }, k_pump_bound);
         REQUIRE(attached);
 
         pio::forward_options opts;
@@ -148,7 +148,7 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
         REQUIRE(big_inner.size() > k_ceiling);
         sp.refan(relay_messages, hash, origin, /*hop=*/1, big_inner, /*arrival=*/nullptr, nullptr);
         REQUIRE(sp.exhaustion_drops() == 0u);
-        pump_until(io, [&] { return oversize_drops > 0; });
+        plexus::testing::pump_until(io, [&] { return oversize_drops > 0; }, k_pump_bound);
 
         REQUIRE(oversize_drops == 1u);  // drop-with-count at the splice
         REQUIRE(peer_deliveries == 0u); // the oversized frame never crossed
@@ -158,7 +158,7 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
         // over a live wire, not a dead one.
         const auto small_inner = capture_inner("gated", 16);
         sp.refan(relay_messages, hash, origin, /*hop=*/2, small_inner, /*arrival=*/nullptr, nullptr);
-        pump_until(io, [&] { return peer_deliveries > 0; });
+        plexus::testing::pump_until(io, [&] { return peer_deliveries > 0; }, k_pump_bound);
 
         REQUIRE(peer_deliveries == 1u);
         REQUIRE(peer.is_complete());
@@ -178,17 +178,7 @@ std::vector<std::byte> make_payload(std::size_t n)
     return out;
 }
 
-template<typename Pred>
-void pump(::asio::io_context &io, Pred pred, ms timeout = ms{15000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
+constexpr ms k_udp_pump_bound{15000};
 
 }
 
@@ -223,7 +213,7 @@ TEST_CASE("envelope gate: a multi-fragment UDP message reassembles on the wide i
                     consumer_ch->on_data([&](std::span<const std::byte> b) { delivered.assign(b.begin(), b.end()); });
                 });
         consumer.listen({"udp", "127.0.0.1:0"});
-        pump(io, [&] { return consumer.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return consumer.port() != 0; }, k_udp_pump_bound);
 
         // The relay reassembles a whole inbound message and re-sends it on the narrower outbound leg.
         relay_in.on_accepted(
@@ -233,13 +223,13 @@ TEST_CASE("envelope gate: a multi-fragment UDP message reassembles on the wide i
                     relay_in_ch->on_data([&](std::span<const std::byte> whole) { if(relay_out_ch) relay_out_ch->send(whole); });
                 });
         relay_in.listen({"udp", "127.0.0.1:0"});
-        pump(io, [&] { return relay_in.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return relay_in.port() != 0; }, k_udp_pump_bound);
 
         relay_out.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { relay_out_ch = std::move(ch); });
         relay_out.dial({"udpr", "127.0.0.1:" + std::to_string(consumer.port())});
         origin.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { origin_ch = std::move(ch); });
         origin.dial({"udpr", "127.0.0.1:" + std::to_string(relay_in.port())});
-        pump(io, [&] { return relay_out_ch && origin_ch && relay_in_ch; });
+        plexus::testing::pump_until(io, [&] { return relay_out_ch && origin_ch && relay_in_ch; }, k_udp_pump_bound);
         REQUIRE(relay_out_ch != nullptr);
         REQUIRE(origin_ch != nullptr);
 
@@ -248,7 +238,7 @@ TEST_CASE("envelope gate: a multi-fragment UDP message reassembles on the wide i
         REQUIRE(payload.size() > budget_out); // genuinely multi-fragment (refragmented) outbound
         origin_ch->send(payload);
 
-        pump(io, [&] { return !delivered.empty(); });
+        plexus::testing::pump_until(io, [&] { return !delivered.empty(); }, k_udp_pump_bound);
         REQUIRE(delivered.size() == payload.size());
         REQUIRE(std::equal(delivered.begin(), delivered.end(), payload.begin())); // byte-for-byte through the relay
         ++proven;

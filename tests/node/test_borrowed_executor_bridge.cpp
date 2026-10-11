@@ -28,6 +28,8 @@
 
 #include "plexus/wire/rpc_status.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -99,18 +101,7 @@ std::size_t os_thread_count()
 }
 #endif
 
-template<typename Pred>
-bool pump_until(inproc_executor<> &ex, Pred done, int step_budget = 100000)
-{
-    for(int i = 0; i < step_budget; ++i)
-    {
-        if(done())
-            return true;
-        if(!ex.step())
-            return done();
-    }
-    return done();
-}
+constexpr std::int32_t k_step_budget = 100000;
 
 // The bridge host: the HOST owns and pumps the io_context-equivalent (executor + bus), the
 // discovery service, and the transports. The two embedded nodes borrow all three. Member
@@ -215,7 +206,7 @@ TEST_CASE("borrowed executor: no delivery happens until the host pumps the loop"
     pub.publish(as_bytes("held"));
     REQUIRE(got.empty());
 
-    REQUIRE(pump_until(h.ex, [&] { return !got.empty(); }));
+    REQUIRE(plexus::testing::pump_steps_until(h.ex, [&] { return !got.empty(); }, k_step_budget));
     REQUIRE(got.size() == 1);
     REQUIRE(got.front() == "held");
 }

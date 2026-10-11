@@ -25,7 +25,7 @@ TEST_CASE("routing over asio: LAZY opens no connection until a demand call, then
         // Demand: reach the known-but-unconnected peer. NOW it dials over real TCP,
         // the inbound bootstrap accepts, and the handshake completes both ends.
         a.eng.reach(id_b);
-        pump_until(io, [&] { return a.eng.is_connected(id_b); });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b); }, k_pump_bound);
         REQUIRE(a.eng.is_connected(id_b));
         REQUIRE(a.eng.session_for(id_b)->session_id() != 0);
         ++proven;
@@ -49,7 +49,7 @@ TEST_CASE("routing over asio: a demand subscribe carries a real published messag
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.subscribe(id_b, "topic");
-        pump_until(io, [&] { return a.eng.is_connected(id_b); });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b); }, k_pump_bound);
         REQUIRE(a.eng.is_connected(id_b));
 
         // A's demand subscribe closes the loop over the real path: the resurrected
@@ -73,7 +73,7 @@ TEST_CASE("routing over asio: a demand subscribe carries a real published messag
         settle(io); // drain the subscribe round-trip so B's fanout to A is wired
 
         b.eng.messages().publish("topic", as_bytes(payload), b_inbound->session_id());
-        pump_until(io, [&] { return !a_received.empty(); });
+        plexus::testing::pump_until(io, [&] { return !a_received.empty(); }, k_pump_bound);
         REQUIRE(a_received.size() == 1);
         REQUIRE(a_received.front() == payload);
         REQUIRE(a_to_b->peer_session_id() == b_inbound->session_id());
@@ -97,7 +97,7 @@ TEST_CASE("routing over asio: EAGER dials and completes off note_peer ALONE with
 
         // No reach/subscribe/call: awareness ALONE triggers the dial+handshake.
         a.eng.note_peer(id_b, b.listen_ep());
-        pump_until(io, [&] { return a.eng.is_connected(id_b); });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b); }, k_pump_bound);
         REQUIRE(a.eng.is_connected(id_b));
         REQUIRE(a.eng.session_for(id_b)->session_id() != 0);
         ++proven;

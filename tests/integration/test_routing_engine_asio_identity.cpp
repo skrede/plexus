@@ -34,7 +34,7 @@ TEST_CASE("routing over asio: one node dialing TWO peers near-simultaneously res
         // Dial BOTH near-simultaneously: two overlapping in-flight dials.
         a.eng.subscribe(id_b, "topic-b");
         a.eng.subscribe(id_c, "topic-c");
-        pump_until(io, [&] { return a.eng.is_connected(id_b) && a.eng.is_connected(id_c); });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b) && a.eng.is_connected(id_c); }, k_pump_bound);
         REQUIRE(a.eng.is_connected(id_b));
         REQUIRE(a.eng.is_connected(id_c));
 
@@ -78,7 +78,7 @@ TEST_CASE("routing over asio: one node dialing TWO peers near-simultaneously res
 
         b.eng.messages().publish("topic-b", as_bytes(from_b), b_in->session_id());
         c.eng.messages().publish("topic-c", as_bytes(from_c), c_in->session_id());
-        pump_until(io, [&] { return !a_from_b.empty() && !a_from_c.empty(); });
+        plexus::testing::pump_until(io, [&] { return !a_from_b.empty() && !a_from_c.empty(); }, k_pump_bound);
 
         // Each frame resolved to its OWN source-peer identity — no cross-attribution.
         REQUIRE(a_from_b.size() == 1);
@@ -131,13 +131,13 @@ TEST_CASE("routing over asio: a dial that completes OUT OF ORDER is correlated t
         a.eng.subscribe(id_c, "topic-c");
 
         // C completes first while B is still retrying — the out-of-order completion.
-        pump_until(io, [&] { return a.eng.is_connected(id_c); });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_c); }, k_pump_bound);
         REQUIRE(a.eng.is_connected(id_c));
         REQUIRE(!a.eng.is_connected(id_b)); // B has NOT connected yet (listener down)
 
         // Bring B's listener up on its reserved port; B's retry now succeeds.
         b.listen_on(b_port);
-        pump_until(io, [&] { return a.eng.is_connected(id_b); });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b); }, k_pump_bound);
         REQUIRE(a.eng.is_connected(id_b));
 
         auto *a_to_b = a.eng.session_for(id_b);
@@ -167,7 +167,7 @@ TEST_CASE("routing over asio: a dial that completes OUT OF ORDER is correlated t
 
         b.eng.messages().publish("topic-b", as_bytes(from_b), b_in->session_id());
         c.eng.messages().publish("topic-c", as_bytes(from_c), c_in->session_id());
-        pump_until(io, [&] { return !a_from_b.empty() && !a_from_c.empty(); });
+        plexus::testing::pump_until(io, [&] { return !a_from_b.empty() && !a_from_c.empty(); }, k_pump_bound);
 
         // No cross-attribution: B's bytes reached the B-slot and C's the C-slot, and
         // each slot latched its OWN remote epoch — even though C's channel completed

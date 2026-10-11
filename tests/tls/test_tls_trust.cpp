@@ -10,6 +10,7 @@
 
 #include "plexus/io/endpoint.h"
 
+#include "plexus/testing/pump.h"
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -172,9 +173,7 @@ struct trust_link
     template<typename Pred>
     void pump_until(Pred pred)
     {
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-            io.poll();
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(5));
     }
 
     // A bounded settle window so a rejected handshake has time to surface its

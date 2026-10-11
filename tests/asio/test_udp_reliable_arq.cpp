@@ -26,6 +26,8 @@
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -225,18 +227,6 @@ struct relay
     }
 };
 
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{6000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
-
 // A dialed/accepted channel pair behind a programmable relay, handshake already
 // established. The accepted channel records in-order reliable deliveries.
 struct fixture
@@ -261,7 +251,7 @@ struct fixture
                     accepted->on_data([this](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [this] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [this] { return server.port() != 0; });
 
         link = std::make_unique<relay>(io, server.port());
 
@@ -275,7 +265,7 @@ struct fixture
         // be reliable-mode to deliver the kind=1 ARQ segments (a best_effort channel drops
         // them — the mode, not the envelope kind alone, gates the reliable path).
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link->port())});
-        pump_until(io, [this] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [this] { return dialed && accepted; });
     }
 };
 
@@ -302,7 +292,7 @@ TEST_CASE("udp reliable_arq: a single lost data segment retransmits and delivers
             sent.push_back(p);
             REQUIRE(f.dialed->send_reliable(bytes_of(p)) == pasio::udp_channel::submit_result::admitted);
         }
-        pump_until(f.io, [&] { return f.delivered.size() == 4; });
+        plexus::testing::pump_until(f.io, [&] { return f.delivered.size() == 4; });
 
         REQUIRE(f.delivered == sent);    // exactly once, in publish order
         REQUIRE(f.link->data_seen >= 5); // 4 originals + >=1 retransmit (genuinely lossy)
@@ -333,12 +323,12 @@ TEST_CASE("udp reliable_arq: out-of-order arrival behind a gap is held then rele
             REQUIRE(f.dialed->send_reliable(bytes_of(p)) == pasio::udp_channel::submit_result::admitted);
         }
         // Let 1,2,3 arrive and be buffered (HOL: nothing delivers behind the gap at 0).
-        pump_until(f.io, [&] { return f.link->data_seen >= 4; });
-        pump_until(f.io, [&] { return false; }, ms{40});
+        plexus::testing::pump_until(f.io, [&] { return f.link->data_seen >= 4; });
+        plexus::testing::pump_until(f.io, [&] { return false; }, ms{40});
         REQUIRE(f.delivered.empty()); // HOL: gap at 0 blocks every successor
 
         f.link->release_held(); // 0 arrives (out of order)
-        pump_until(f.io, [&] { return f.delivered.size() == 4; });
+        plexus::testing::pump_until(f.io, [&] { return f.delivered.size() == 4; });
         REQUIRE(f.delivered == sent); // released strictly in publish order
         ++proven;
     }
@@ -366,8 +356,8 @@ TEST_CASE("udp reliable_arq: a duplicated segment is delivered exactly once", "[
             sent.push_back(p);
             REQUIRE(f.dialed->send_reliable(bytes_of(p)) == pasio::udp_channel::submit_result::admitted);
         }
-        pump_until(f.io, [&] { return f.delivered.size() == 3; });
-        pump_until(f.io, [&] { return false; }, ms{40}); // give any duplicate time to (wrongly) arrive
+        plexus::testing::pump_until(f.io, [&] { return f.delivered.size() == 3; });
+        plexus::testing::pump_until(f.io, [&] { return false; }, ms{40}); // give any duplicate time to (wrongly) arrive
 
         REQUIRE(f.delivered == sent); // exactly once despite duplication
         REQUIRE(f.delivered.size() == 3);
@@ -390,7 +380,7 @@ TEST_CASE("udp reliable_arq: exhausting the retransmit cap surfaces a connection
         f.link->data_script = std::deque<action>(64, action::drop);
 
         REQUIRE(f.dialed->send_reliable(bytes_of("never-" + std::to_string(iter))) == pasio::udp_channel::submit_result::admitted);
-        pump_until(f.io, [&] { return f.dialed_error.has_value(); });
+        plexus::testing::pump_until(f.io, [&] { return f.dialed_error.has_value(); });
 
         REQUIRE(f.dialed_error.has_value());
         REQUIRE(*f.dialed_error == plexus::io::io_error::timed_out);

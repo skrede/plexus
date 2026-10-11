@@ -21,7 +21,7 @@ TEST_CASE("observer over asio: connected fires once and ready fires immediately 
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
-        pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; }, k_pump_bound);
 
         const auto &c = rec.for_peer(id_b);
         REQUIRE(a.eng.is_connected(id_b));
@@ -51,14 +51,14 @@ TEST_CASE("observer over asio: a real socket drop+redial fires reconnected (NOT 
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
-        pump_until(io, [&] { return a.eng.is_connected(id_b); });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b); }, k_pump_bound);
         REQUIRE(rec.for_peer(id_b).connected == 1);
 
         // A REAL transport drop: close B's accepted socket so A observes the drop and
         // re-dials over a fresh socket, re-handshaking. reconnected fires (not a second
         // connected); the dead session's tear_down fires disconnected.
         b.eng.session_for(inbound_slot(1))->tear_down();
-        pump_until(io, [&] { return rec.for_peer(id_b).reconnected == 1 && a.eng.is_connected(id_b); });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).reconnected == 1 && a.eng.is_connected(id_b); }, k_pump_bound);
 
         const auto &c = rec.for_peer(id_b);
         REQUIRE(a.eng.is_connected(id_b));
@@ -89,7 +89,7 @@ TEST_CASE("observer over asio: dead fires once when the driver surrenders agains
         const auto dead_port = reserve_closed_port();
         a.eng.note_peer(id_b, {"tcp", "127.0.0.1:" + std::to_string(dead_port)});
         a.eng.reach(id_b);
-        pump_until(io, [&] { return rec.for_peer(id_b).dead == 1; });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).dead == 1; }, k_pump_bound);
 
         REQUIRE(a.eng.is_dead(id_b));
         REQUIRE(rec.for_peer(id_b).dead == 1);
@@ -120,7 +120,7 @@ TEST_CASE("observer over asio: rejected fires once carrying the real refusal rea
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
-        pump_until(io, [&] { return rec.for_peer(id_b).rejected >= 1; });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).rejected >= 1; }, k_pump_bound);
 
         const auto &c = rec.for_peer(id_b);
         REQUIRE(c.rejected >= 1);

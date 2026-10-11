@@ -25,7 +25,7 @@ TEST_CASE("observer over asio: on_peer_ready over the REAL loop, then the awaite
         // so ready fires after its ack.
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.subscribe(id_b, "topic");
-        pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; }, k_pump_bound);
         REQUIRE(a.eng.is_connected(id_b));
         REQUIRE(rec.for_peer(id_b).ready == 1);
 
@@ -39,7 +39,7 @@ TEST_CASE("observer over asio: on_peer_ready over the REAL loop, then the awaite
         REQUIRE(b_inbound != nullptr);
         settle(io); // let B's producer-side fanout settle from A's subscribe
         b.eng.messages().publish("topic", as_bytes(payload), b_inbound->session_id());
-        pump_until(io, [&] { return !a_received.empty(); });
+        plexus::testing::pump_until(io, [&] { return !a_received.empty(); }, k_pump_bound);
 
         REQUIRE(a_received.size() == 1);
         REQUIRE(a_received.front() == payload);
@@ -65,13 +65,13 @@ TEST_CASE("observer over asio: ready fires EXACTLY once per cycle across a real 
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.subscribe(id_b, "topic");
-        pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; }, k_pump_bound);
         REQUIRE(rec.for_peer(id_b).ready == 1); // cycle 1
 
         // Real socket drop + re-dial: the fresh incarnation re-arms and resurrects the
         // remembered subscribe through the counted path, firing ready a SECOND time.
         b.eng.session_for(inbound_slot(1))->tear_down();
-        pump_until(io, [&] { return rec.for_peer(id_b).ready == 2; });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).ready == 2; }, k_pump_bound);
 
         const auto &c = rec.for_peer(id_b);
         REQUIRE(c.ready == 2);
@@ -100,7 +100,7 @@ TEST_CASE("observer over asio: premature-ready window - ready stays 1 across the
         // the live session so each is remembered. The reconnect resurrects all N.
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
-        pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; });
+        plexus::testing::pump_until(io, [&] { return a.eng.is_connected(id_b) && rec.for_peer(id_b).ready == 1; }, k_pump_bound);
         REQUIRE(rec.for_peer(id_b).ready == 1); // cycle 1: zero-subscribe ready
         a.eng.subscribe(id_b, "topic-1");
         a.eng.subscribe(id_b, "topic-2");
@@ -118,13 +118,13 @@ TEST_CASE("observer over asio: premature-ready window - ready stays 1 across the
         // load-bearing assertion is that it never OVERSHOOTS 2 (a bypass of the counted
         // path would fire ready more than once per resurrected cycle).
         b.eng.session_for(inbound_slot(1))->tear_down();
-        pump_until(io, [&] { return rec.for_peer(id_b).reconnected == 1; });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).reconnected == 1; }, k_pump_bound);
         REQUIRE(rec.for_peer(id_b).reconnected == 1);
         REQUIRE(rec.for_peer(id_b).ready <= 2); // never premature past the cycle count
 
         // The resurrected subscribe_responses drain through the counted path: ready
         // settles at EXACTLY 2 (one ready per cycle), never more.
-        pump_until(io, [&] { return rec.for_peer(id_b).ready == 2; });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).ready == 2; }, k_pump_bound);
         REQUIRE(rec.for_peer(id_b).ready == 2);
         settle(io);
         REQUIRE(rec.for_peer(id_b).ready == 2); // does not overshoot — the counted path fired once

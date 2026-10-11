@@ -72,7 +72,7 @@ TEST_CASE("cross-universe nodes stay mutually unaware over real multicast while 
         b.listen({"tcp", "127.0.0.1:" + std::to_string(port + 2)});
 
         const auto t0      = std::chrono::steady_clock::now();
-        const bool control = pump_until(io, [&] { return a1.router().known().contains(id_a2) && a2.router().known().contains(id_a1); }, k_bound);
+        const bool control = plexus::testing::pump_until(io, [&] { return a1.router().known().contains(id_a2) && a2.router().known().contains(id_a1); }, k_bound);
         const auto ctrl_dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
 
         if(!control && run == 0)
@@ -81,7 +81,7 @@ TEST_CASE("cross-universe nodes stay mutually unaware over real multicast while 
 
         // Give the foreign-universe node several announce periods on the shared group; its
         // datagrams are delivered, and only the inbound compare keeps it out of the A-nodes' tables.
-        pump_until(io, [] { return false; }, k_settle);
+        plexus::testing::pump_until(io, [] { return false; }, k_settle);
         REQUIRE_FALSE(a1.router().known().contains(id_b));
         REQUIRE_FALSE(a2.router().known().contains(id_b));
 
@@ -138,13 +138,13 @@ TEST_CASE("two hard-scoped same-universe nodes rendezvous on the derived group o
 
         // The soft same-universe pair on the base group is the liveness control: if it cannot
         // rendezvous the host has no usable loopback, so the hard failure would be the environment.
-        const bool control = pump_until(io, [&] { return c1.router().known().contains(id_c2) && c2.router().known().contains(id_c1); }, k_bound);
+        const bool control = plexus::testing::pump_until(io, [&] { return c1.router().known().contains(id_c2) && c2.router().known().contains(id_c1); }, k_bound);
         if(!control && run == 0)
             SKIP("multicast loopback unavailable on this host: the soft liveness control reached no awareness within the bound");
         REQUIRE(control);
 
         const auto t0      = std::chrono::steady_clock::now();
-        const bool hard_aware = pump_until(io, [&] { return h1.router().known().contains(id_h2) && h2.router().known().contains(id_h1); }, k_bound);
+        const bool hard_aware = plexus::testing::pump_until(io, [&] { return h1.router().known().contains(id_h2) && h2.router().known().contains(id_h1); }, k_bound);
         const auto hard_dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         REQUIRE(hard_aware); // fails iff the factory ignores the effective group
 

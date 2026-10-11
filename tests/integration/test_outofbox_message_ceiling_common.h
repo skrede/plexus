@@ -40,6 +40,8 @@
     #include <openssl/x509.h>
 #endif
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -87,17 +89,7 @@ inline bool equal_bytes(std::span<const std::byte> a, std::span<const std::byte>
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
 }
 
-template<typename Pred>
-inline void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{20000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
+inline constexpr ms k_pump_bound{20000};
 
 // A stream frame whose payload is the ceiling-sized body: tcp/unix/tls round-trip the WHOLE
 // framed message through the reassembler, so the body sits under a short frame header.

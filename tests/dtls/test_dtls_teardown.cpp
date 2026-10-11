@@ -183,7 +183,7 @@ struct dial_link
 
     void pump_until_ready()
     {
-        pdt::pump_until(io, [this] { return (accepted && dialed) || dial_failed; });
+        plexus::testing::pump_until(io, [this] { return (accepted && dialed) || dial_failed; });
     }
 
     void drain()

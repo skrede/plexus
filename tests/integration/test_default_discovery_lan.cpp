@@ -52,7 +52,7 @@ TEST_CASE("default_discovery_lan two configless nodes reach mutual awareness ove
         b.listen({"tcp", "127.0.0.1:" + std::to_string(port_b)});
 
         const auto t0    = std::chrono::steady_clock::now();
-        const bool aware = pump_until(io, [&] { return a.router().known().contains(id_b) && b.router().known().contains(id_a); }, k_bound);
+        const bool aware = plexus::testing::pump_until(io, [&] { return a.router().known().contains(id_b) && b.router().known().contains(id_a); }, k_bound);
         const auto aware_dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
 
         // A recorded, never-silent skip: a host with no usable multicast loopback (a sandbox that
@@ -67,7 +67,8 @@ TEST_CASE("default_discovery_lan two configless nodes reach mutual awareness ove
         REQUIRE_FALSE(b.router().known().contains(id_b));
 
         const auto h0      = std::chrono::steady_clock::now();
-        const bool healthy = pump_until(io, [&] { return disc_a.self_check() == discovery_health::healthy && disc_b.self_check() == discovery_health::healthy; }, k_bound);
+        const bool healthy =
+                plexus::testing::pump_until(io, [&] { return disc_a.self_check() == discovery_health::healthy && disc_b.self_check() == discovery_health::healthy; }, k_bound);
         const auto healthy_dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - h0).count();
         REQUIRE(healthy);
         REQUIRE(disc_a.self_check() == discovery_health::healthy);

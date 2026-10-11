@@ -99,7 +99,7 @@ TEST_CASE("serial resync: a byte-FLIPPED frame is dropped and the link recovers 
         write_raw(master, bad);
         write_raw(master, wire_frame("recovered-after-flip"));
 
-        pump_until(io, [&] { return probe.received.has_value(); });
+        plexus::testing::pump_until(io, [&] { return probe.received.has_value(); }, k_pump_bound);
 
         REQUIRE(probe.drops >= 1);                          // the corrupt frame was caught
         REQUIRE(probe.received.has_value());                // the next frame still decoded
@@ -139,7 +139,7 @@ TEST_CASE("serial resync: a byte-DROPPED (mid-frame) frame desyncs but the next 
         write_raw(master, dropped);
         write_raw(master, wire_frame("recovered-after-drop"));
 
-        pump_until(io, [&] { return probe.received.has_value(); });
+        plexus::testing::pump_until(io, [&] { return probe.received.has_value(); }, k_pump_bound);
 
         REQUIRE(probe.received.has_value());
         REQUIRE(*probe.received == "recovered-after-drop");
@@ -173,7 +173,7 @@ TEST_CASE("serial resync: corruption is non-fatal - neither on_protocol_close no
         write_raw(master, bad2);
         write_raw(master, wire_frame("survivor"));
 
-        pump_until(io, [&] { return probe.received.has_value(); });
+        plexus::testing::pump_until(io, [&] { return probe.received.has_value(); }, k_pump_bound);
 
         REQUIRE(probe.received.has_value());
         REQUIRE(*probe.received == "survivor");

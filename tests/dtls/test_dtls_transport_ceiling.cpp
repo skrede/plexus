@@ -5,6 +5,8 @@
 
 #include "plexus/io/io_error.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -67,7 +69,7 @@ struct ceiling_link
     template<typename Pred>
     void pump_until(Pred pred, std::chrono::milliseconds timeout = std::chrono::milliseconds{6000})
     {
-        pdt::pump_until(io, pred, timeout);
+        plexus::testing::pump_until(io, pred, timeout);
     }
 };
 

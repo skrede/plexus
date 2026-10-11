@@ -23,16 +23,16 @@ TEST_CASE("integration udp reproducibility: best_effort delivers the clean path 
                     accepted->on_data([&](std::span<const std::byte> b) { got = str_of(b); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
 
         const std::string payload = "be-" + std::to_string(iter);
         dialed->send(bytes_of(payload));
-        pump_until(io, [&] { return got.has_value(); });
+        plexus::testing::pump_until(io, [&] { return got.has_value(); });
         REQUIRE(got.has_value());
         REQUIRE(*got == payload);
         ++proven;

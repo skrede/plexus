@@ -24,6 +24,8 @@
 
 #include "support/loss_reorder_shim.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -81,17 +83,7 @@ inline bool equal_bytes(std::span<const std::byte> a, std::span<const std::byte>
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
 }
 
-template<typename Pred>
-inline void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{15000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
+inline constexpr ms k_pump_bound{15000};
 
 }
 

@@ -14,6 +14,8 @@
 #include "plexus/asio/udp_transport.h"
 #include "plexus/datagram/detail/udp_handshake_arq.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -110,16 +112,6 @@ struct lossy_relay
     }
 };
 
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{4000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
+inline constexpr ms k_pump_bound{4000};
 
 } // namespace udp_handshake_arq_fixture

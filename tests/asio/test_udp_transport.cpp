@@ -1,5 +1,7 @@
 #include "test_udp_transport_common.h"
 
+#include "plexus/testing/pump.h"
+
 using namespace udp_transport_fixture;
 
 namespace {
@@ -46,13 +48,7 @@ struct loopback
     template<typename Pred>
     void pump_until(Pred pred)
     {
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-        {
-            io.poll();
-            if(io.stopped())
-                io.restart();
-        }
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(5));
     }
 };
 

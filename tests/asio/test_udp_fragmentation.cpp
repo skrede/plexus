@@ -25,11 +25,11 @@ TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal 
                     accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
@@ -38,7 +38,7 @@ TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal 
         REQUIRE(payload.size() + wire::udp_envelope_overhead > budget); // genuinely oversize
         dialed->send(payload);
 
-        pump_until(io, [&] { return !got.empty(); });
+        plexus::testing::pump_until(io, [&] { return !got.empty(); }, k_pump_bound);
         REQUIRE(got.size() == 1);                   // exactly ONE reassembled message
         REQUIRE(equal_bytes(got.front(), payload)); // byte-equal end-to-end
         ++proven;
@@ -66,11 +66,11 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
                 accepted->on_data([&](std::span<const std::byte>) { ++deliveries; });
             });
     server.listen({"udp", "127.0.0.1:0"});
-    pump_until(io, [&] { return server.port() != 0; });
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
     client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
     client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-    pump_until(io, [&] { return dialed && accepted; });
+    plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
     REQUIRE(accepted != nullptr);
 
     // Build 4 best_effort fragments of one msg_id and inject all but index 2.
@@ -91,11 +91,11 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
             accepted->deliver_inbound(datagrams[i]); // withhold fragment index 2
 
     // Drain briefly: the message is incomplete, nothing is delivered yet.
-    pump_until(io, [&] { return deliveries > 0; }, ms{300});
+    plexus::testing::pump_until(io, [&] { return deliveries > 0; }, ms{300});
     REQUIRE(deliveries == 0);
 
     // The reassembler's per-message timeout (default 5000 ms) reclaims the partial; pump
     // past it and confirm the whole message was dropped (still no delivery).
-    pump_until(io, [&] { return deliveries > 0; }, ms{6000});
+    plexus::testing::pump_until(io, [&] { return deliveries > 0; }, ms{6000});
     REQUIRE(deliveries == 0); // dropped whole — no partial delivery
 }

@@ -81,16 +81,16 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over udpr at shipped defaults,
                     accepted->on_data([&](std::span<const std::byte> b) { got.emplace_back(b.begin(), b.end()); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
         dialed->send(payload);
-        pump_until(io, [&] { return !got.empty(); }, ms{40000});
+        plexus::testing::pump_until(io, [&] { return !got.empty(); }, ms{40000});
         REQUIRE(got.size() == 1);
         REQUIRE(equal_bytes(got.front(),
                             payload)); // byte-equal at the shipped ceiling, default caps

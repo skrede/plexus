@@ -16,7 +16,7 @@ TEST_CASE("udp handshake_arq: the session establishes under injected loss via re
         bool dialed   = false;
         server.on_accepted([&](std::unique_ptr<pasio::udp_channel>) { accepted = true; });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         // Drop the first datagram each way: the dialer's first hs_request (and/or the
         // first hs_response) is lost, so the ARQ must retransmit to establish.
@@ -25,7 +25,7 @@ TEST_CASE("udp handshake_arq: the session establishes under injected loss via re
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel>, const plexus::io::endpoint &) { dialed = true; });
         client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
 
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
         REQUIRE(dialed);
         REQUIRE(accepted);
         REQUIRE(relay.dropped >= 1); // a datagram WAS dropped — the path was genuinely lossy
@@ -45,7 +45,7 @@ TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeo
         pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_ladder};
 
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
 
         lossy_relay relay{io, server.port(), /*drops=*/10000}; // drop everything
 
@@ -55,7 +55,7 @@ TEST_CASE("udp handshake_arq: dropping every datagram surfaces a handshake-timeo
         client.on_dial_failed([&](const plexus::io::endpoint &, plexus::io::io_error e) { dial_fail = e; });
         client.dial({"udp", "127.0.0.1:" + std::to_string(relay.port())});
 
-        pump_until(io, [&] { return dial_fail.has_value(); });
+        plexus::testing::pump_until(io, [&] { return dial_fail.has_value(); }, k_pump_bound);
         REQUIRE_FALSE(dialed);
         REQUIRE(dial_fail.has_value());
         REQUIRE(*dial_fail == plexus::io::io_error::timed_out);

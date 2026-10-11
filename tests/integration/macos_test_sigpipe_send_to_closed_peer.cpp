@@ -13,6 +13,7 @@
 
 #include "plexus/io/io_error.h"
 
+#include "plexus/testing/pump.h"
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -49,13 +50,7 @@ std::vector<std::byte> payload_bytes()
     return v;
 }
 
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred)
-{
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while(!pred() && std::chrono::steady_clock::now() < deadline)
-        io.poll();
-}
+constexpr std::chrono::seconds k_pump_bound{5};
 
 bool is_hard_drop(pio::io_error e)
 {
@@ -96,7 +91,7 @@ std::optional<pio::io_error> send_to_closed_peer(const typename Protocol::endpoi
     for(int i = 0; i < 8 && !surfaced; ++i)
     {
         channel.send(payload);
-        pump_until(io, [&surfaced] { return surfaced.has_value(); });
+        plexus::testing::pump_until(io, [&surfaced] { return surfaced.has_value(); }, k_pump_bound);
     }
     return surfaced;
 }

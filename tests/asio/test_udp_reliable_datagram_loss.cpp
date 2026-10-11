@@ -108,12 +108,12 @@ TEST_CASE("udp reliable_datagram: a 'udpr' channel delivers in-order over inject
                     accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
         relay link{io, server.port()};
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
@@ -128,7 +128,7 @@ TEST_CASE("udp reliable_datagram: a 'udpr' channel delivers in-order over inject
             sent.push_back(p);
             dialed->send(bytes_of(p)); // the SINGLE send verb drives the ARQ in reliable mode
         }
-        pump_until(io, [&] { return delivered.size() == 4; });
+        plexus::testing::pump_until(io, [&] { return delivered.size() == 4; });
 
         REQUIRE(delivered == sent);   // exactly once, in publish order, over loss
         REQUIRE(link.data_seen >= 5); // genuinely lossy (>=1 retransmit)

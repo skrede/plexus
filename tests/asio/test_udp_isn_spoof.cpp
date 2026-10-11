@@ -23,11 +23,11 @@ TEST_CASE("udp isn: a spoofed seq=0 reliable-data segment is rejected on a non-z
                     accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
                 });
         server.listen({"udp", "127.0.0.1:0"});
-        pump_until(io, [&] { return server.port() != 0; });
+        plexus::testing::pump_until(io, [&] { return server.port() != 0; });
 
         client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
         client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return dialed && accepted; });
+        plexus::testing::pump_until(io, [&] { return dialed && accepted; });
         REQUIRE(accepted != nullptr);
 
         // An off-path attacker forges a [kind=reliable-data][seq=0] data segment that
@@ -80,7 +80,7 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
                     isns.push_back(hs->initial_seq);
             });
     sniffer.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
-    pump_until(io, [&] { return sniffer.port() != 0; });
+    plexus::testing::pump_until(io, [&] { return sniffer.port() != 0; });
 
     std::vector<std::unique_ptr<pasio::udp_transport>> clients;
     for(int i = 0; i < k_sessions; ++i)
@@ -89,7 +89,7 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
         c->dial({"udpr", "127.0.0.1:" + std::to_string(sniffer.port())});
         clients.push_back(std::move(c));
     }
-    pump_until(io, [&] { return isns.size() >= static_cast<std::size_t>(k_sessions); });
+    plexus::testing::pump_until(io, [&] { return isns.size() >= static_cast<std::size_t>(k_sessions); });
 
     REQUIRE(isns.size() >= static_cast<std::size_t>(k_sessions));
     isns.resize(k_sessions);

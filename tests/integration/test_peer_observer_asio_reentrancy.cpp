@@ -22,7 +22,7 @@ TEST_CASE("observer over asio: an accepted (inbound) peer fires connected/discon
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
         const auto inbound = inbound_slot(1);
-        pump_until(io, [&] { return rec.for_peer(inbound).connected == 1 && rec.for_peer(inbound).ready == 1; });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(inbound).connected == 1 && rec.for_peer(inbound).ready == 1; }, k_pump_bound);
         {
             const auto &c = rec.for_peer(inbound);
             REQUIRE(c.connected == 1);
@@ -33,7 +33,7 @@ TEST_CASE("observer over asio: an accepted (inbound) peer fires connected/discon
         // Drop from A's side: B's accepted session tears down (disconnected) but owns
         // no driver, so NEVER reconnect/dead.
         a.eng.session_for(id_b)->tear_down();
-        pump_until(io, [&] { return rec.for_peer(inbound).disconnected == 1; });
+        plexus::testing::pump_until(io, [&] { return rec.for_peer(inbound).disconnected == 1; }, k_pump_bound);
         settle(io); // give any (erroneous) reconnect/dead a chance to fire
 
         const auto &c = rec.for_peer(inbound);
@@ -77,7 +77,7 @@ TEST_CASE("observer over asio: calling engine.subscribe from inside an observer 
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
-        pump_until(io, [&] { return obs.connected == 1; });
+        plexus::testing::pump_until(io, [&] { return obs.connected == 1; }, k_pump_bound);
         settle(io); // the nested subscribe runs on a later turn — no crash
 
         REQUIRE(obs.connected == 1);

@@ -2,6 +2,8 @@
 
 #include "plexus/stream/datagram_socket.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -42,17 +44,7 @@ std::string str_of(std::span<const std::byte> b)
     return s;
 }
 
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred)
-{
-    auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
+constexpr std::chrono::seconds k_pump_bound{2};
 
 TEST_CASE("two udp_multicast_sockets on one group: bind + join run without error", "[datagram_socket][multicast]")
 {
@@ -89,7 +81,7 @@ TEST_CASE("a sent multicast datagram is delivered to on_datagram with the source
     const std::string payload = "announce-hello";
     sender.send_multicast(bytes_of(payload));
 
-    pump_until(io, [&] { return got.has_value(); });
+    plexus::testing::pump_until(io, [&] { return got.has_value(); }, k_pump_bound);
 
     REQUIRE(got.has_value());
     REQUIRE(*got == payload);

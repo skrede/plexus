@@ -55,7 +55,7 @@ TEST_CASE("node_native_discovery: two nodes discover each other over the wired d
     a.listen({"tcp", "127.0.1.1:18801"});
     b.listen({"tcp", "127.0.1.2:18802"});
 
-    pump_until(io, [&] { return a.router().known().contains(id_b) && b.router().known().contains(id_a); });
+    plexus::testing::pump_until(io, [&] { return a.router().known().contains(id_b) && b.router().known().contains(id_a); }, k_pump_bound);
 
     REQUIRE(a.router().known().contains(id_b));
     REQUIRE(b.router().known().contains(id_a));
@@ -101,13 +101,13 @@ TEST_CASE("node_native_discovery: a goodbye flushes the leaver from a peer's awa
     a.listen({"tcp", "127.0.1.1:18821"});
     b.listen({"tcp", "127.0.1.2:18822"});
 
-    pump_until(io, [&] { return b.router().known().contains(id_a); });
+    plexus::testing::pump_until(io, [&] { return b.router().known().contains(id_a); }, k_pump_bound);
     REQUIRE(b.router().known().contains(id_a));
     REQUIRE(b.router().session_for(id_a) == nullptr);
 
     disc_a.stop();
 
-    pump_until(io, [&] { return !b.router().known().contains(id_a); });
+    plexus::testing::pump_until(io, [&] { return !b.router().known().contains(id_a); }, k_pump_bound);
     REQUIRE_FALSE(b.router().known().contains(id_a));
     // B's own identity is untouched, and no session was ever torn down (none existed).
     REQUIRE(b.router().known().contains(id_b) == false);
@@ -148,7 +148,7 @@ TEST_CASE("node_native_discovery: two nodes discover each other over real multic
     a.listen({"tcp", "127.0.0.1:18811"});
     b.listen({"tcp", "127.0.0.1:18812"});
 
-    pump_until(io, [&] { return a.router().known().contains(id_b) && b.router().known().contains(id_a); });
+    plexus::testing::pump_until(io, [&] { return a.router().known().contains(id_b) && b.router().known().contains(id_a); }, k_pump_bound);
 
     REQUIRE(a.router().known().contains(id_b));
     REQUIRE(b.router().known().contains(id_a));

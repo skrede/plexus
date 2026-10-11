@@ -50,7 +50,7 @@ TEST_CASE("dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty 
         for(int i = 0; i < k_iterations; ++i)
         {
             relay_link l(pdt::pin_one(srv, cli.digest), pdt::pin_one(cli, srv.digest));
-            pdt::pump_until(l.io, [&] { return (l.accepted && l.dialed) || l.dial_failed; });
+            plexus::testing::pump_until(l.io, [&] { return (l.accepted && l.dialed) || l.dial_failed; });
             REQUIRE(l.dialed != nullptr);
             REQUIRE(l.accepted != nullptr);
             ++ok;
@@ -64,7 +64,7 @@ TEST_CASE("dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty 
         for(int i = 0; i < k_iterations; ++i)
         {
             relay_link l(pdt::pin_one(srv, other.digest), pdt::pin_one(cli, srv.digest));
-            pdt::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
+            plexus::testing::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
             REQUIRE(l.accepted == nullptr);
             REQUIRE(l.dialed == nullptr);
             ++closed;
@@ -78,7 +78,7 @@ TEST_CASE("dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty 
         for(int i = 0; i < k_iterations; ++i)
         {
             relay_link l(pdt::pin_one(srv, cli.digest), pdt::pin_one(cli, other.digest));
-            pdt::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
+            plexus::testing::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
             REQUIRE(l.dialed == nullptr);
             REQUIRE(l.accepted == nullptr);
             ++closed;
@@ -92,7 +92,7 @@ TEST_CASE("dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty 
         for(int i = 0; i < k_iterations; ++i)
         {
             relay_link l(pdt::pin_none(srv), pdt::pin_one(cli, srv.digest));
-            pdt::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
+            plexus::testing::pump_until(l.io, [&] { return l.dial_failed || (l.accepted && l.dialed); }, std::chrono::milliseconds{1500});
             REQUIRE(l.accepted == nullptr);
             REQUIRE(l.dialed == nullptr);
             ++closed;
@@ -151,7 +151,7 @@ TEST_CASE("dtls.handshake_loss: the handshake completes through a lossy relay, l
         // Drop the first ClientHello, duplicate the cookie'd retry, then pass — OpenSSL
         // retransmit (NOT the ARQ) must recover. Subsequent flights pass.
         l.link->script = {pdt::action::drop, pdt::action::duplicate};
-        pdt::pump_until(l.io, [&] { return (l.accepted && l.dialed) || l.dial_failed; });
+        plexus::testing::pump_until(l.io, [&] { return (l.accepted && l.dialed) || l.dial_failed; });
         REQUIRE_FALSE(l.dial_failed);
         REQUIRE(l.dialed != nullptr);
         REQUIRE(l.accepted != nullptr);

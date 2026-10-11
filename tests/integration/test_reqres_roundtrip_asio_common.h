@@ -10,6 +10,8 @@
 
 #include "plexus/wire/rpc_status.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -100,9 +102,7 @@ struct live_rpc
     template<typename Pred>
     void pump_until(Pred pred)
     {
-        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-        while(!pred() && std::chrono::steady_clock::now() < deadline)
-            io.poll();
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(2));
     }
 };
 

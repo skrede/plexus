@@ -100,7 +100,7 @@ TEST_CASE("dtls.cookie: a no-cookie ClientHello gets a small HelloVerifyRequest,
         cookie_relay link(io, server.port());
         client.dial({"dtls", "127.0.0.1:" + std::to_string(link.port())});
 
-        pdt::pump_until(io, [&] { return (accepted && dialed) || dial_failed; });
+        plexus::testing::pump_until(io, [&] { return (accepted && dialed) || dial_failed; });
 
         // The cookie gate completes the handshake (a valid cookie proceeds).
         REQUIRE_FALSE(dial_failed);

@@ -15,6 +15,8 @@
 
 #include "plexus/io/fragmentation.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/buffer.hpp>
@@ -75,16 +77,6 @@ enum class action
     drop
 };
 
-template<typename Pred>
-void pump_until(::asio::io_context &io, Pred pred, ms timeout = ms{8000})
-{
-    auto bound = std::chrono::steady_clock::now() + timeout;
-    while(!pred() && std::chrono::steady_clock::now() < bound)
-    {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
-}
+inline constexpr ms k_pump_bound{8000};
 
 } // namespace udp_fragmentation_fixture

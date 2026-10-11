@@ -21,6 +21,8 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/transport_backend.h"
 
+#include "plexus/testing/pump.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -76,13 +78,7 @@ struct loopback
     template<typename Pred>
     void pump_until(Pred pred)
     {
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-        {
-            io.poll();
-            if(io.stopped())
-                io.restart();
-        }
+        plexus::testing::pump_until(io, pred, std::chrono::seconds(5));
     }
 
     void drain()
@@ -146,23 +142,13 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
     server.on_accepted([&](std::unique_ptr<pasio::udp_channel> ch) { accepted.push_back(std::move(ch)); });
     server.listen({"udp", "127.0.0.1:0"});
 
-    auto pump = [&](auto pred)
-    {
-        auto bound = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-        while(!pred() && std::chrono::steady_clock::now() < bound)
-        {
-            io.poll();
-            if(io.stopped())
-                io.restart();
-        }
-    };
-    pump([&] { return server.port() != 0; });
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; }, std::chrono::seconds(5));
 
     pasio::udp_transport first{io};
     std::unique_ptr<pasio::udp_channel> first_dialed;
     first.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { first_dialed = std::move(ch); });
     first.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-    pump([&] { return first_dialed != nullptr && accepted.size() == 1; });
+    plexus::testing::pump_until(io, [&] { return first_dialed != nullptr && accepted.size() == 1; }, std::chrono::seconds(5));
     REQUIRE(accepted.size() == 1);
 
     // Tear the first accepted channel down, then bring up a fresh dialer.
@@ -178,7 +164,7 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
     std::unique_ptr<pasio::udp_channel> second_dialed;
     second.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { second_dialed = std::move(ch); });
     second.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-    pump([&] { return second_dialed != nullptr && accepted.size() == 1; });
+    plexus::testing::pump_until(io, [&] { return second_dialed != nullptr && accepted.size() == 1; }, std::chrono::seconds(5));
 
     REQUIRE(second_dialed != nullptr);
     REQUIRE(accepted.size() == 1); // the new peer accepted cleanly post-teardown

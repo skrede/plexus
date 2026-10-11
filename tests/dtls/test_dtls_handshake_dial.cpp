@@ -1,5 +1,7 @@
 #include "test_dtls_handshake_common.h"
 
+#include "plexus/testing/pump.h"
+
 namespace {
 
 // A DIALED loopback DTLS link via the transport: a server-side and a client-side
@@ -46,9 +48,9 @@ struct dial_link
     }
 
     template<typename Pred>
-    void pump_until(Pred pred, std::chrono::milliseconds timeout = std::chrono::milliseconds{6000})
+    void pump_until(Pred pred)
     {
-        pdt::pump_until(io, pred, timeout);
+        plexus::testing::pump_until(io, pred);
     }
 };
 

@@ -31,12 +31,12 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over TCP at shipped defaults, 
 
         server.listen({"tcp", "127.0.0.1:0"});
         client.dial({"tcp", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until(io, [&] { return accepted && dialed; }, ms{8000});
+        plexus::testing::pump_until(io, [&] { return accepted && dialed; }, ms{8000});
         REQUIRE(accepted != nullptr);
         REQUIRE(dialed != nullptr);
 
         dialed->send(std::span<const std::byte>{frame});
-        pump_until(io, [&] { return got.size() == frame.size(); });
+        plexus::testing::pump_until(io, [&] { return got.size() == frame.size(); }, k_pump_bound);
         REQUIRE(got.size() == frame.size());
         REQUIRE(equal_bytes(got, frame)); // byte-equal at the shipped ceiling, default caps
         ++proven;
@@ -72,12 +72,12 @@ TEST_CASE("outofbox: an 8 MiB message round-trips over AF_UNIX at shipped defaul
 
         server.listen({"unix", path});
         client.dial({"unix", path});
-        pump_until(io, [&] { return accepted && dialed; }, ms{8000});
+        plexus::testing::pump_until(io, [&] { return accepted && dialed; }, ms{8000});
         REQUIRE(accepted != nullptr);
         REQUIRE(dialed != nullptr);
 
         dialed->send(std::span<const std::byte>{frame});
-        pump_until(io, [&] { return got.size() == frame.size(); });
+        plexus::testing::pump_until(io, [&] { return got.size() == frame.size(); }, k_pump_bound);
         REQUIRE(got.size() == frame.size());
         REQUIRE(equal_bytes(got, frame));
         ++proven;
