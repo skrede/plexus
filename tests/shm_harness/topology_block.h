@@ -3,6 +3,7 @@
 
 #include <array>
 #include <atomic>
+#include <string>
 #include <cstdint>
 #include <string_view>
 
@@ -31,6 +32,12 @@ inline std::string_view role_name(node_role role)
     return "";
 }
 
+enum class dial_wiring : std::uint32_t
+{
+    one_way,
+    crossed,
+};
+
 enum class node_command : std::uint32_t
 {
     none,
@@ -53,6 +60,7 @@ struct node_slot
     std::atomic<std::uint32_t> distinct;
     std::atomic<std::uint32_t> duplicates;
     std::atomic<std::uint32_t> warm_seen;
+    std::atomic<std::uint32_t> slowest_send_us;
     std::atomic<std::uint32_t> exit_code;
 };
 
@@ -69,12 +77,20 @@ struct node_counts
     std::uint32_t distinct;
     std::uint32_t duplicates;
     std::uint32_t warm_seen;
+    std::uint32_t slowest_send_us;
 };
 
 inline node_counts snapshot(const node_slot &s)
 {
-    return {s.connected.load(std::memory_order_acquire), s.published.load(std::memory_order_acquire),  s.received.load(std::memory_order_acquire),
-            s.distinct.load(std::memory_order_acquire),  s.duplicates.load(std::memory_order_acquire), s.warm_seen.load(std::memory_order_acquire)};
+    return {s.connected.load(std::memory_order_acquire),      s.published.load(std::memory_order_acquire),  s.received.load(std::memory_order_acquire),
+            s.distinct.load(std::memory_order_acquire),       s.duplicates.load(std::memory_order_acquire), s.warm_seen.load(std::memory_order_acquire),
+            s.slowest_send_us.load(std::memory_order_acquire)};
+}
+
+inline std::string summary(const node_counts &c, bool over_shm)
+{
+    return "received=" + std::to_string(c.received) + " distinct=" + std::to_string(c.distinct) + " duplicates=" + std::to_string(c.duplicates) +
+            " warm_seen=" + std::to_string(c.warm_seen) + " connected=" + std::to_string(c.connected) + " shm_region=" + (over_shm ? "1" : "0");
 }
 
 }

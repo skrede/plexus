@@ -51,7 +51,8 @@ public:
     {
         if(m.warm)
         {
-            m_slot.warm_seen.fetch_add(1, std::memory_order_release);
+            if(m.publisher < k_max_nodes)
+                m_slot.warm_seen.fetch_or(1u << m.publisher, std::memory_order_release);
             return;
         }
         m_slot.received.fetch_add(1, std::memory_order_release);

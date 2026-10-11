@@ -1,3 +1,4 @@
+#include "child_args.h"
 #include "node_driver.h"
 #include "seccomp_deny.h"
 #include "topology_block.h"
@@ -29,9 +30,7 @@
 #include <csignal>
 #include <cstddef>
 #include <cstdint>
-#include <charconv>
 #include <optional>
-#include <string_view>
 
 #include <sys/prctl.h>
 
@@ -40,46 +39,6 @@ namespace {
 using namespace shm_harness;
 using namespace std::chrono_literals;
 
-struct node_args
-{
-    std::string block;
-    std::uint32_t index;
-    std::uint32_t count;
-    std::string fqn;
-    std::string role;
-    bool hint;
-    bool deny;
-    std::vector<std::uint16_t> ports;
-};
-
-std::optional<std::uint32_t> to_u32(std::string_view text)
-{
-    std::uint32_t value     = 0;
-    const char *const end   = text.data() + text.size();
-    const auto [last, errc] = std::from_chars(text.data(), end, value);
-    if(errc != std::errc{} || last != end)
-        return std::nullopt;
-    return value;
-}
-
-std::optional<node_args> parse_node_args(const std::vector<std::string> &argv)
-{
-    const std::optional<std::uint32_t> index = argv.size() >= 7 ? to_u32(argv[1]) : std::nullopt;
-    const std::optional<std::uint32_t> count = argv.size() >= 7 ? to_u32(argv[2]) : std::nullopt;
-    if(!index || !count || *count > k_max_nodes || *index >= *count || argv.size() != 7 + *count)
-        return std::nullopt;
-
-    node_args out{argv[0], *index, *count, argv[3], argv[4], argv[5] == "1", argv[6] == "1", {}};
-    for(std::uint32_t i = 0; i < *count; ++i)
-    {
-        const std::optional<std::uint32_t> port = to_u32(argv[7 + i]);
-        if(!port || *port > 0xFFFFu)
-            return std::nullopt;
-        out.ports.push_back(static_cast<std::uint16_t>(*port));
-    }
-    return out;
-}
-
 plexus::node_id harness_id(std::uint32_t index)
 {
     plexus::node_id id{};
@@ -87,12 +46,20 @@ plexus::node_id harness_id(std::uint32_t index)
     return id;
 }
 
-// Only the higher-indexed node of each pair knows the other's card, so exactly one side dials.
-std::vector<plexus::discovery::service_info> lower_cards(const node_args &args)
+// One-way wiring gives only the higher-indexed node of each pair the other's card, so exactly one side dials; crossed
+// wiring gives every node every card, so both sides of each pair dial.
+bool dials(const node_args &args, std::uint32_t peer)
+{
+    return peer != args.index && (args.crossed || peer < args.index);
+}
+
+std::vector<plexus::discovery::service_info> peer_cards(const node_args &args)
 {
     std::vector<plexus::discovery::service_info> cards;
-    for(std::uint32_t peer = 0; peer < args.index; ++peer)
+    for(std::uint32_t peer = 0; peer < args.count; ++peer)
     {
+        if(!dials(args, peer))
+            continue;
         const auto card = plexus::discovery::assemble_contact_card(harness_id(peer), {{"tcp", args.ports[peer]}});
         cards.push_back({"shm_harness." + std::to_string(peer), plexus::io::endpoint{"", "127.0.0.1"}, card});
     }
@@ -126,9 +93,9 @@ template<typename Node>
 void update_connected(Node &node, const node_args &args, node_slot &slot)
 {
     std::uint32_t connected = 0;
-    for(std::uint32_t peer = 0; peer < args.index; ++peer)
+    for(std::uint32_t peer = 0; peer < args.count; ++peer)
     {
-        if(node.router().is_connected(harness_id(peer)))
+        if(dials(args, peer) && node.router().is_connected(harness_id(peer)))
             ++connected;
     }
     slot.connected.store(connected, std::memory_order_release);
@@ -137,7 +104,7 @@ void update_connected(Node &node, const node_args &args, node_slot &slot)
 void run_node(const node_args &args, node_slot &slot)
 {
     ::asio::io_context io;
-    plexus::discovery::static_discovery disc{lower_cards(args)};
+    plexus::discovery::static_discovery disc{peer_cards(args)};
     plexus::asio::same_host_transports transports{io};
     auto node = transports.make_node(disc, harness_id(args.index), dial_opts());
     node.listen({"tcp", "127.0.0.1:" + std::to_string(args.ports[args.index])});
@@ -145,7 +112,7 @@ void run_node(const node_args &args, node_slot &slot)
     std::optional<plexus::publisher<>> pub;
     if(args.role != role_name(node_role::sub))
         pub.emplace(node, args.fqn, topic_qos_for(args.hint));
-    node_driver driver{slot, args.index, pub};
+    node_driver driver{slot, args.index, pub ? publish_fn{[&pub](std::span<const std::byte> bytes) { pub->publish(bytes); }} : publish_fn{}};
     std::optional<plexus::subscriber<>> sub;
     if(args.role != role_name(node_role::pub))
         sub.emplace(node, args.fqn, subscriber_qos_for(args.hint), [&driver](std::span<const std::byte> bytes) { driver.receive(bytes); });

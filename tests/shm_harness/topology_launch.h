@@ -1,16 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPOLOGY_LAUNCH_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPOLOGY_LAUNCH_H
 
+#include "topic_regions.h"
 #include "launch_helpers.h"
 #include "topology_block.h"
 
 #include "support/xproc_control.h"
 #include "support/xproc_harness.h"
 #include "support/xproc_process.h"
-
-#include "plexus/native/shm_region_broker.h"
-
-#include "plexus/shm/region_naming.h"
 
 #include <array>
 #include <chrono>
@@ -20,25 +17,20 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
-
-#include <sys/mman.h>
+#include <string_view>
 
 namespace shm_harness {
-
-inline std::string summary(const node_counts &c, bool over_shm)
-{
-    return "received=" + std::to_string(c.received) + " distinct=" + std::to_string(c.distinct) + " duplicates=" + std::to_string(c.duplicates) +
-            " warm_seen=" + std::to_string(c.warm_seen) + " connected=" + std::to_string(c.connected) + " shm_region=" + (over_shm ? "1" : "0");
-}
 
 class topology
 {
 public:
-    topology(std::string fqn, std::uint32_t count)
+    topology(std::string fqn, std::uint32_t count, dial_wiring wiring = dial_wiring::one_way)
             : m_fqn(std::move(fqn))
             , m_count(count)
+            , m_wiring(wiring)
             , m_ports(free_tcp_ports(count))
             , m_name("shm_harness.")
+            , m_regions(m_fqn)
             , m_block(plexus::testing::xproc_shared<topology_block>::create(m_name.str()))
             , m_nodes()
     {
@@ -51,8 +43,6 @@ public:
     {
         for(std::optional<plexus::testing::xproc_process> &node : m_nodes)
             node.reset();
-        for(const std::string &region : {region_name(), region_name() + ".s"})
-            ::shm_unlink(("/plexus." + region).c_str());
     }
 
     bool created() const
@@ -62,20 +52,28 @@ public:
 
     bool spawn_node(std::uint32_t index, node_role role, bool hint, bool deny)
     {
-        slot(index).ready.store(0, std::memory_order_release);
-        std::vector<std::string> args{m_name.str(), std::to_string(index), std::to_string(m_count), m_fqn, std::string(role_name(role)), hint ? "1" : "0", deny ? "1" : "0"};
+        const bool crossed = m_wiring == dial_wiring::crossed;
+        std::vector<std::string> args{m_name.str(),     std::to_string(index), std::to_string(m_count), m_fqn, std::string(role_name(role)),
+                                      hint ? "1" : "0", deny ? "1" : "0",      crossed ? "1" : "0"};
         for(const std::uint16_t port : m_ports)
             args.push_back(std::to_string(port));
-
-        m_nodes[index] = plexus::testing::xproc_process::spawn("shm_harness.node", args);
-        if(!m_nodes[index])
-            return false;
-        return wait_until([&] { return slot(index).ready.load(std::memory_order_acquire) != 0 || !m_nodes[index]->running(); }, 10s) &&
-                slot(index).ready.load(std::memory_order_acquire) != 0;
+        return launch(index, "shm_harness.node", args);
     }
 
-    // An accepted session is keyed by a provisional id, so a node observes only the sessions it dialed: node i is
-    // fully connected once it reaches every lower-indexed node.
+    bool spawn_registry(std::uint32_t index, node_role role)
+    {
+        return launch(index, "shm_harness.registry", {m_name.str(), std::to_string(index), m_fqn, std::string(role_name(role))});
+    }
+
+    void kill(std::uint32_t index)
+    {
+        if(m_nodes[index])
+            m_nodes[index]->kill();
+        m_nodes[index].reset();
+    }
+
+    // An accepted session is keyed by a provisional id, so a node observes only the sessions it dialed: one way, node i
+    // is fully connected once it reaches every lower-indexed node; crossed, once it reaches every other node.
     bool wait_connected(std::chrono::milliseconds bound)
     {
         return wait_until(
@@ -83,7 +81,8 @@ public:
                 {
                     for(std::uint32_t index = 0; index < m_count; ++index)
                     {
-                        if(slot(index).connected.load(std::memory_order_acquire) != index)
+                        const std::uint32_t dialed = m_wiring == dial_wiring::crossed ? m_count - 1 : index;
+                        if(slot(index).connected.load(std::memory_order_acquire) != dialed)
                             return false;
                     }
                     return true;
@@ -99,22 +98,28 @@ public:
 
     bool warm_up(const std::vector<std::uint32_t> &publishers, const std::vector<std::uint32_t> &subscribers, std::chrono::milliseconds bound)
     {
-        bool commanded = true;
+        bool commanded     = true;
+        std::uint32_t mask = 0;
         for(const std::uint32_t index : publishers)
+        {
             commanded = command(index, node_command::warm) && commanded;
-        const bool seen = commanded && wait_until([&] { return every(subscribers, [](const node_counts &c) { return c.warm_seen > 0; }); }, bound);
+            mask |= 1u << index;
+        }
+        const bool seen = commanded && wait_until([&] { return every(subscribers, [mask](const node_counts &c) { return (c.warm_seen & mask) == mask; }); }, bound);
         for(const std::uint32_t index : publishers)
             command(index, node_command::none);
         return seen;
     }
 
     // Counted traffic still in flight after the target is reached would surface as duplicates in the settle window.
-    bool publish_round(std::uint32_t publisher, std::uint32_t count, const std::vector<std::uint32_t> &subscribers, std::chrono::milliseconds bound)
+    bool publish_round(const std::vector<std::uint32_t> &publishers, std::uint32_t count, const std::vector<std::uint32_t> &subscribers, std::chrono::milliseconds bound)
     {
         for(const std::uint32_t index : subscribers)
             command(index, node_command::reset);
-        command(publisher, node_command::publish, count);
-        const bool reached = wait_until([&] { return every(subscribers, [count](const node_counts &c) { return c.received >= count; }); }, bound);
+        for(const std::uint32_t index : publishers)
+            command(index, node_command::publish, count, bound);
+        const std::uint32_t target = count * static_cast<std::uint32_t>(publishers.size());
+        const bool reached         = wait_until([&] { return every(subscribers, [target](const node_counts &c) { return c.received >= target; }); }, bound);
         std::this_thread::sleep_for(500ms);
         return reached;
     }
@@ -132,18 +137,18 @@ public:
         return snapshot(slot(index));
     }
 
-    bool region_attaches() const
+    const topic_regions &regions() const
     {
-        plexus::native::shm_region_broker broker;
-        plexus::native::shm_region_handle region;
-        return broker.attach(region_name(), region) == plexus::shm::region_status::ok;
+        return m_regions;
     }
 
 private:
     std::string m_fqn;
     std::uint32_t m_count;
+    dial_wiring m_wiring;
     std::vector<std::uint16_t> m_ports;
     plexus::testing::scoped_shm_name m_name;
+    topic_regions m_regions;
     std::optional<plexus::testing::xproc_shared<topology_block>> m_block;
     std::array<std::optional<plexus::testing::xproc_process>, k_max_nodes> m_nodes;
 
@@ -152,9 +157,14 @@ private:
         return m_block->get().nodes[index];
     }
 
-    std::string region_name() const
+    bool launch(std::uint32_t index, std::string_view key, const std::vector<std::string> &args)
     {
-        return plexus::shm::region_name_for(m_fqn, plexus::shm::ring_direction::request);
+        slot(index).ready.store(0, std::memory_order_release);
+        m_nodes[index] = plexus::testing::xproc_process::spawn(key, args);
+        if(!m_nodes[index])
+            return false;
+        return wait_until([&] { return slot(index).ready.load(std::memory_order_acquire) != 0 || !m_nodes[index]->running(); }, 10s) &&
+                slot(index).ready.load(std::memory_order_acquire) != 0;
     }
 
     std::uint32_t issue(std::uint32_t index, node_command cmd, std::uint32_t arg)

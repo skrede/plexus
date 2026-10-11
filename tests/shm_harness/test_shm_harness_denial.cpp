@@ -18,8 +18,8 @@ TEST_CASE("harness a subscriber denied io_uring still receives every message", "
     REQUIRE(topo.wait_connected(10s));
 
     CHECK(topo.warm_up({0}, {1}, 10s));
-    topo.publish_round(0, 20, {1}, 10s);
-    const bool over_shm   = topo.region_attaches();
+    topo.publish_round({0}, 20, {1}, 10s);
+    const bool over_shm   = topo.regions().attaches();
     const node_counts sub = topo.counts(1);
     std::cout << "denial " << summary(sub, over_shm) << std::endl;
 
