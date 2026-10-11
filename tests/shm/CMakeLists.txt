@@ -426,6 +426,18 @@ target_link_libraries(test_shm_registry PRIVATE
 
 catch_discover_tests(test_shm_registry TEST_PREFIX "shm.")
 
+# A notifier that cannot arm must fail the acquire, over the platform broker.
+add_executable(test_shm_registry_arm test_shm_registry_arm.cpp)
+
+target_link_libraries(test_shm_registry_arm PRIVATE
+    plexus::shm
+    plexus::native
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_registry_arm TEST_PREFIX "shm.")
+
 # The ring memory cost query (header-only core): ring_memory_for equals the layout
 # helpers AND the bytes the registry actually requests from the broker for a
 # (payload, capacity) table, pinning the depth-32 16 MiB figure (512 MiB) so a
