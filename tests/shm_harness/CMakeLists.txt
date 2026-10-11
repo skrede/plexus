@@ -46,3 +46,8 @@ endif()
 if(LINUX AND PLEXUS_LIBURING_HAS_FUTEX)
     plexus_add_shm_harness_test(test_shm_harness_denial test_shm_harness_denial.cpp)
 endif()
+
+# Burst-then-idle wake stress over one ring with one producer process and one or two consumer processes.
+if(LINUX)
+    plexus_add_shm_harness_test(test_shm_wake_stress wake_roles.cpp test_shm_wake_stress.cpp)
+endif()

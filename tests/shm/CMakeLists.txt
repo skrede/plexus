@@ -68,7 +68,7 @@ catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 # (the ring drives a caller-supplied anonymous mapped span), proving the family is
 # POSIX/asio-free. They link plexus::shm for the family include path, plexus::core
 # for the engine, and the xproc harness header path.
-add_executable(test_shm_ring_core test_shm_ring_core.cpp test_shm_ring_core_capacity.cpp)
+add_executable(test_shm_ring_core test_shm_ring_core.cpp test_shm_ring_core_capacity.cpp test_shm_ring_magic.cpp)
 
 target_include_directories(test_shm_ring_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
@@ -276,6 +276,33 @@ if(NOT WIN32 AND NOT APPLE)
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
+endif()
+
+# Two waiters sharing one park word: a waiter that unparks erases the park of a waiter still blocked, so the gated
+# signal skips the wake. Drives the Linux futex primitive directly, so it is Linux-only.
+if(NOT WIN32 AND NOT APPLE)
+    add_executable(test_shm_wake_per_waiter test_shm_wake_per_waiter.cpp)
+
+    target_link_libraries(test_shm_wake_per_waiter PRIVATE
+        plexus::native
+        plexus::shm
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_wake_per_waiter TEST_PREFIX "shm.")
+endif()
+
+# Exhaustive interleavings of the park/notify steps over a model of the Linux kernel futex.
+if(NOT WIN32 AND NOT APPLE)
+    add_executable(test_shm_park_protocol test_shm_park_protocol.cpp)
+
+    target_include_directories(test_shm_park_protocol PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_park_protocol PRIVATE
+        plexus::shm
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_park_protocol TEST_PREFIX "shm.")
 endif()
 
 # The first whole-stack cross-process proof: two processes converge on the same
