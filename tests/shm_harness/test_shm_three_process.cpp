@@ -1,9 +1,9 @@
 #include "launch_helpers.h"
 #include "three_process_block.h"
 
-#if defined(__linux__)
-    #include "sem_support.h"
+#if !defined(_WIN32)
     #include "topic_regions.h"
+    #include "region_doorbells.h"
 #endif
 
 #include "support/xproc_control.h"
@@ -130,9 +130,9 @@ bool report_round(std::uint32_t round, const std::array<std::optional<std::uint3
 void require_every_round(std::string_view notifier)
 {
     const std::string fqn = "shm_harness.three." + std::to_string(plexus::testing::process_id());
-#if defined(__linux__)
+#if !defined(_WIN32)
     const topic_regions regions{fqn};
-    const scoped_sem_name sem{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
+    const region_doorbells doorbells{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
 #endif
     three_process topology{fqn, notifier};
     REQUIRE(topology.start());
@@ -155,12 +155,12 @@ TEST_CASE("three_process one publish reaches both subscriber processes", "[shm][
     require_every_round(k_platform_notifier);
 }
 
-TEST_CASE("three_process one publish reaches both subscriber processes through POSIX semaphores", "[shm][three_process][!shouldfail]")
+TEST_CASE("three_process one publish reaches both subscriber processes through POSIX semaphores", "[shm][three_process]")
 {
     require_every_round(k_posix_sem_notifier);
 }
 #else
-TEST_CASE("three_process one publish reaches both subscriber processes", "[shm][three_process][!shouldfail]")
+TEST_CASE("three_process one publish reaches both subscriber processes", "[shm][three_process]")
 {
     require_every_round(k_platform_notifier);
 }

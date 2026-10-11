@@ -95,6 +95,11 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
             PLEXUS_HAS_IO_URING_FUTEX=$<BOOL:${PLEXUS_LIBURING_HAS_FUTEX}>)
     endif()
 
+    # windows/event_doorbell.h builds its owner-only event security descriptor through advapi32.
+    if(WIN32)
+        target_link_libraries(plexus-asio-shm INTERFACE advapi32)
+    endif()
+
     target_compile_features(plexus-asio-shm INTERFACE cxx_std_20)
 
     set_target_properties(plexus-asio-shm PROPERTIES EXPORT_NAME asio-shm)

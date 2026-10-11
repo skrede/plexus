@@ -1,6 +1,5 @@
-#include "sem_support.h"
+#include "region_doorbells.h"
 
-#include "support/xproc_harness.h"
 #include "support/xproc_process.h"
 
 #include "plexus/shm/region_naming.h"
@@ -17,11 +16,11 @@
 
 using namespace std::chrono_literals;
 
-// A burst larger than the wake pipe's capacity blocks the waiter on its write while the reactor is not reading.
-TEST_CASE("sem_pipe a disarm completes after a burst of signals while the reactor is stalled", "[shm][sem_pipe][!shouldfail]")
+// A burst larger than the wake pipe's capacity must not block the waiter while the reactor is not reading.
+TEST_CASE("sem_pipe a disarm completes after a burst of signals while the reactor is stalled", "[shm][sem_pipe]")
 {
     const std::string fqn = "shm_harness.sem_pipe." + std::to_string(plexus::testing::process_id());
-    const shm_harness::scoped_sem_name sem{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
+    const shm_harness::region_doorbells doorbells{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
 
     std::optional<plexus::testing::xproc_process> flood = plexus::testing::xproc_process::spawn("shm_harness.sem_flood", {fqn});
     REQUIRE(flood);

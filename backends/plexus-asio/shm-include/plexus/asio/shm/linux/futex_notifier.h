@@ -12,7 +12,6 @@
 
 #include "plexus/detail/compat.h"
 
-#include <unistd.h>
 #include <sys/eventfd.h>
 
 #include <atomic>
@@ -123,19 +122,13 @@ private:
         std::uint32_t snapshot = ::plexus::shm::park_snapshot(s.header);
         while(!s.stop.load(std::memory_order_acquire))
         {
-            poke(s.doorbell);
+            s.doorbell.poke();
             ::plexus::shm::park_store(s.header, s.slot);
             if(::plexus::shm::park_recheck(s.header, snapshot) && !s.stop.load(std::memory_order_seq_cst))
                 ::plexus::native::notifier_wait(::plexus::shm::park_word(s.header, s.slot), ::plexus::shm::k_park_parked);
             ::plexus::shm::park_clear(s.header, s.slot);
             snapshot = ::plexus::shm::park_snapshot(s.header);
         }
-    }
-
-    static void poke(const detail::fd_doorbell &doorbell) noexcept
-    {
-        const std::uint64_t one = 1;
-        (void)::write(doorbell.native_handle(), &one, sizeof(one));
     }
 
     std::thread m_waiter;

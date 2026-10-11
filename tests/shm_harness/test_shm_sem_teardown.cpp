@@ -1,6 +1,6 @@
-#include "sem_support.h"
 #include "topic_regions.h"
 #include "launch_helpers.h"
+#include "region_doorbells.h"
 #include "three_process_block.h"
 
 #include "support/xproc_control.h"
@@ -30,7 +30,7 @@ std::string outcome(const std::optional<std::int32_t> &status)
     return status ? "exit " + std::to_string(*status) : std::string("killed after the bound");
 }
 
-// The waiter parks on the semaphore notifier and settles, so it is queued on the semaphore before anyone else.
+// The waiter parks on the semaphore notifier and settles before the other process arms on the same ring.
 std::optional<plexus::testing::xproc_process> spawn_parked(const std::string &block, const std::string &fqn, three_role_slot &slot)
 {
     std::optional<plexus::testing::xproc_process> waiter = plexus::testing::xproc_process::spawn("shm_harness.three_sub", {block, "1", fqn, std::string(k_posix_sem_notifier)});
@@ -45,12 +45,12 @@ std::optional<plexus::testing::xproc_process> spawn_parked(const std::string &bl
 
 }
 
-// The disarm's stop post on the shared semaphore can be taken by the waiter another process parked there first.
-TEST_CASE("sem_teardown a waiter's disarm completes while another process waits on the same ring", "[shm][sem_teardown][!shouldfail]")
+// A disarm's stop wake goes to its own waiter's semaphore, so a waiter another process parked on the ring cannot take it.
+TEST_CASE("sem_teardown a waiter's disarm completes while another process waits on the same ring", "[shm][sem_teardown]")
 {
     const std::string fqn = "shm_harness.sem_teardown." + std::to_string(plexus::testing::process_id());
     const topic_regions regions{fqn};
-    const scoped_sem_name sem{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
+    const region_doorbells doorbells{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
     const plexus::testing::scoped_shm_name name{"shm_harness.sem_teardown_block."};
     auto block = plexus::testing::xproc_shared<three_process_block>::create(name.str());
     REQUIRE(block);

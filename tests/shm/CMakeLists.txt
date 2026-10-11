@@ -164,9 +164,9 @@ target_link_libraries(test_shm_same_host PRIVATE
 catch_discover_tests(test_shm_same_host TEST_PREFIX "shm.")
 
 # The naming-budget invariant: the region name is a fixed 16 hex chars for any fqn/direction/
-# namespace, and the composed macOS canonical/slab/notifier names all fit the Darwin 31-char
-# limit. Platform-neutral naming math (no Darwin symbol needed); links plexus::wire for the fqn
-# hash the naming routes through.
+# namespace, the composed macOS canonical/slab names fit the Darwin 31-char limit and the doorbell
+# names the semaphore budget. Platform-neutral naming math (no Darwin symbol needed); links
+# plexus::wire for the fqn hash the naming routes through.
 add_executable(test_region_naming_length test_region_naming_length.cpp)
 
 target_link_libraries(test_region_naming_length PRIVATE
@@ -175,6 +175,15 @@ target_link_libraries(test_region_naming_length PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_region_naming_length TEST_PREFIX "shm.")
+
+# The per-waiter doorbell name: one fixed-array format of region, cursor slot and tag within the macOS semaphore budget.
+add_executable(test_shm_doorbell_naming test_shm_doorbell_naming.cpp)
+
+target_link_libraries(test_shm_doorbell_naming PRIVATE
+    plexus::shm
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_doorbell_naming TEST_PREFIX "shm.")
 
 # The shared-memory selection decision (locality x hint, bilateral) + the
 # per-forwarder acquired-ring refcount set (no singleton).
@@ -873,56 +882,6 @@ target_link_libraries(test_shm_xproc_process PRIVATE
     Catch2::Catch2)
 
 catch_discover_tests(test_shm_xproc_process TEST_PREFIX "shm.")
-
-# The Windows two-process / two-subscriber cross-process wake + delivery proof (xproc): a parent
-# creates the named regions + ring, registers TWO subscriber cursors, and arms one named-event
-# doorbell; a re-exec'd child re-opens the regions BY NAME, publishes one value, and rings the
-# doorbell; both subscribers take the value across the process boundary. The named-event bridge is
-# the Windows same-host wake (no shared-page futex), so this is the Windows analog of the
-# io_uring-futex POSIX dual-delivery leaf. It has a custom main() for the re-exec child dispatcher,
-# so it links the main-less Catch2 target and plexus::testing for the process-id / harness helper.
-if(WIN32)
-    add_executable(windows_test_shm_dual_delivery windows_test_shm_dual_delivery.cpp)
-
-    target_include_directories(windows_test_shm_dual_delivery PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR})
-
-    target_link_libraries(windows_test_shm_dual_delivery PRIVATE
-        plexus::shm
-        plexus::asio
-        plexus::asio::shm
-        plexus::native
-        plexus::wire
-        plexus::testing
-        Catch2::Catch2)
-
-    catch_discover_tests(windows_test_shm_dual_delivery TEST_PREFIX "shm.")
-endif()
-
-# The macOS two-process / two-subscriber cross-process wake + delivery proof (xproc): a parent
-# creates the named regions + ring, registers TWO subscriber cursors, and arms one named-semaphore
-# doorbell; a re-exec'd child re-opens the regions BY NAME, publishes one value, and rings the
-# doorbell; both subscribers take the value across the process boundary. The named POSIX semaphore
-# bridge is the macOS same-host wake (no shared-page futex), so this is the macOS analog of the
-# io_uring-futex POSIX dual-delivery leaf. It has a custom main() for the re-exec child dispatcher,
-# so it links the main-less Catch2 target and plexus::testing for the process-id / harness helper.
-if(APPLE)
-    add_executable(macos_test_shm_dual_delivery macos_test_shm_dual_delivery.cpp)
-
-    target_include_directories(macos_test_shm_dual_delivery PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR})
-
-    target_link_libraries(macos_test_shm_dual_delivery PRIVATE
-        plexus::shm
-        plexus::asio
-        plexus::asio::shm
-        plexus::native
-        plexus::wire
-        plexus::testing
-        Catch2::Catch2)
-
-    catch_discover_tests(macos_test_shm_dual_delivery TEST_PREFIX "shm.")
-endif()
 
 # The wire_fallback per-message routing proof (xproc): a topic in wire_fallback mode
 # mints a CAPPED ring through shm_mux_member's acquire path AND routes per message at the

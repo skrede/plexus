@@ -1,4 +1,5 @@
 #include "plexus/shm/region_naming.h"
+#include "plexus/shm/doorbell_naming.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -7,18 +8,16 @@
 #include <string_view>
 
 // The region name is a fixed 16 hex chars regardless of fqn/direction/namespace length; the
-// macOS backend composes its kernel-object names off that fixed width and must stay within the
-// Darwin PSHMNAMLEN (~31) budget. These are platform-neutral naming-math invariants provable on
-// any host.
+// macOS backend composes its kernel-object names off that fixed width, so its shared-memory names
+// stay within the Darwin PSHMNAMLEN (31) budget and its semaphore doorbells within PSEMNAMLEN.
 
 using namespace plexus::shm;
 
 namespace {
 
-constexpr std::string_view k_region_prefix   = "/plexus.";
-constexpr std::string_view k_slab_suffix     = ".s";
-constexpr std::string_view k_notifier_prefix = "/pxn.";
-constexpr std::size_t k_darwin_name_max      = 31;
+constexpr std::string_view k_region_prefix = "/plexus.";
+constexpr std::string_view k_slab_suffix   = ".s";
+constexpr std::size_t k_darwin_name_max    = 31;
 
 const std::array<std::string, 3> k_fqns{
     std::string{"a"},
@@ -41,7 +40,7 @@ TEST_CASE("region_naming: fixed-width names fit the macOS budget and stay distin
         }
     }
 
-    SECTION("the macOS canonical, slab, and notifier names fit the 31-char budget")
+    SECTION("the macOS canonical and slab names fit the 31-char budget and the doorbell names the semaphore budget")
     {
         for(const auto &fqn : k_fqns)
         {
@@ -49,14 +48,13 @@ TEST_CASE("region_naming: fixed-width names fit the macOS budget and stay distin
 
             const std::size_t region_len   = k_region_prefix.size() + name.size();
             const std::size_t slab_len     = region_len + k_slab_suffix.size();
-            const std::size_t notifier_len = k_notifier_prefix.size() + name.size();
+            const std::size_t doorbell_len = format_doorbell_name(k_semaphore_doorbell_prefix, name, 15, 0xFFFF'FFFFu).size;
 
             REQUIRE(region_len == 24);
             REQUIRE(slab_len == 26);
-            REQUIRE(notifier_len == 21);
             REQUIRE(region_len <= k_darwin_name_max);
             REQUIRE(slab_len <= k_darwin_name_max);
-            REQUIRE(notifier_len <= k_darwin_name_max);
+            REQUIRE(doorbell_len <= k_doorbell_name_max);
         }
     }
 

@@ -13,11 +13,12 @@
 
 #include <asio/io_context.hpp>
 
-#include <string>
+#include <atomic>
+#include <chrono>
+#include <thread>
+#include <cstdint>
 #include <optional>
 #include <string_view>
-
-#include <semaphore.h>
 
 namespace shm_harness {
 
@@ -36,37 +37,17 @@ struct posix_sem_leg
     }
 };
 
-// Mirrors the name the semaphore notifier derives privately from its region.
-inline std::string sem_name_for(std::string_view region)
+inline bool wait_parked(const plexus::shm::control_header_t &header, std::uint32_t slot)
 {
-    return "/pxn." + std::string(region);
+    const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while(header.park[slot].load(std::memory_order_seq_cst) != plexus::shm::k_park_parked)
+    {
+        if(std::chrono::steady_clock::now() > deadline)
+            return false;
+        std::this_thread::yield();
+    }
+    return true;
 }
-
-// Unlinked on destruction so a killed waiter leaves no semaphore behind.
-class scoped_sem_name
-{
-public:
-    explicit scoped_sem_name(std::string_view region)
-            : m_name(sem_name_for(region))
-    {
-    }
-
-    scoped_sem_name(const scoped_sem_name &)            = delete;
-    scoped_sem_name &operator=(const scoped_sem_name &) = delete;
-
-    ~scoped_sem_name()
-    {
-        ::sem_unlink(m_name.c_str());
-    }
-
-    const std::string &str() const noexcept
-    {
-        return m_name;
-    }
-
-private:
-    std::string m_name;
-};
 
 }
 

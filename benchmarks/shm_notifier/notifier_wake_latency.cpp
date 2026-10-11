@@ -1,20 +1,20 @@
-// A wake-latency probe for the macOS shm notifier. It times the full path producer signal() ->
-// sem_post -> waiter thread wakes -> pokes the process-local self-pipe doorbell -> reactor drains
-// -> posted drain runs. The waiter loop pokes the doorbell once at arm (drain-before-wait), so
-// the first poke is consumed before timing begins; thereafter each signal() yields exactly one
-// doorbell poke because the harness waits for the drain before the next signal().
+// Times the macOS shm notifier's wake end to end: producer signal() -> the parked waiter's own
+// named semaphore -> waiter thread -> process-local self-pipe doorbell -> reactor -> posted drain.
 
 #include "plexus/asio/shm/macos/sem_notifier.h"
 
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/region_naming.h"
 
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <string>
+#include <thread>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
@@ -49,6 +49,16 @@ double percentile(std::vector<double> &sorted, double q)
     return sorted[rank];
 }
 
+// A producer wakes only a parked waiter with a registered cursor, so the header registers slot 0
+// and every timed signal waits for the waiter to park first.
+::plexus::shm::control_header_t &one_waiter(::plexus::shm::control_header_t &header)
+{
+    header.consumer_capacity = 1;
+    header.cursors[0].active.store(1, std::memory_order_release);
+    header.high_water.store(1, std::memory_order_release);
+    return header;
+}
+
 // Owns one notifier instance and the single-threaded reactor that drains its doorbell. The
 // notifier's own waiter thread does the sem_wait off this thread; run_one drives the drain here.
 template<typename Notifier>
@@ -58,11 +68,10 @@ public:
     wake_probe()
             : m_io()
             , m_header()
-            , m_notifier(m_io, m_header, "wake." + std::to_string(::getpid()))
+            , m_notifier(m_io, one_waiter(m_header), ::plexus::shm::bare_hex(static_cast<std::uint64_t>(::getpid())))
             , m_drained(0)
             , m_drain_time()
     {
-        m_header.consumer_capacity = 1;
         m_notifier.arm(0, [this] { m_drain_time = clock_type::now(); ++m_drained; });
     }
 
@@ -73,7 +82,9 @@ public:
         for(std::size_t i = 0; i < warmup + iters; ++i)
         {
             const auto target = m_drained + 1;
-            const auto t0     = clock_type::now();
+            while(m_header.park[0].load(std::memory_order_seq_cst) != ::plexus::shm::k_park_parked)
+                std::this_thread::yield();
+            const auto t0 = clock_type::now();
             m_notifier.signal();
             if(!pump_to(target))
                 return false;
@@ -131,12 +142,11 @@ run_stats run_variant()
 
 void emit(std::ostream &out, const run_stats &r)
 {
-    out << "# macOS shm notifier wake-latency (self-pipe doorbell, single process)\n\n";
+    out << "# macOS shm notifier wake-latency (per-waiter semaphore, single process)\n\n";
     out << "Host: Apple Silicon arm64, AppleClang all-options build. " << k_runs << " runs x "
         << k_iters << " timed iterations (" << k_warmup << " warmup discarded).\n";
-    out << "Latency is end-to-end signal() -> drain (steady_clock): sem_post -> waiter wakeup ->\n"
-        << "self-pipe doorbell -> reactor drain -> posted drain. The ~16.8 us floor is the shared\n"
-        << "named-semaphore + cross-thread wakeup leg; the local doorbell is a negligible fraction.\n\n";
+    out << "Latency is end-to-end signal() -> drain (steady_clock): the parked waiter's own semaphore ->\n"
+        << "waiter wakeup -> self-pipe doorbell -> reactor drain -> posted drain.\n\n";
     if(!r.ran)
     {
         out << "The probe did not run on this host; no numbers recorded.\n";

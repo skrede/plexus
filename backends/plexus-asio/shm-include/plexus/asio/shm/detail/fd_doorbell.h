@@ -6,19 +6,23 @@
 #include <asio/posix/stream_descriptor.hpp>
 #include <asio/io_context.hpp>
 
+#include <fcntl.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <memory>
 #include <cstdint>
+#include <utility>
 #include <optional>
 #include <system_error>
-#include <utility>
 
 namespace plexus::asio::shm::detail {
 
 // A process-local read descriptor (an eventfd counter or a self-pipe read end) watched on the
 // user's io_context. The doorbell owns the descriptor and asio only borrows it, so detach() leaves
-// it open for a teardown step that must still run before the close.
+// it open for a teardown step that must still run before the close. Pokes are coalesced: a poke
+// writes only when none is pending since the reactor last drained, so a stalled reactor never fills
+// the descriptor and a poke never blocks.
 class fd_doorbell
 {
 public:
@@ -31,6 +35,8 @@ public:
     fd_doorbell() noexcept
             : m_fd(-1)
             , m_kind(kind::counter)
+            , m_write(-1)
+            , m_pending(false)
             , m_descriptor()
     {
     }
@@ -50,6 +56,35 @@ public:
         m_fd   = fd;
         m_kind = k;
         return fd >= 0;
+    }
+
+    bool open_pipe() noexcept
+    {
+        int fds[2] = {-1, -1};
+        if(::pipe(fds) != 0)
+            return false;
+        for(const int fd : fds)
+        {
+            ::fcntl(fd, F_SETFL, O_NONBLOCK);
+            ::fcntl(fd, F_SETFD, FD_CLOEXEC);
+        }
+        m_write = fds[1];
+        return adopt(fds[0], kind::bytes);
+    }
+
+    // A full descriptor (EAGAIN) already holds a pending poke, so the failed write is dropped.
+    void poke() noexcept
+    {
+        if(m_pending.exchange(true, std::memory_order_acq_rel))
+            return;
+        if(m_kind == kind::counter)
+        {
+            const std::uint64_t one = 1;
+            (void)::write(m_fd, &one, sizeof(one));
+            return;
+        }
+        const unsigned char one = 1;
+        (void)::write(m_write, &one, sizeof(one));
     }
 
     int native_handle() const noexcept
@@ -73,17 +108,21 @@ public:
         m_descriptor->async_wait(::asio::posix::stream_descriptor::wait_read, std::forward<Handler>(handler));
     }
 
-    // One read empties an eventfd counter; a self-pipe yields up to 64 pending pokes per read.
+    // The pending flag clears after the read and before the caller posts its drain: a poke that still found it set is
+    // covered by that drain, and a poke after the clear writes again and re-fires the watch.
     void drain() noexcept
     {
         if(m_kind == kind::counter)
         {
             std::uint64_t count = 0;
             (void)::read(m_fd, &count, sizeof(count));
-            return;
         }
-        unsigned char pokes[64];
-        (void)::read(m_fd, pokes, sizeof(pokes));
+        else
+        {
+            unsigned char pokes[64];
+            (void)::read(m_fd, pokes, sizeof(pokes));
+        }
+        m_pending.exchange(false, std::memory_order_acq_rel);
     }
 
     void detach() noexcept
@@ -101,12 +140,18 @@ public:
         detach();
         if(m_fd >= 0)
             ::close(m_fd);
-        m_fd = -1;
+        if(m_write >= 0)
+            ::close(m_write);
+        m_fd    = -1;
+        m_write = -1;
+        m_pending.store(false, std::memory_order_release);
     }
 
 private:
     int m_fd;
     kind m_kind;
+    int m_write;
+    std::atomic<bool> m_pending;
     std::optional<::asio::posix::stream_descriptor> m_descriptor;
 };
 

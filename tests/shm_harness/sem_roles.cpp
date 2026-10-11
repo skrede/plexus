@@ -1,10 +1,12 @@
 #include "sem_support.h"
+#include "region_doorbells.h"
 
 #include "support/heap_ring.h"
 #include "support/xproc_harness.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/region_naming.h"
+#include "plexus/shm/slot_subscriber.h"
 #include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_acquire_result.h"
 
@@ -13,6 +15,7 @@
 
 #include <asio/io_context.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -21,7 +24,6 @@
 #include <cstdint>
 #include <iostream>
 
-#include <fcntl.h>
 #include <semaphore.h>
 #include <sys/prctl.h>
 
@@ -41,7 +43,7 @@ void settle(::asio::io_context &io, std::chrono::milliseconds span)
     io.run_for(span);
 }
 
-// The first cycle settles so this process's waiter queues on the shared semaphore behind the parked peer's.
+// The first cycle settles so this process's waiter parks while the peer's waiter is parked on the same ring.
 bool sem_cycler(const std::vector<std::string> &argv)
 {
     ::prctl(PR_SET_PDEATHSIG, SIGKILL);
@@ -61,7 +63,7 @@ bool sem_cycler(const std::vector<std::string> &argv)
     return true;
 }
 
-// The waiter stops consuming the shared count only once it blocks, so a count unchanged across a settle means the
+// The waiter stops consuming its semaphore's count only once it blocks, so a count unchanged across a settle means the
 // waiter is either blocked or idle.
 void wait_until_waiter_settles(const std::string &sem_name)
 {
@@ -83,7 +85,7 @@ void wait_until_waiter_settles(const std::string &sem_name)
     std::cout << "sem_flood settled count=" << current << std::endl;
 }
 
-// The reactor is never polled, so every wake the waiter relays stays in its wake pipe.
+// The reactor is never polled, so every wake the waiter relays stays pending in its wake pipe.
 bool sem_flood(const std::vector<std::string> &argv)
 {
     ::prctl(PR_SET_PDEATHSIG, SIGKILL);
@@ -91,10 +93,12 @@ bool sem_flood(const std::vector<std::string> &argv)
         return false;
 
     plexus::testing::heap_ring heap{16, 64};
+    plexus::shm::slot_subscriber subscriber{heap.ring()};
     ::asio::io_context io;
     const std::string region = plexus::shm::region_name_for(argv[0], k_request);
     sem_notifier notifier{io, heap.ring().header(), region};
-    if(!heap.created() || notifier.arm(0, [] {}) != plexus::shm::arm_status::armed)
+    const std::uint32_t slot = subscriber.cursor_index().value_or(0);
+    if(!heap.created() || !subscriber.cursor_index() || notifier.arm(slot, [] {}) != plexus::shm::arm_status::armed)
         return false;
 
     std::thread signaler(
@@ -104,7 +108,7 @@ bool sem_flood(const std::vector<std::string> &argv)
                     notifier.signal();
             });
     signaler.join();
-    wait_until_waiter_settles(sem_name_for(region));
+    wait_until_waiter_settles(sem_name_for(region, slot, heap.ring().header().cursors[slot].waiter_tag.load(std::memory_order_acquire)));
     notifier.disarm();
     return true;
 }

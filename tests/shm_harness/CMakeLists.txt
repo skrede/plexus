@@ -74,8 +74,8 @@ endfunction()
 # every platform.
 plexus_add_shm_xproc_test(test_shm_three_process three_process_roles.cpp test_shm_three_process.cpp)
 
-# Every case is an expected failure that runs the POSIX-semaphore notifier on Linux: a disarm whose stop wake another
-# process's waiter takes, a wake pipe filled while the reactor is stalled, and a stale semaphore adopted by name. A
+# The POSIX-semaphore notifier run on Linux: a disarm while another process's waiter is parked on the ring, a burst of
+# wakes while the reactor is stalled, a semaphore name already taken, and a notifier destroyed with a drain pending. A
 # case that can hang runs its hanging side in a child the parent kills after a bound.
 if(LINUX)
     plexus_add_shm_xproc_test(test_shm_sem_notifier
@@ -83,5 +83,29 @@ if(LINUX)
         sem_roles.cpp
         test_shm_sem_teardown.cpp
         test_shm_sem_pipe.cpp
-        test_shm_sem_adoption.cpp)
+        test_shm_sem_adoption.cpp
+        test_shm_sem_pending.cpp)
+endif()
+
+# The allocation counter replaces the global operator new for the whole binary, so the signal-path gate has its own
+# executable and runs alone.
+if(LINUX)
+    add_executable(test_shm_sem_alloc test_shm_sem_alloc.cpp)
+
+    target_include_directories(test_shm_sem_alloc PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}/tests/shm
+        ${PROJECT_SOURCE_DIR}/tests)
+
+    target_link_libraries(test_shm_sem_alloc PRIVATE
+        plexus::shm
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        plexus::wire
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_sem_alloc TEST_PREFIX "shm."
+        PROPERTIES RUN_SERIAL TRUE)
 endif()
