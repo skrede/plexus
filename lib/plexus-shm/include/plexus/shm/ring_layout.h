@@ -31,15 +31,14 @@ inline constexpr std::size_t k_max_consumers = 16;
 // Magic + version word stamped by the creator into the control header and
 // re-validated by an attacher before it trusts any other header field. A
 // mismatch means the region is foreign or a layout-incompatible build.
-inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'33'00ull; // "PLXRNG3\0"
+inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'34'00ull; // "PLXRNG4\0"
 
-// The 3-state encoding of the parked-waiter word in control_header_t (a SEPARATE
-// atom from notify_generation: the generation says WHAT to drain, the park-state
-// says WHETHER anyone is asleep). A producer reads it to skip the FUTEX_WAKE
-// syscall when no consumer is parked; the canonical EMPTY/PARKED/NOTIFIED futex
-// parking encoding rules out the lost wakeup when the consumer stores PARKED
-// (release) before committing to the wait and re-checks the generation. EMPTY is
-// the zero-init default so a freshly created header parks nobody without a store.
+// The 3-state encoding of each cursor slot's park word (a SEPARATE atom from
+// notify_generation: the generation says WHAT to drain, the park word says WHETHER
+// that cursor's waiter is asleep). The waiter blocks on its own word while it reads
+// PARKED, and a producer wakes it only on a PARKED -> NOTIFIED exchange, so a
+// spinning (EMPTY) waiter costs the producer no wake syscall. EMPTY is the
+// zero-init default so a freshly created header parks nobody without a store.
 // (Reference: the std/parking_lot 3-state thread-parking word.)
 inline constexpr std::uint32_t k_park_empty    = 0;
 inline constexpr std::uint32_t k_park_parked   = 1;
@@ -123,10 +122,13 @@ struct alignas(k_cache_line) cell_t
 // advancing its cursor does not thrash the line of an adjacent consumer or the
 // producer's enqueue counter. `position` is a 64-bit monotonically-advancing
 // index, mirroring the sequence width. `active` marks a registered slot.
+// `waiter_tag` names the waiter's own doorbell where the platform wakes through
+// a named kernel object instead of a futex.
 struct alignas(k_cache_line) cursor_t
 {
     std::atomic<std::uint64_t> position;
     std::atomic<std::uint32_t> active;
+    std::atomic<std::uint32_t> waiter_tag;
 };
 
 // Control header placement-new'd at the front of the control+cells region. The
@@ -157,25 +159,17 @@ struct control_header_t
     alignas(k_cache_line) cursor_t cursors[k_max_consumers];
 
     // Monotonic wakeup-generation counter for the cross-process consumer
-    // notifier. ANY producer process bumps it (release) after publishing and
-    // wakes a waiter blocked on it by address; the consumer reads it, drains,
-    // then waits on the last-seen value so a bump that lands between drain and
-    // wait is never lost. It lives on its OWN cache line, mirroring enqueue_pos,
-    // so producer wakeups do not thrash the consumer-cursor line. It is a 4-byte
-    // lock-free atomic (== the kernel futex word width) so the by-address wakeup
-    // syscall operates on it directly across address spaces.
+    // notifier. ANY producer process bumps it after publishing; a waiter
+    // snapshots it before it drains and re-checks it after storing PARKED, so a
+    // bump that lands between the drain and the block keeps the waiter awake. It
+    // lives on its OWN cache line, mirroring enqueue_pos, so producer wakeups do
+    // not thrash the consumer-cursor lines.
     alignas(k_cache_line) std::atomic<std::uint32_t> notify_generation;
 
-    // The parked-waiter 3-state (k_park_empty/parked/notified). A consumer's
-    // notifier park boundary stores PARKED (release) before committing to the futex
-    // wait; the producer's gated wake swaps it to NOTIFIED and issues FUTEX_WAKE
-    // ONLY when the prior state was PARKED, so a busy/spinning (EMPTY) consumer costs
-    // the producer zero wake syscalls. It lives on its OWN cache line so the
-    // producer's wake-gate read and the consumer's park store never thrash the
-    // generation line. A distinct word from notify_generation on purpose: folding
-    // the bit into the generation would couple the kernel FUTEX_WAIT value-compare
-    // to the park state and risk a lost wake.
-    alignas(k_cache_line) std::atomic<std::uint32_t> park_state;
+    // One park word per cursor slot, packed on ONE line apart from the cursors: a
+    // waiter writes its word only when it parks or unparks, so the producer's wake
+    // gate reads a single clean line however busy the consumers' cursor lines are.
+    alignas(k_cache_line) std::atomic<std::uint32_t> park[k_max_consumers];
 
     // Monotonic high-water of registered broadcast cursors: the largest (index + 1)
     // any register_cursor has ever claimed. The reliable-reclaim scan bounds its
@@ -184,7 +178,7 @@ struct control_header_t
     // it), so a stale registered cursor is always below the high-water it set and
     // the scan can never miss it; the dense ascending allocation keeps it near-tight.
     // On its OWN cache line so a register-time bump never thrashes the producer's
-    // park/generation lines.
+    // generation line.
     alignas(k_cache_line) std::atomic<std::uint32_t> high_water;
 
     constexpr std::size_t cursor_region_capacity() const noexcept
@@ -210,15 +204,18 @@ static_assert(std::is_standard_layout_v<cursor_t>, "cursor_t must be standard-la
 static_assert(std::is_standard_layout_v<control_header_t>, "control_header_t must be standard-layout for SHM placement");
 
 // Pin the cross-process layout: enqueue_pos line + config line + cursor array +
-// notify_generation line + park_state line + high_water line, each
-// cache-line-aligned. consumer_capacity rides the existing config line (it fits the
-// 64 bytes alongside magic/cell_count/slot_capacity/mask), so adding it does not
-// grow the header and this size formula is unchanged. An unintended field add/reorder
-// (which would shift every in-region offset and silently mismap a peer) fails the
-// build here. A deliberate layout change updates this size AND bumps k_ring_magic so
-// an old region fails-closed on attach.
+// notify_generation line + park line + high_water line, each cache-line-aligned.
+// consumer_capacity rides the existing config line (it fits the 64 bytes alongside
+// magic/cell_count/slot_capacity/mask), so it does not grow the header. An
+// unintended field add/reorder (which would shift every in-region offset and
+// silently mismap a peer) fails the build here. A deliberate layout change updates
+// this size AND bumps k_ring_magic so an old region fails-closed on attach.
 static_assert(sizeof(control_header_t) == k_cache_line * 2 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 3,
               "control_header_t layout drift -- update the size guard and bump k_ring_magic");
+static_assert(sizeof(cursor_t) == k_cache_line, "cursor_t must stay one cache line");
+static_assert(sizeof(control_header_t::park) == k_cache_line && alignof(control_header_t) >= k_cache_line, "the park words must fill exactly one cache line");
+static_assert(offsetof(control_header_t, park) == k_cache_line * 3 + k_max_consumers * sizeof(cursor_t), "the park line must follow the notify_generation line");
+static_assert(k_max_consumers <= 32, "a 32-bit parked-slot mask must cover every cursor");
 
 // Round a byte count up to the next multiple of eight so a slot base laid out
 // at i*slot_capacity, over a page-aligned slab base, is always 8-aligned.

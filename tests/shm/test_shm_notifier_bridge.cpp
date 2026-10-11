@@ -35,7 +35,7 @@
 #include <sys/wait.h>
 
 // The wakeup -> reactor bridge functional proof (xproc): a PRODUCER process
-// publishes into the shared ring and signals the in-region notify word; the
+// publishes into the shared ring and wakes the consumer's parked slot; the
 // CONSUMER (parent) has armed the io_uring-futex bridge on its OWN asio reactor.
 // The parent drives ONLY its user-owned io_context (run_for) -- there is no
 // plexus-spawned loop. The cross-process futex wake reaps the io_uring CQE on a
@@ -88,8 +88,7 @@ std::string slab_name(const std::string &fqn)
 constexpr std::uint32_t k_payload = 0xBEEF1234u;
 
 // The producer child: attach the consumer's regions, publish ONE value into the
-// ring, then signal the in-region notify word (the cross-process futex wake the
-// parent's bridge is parked on).
+// ring, then signal through a never-armed notifier (the production producer path).
 bool produce(const std::string &fqn)
 {
     posix_shm_region_broker broker;
@@ -108,14 +107,13 @@ bool produce(const std::string &fqn)
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
 
-    plexus::native::notifier_signal(ring.header().notify_generation);
+    ::asio::io_context io;
+    plexus::asio::shm::ring_notifier<test_policy> notifier(io, ring.header(), "");
+    notifier.signal();
     return true;
 }
 
-// The GATED producer child: attach, publish ONE value, then drive the TWO-ARG gated
-// signal over (generation, park_state). The wake is issued only if the consumer's
-// notifier stored PARKED before its io_uring submit (the A2 ordering). Used by the
-// submit-time-registration leg below.
+// The same publish, woken by the native per-slot gate directly.
 bool produce_gated(const std::string &fqn)
 {
     posix_shm_region_broker broker;
@@ -134,7 +132,7 @@ bool produce_gated(const std::string &fqn)
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
 
-    plexus::native::notifier_signal(ring.header().notify_generation, ring.header().park_state);
+    plexus::native::notifier_signal(ring.header());
     return true;
 }
 
@@ -222,14 +220,10 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
           "registration)",
           "[shm][notifier_bridge][wake_gating][submit_futex]")
 {
-    // The A2 proof: the io_uring submit-time waiter registration closes the lost-wake
-    // window for the GATED wake. The consumer's submit_futex_wait stores PARKED
-    // (release) BEFORE io_uring_submit registers the waiter; the producer's TWO-ARG
-    // gated signal reads park_state and issues the FUTEX_WAKE only because it observes
-    // PARKED. If the kernel registered the waiter LATER than the submit (A2 false), the
-    // producer could read a stale non-PARKED state, skip the wake, and the consumer
-    // would never drain — surfacing as the deadline timeout below, never a silent hang.
-    // Looped N>=100; the parked consumer drives the REAL submit_futex_wait path.
+    // The consumer's arm stores PARKED in its park slot before io_uring_submit registers
+    // the futex wait on that word; the producer's gate issues the FUTEX_WAKE only because
+    // it observes PARKED. A skipped wake leaves the consumer undrained, surfacing as the
+    // deadline timeout below, never a silent hang. Looped N>=100.
     const std::string fqn         = "topic.bridgegate." + std::to_string(plexus::testing::process_id());
     const pio::ring_geometry geom = pio::ring_geometry_for(std::nullopt);
 
@@ -258,9 +252,6 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
         REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
-        // The GATED bridge: bound to BOTH the generation word AND the in-region park
-        // word, so submit_futex_wait stores PARKED before its io_uring submit and the
-        // producer's gated signal reads it.
         plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");
 
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
@@ -277,9 +268,8 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
                     channel.drain(deliver);
                 });
 
-        // arm() ran submit_futex_wait: the consumer is now PARKED (the store preceded
-        // the io_uring submit). Release the producer only now so its gated signal must
-        // observe PARKED to land the wake.
+        // arm() parked the consumer in its park slot; release the producer only now so
+        // its gate must observe PARKED to land the wake.
         c->regions_ready.store(1, std::memory_order_release);
 
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);

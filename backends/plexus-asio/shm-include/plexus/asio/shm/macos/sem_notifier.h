@@ -31,7 +31,7 @@ class sem_notifier
 {
     struct state
     {
-        state(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park, std::string sem_name) noexcept
+        state(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::string sem_name) noexcept
                 : sem(SEM_FAILED)
                 , owns_sem(false)
                 , pipe_write(-1)
@@ -39,7 +39,6 @@ class sem_notifier
                 , stop(false)
                 , doorbell()
                 , word(word)
-                , park(park)
                 , bridge(executor)
         {
         }
@@ -51,7 +50,6 @@ class sem_notifier
         std::atomic<bool> stop;
         detail::fd_doorbell doorbell;
         std::atomic<std::uint32_t> &word;
-        std::atomic<std::uint32_t> &park;
         ::plexus::shm::detail::notifier_bridge<Policy> bridge;
     };
 
@@ -60,7 +58,7 @@ public:
 
     sem_notifier(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header, std::string_view region_name)
             : m_waiter()
-            , m_state(std::make_shared<state>(executor, header.notify_generation, header.park_state, sem_name_for(region_name)))
+            , m_state(std::make_shared<state>(executor, header.notify_generation, sem_name_for(region_name)))
     {
     }
 
@@ -166,9 +164,7 @@ private:
         {
             const unsigned char one = 1;
             (void)::write(s.pipe_write, &one, sizeof(one));
-            s.park.store(::plexus::shm::k_park_parked, std::memory_order_release);
             ::sem_wait(s.sem);
-            s.park.store(::plexus::shm::k_park_empty, std::memory_order_release);
         }
     }
 

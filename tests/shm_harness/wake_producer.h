@@ -10,6 +10,7 @@
 #include "plexus/native/futex_notifier_primitive.h"
 
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/waiter_park.h"
 #include "plexus/shm/loaned_buffer.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/slot_publisher.h"
@@ -78,7 +79,7 @@ public:
             return true;
         }
         m_block.stalls.fetch_add(1, std::memory_order_acq_rel);
-        plexus::native::notifier_signal(m_ring.header().notify_generation);
+        rescue();
         return observed_by(std::chrono::steady_clock::now() + std::chrono::seconds(5));
     }
 
@@ -139,6 +140,17 @@ private:
                 return false;
         }
         return true;
+    }
+
+    void rescue() noexcept
+    {
+        plexus::shm::control_header_t &header = m_ring.header();
+        const std::uint32_t slots             = header.high_water.load(std::memory_order_acquire);
+        for(std::uint32_t slot = 0; slot < slots && slot < plexus::shm::k_max_consumers; ++slot)
+        {
+            plexus::shm::park_word(header, slot).store(plexus::shm::k_park_notified, std::memory_order_seq_cst);
+            plexus::native::notifier_wake(plexus::shm::park_word(header, slot));
+        }
     }
 
     static void spin_for(std::chrono::microseconds gap)

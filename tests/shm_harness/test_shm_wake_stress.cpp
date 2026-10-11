@@ -100,17 +100,17 @@ void require_no_stall(std::uint32_t consumers, std::string_view leg)
 
 }
 
-TEST_CASE("wake_stress two consumer processes observe every final message", "[.][shm-stress]")
+TEST_CASE("wake_stress two consumer processes observe every final message", "[shm-stress]")
 {
     require_no_stall(2, k_production_leg);
 }
 
-TEST_CASE("wake_stress two consumer processes on the threaded leg observe every final message", "[.][shm-stress]")
+TEST_CASE("wake_stress two consumer processes on the threaded leg observe every final message", "[shm-stress]")
 {
     require_no_stall(2, k_threaded_leg);
 }
 
-TEST_CASE("wake_stress a single waiter never stalls", "[.][shm-stress]")
+TEST_CASE("wake_stress a single waiter never stalls", "[shm-stress]")
 {
     require_no_stall(1, k_production_leg);
 }

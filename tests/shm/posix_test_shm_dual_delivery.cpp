@@ -42,7 +42,7 @@
 
 // Dual-delivery (xproc): the same-host shared-memory upgrade ADDS a fast path; it
 // does NOT REPLACE the wire path. For ONE topic, this oracle proves both flows coexist:
-//   * the SHM leg — a forked producer publishes + signals the in-region notify word; the
+//   * the SHM leg — a forked producer publishes + wakes the consumer's parked slot; the
 //     parent's io_uring-futex bridge reaps the cross-process wake on its OWN asio reactor
 //     and the drain delivers the value over the shm_channel.
 //   * the WIRE leg — for the SAME topic, a loopback TCP peer delivers the SAME bytes over
@@ -88,8 +88,8 @@ std::string slab_name(const std::string &fqn)
 
 constexpr std::uint32_t k_payload = 0xD04D11EFu;
 
-// The producer child: attach the parent's SHM regions, publish ONE value, signal the
-// notify word (the SHM cross-process wake the parent's bridge is parked on).
+// The producer child: attach the parent's SHM regions, publish ONE value, wake the
+// parked slot (the SHM cross-process wake the parent's bridge is parked on).
 bool produce_shm(const std::string &fqn)
 {
     posix_shm_region_broker broker;
@@ -105,7 +105,7 @@ bool produce_shm(const std::string &fqn)
     std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
-    plexus::native::notifier_signal(ring.header().notify_generation);
+    plexus::native::notifier_signal(ring.header());
     return true;
 }
 
@@ -153,7 +153,7 @@ TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic c
         }
 
         // The SHM leg (consumer parent): create the regions, build the channel, arm the
-        // bridge on a user-owned io_context bound to the ring's notify word.
+        // bridge on a user-owned io_context bound to the ring's header.
         posix_shm_region_broker broker;
         region_handle ctrl, slab;
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);

@@ -258,13 +258,10 @@ if(NOT WIN32 AND NOT APPLE)
     catch_discover_tests(test_shm_notifier_lostwakeup TEST_PREFIX "shm.")
 endif()
 
-# The parked-flag-gated wake: the wake decision is gated off the prior park-state (a
-# pure predicate, so zero-wake-when-spinning is asserted off the syscall), a spinning
-# consumer leaves the gated signal NOTIFIED parking nobody, and a forked parked
-# consumer is still woken across address spaces by the two-arg gated signal (the
-# lost-wakeup guard on the gated path). Links plexus::native for the raw SYS_futex bodies.
-# Drives the Linux futex notifier primitive directly (SYS_futex, <linux/futex.h>), so it is
-# Linux-only and excluded on Windows AND macOS (neither carries the futex notifier body).
+# The per-slot wake gate: only a registered slot whose waiter is PARKED asks for a wake, the
+# scan stays inside the cursor array whatever the header claims, and a forked parked waiter
+# is still woken across address spaces. Drives the Linux futex notifier primitive directly
+# (SYS_futex, <linux/futex.h>), so it is Linux-only.
 if(NOT WIN32 AND NOT APPLE)
     add_executable(test_shm_wake_gating test_shm_wake_gating.cpp)
 
@@ -273,15 +270,19 @@ if(NOT WIN32 AND NOT APPLE)
 
     target_link_libraries(test_shm_wake_gating PRIVATE
         plexus::native
+        plexus::shm
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_wake_gating TEST_PREFIX "shm.")
 endif()
 
-# Two waiters sharing one park word: a waiter that unparks erases the park of a waiter still blocked, so the gated
-# signal skips the wake. Drives the Linux futex primitive directly, so it is Linux-only.
+# Two waiters in their own park slots: a waiter that unparks leaves the park of a waiter still blocked intact. Drives
+# the Linux futex primitive directly, so it is Linux-only.
 if(NOT WIN32 AND NOT APPLE)
     add_executable(test_shm_wake_per_waiter test_shm_wake_per_waiter.cpp)
+
+    target_include_directories(test_shm_wake_per_waiter PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_wake_per_waiter PRIVATE
         plexus::native
@@ -291,7 +292,8 @@ if(NOT WIN32 AND NOT APPLE)
     catch_discover_tests(test_shm_wake_per_waiter TEST_PREFIX "shm.")
 endif()
 
-# Exhaustive interleavings of the park/notify steps over a model of the Linux kernel futex.
+# Exhaustive interleavings of the park/notify steps: the per-slot parker over the real ring header, and the rejected
+# orderings over a model of the Linux kernel futex.
 if(NOT WIN32 AND NOT APPLE)
     add_executable(test_shm_park_protocol test_shm_park_protocol.cpp)
 

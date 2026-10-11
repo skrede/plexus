@@ -1,5 +1,7 @@
 #include "plexus/native/futex_notifier_primitive.h"
 
+#include "plexus/shm/waiter_park.h"
+
 #include <climits>
 
 #include <unistd.h>
@@ -35,22 +37,19 @@ void notifier_signal(std::atomic<std::uint32_t> &generation) noexcept
     futex_op(reinterpret_cast<std::uint32_t *>(&generation), FUTEX_WAKE, INT_MAX);
 }
 
-void notifier_signal(std::atomic<std::uint32_t> &generation, std::atomic<std::uint32_t> &park_state) noexcept
+void notifier_signal(::plexus::shm::control_header_t &header) noexcept
 {
-    generation.fetch_add(1, std::memory_order_release);
-    // Publish NOTIFIED and read the prior state in one swap (acq_rel): the acquire
-    // half pairs with the consumer's release store of PARKED, so a PARKED we observe
-    // here happened-before our generation bump is visible to it. Wake only when the
-    // consumer was actually parked; a spinning (EMPTY) consumer sees the generation
-    // move on its own, and an already-NOTIFIED state means a wake is already pending.
-    const std::uint32_t prior = park_state.exchange(::plexus::shm::k_park_notified, std::memory_order_acq_rel);
-    if(should_wake(prior))
-        futex_op(reinterpret_cast<std::uint32_t *>(&generation), FUTEX_WAKE, INT_MAX);
+    ::plexus::shm::wake_parked(header, ::plexus::shm::signal_parked(header), notifier_wake);
 }
 
-void notifier_wait(std::atomic<std::uint32_t> &generation, std::uint32_t last_seen) noexcept
+void notifier_wake(std::atomic<std::uint32_t> &word) noexcept
 {
-    futex_op(reinterpret_cast<std::uint32_t *>(&generation), FUTEX_WAIT, last_seen);
+    futex_op(reinterpret_cast<std::uint32_t *>(&word), FUTEX_WAKE, INT_MAX);
+}
+
+void notifier_wait(std::atomic<std::uint32_t> &word, std::uint32_t expected) noexcept
+{
+    futex_op(reinterpret_cast<std::uint32_t *>(&word), FUTEX_WAIT, expected);
 }
 
 int make_notifier_eventfd() noexcept

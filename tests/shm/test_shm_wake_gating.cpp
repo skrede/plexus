@@ -1,9 +1,13 @@
+#include "support/registered_waiters.h"
+
 #include "plexus/native/futex_notifier_primitive.h"
 
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/waiter_park.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <new>
 #include <atomic>
 #include <cstdint>
 
@@ -11,30 +15,15 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 
-// The parked-flag-gated wake: a producer publishing while the consumer is SPINNING
-// (park_state == EMPTY) issues ZERO FUTEX_WAKE syscalls; a producer publishing while
-// the consumer IS parked still wakes it (no lost wakeup). Two proofs:
-//   (1) the wake DECISION is gated off the prior park-state (a pure predicate, so the
-//       zero-wake-when-spinning claim is asserted off the syscall): should_wake is
-//       true ONLY for PARKED, false for EMPTY (spinning) and NOTIFIED (already pending).
-//   (2) WOKEN-WHEN-PARKED crosses address spaces: a forked child stores PARKED then
-//       FUTEX_WAITs on the shared generation word; the parent's two-arg gated signal
-//       observes PARKED and delivers the wake. Looped N>=100; the binary is re-run
-//       >=3 times for reproducibility.
-// The existing test_shm_notifier_lostwakeup is the UNTOUCHED template for the fork'd
-// shared-page pattern; this TU adds the park-state word and exercises the gated path.
-
 namespace {
 
 using namespace plexus::shm;
+using plexus::testing::register_waiters;
 
-// A shared anonymous page holding the gated wakeup state: the generation word the
-// futex rides on + the 3-state park word the producer reads to gate the syscall.
 struct shared_state
 {
-    std::atomic<std::uint32_t> generation{0};
-    std::atomic<std::uint32_t> park_state{k_park_empty};
-    std::atomic<std::uint32_t> child_armed{0}; // the consumer announces PARKED is stored
+    control_header_t header;
+    std::atomic<std::uint32_t> child_parked;
 };
 
 shared_state *map_shared_state()
@@ -42,67 +31,64 @@ shared_state *map_shared_state()
     void *p = ::mmap(nullptr, sizeof(shared_state), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
     if(p == MAP_FAILED)
         return nullptr;
-    return ::new(p) shared_state{};
+    shared_state *s = ::new(p) shared_state{};
+    register_waiters(s->header, 1);
+    return s;
 }
 
-// The consumer half: store PARKED (release) before committing to the wait, announce
-// armed, then FUTEX_WAIT until the generation moves. Mirrors the notifier park
-// boundary (store PARKED before the wait) so the parent's gated signal sees PARKED.
-bool consumer_park_and_wait(shared_state *s)
+void park_and_wait(shared_state &s)
 {
-    const std::uint32_t last_seen = s->generation.load(std::memory_order_acquire);
-    s->park_state.store(k_park_parked, std::memory_order_release);
-    s->child_armed.store(1, std::memory_order_release);
-    while(s->generation.load(std::memory_order_acquire) == last_seen)
-        plexus::native::notifier_wait(s->generation, last_seen);
-    return true;
+    const std::uint32_t snapshot = park_snapshot(s.header);
+    park_store(s.header, 0);
+    s.child_parked.store(1, std::memory_order_release);
+    if(!park_recheck(s.header, snapshot))
+        return;
+    while(park_word(s.header, 0).load(std::memory_order_acquire) == k_park_parked)
+        plexus::native::notifier_wait(park_word(s.header, 0), k_park_parked);
 }
 
 }
 
-TEST_CASE("shm.wake_gating the wake decision is gated off the prior park-state", "[shm][wake_gating]")
+TEST_CASE("shm.wake_gating only a parked waiter's slot asks for a wake", "[shm][wake_gating]")
 {
-    // The zero-wake-when-spinning claim, asserted off the syscall: a producer wakes
-    // ONLY when the consumer was PARKED. EMPTY (spinning) and NOTIFIED (a wake is
-    // already pending) skip the FUTEX_WAKE entirely.
-    REQUIRE(plexus::native::should_wake(k_park_empty) == false);
-    REQUIRE(plexus::native::should_wake(k_park_parked) == true);
-    REQUIRE(plexus::native::should_wake(k_park_notified) == false);
+    control_header_t header{};
+    register_waiters(header, 2);
+
+    REQUIRE(signal_parked(header) == 0);
+    REQUIRE(park_word(header, 0).load() == k_park_empty);
+
+    park_word(header, 0).store(k_park_notified);
+    REQUIRE(signal_parked(header) == 0);
+
+    park_store(header, 1);
+    REQUIRE(signal_parked(header) == 0b10u);
+    REQUIRE(park_word(header, 1).load() == k_park_notified);
 }
 
-TEST_CASE("shm.wake_gating a spinning consumer leaves the gated signal NOTIFIED and parks nobody", "[shm][wake_gating]")
+TEST_CASE("shm.wake_gating an unregistered slot is never woken", "[shm][wake_gating]")
 {
-    // Single-process: with the consumer SPINNING (park_state == EMPTY) the gated
-    // signal bumps the generation and swaps the park word to NOTIFIED without ever
-    // FUTEX_WAITing — so the producer's wake is a no-op syscall-wise (the prior state
-    // was not PARKED). We assert the protocol's observable state transition: the
-    // generation advanced and the park word reads NOTIFIED (a spinning consumer will
-    // observe the generation move on its own and reset it on its next park).
-    shared_state *s = map_shared_state();
-    REQUIRE(s != nullptr);
+    control_header_t header{};
+    register_waiters(header, 2);
+    header.cursors[1].active.store(0);
+    park_store(header, 1);
 
-    for(int iter = 0; iter < 100; ++iter)
-    {
-        s->generation.store(0, std::memory_order_relaxed);
-        s->park_state.store(k_park_empty, std::memory_order_relaxed);
-
-        const std::uint32_t before = s->generation.load(std::memory_order_acquire);
-        plexus::native::notifier_signal(s->generation, s->park_state);
-
-        REQUIRE(s->generation.load(std::memory_order_acquire) != before);
-        REQUIRE(s->park_state.load(std::memory_order_acquire) == k_park_notified);
-    }
-
-    ::munmap(s, sizeof(shared_state));
+    REQUIRE(signal_parked(header) == 0);
+    REQUIRE(park_word(header, 1).load() == k_park_parked);
 }
 
-TEST_CASE("shm.wake_gating a parked consumer is woken by the gated signal across address spaces", "[shm][wake_gating]")
+TEST_CASE("shm.wake_gating a rewritten capacity never scans past the cursor array", "[shm][wake_gating]")
 {
-    // WOKEN-WHEN-PARKED (the lost-wakeup guard on the GATED path): a forked child
-    // stores PARKED then FUTEX_WAITs; the parent's two-arg gated signal observes the
-    // PARKED state and issues the FUTEX_WAKE that crosses the process boundary. If the
-    // gate wrongly skipped the wake the child would block forever and waitpid would
-    // hang — surfacing as the failure. Looped N>=100.
+    control_header_t header{};
+    register_waiters(header, static_cast<std::uint32_t>(k_max_consumers));
+    header.consumer_capacity = 1000;
+    header.high_water.store(1000);
+    park_store(header, k_max_consumers - 1);
+
+    REQUIRE(signal_parked(header) == std::uint32_t{1} << (k_max_consumers - 1));
+}
+
+TEST_CASE("shm.wake_gating a parked waiter is woken across address spaces", "[shm][wake_gating]")
+{
     for(int iter = 0; iter < 100; ++iter)
     {
         shared_state *s = map_shared_state();
@@ -112,17 +98,13 @@ TEST_CASE("shm.wake_gating a parked consumer is woken by the gated signal across
         REQUIRE(pid >= 0);
         if(pid == 0)
         {
-            const bool ok = consumer_park_and_wait(s);
-            ::_exit(ok ? 0 : 1);
+            park_and_wait(*s);
+            ::_exit(0);
         }
 
-        // Parent (producer): wait until the child has stored PARKED + armed, then drive
-        // the GATED signal. The child's release store of PARKED happens-before the
-        // parent's acquire-exchange in the gated signal, so the prior state it reads is
-        // PARKED and the wake is issued.
-        while(s->child_armed.load(std::memory_order_acquire) == 0)
-            ; // spin until the child has parked
-        plexus::native::notifier_signal(s->generation, s->park_state);
+        while(s->child_parked.load(std::memory_order_acquire) == 0)
+            ;
+        plexus::native::notifier_signal(s->header);
 
         int status = 0;
         while(::waitpid(pid, &status, 0) < 0)

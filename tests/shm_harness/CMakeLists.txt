@@ -49,5 +49,5 @@ endif()
 
 # Burst-then-idle wake stress over one ring with one producer process and one or two consumer processes.
 if(LINUX)
-    plexus_add_shm_harness_test(test_shm_wake_stress wake_roles.cpp test_shm_wake_stress.cpp)
+    plexus_add_shm_harness_test(test_shm_wake_stress wake_roles.cpp test_shm_wake_stress.cpp PROPERTIES TIMEOUT 300)
 endif()

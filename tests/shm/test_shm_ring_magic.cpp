@@ -1,5 +1,7 @@
 #include "test_shm_ring_core_common.h"
 
+#include "plexus/shm/waiter_park.h"
+
 using namespace shm_ring_core_fixture;
 
 namespace {
@@ -23,7 +25,7 @@ loan_status attach_stamped(std::uint64_t magic)
 
 }
 
-TEST_CASE("ring_magic a region stamped with the previous layout magic fails closed", "[shm][ring_magic][!shouldfail]")
+TEST_CASE("ring_magic a region stamped with the previous layout magic fails closed", "[shm][ring_magic]")
 {
     REQUIRE(attach_stamped(k_previous_ring_magic) == loan_status::rejected);
 }
@@ -31,4 +33,23 @@ TEST_CASE("ring_magic a region stamped with the previous layout magic fails clos
 TEST_CASE("ring_magic a region stamped with the current magic attaches", "[shm][ring_magic]")
 {
     REQUIRE(attach_stamped(k_ring_magic) == loan_status::ok);
+}
+
+TEST_CASE("ring_magic every slot's park word sits on one cache line apart from the cursors", "[shm][ring_magic]")
+{
+    backing_region control(control_region_bytes(k_cells));
+    backing_region slab(slab_region_bytes(k_cells, k_slot));
+    broadcast_ring ring;
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
+
+    const auto *base  = reinterpret_cast<const std::byte *>(&ring.header());
+    const auto *first = reinterpret_cast<const std::byte *>(&plexus::shm::park_word(ring.header(), 0));
+    const auto *last  = reinterpret_cast<const std::byte *>(&plexus::shm::park_word(ring.header(), k_max_consumers - 1));
+    const auto *after = reinterpret_cast<const std::byte *>(&ring.header().cursors[k_max_consumers - 1]) + sizeof(cursor_t);
+
+    REQUIRE((first - base) % static_cast<std::ptrdiff_t>(k_cache_line) == 0);
+    REQUIRE(last - first == static_cast<std::ptrdiff_t>(k_cache_line - sizeof(std::uint32_t)));
+    REQUIRE(first >= after);
+    for(std::uint32_t slot = 0; slot < k_max_consumers; ++slot)
+        REQUIRE(plexus::shm::park_word(ring.header(), slot).load() == k_park_empty);
 }

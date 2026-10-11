@@ -35,7 +35,7 @@
 #include <sys/wait.h>
 
 // The teardown-race proof (asan-targeted): a PRODUCER process floods the
-// in-region notify word with signals at the exact moment the CONSUMER tears the
+// ring's waiters with signals at the exact moment the CONSUMER tears the
 // channel + bridge down, repeatedly, to drive the wake-vs-teardown race. The
 // PASS criterion is asan/ubsan-clean -- no heap-use-after-free on the posted-drain
 // path during teardown. The bridge holds the teardown ordering: disarm() cancels
@@ -84,7 +84,7 @@ std::string slab_name(const std::string &fqn)
 
 constexpr std::uint32_t k_payload = 0xFEEDFACEu;
 
-// The producer child: attach, publish ONE value, then FLOOD the notify word with
+// The producer child: attach, publish ONE value, then FLOOD the ring with
 // signals across the consumer's teardown window so a wake is maximally likely to
 // be in flight as the consumer disarms.
 bool flood(const std::string &fqn, coord *c)
@@ -109,13 +109,13 @@ bool flood(const std::string &fqn, coord *c)
     // landing exactly as disarm() runs is the race the asan proof must clear.
     for(int i = 0; i < 2000; ++i)
     {
-        plexus::native::notifier_signal(ring.header().notify_generation);
+        plexus::native::notifier_signal(ring.header());
         if(c->tearing_down.load(std::memory_order_acquire) == 1 && i > 50)
             break; // a few more after the consumer began tearing down, then stop
     }
     // A final burst strictly during/after the teardown signal.
     for(int i = 0; i < 64; ++i)
-        plexus::native::notifier_signal(ring.header().notify_generation);
+        plexus::native::notifier_signal(ring.header());
     c->producer_done.store(1, std::memory_order_release);
     return true;
 }

@@ -81,6 +81,18 @@ private:
     }
 };
 
+inline std::uint64_t interleaving_count(const std::vector<std::size_t> &lengths)
+{
+    std::uint64_t count = 1;
+    std::uint64_t total = 0;
+    for(const std::size_t length : lengths)
+    {
+        for(std::size_t step = 1; step <= length; ++step)
+            count = count * ++total / step;
+    }
+    return count;
+}
+
 // The kernel futex as the protocol sees it: a block registers only while the word still equals the snapshot (the
 // FUTEX_WAIT value compare), a wake releases every registered waiter, and a wake with nobody registered is lost.
 struct futex_model

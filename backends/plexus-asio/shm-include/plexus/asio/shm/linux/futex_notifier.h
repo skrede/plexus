@@ -7,6 +7,7 @@
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/waiter_park.h"
 #include "plexus/shm/detail/notifier_bridge.h"
 
 #include "plexus/detail/compat.h"
@@ -24,25 +25,25 @@
 namespace plexus::asio::shm {
 
 // The floor for kernels without io_uring futex-wait: one lifetime-bounded thread off the executor
-// futex-waits on the in-region word and pokes a process-local eventfd the user's io_context watches.
+// futex-waits on its slot's in-region park word and pokes a process-local eventfd the user's io_context watches.
 template<typename Policy>
 class ring_notifier_threaded
 {
     struct state
     {
-        state(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park) noexcept
-                : stop(false)
+        state(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header) noexcept
+                : slot(0)
+                , stop(false)
                 , doorbell()
-                , word(word)
-                , park(park)
+                , header(header)
                 , bridge(executor)
         {
         }
 
+        std::uint32_t slot;
         std::atomic<bool> stop;
         detail::fd_doorbell doorbell;
-        std::atomic<std::uint32_t> &word;
-        std::atomic<std::uint32_t> &park;
+        ::plexus::shm::control_header_t &header;
         ::plexus::shm::detail::notifier_bridge<Policy> bridge;
     };
 
@@ -51,7 +52,7 @@ public:
 
     ring_notifier_threaded(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header, std::string_view)
             : m_waiter()
-            , m_state(std::make_shared<state>(executor, header.notify_generation, header.park_state))
+            , m_state(std::make_shared<state>(executor, header))
     {
     }
 
@@ -67,12 +68,13 @@ public:
 
     void signal() noexcept
     {
-        ::plexus::native::notifier_signal(m_state->word, m_state->park);
+        ::plexus::native::notifier_signal(m_state->header);
     }
 
-    ::plexus::shm::arm_status arm(std::uint32_t, drain_fn drain)
+    ::plexus::shm::arm_status arm(std::uint32_t slot, drain_fn drain)
     {
         state &s = *m_state;
+        s.slot   = slot;
         s.bridge.arm(std::move(drain));
         if(!s.doorbell.adopt(::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK), detail::fd_doorbell::kind::counter))
             return ::plexus::shm::arm_status::exhausted;
@@ -83,33 +85,36 @@ public:
         return ::plexus::shm::arm_status::armed;
     }
 
-    // The join precedes the close so the waiter never pokes a closed eventfd.
+    // The join precedes the close so the waiter never pokes a closed eventfd. The stop store and the waiter's stop
+    // re-check after its park store are the same Dekker pair as a publish, so the stop is never slept through.
     void disarm() noexcept
     {
         state &s = *m_state;
         s.bridge.disarm();
         if(m_waiter.joinable())
         {
-            s.stop.store(true, std::memory_order_release);
-            ::plexus::native::notifier_signal(s.word);
+            s.stop.store(true, std::memory_order_seq_cst);
+            if(::plexus::shm::notify_if_parked(s.header, s.slot))
+                ::plexus::native::notifier_wake(::plexus::shm::park_word(s.header, s.slot));
             m_waiter.join();
         }
         s.doorbell.close();
     }
 
 private:
-    // Drain-before-wait: the poke precedes the park, and FUTEX_WAIT compares against last_seen, so
-    // a publish that moved the word after the snapshot returns at once and no wake is lost.
+    // The snapshot precedes the poke, so the drain it triggers covers every publish up to the snapshot; a later
+    // publish either fails the recheck or finds the word PARKED and wakes it.
     static void wait_loop(state &s) noexcept
     {
-        std::uint32_t last_seen = s.word.load(std::memory_order_acquire);
+        std::uint32_t snapshot = ::plexus::shm::park_snapshot(s.header);
         while(!s.stop.load(std::memory_order_acquire))
         {
             poke(s.doorbell);
-            s.park.store(::plexus::shm::k_park_parked, std::memory_order_release);
-            ::plexus::native::notifier_wait(s.word, last_seen);
-            s.park.store(::plexus::shm::k_park_empty, std::memory_order_release);
-            last_seen = s.word.load(std::memory_order_acquire);
+            ::plexus::shm::park_store(s.header, s.slot);
+            if(::plexus::shm::park_recheck(s.header, snapshot) && !s.stop.load(std::memory_order_seq_cst))
+                ::plexus::native::notifier_wait(::plexus::shm::park_word(s.header, s.slot), ::plexus::shm::k_park_parked);
+            ::plexus::shm::park_clear(s.header, s.slot);
+            snapshot = ::plexus::shm::park_snapshot(s.header);
         }
     }
 

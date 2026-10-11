@@ -83,7 +83,6 @@ public:
         header->mask              = cell_count - 1;
         header->consumer_capacity = consumer_capacity;
         header->notify_generation.store(0, std::memory_order_relaxed);
-        header->park_state.store(k_park_empty, std::memory_order_relaxed);
         header->high_water.store(0, std::memory_order_relaxed);
         for(std::size_t i = 0; i < k_max_consumers; ++i)
         {
