@@ -1,5 +1,5 @@
-#include "plexus/asio/shm/linux/local_shm_mux.h"
-#include "plexus/asio/shm/linux/shm_member.h"
+#include "plexus/asio/shm/local_shm_mux.h"
+#include "plexus/asio/shm/shm_member.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
 #include "plexus/asio/node_aliases.h"

@@ -72,7 +72,7 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
         plexus::shm
         plexus::native)
 
-    # The shm-include/ headers (ring_notifier) call io_uring_* directly, so on Linux the
+    # The shm-include/ headers (linux/uring_notifier.h) call io_uring_* directly, so on Linux the
     # shm target carries liburing as a usage requirement — a consumer linking
     # plexus::asio::shm resolves io_uring transitively, never by rediscovering liburing
     # itself. liburing is Linux-only, so a non-Linux shm configure never reaches it.

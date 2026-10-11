@@ -12,6 +12,7 @@
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/detail/shm_topic_open.h"
+#include "plexus/shm/detail/shm_topic_entry.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -80,7 +81,6 @@ public:
 
     // A repeat acquire of a live key bumps the refcount and returns its prior verdict; a first
     // acquire mints (or attaches to a peer's) ring (max_payload 0 -> default).
-    // NOLINTNEXTLINE(readability-function-size)
     acquire_result acquire(const std::string &fqn, ring_direction direction, std::uint32_t max_payload, ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
                            std::uint32_t consumer_capacity = 0, acquire_mode amode = acquire_mode::reclaim_stale)
     {
@@ -97,17 +97,7 @@ public:
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
 
-        // The channel must be built AFTER the ring is bound (its subscriber registers a cursor
-        // over the live ring).
-        m_bind_notifier(e->notify, e->ring.notify_generation(), e->ring.park_state(), region_name_for(fqn, direction, m_region_ns));
-        e->channel.emplace(e->ring, *e->notify, m_reliability, m_congestion);
-        e->verdict  = verdict;
-        e->refcount = 1;
-        entry *raw  = e.get();
-        // The ONE drain authority for this ring's single consumer cursor: routing both delivery
-        // and discard through the one armed drain keeps the cursor un-raced (a second drainer
-        // would steal messages).
-        e->notify->arm([raw] { raw->deliver_pending(); });
+        bind_entry(*e, fqn, direction, verdict);
         m_entries.emplace(k, std::move(e));
         return verdict;
     }
@@ -182,58 +172,8 @@ public:
     }
 
 private:
-    struct key
-    {
-        std::string fqn;
-        ring_direction direction;
-
-        bool operator==(const key &o) const noexcept
-        {
-            return direction == o.direction && fqn == o.fqn;
-        }
-    };
-
-    struct key_hash
-    {
-        std::size_t operator()(const key &k) const noexcept
-        {
-            return std::hash<std::string>{}(k.fqn) ^ static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
-        }
-    };
-
-    // One live ring's owned state, pinned by the entry's unique_ptr so the non-movable
-    // ring/channel/notifier hold stable addresses. The channel must destruct BEFORE the notifier
-    // so a disarm-then-teardown keeps the wake off a destroyed subscriber.
-    struct entry
-    {
-        entry() = default;
-
-        typename Broker::region_handle control;
-        typename Broker::region_handle slab;
-        broadcast_ring ring;
-        std::optional<Notifier> notify;
-        std::optional<shm_channel<Notifier>> channel;
-        acquire_result verdict = acquire_result::failed;
-        int refcount           = 0;
-        bool creator           = false;
-        // Unset = the wake-drain discards (the send-only default).
-        deliver_fn sink;
-
-        // The ONE place the cursor is taken, so the armed wake and the attach-time catch-up
-        // share it without racing a second drainer.
-        void deliver_pending()
-        {
-            if(!channel)
-                return;
-            if(sink)
-                channel->drain(sink);
-            else
-            {
-                deliver_fn discard = [](::plexus::wire_bytes<shm_slot_owner>) {};
-                channel->drain(discard);
-            }
-        }
-    };
+    using key   = detail::shm_topic_key;
+    using entry = detail::shm_topic_entry<Broker, Notifier>;
 
     template<typename R, typename E>
     friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const std::string &, ::plexus::shm::ring_direction, std::uint32_t, ::plexus::shm::ring_geometry_mode,
@@ -244,6 +184,18 @@ private:
     friend ::plexus::shm::acquire_result detail::topic_join(R &, E &, const std::string &, const std::string &);
     template<typename R>
     friend bool detail::topic_region_exists(R &, const std::string &);
+
+    // The channel must be built AFTER the ring is bound (its subscriber registers a cursor over the
+    // live ring). The armed drain is the ONE drain authority for the ring's single consumer cursor:
+    // a second drainer would steal messages.
+    void bind_entry(entry &e, const std::string &fqn, ring_direction direction, acquire_result verdict)
+    {
+        m_bind_notifier(e.notify, e.ring.notify_generation(), e.ring.park_state(), region_name_for(fqn, direction, m_region_ns));
+        e.channel.emplace(e.ring, *e.notify, m_reliability, m_congestion);
+        e.verdict  = verdict;
+        e.refcount = 1;
+        e.notify->arm([&e] { e.deliver_pending(); });
+    }
 
     // Non-negotiable ordering: disarm the notifier BEFORE the channel (and the subscriber its
     // drain touches) is destroyed, so a wake racing teardown can never post a drain onto a
@@ -270,7 +222,7 @@ private:
     std::string m_region_ns;
     acquire_failure m_last_failure;
 
-    std::unordered_map<key, std::unique_ptr<entry>, key_hash> m_entries;
+    std::unordered_map<key, std::unique_ptr<entry>, detail::shm_topic_key_hash> m_entries;
 };
 
 }

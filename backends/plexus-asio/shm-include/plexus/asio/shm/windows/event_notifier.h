@@ -1,15 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_SHM_WINDOWS_EVENT_NOTIFIER_H
 #define HPP_GUARD_PLEXUS_ASIO_SHM_WINDOWS_EVENT_NOTIFIER_H
 
-#include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/detail/notifier_bridge.h"
 
-#include "plexus/policy.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/windows/object_handle.hpp>
 #include <asio/io_context.hpp>
-#include <asio/post.hpp>
 
 #include <windows.h>
 
@@ -24,30 +22,44 @@
 
 namespace plexus::asio::shm {
 
-// The cross-process wakeup -> reactor bridge for Windows, where there is no shared-page
-// futex: a named auto-reset kernel event both peers derive from the region name is the
-// doorbell, watched on the user's io_context via asio::windows::object_handle (IOCP). Each
-// wake POSTS the drain onto the user's executor (Policy::post, never a serialized wrapper)
-// and re-arms; the auto-reset event resets itself when a wait is satisfied. Non-copy/non-move:
-// the asio object_handle holds a stable address and the in-flight handler captures `this`.
+// Windows has no shared-page futex: a named auto-reset kernel event both peers derive from the
+// region name is the doorbell, watched on the user's io_context through IOCP. The event resets
+// itself when a wait is satisfied.
 template<typename Policy>
 class event_notifier
 {
+    struct state
+    {
+        explicit state(typename Policy::executor_type executor) noexcept
+                : doorbell()
+                , bridge(executor)
+        {
+        }
+
+        std::optional<::asio::windows::object_handle> doorbell;
+        ::plexus::shm::detail::notifier_bridge<Policy> bridge;
+    };
+
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    event_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park, std::string_view region_name) noexcept
-            : m_executor(executor)
+    event_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park, std::string_view region_name)
+            : m_park_fallback(::plexus::shm::k_park_empty)
+            , m_event(nullptr)
+            , m_event_name(make_event_name(region_name))
+            , m_state(std::make_shared<state>(executor))
             , m_word(word)
             , m_park(park)
-            , m_event_name(make_event_name(region_name))
     {
     }
 
-    // A single-process harness binds an owned park fallback and an anonymous (unnamed)
-    // event, since no second process opens it by name.
-    event_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word) noexcept
-            : m_executor(executor)
+    // A single-process harness binds an owned park fallback and an unnamed event no second
+    // process opens.
+    event_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word)
+            : m_park_fallback(::plexus::shm::k_park_empty)
+            , m_event(nullptr)
+            , m_event_name()
+            , m_state(std::make_shared<state>(executor))
             , m_word(word)
             , m_park(m_park_fallback)
     {
@@ -64,7 +76,7 @@ public:
     event_notifier &operator=(event_notifier &&)      = delete;
 
     // Ungated: an auto-reset event has no value-compare, so a park-gated skip during the
-    // drain/re-arm window would risk a silently lost wakeup. The event latches one wake.
+    // drain/re-arm window could lose a wake. The event latches one.
     void signal() noexcept
     {
         m_word.fetch_add(1, std::memory_order_release);
@@ -74,38 +86,36 @@ public:
 
     void arm(drain_fn drain)
     {
-        m_drain_cb          = std::move(drain);
+        state &s = *m_state;
+        s.bridge.arm(std::move(drain));
         const wchar_t *name = m_event_name.empty() ? nullptr : m_event_name.c_str();
         m_event             = ::CreateEventW(nullptr, FALSE, FALSE, name);
         if(m_event == nullptr)
-            return; // bring-up failure: the seam stays inert (disarm is a no-op)
-        m_doorbell.emplace(executor_io(m_executor));
-        m_doorbell->assign(static_cast<HANDLE>(m_event));
-        watch_doorbell();
+            return;
+        s.doorbell.emplace(s.bridge.executor());
+        s.doorbell->assign(static_cast<HANDLE>(m_event));
+        watch(m_state);
     }
 
-    // Mandated teardown order: clear the alive token, cancel the asio wait, then close the
-    // event through the object_handle that owns it (assign() transferred ownership; this asio's
-    // object_handle has no release(), so the handle is asio-owned and must not be CloseHandle'd a
-    // second time). The asio cancel does NOT un-post a drain a prior on_signaled already handed to
-    // Policy::post; the alive token (checked by value in that closure) makes the trailing post a
-    // no-op without dereferencing freed `this`.
+    // assign() handed the event to the object_handle, which has no release(): its close() is the
+    // one CloseHandle, so the raw handle is only forgotten here.
     void disarm() noexcept
     {
-        m_alive->store(false, std::memory_order_release);
-        if(m_doorbell)
+        state &s = *m_state;
+        s.bridge.disarm();
+        if(s.doorbell)
         {
             std::error_code ignore;
-            m_doorbell->cancel(ignore);
-            m_doorbell->close(ignore); // closes the asio-owned event handle exactly once
-            m_doorbell.reset();
+            s.doorbell->cancel(ignore);
+            s.doorbell->close(ignore);
+            s.doorbell.reset();
         }
-        m_event = nullptr; // asio owned and closed it above; never double-close
+        m_event = nullptr;
     }
 
 private:
-    // Both peers derive this identically from the region name (the 16-hex token), so the two
-    // processes open the same auto-reset event in the per-session Local\ namespace.
+    // Both peers derive the name identically, so the two processes open the same event in the
+    // per-session Local\ namespace.
     static std::wstring make_event_name(std::string_view region_name)
     {
         std::wstring name = L"Local\\plexus.n.";
@@ -113,47 +123,25 @@ private:
         return name;
     }
 
-    static ::asio::io_context &executor_io(typename Policy::executor_type ex) noexcept
+    static void watch(const std::shared_ptr<state> &s)
     {
-        return ex;
+        s->doorbell->async_wait([s](const std::error_code &ec) { on_signaled(s, ec); });
     }
 
-    void watch_doorbell() noexcept
+    static void on_signaled(const std::shared_ptr<state> &s, const std::error_code &ec)
     {
-        m_doorbell->async_wait([this](const std::error_code &ec) { on_signaled(ec); });
+        if(ec || !s->doorbell)
+            return;
+        ::plexus::shm::detail::post_drain(s, s->bridge);
+        watch(s);
     }
 
-    void on_signaled(const std::error_code &ec) noexcept
-    {
-        if(ec || !m_doorbell)
-            return; // aborted on disarm, or already torn down: touch nothing
-        Policy::post(m_executor, drain_post());
-        watch_doorbell();
-    }
-
-    // The closure captures the alive token by value: a post that outlives a disarm (token went
-    // false) no-ops instead of touching freed `this`. The token is a liveness flag, NOT shared
-    // ownership (the entry stays the single owner and sequences teardown).
-    drain_fn drain_post() noexcept
-    {
-        return [this, alive = m_alive]
-        {
-            if(alive->load(std::memory_order_acquire) && m_drain_cb)
-                m_drain_cb();
-        };
-    }
-
-    std::atomic<std::uint32_t> m_park_fallback{::plexus::shm::k_park_empty};
-    std::shared_ptr<std::atomic<bool>> m_alive = std::make_shared<std::atomic<bool>>(true);
-
-    typename Policy::executor_type m_executor;
+    std::atomic<std::uint32_t> m_park_fallback;
+    void *m_event;
+    std::wstring m_event_name;
+    std::shared_ptr<state> m_state;
     std::atomic<std::uint32_t> &m_word;
     std::atomic<std::uint32_t> &m_park;
-    drain_fn m_drain_cb;
-
-    std::wstring m_event_name;
-    void *m_event = nullptr;
-    std::optional<::asio::windows::object_handle> m_doorbell;
 };
 
 }

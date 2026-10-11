@@ -10,13 +10,7 @@
 #endif
 
 #if PLEXUS_SAME_HOST_SHM
-    #if defined(__linux__)
-        #include "plexus/asio/shm/linux/shm_member.h"
-    #elif defined(_WIN32)
-        #include "plexus/asio/shm/windows/shm_member.h"
-    #elif defined(__APPLE__)
-        #include "plexus/asio/shm/macos/shm_member.h"
-    #endif
+    #include "plexus/asio/shm/shm_member.h"
 #endif
 
 #endif

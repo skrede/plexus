@@ -8,7 +8,7 @@
 // and MUST OUTLIVE every node it mints:
 //
 //   asio::io_context io;
-//   plexus::native::posix_shm_region_broker broker;                  // owns the rings; outlives the
+//   plexus::native::shm_region_broker broker;                        // owns the rings; outlives the
 //   set plexus::asio::transport_set<plexus::asio::shm::shm_member,
 //                               plexus::asio::unix_transport,
 //                               plexus::asio::asio_transport> ts{io, broker};
@@ -29,7 +29,7 @@
 //                plexus::asio::unix_transport, plexus::asio::asio_transport>
 //       node{io, disc, id, shm, local, remote, plexus::node_options{}};
 //
-// THE PRE-BUILT-MUX ALTERNATIVE (plexus/asio/shm/linux/local_shm_mux.h). local_shm_mux is the
+// THE PRE-BUILT-MUX ALTERNATIVE (plexus/asio/shm/local_shm_mux.h). local_shm_mux is the
 // lean, crypto-free alias for this three-member shape, handed to the node as a single leaf:
 //
 //   auto mux = plexus::asio::shm::make_local_shm_mux(shm, local, remote);
@@ -45,7 +45,7 @@
 // test suite — see tests/shm/test_shm_same_host_roundtrip.cpp and the live-mux xproc proofs
 // in tests/shm/test_shm_large_message.cpp / posix_test_shm_dual_delivery.cpp.
 
-#include "plexus/asio/shm/linux/shm_member.h"
+#include "plexus/asio/shm/shm_member.h"
 #include "plexus/asio/transport_set.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
@@ -53,11 +53,13 @@
 #include "plexus/node.h"
 #include "plexus/node_options.h"
 
-#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/shm_region_broker.h"
 
 #include "plexus/discovery/static_discovery.h"
 
 #include <asio/io_context.hpp>
+
+#include <unistd.h>
 
 #include <string>
 #include <cstddef>
@@ -68,7 +70,7 @@ namespace pasio = plexus::asio;
 int main()
 {
     ::asio::io_context io;
-    plexus::native::posix_shm_region_broker broker;
+    plexus::native::shm_region_broker broker;
     plexus::discovery::static_discovery disc{{}};
 
     pasio::transport_set<pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport> ts{

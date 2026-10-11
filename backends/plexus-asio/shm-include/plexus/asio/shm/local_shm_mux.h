@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_ASIO_SHM_LINUX_LOCAL_SHM_MUX_H
-#define HPP_GUARD_PLEXUS_ASIO_SHM_LINUX_LOCAL_SHM_MUX_H
+#ifndef HPP_GUARD_PLEXUS_ASIO_SHM_LOCAL_SHM_MUX_H
+#define HPP_GUARD_PLEXUS_ASIO_SHM_LOCAL_SHM_MUX_H
 
-#include "plexus/asio/shm/linux/shm_member.h"
+#include "plexus/asio/shm/shm_member.h"
 
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"

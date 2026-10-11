@@ -1,4 +1,4 @@
-#include "plexus/asio/shm/linux/shm_member.h"
+#include "plexus/asio/shm/shm_member.h"
 #include "plexus/asio/transport_set.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"

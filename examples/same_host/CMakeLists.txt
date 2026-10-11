@@ -1,7 +1,7 @@
-# Same-host nodes over AF_UNIX + plain TCP, crypto-free. shm_local_node composes the Linux shm member
+# Same-host nodes over AF_UNIX + plain TCP, crypto-free. shm_local_node composes the shm member
 # directly; same_host_node is the portable composition, which puts shm in front whenever the shm
-# target is linked and needs only a POSIX host (getpid, /tmp).
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET plexus::asio::shm)
+# target is linked. Both need a POSIX host (getpid, /tmp).
+if(TARGET plexus::asio::shm AND NOT WIN32)
     plexus_example(shm_local_node plexus::plexus plexus::asio plexus::asio::shm plexus::native)
 endif()
 

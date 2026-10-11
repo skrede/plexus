@@ -1,4 +1,4 @@
-#include "plexus/asio/shm/macos/shm_notifier_select.h"
+#include "plexus/asio/shm/shm_notifier.h"
 
 #include "plexus/asio/detail/same_host_shm_config.h"
 
@@ -38,7 +38,7 @@
 // The macOS cross-process wake + delivery proof on the re-exec (open-by-name) harness: the PARENT
 // creates the named control+slab regions, builds the broadcast ring, and registers TWO
 // slot_subscriber cursors at the tail BEFORE any publish, so both see the message the child later
-// commits; it arms ONE mac_notifier on the ring's notify word + the named POSIX counting semaphore
+// commits; it arms ONE shm_notifier on the ring's notify word + the named POSIX counting semaphore
 // whose name derives from the region name ("/pxn."+region_name). The CHILD is a fresh process image
 // that re-opens the SAME regions BY NAME (the names arrive by argv), attaches the ring, publishes
 // ONE known value, and rings the doorbell (bump the notify word + sem_post). run_xproc runs the
@@ -114,7 +114,7 @@ bool two_subscriber_producer(const std::vector<std::string> &args)
     // Open the SAME named semaphore the parent armed (arm derives "/pxn."+region_name) and ring it.
     // The child never runs its own reactor; the wait is only ever the parent's.
     ::asio::io_context child_io;
-    pas::mac_notifier<test_policy> doorbell(child_io, ring.notify_generation(), ring.park_state(), args[0]);
+    pas::shm_notifier<test_policy> doorbell(child_io, ring.notify_generation(), ring.park_state(), args[0]);
     doorbell.arm([] {});
     doorbell.signal();
     return true;
@@ -153,7 +153,7 @@ TEST_CASE("shm.xproc_two_subscriber a macos cross-process shm wake delivers one 
         REQUIRE(sub_b.registered());
 
         ::asio::io_context io;
-        pas::mac_notifier<test_policy> notifier(io, ring.notify_generation(), ring.park_state(), ctrl_name);
+        pas::shm_notifier<test_policy> notifier(io, ring.notify_generation(), ring.park_state(), ctrl_name);
 
         std::uint32_t got_a = 0;
         std::uint32_t got_b = 0;
