@@ -52,6 +52,8 @@
 #include "plexus/wire/handshake.h"
 #include "plexus/wire/frame_codec.h"
 
+#include "shm/support/noop_notifier.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -275,18 +277,7 @@ struct recording_drop_observer final : plexus::io::observer
 
 // The no-op notifier the shm congestion fixture needs (it exercises the loan gate, not
 // the cross-process wake).
-struct null_notifier
-{
-    void signal() noexcept
-    {
-    }
-    void arm(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void disarm() noexcept
-    {
-    }
-};
+using null_notifier = plexus::testing::noop_notifier;
 
 static_assert(plexus::shm::notifier<null_notifier>);
 

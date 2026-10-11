@@ -5,6 +5,7 @@
 
 #include "plexus/native/futex_notifier_primitive.h"
 
+#include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/detail/notifier_bridge.h"
 
@@ -18,6 +19,7 @@
 #include <thread>
 #include <cstdint>
 #include <utility>
+#include <string_view>
 
 namespace plexus::asio::shm {
 
@@ -47,18 +49,9 @@ class ring_notifier_threaded
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    ring_notifier_threaded(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_waiter()
-            , m_state(std::make_shared<state>(executor, word, park))
-    {
-    }
-
-    // A single-process harness driving the always-wake one-arg signal binds an owned fallback atom.
-    ring_notifier_threaded(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_waiter()
-            , m_state(std::make_shared<state>(executor, word, m_park_fallback))
+    ring_notifier_threaded(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header, std::string_view)
+            : m_waiter()
+            , m_state(std::make_shared<state>(executor, header.notify_generation, header.park_state))
     {
     }
 
@@ -77,16 +70,17 @@ public:
         ::plexus::native::notifier_signal(m_state->word, m_state->park);
     }
 
-    void arm(drain_fn drain)
+    ::plexus::shm::arm_status arm(std::uint32_t, drain_fn drain)
     {
         state &s = *m_state;
         s.bridge.arm(std::move(drain));
         if(!s.doorbell.adopt(::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK), detail::fd_doorbell::kind::counter))
-            return;
+            return ::plexus::shm::arm_status::exhausted;
         s.doorbell.attach(s.bridge.executor());
         detail::relay_wakes(m_state, s.doorbell, s.bridge);
         s.stop.store(false, std::memory_order_release);
         m_waiter = std::thread([&s] { wait_loop(s); });
+        return ::plexus::shm::arm_status::armed;
     }
 
     // The join precedes the close so the waiter never pokes a closed eventfd.
@@ -125,7 +119,6 @@ private:
         (void)::write(doorbell.native_handle(), &one, sizeof(one));
     }
 
-    std::atomic<std::uint32_t> m_park_fallback;
     std::thread m_waiter;
     std::shared_ptr<state> m_state;
 };

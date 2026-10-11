@@ -41,9 +41,10 @@ struct recording_notifier
     {
         ++signals;
     }
-    void arm(plexus::detail::move_only_function<void()>)
+    arm_status arm(std::uint32_t, plexus::detail::move_only_function<void()>)
     {
         armed = true;
+        return arm_status::armed;
     }
     void disarm() noexcept
     {

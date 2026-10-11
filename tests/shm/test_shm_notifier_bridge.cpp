@@ -108,7 +108,7 @@ bool produce(const std::string &fqn)
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
 
-    plexus::native::notifier_signal(ring.notify_generation());
+    plexus::native::notifier_signal(ring.header().notify_generation);
     return true;
 }
 
@@ -134,7 +134,7 @@ bool produce_gated(const std::string &fqn)
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
 
-    plexus::native::notifier_signal(ring.notify_generation(), ring.park_state());
+    plexus::native::notifier_signal(ring.header().notify_generation, ring.header().park_state);
     return true;
 }
 
@@ -174,7 +174,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
-        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
+        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");
 
         // The channel's subscriber registers its cursor at the producer's tail at
         // construction; build it BEFORE announcing ready so the cursor is fixed
@@ -185,7 +185,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // The arm()'d drain runs on a posted reactor turn: drain the channel and
         // capture the delivered value. This is the registry's drain-this-channel
         // callback shape (drain over the live subscriber).
-        bridge.arm(
+        bridge.arm(*channel.waiter_slot(),
                 [&]
                 {
                     pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
@@ -261,12 +261,12 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
         // The GATED bridge: bound to BOTH the generation word AND the in-region park
         // word, so submit_futex_wait stores PARKED before its io_uring submit and the
         // producer's gated signal reads it.
-        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation(), ring.park_state());
+        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");
 
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t got = 0;
-        bridge.arm(
+        bridge.arm(*channel.waiter_slot(),
                 [&]
                 {
                     pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)

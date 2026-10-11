@@ -12,6 +12,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "support/noop_notifier.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -173,18 +175,7 @@ private:
 
 static_assert(region_broker<stub_broker>, "stub_broker must satisfy the region_broker seam");
 
-struct silent_notifier
-{
-    void signal() noexcept
-    {
-    }
-    void arm(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void disarm() noexcept
-    {
-    }
-};
+using silent_notifier = plexus::testing::noop_notifier;
 
 static_assert(notifier<silent_notifier>, "silent_notifier must satisfy the notifier seam");
 

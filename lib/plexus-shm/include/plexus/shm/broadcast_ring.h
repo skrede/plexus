@@ -307,23 +307,9 @@ public:
         return slowest;
     }
 
-    // The shared wakeup-generation word in this ring's control header (in mapped
-    // shared memory). A producer in ANY process attached to this ring bumps it and
-    // wakes a consumer blocked on it by address; the consumer's notifier
-    // FUTEX_WAITs on this same word.
-    std::atomic<std::uint32_t> &notify_generation() noexcept
+    control_header_t &header() noexcept
     {
-        return m_header->notify_generation;
-    }
-
-    // The parked-waiter 3-state word in this ring's control header (in mapped
-    // shared memory). A consumer's notifier park boundary toggles it
-    // EMPTY/PARKED/NOTIFIED across processes; the producer's gated wake reads it to
-    // skip the FUTEX_WAKE syscall when no waiter is parked. Mirrors
-    // notify_generation()'s cross-process word accessor.
-    std::atomic<std::uint32_t> &park_state() noexcept
-    {
-        return m_header->park_state;
+        return *m_header;
     }
 
     std::uint64_t cell_count() const noexcept

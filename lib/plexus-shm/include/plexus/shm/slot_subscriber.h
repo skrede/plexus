@@ -7,6 +7,7 @@
 #include "plexus/shm/taken_message.h"
 
 #include <cstdint>
+#include <optional>
 
 namespace plexus::shm {
 
@@ -29,6 +30,9 @@ public:
     explicit slot_subscriber(broadcast_ring &ring, std::uint32_t spin_budget = default_spin_budget) noexcept
             : m_ring(ring)
             , m_spin_budget(spin_budget)
+            , m_cursor_index(0)
+            , m_cursor(0)
+            , m_registered(false)
     {
         if(m_ring.register_cursor(m_cursor_index) == loan_status::ok)
         {
@@ -80,6 +84,13 @@ public:
         return m_cursor;
     }
 
+    std::optional<std::uint32_t> cursor_index() const noexcept
+    {
+        if(!m_registered)
+            return std::nullopt;
+        return m_cursor_index;
+    }
+
 private:
     // Spin (relaxing the core) within the budget so a back-to-back arrival is caught before
     // reporting empty; true past the budget hands off to the backend futex park (~0% CPU idle).
@@ -121,9 +132,9 @@ private:
 
     broadcast_ring &m_ring;
     std::uint32_t m_spin_budget;
-    std::uint32_t m_cursor_index{0};
-    std::uint64_t m_cursor{0};
-    bool m_registered{false};
+    std::uint32_t m_cursor_index;
+    std::uint64_t m_cursor;
+    bool m_registered;
 };
 
 }

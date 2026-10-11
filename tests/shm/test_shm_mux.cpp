@@ -19,6 +19,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "support/noop_notifier.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
@@ -146,18 +148,7 @@ static_assert(region_broker<stub_broker>, "stub_broker must satisfy the region_b
 
 // A no-op notifier (the deterministic single-process oracle drives no cross-process
 // wake): default-constructible so the registry's default binder builds it.
-struct stub_notifier
-{
-    void signal() noexcept
-    {
-    }
-    void arm(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void disarm() noexcept
-    {
-    }
-};
+using stub_notifier = plexus::testing::noop_notifier;
 
 static_assert(notifier<stub_notifier>, "stub_notifier must satisfy the notifier seam");
 

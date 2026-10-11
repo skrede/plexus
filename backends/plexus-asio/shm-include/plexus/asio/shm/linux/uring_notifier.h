@@ -5,6 +5,7 @@
 
 #include "plexus/native/futex_notifier_primitive.h"
 
+#include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/detail/notifier_bridge.h"
 
@@ -16,9 +17,11 @@
 #include <sys/eventfd.h>
 
 #include <atomic>
+#include <cerrno>
 #include <memory>
 #include <cstdint>
 #include <utility>
+#include <string_view>
 #include <system_error>
 
 namespace plexus::asio::shm {
@@ -52,17 +55,8 @@ class ring_notifier_uring
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    ring_notifier_uring(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_state(std::make_shared<state>(executor, word, park))
-    {
-    }
-
-    // A single-process harness whose producer drives the always-wake one-arg signal never reads
-    // this consumer's park word, so it binds an owned fallback atom rather than an in-region word.
-    ring_notifier_uring(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_state(std::make_shared<state>(executor, word, m_park_fallback))
+    ring_notifier_uring(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header, std::string_view)
+            : m_state(std::make_shared<state>(executor, header.notify_generation, header.park_state))
     {
     }
 
@@ -82,18 +76,19 @@ public:
         ::plexus::native::notifier_signal(m_state->word, m_state->park);
     }
 
-    void arm(drain_fn drain)
+    ::plexus::shm::arm_status arm(std::uint32_t, drain_fn drain)
     {
         state &s = *m_state;
         s.bridge.arm(std::move(drain));
-        if(::io_uring_queue_init(k_ring_depth, &s.ring, 0) != 0)
-            return;
+        if(const int rc = ::io_uring_queue_init(k_ring_depth, &s.ring, 0); rc != 0)
+            return rc == -EPERM || rc == -ENOSYS ? ::plexus::shm::arm_status::denied : ::plexus::shm::arm_status::exhausted;
         s.ring_live = true;
         if(!s.doorbell.adopt(::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK), detail::fd_doorbell::kind::counter) || ::io_uring_register_eventfd(&s.ring, s.doorbell.native_handle()) != 0)
-            return;
+            return ::plexus::shm::arm_status::exhausted;
         s.doorbell.attach(s.bridge.executor());
         submit_futex_wait(s);
         watch(m_state);
+        return ::plexus::shm::arm_status::armed;
     }
 
     // Exiting the io_uring drops the in-flight futex wait; the eventfd it signals closes after it.
@@ -155,7 +150,6 @@ private:
             ::io_uring_cqe_seen(&s.ring, cqe);
     }
 
-    std::atomic<std::uint32_t> m_park_fallback;
     std::shared_ptr<state> m_state;
 };
 

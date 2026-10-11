@@ -108,8 +108,8 @@ bool two_subscriber_producer(const std::vector<std::string> &args)
     // Open the SAME named doorbell the parent armed (arm derives the event name from the region
     // name) and ring it. The child never runs its own reactor; the wait is only ever the parent's.
     ::asio::io_context child_io;
-    pas::event_notifier<test_policy> doorbell(child_io, ring.notify_generation(), ring.park_state(), args[0]);
-    doorbell.arm([] {});
+    pas::event_notifier<test_policy> doorbell(child_io, ring.header(), args[0]);
+    doorbell.arm(0, [] {});
     doorbell.signal();
     return true;
 }
@@ -147,11 +147,11 @@ TEST_CASE("shm.xproc_two_subscriber a windows cross-process shm wake delivers on
         REQUIRE(sub_b.registered());
 
         ::asio::io_context io;
-        pas::event_notifier<test_policy> notifier(io, ring.notify_generation(), ring.park_state(), ctrl_name);
+        pas::event_notifier<test_policy> notifier(io, ring.header(), ctrl_name);
 
         std::uint32_t got_a = 0;
         std::uint32_t got_b = 0;
-        notifier.arm(
+        notifier.arm(*sub_a.cursor_index(),
                 [&]
                 {
                     pio::taken_message m;

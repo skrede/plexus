@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_SHM_WINDOWS_EVENT_NOTIFIER_H
 #define HPP_GUARD_PLEXUS_ASIO_SHM_WINDOWS_EVENT_NOTIFIER_H
 
+#include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/detail/notifier_bridge.h"
 
@@ -43,25 +44,11 @@ class event_notifier
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    event_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park, std::string_view region_name)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_event(nullptr)
+    event_notifier(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header, std::string_view region_name)
+            : m_event(nullptr)
             , m_event_name(make_event_name(region_name))
             , m_state(std::make_shared<state>(executor))
-            , m_word(word)
-            , m_park(park)
-    {
-    }
-
-    // A single-process harness binds an owned park fallback and an unnamed event no second
-    // process opens.
-    event_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_event(nullptr)
-            , m_event_name()
-            , m_state(std::make_shared<state>(executor))
-            , m_word(word)
-            , m_park(m_park_fallback)
+            , m_word(header.notify_generation)
     {
     }
 
@@ -84,17 +71,17 @@ public:
             ::SetEvent(static_cast<HANDLE>(m_event));
     }
 
-    void arm(drain_fn drain)
+    ::plexus::shm::arm_status arm(std::uint32_t, drain_fn drain)
     {
         state &s = *m_state;
         s.bridge.arm(std::move(drain));
-        const wchar_t *name = m_event_name.empty() ? nullptr : m_event_name.c_str();
-        m_event             = ::CreateEventW(nullptr, FALSE, FALSE, name);
+        m_event = ::CreateEventW(nullptr, FALSE, FALSE, m_event_name.c_str());
         if(m_event == nullptr)
-            return;
+            return ::plexus::shm::arm_status::exhausted;
         s.doorbell.emplace(s.bridge.executor());
         s.doorbell->assign(static_cast<HANDLE>(m_event));
         watch(m_state);
+        return ::plexus::shm::arm_status::armed;
     }
 
     // assign() handed the event to the object_handle, which has no release(): its close() is the
@@ -136,12 +123,10 @@ private:
         watch(s);
     }
 
-    std::atomic<std::uint32_t> m_park_fallback;
     void *m_event;
     std::wstring m_event_name;
     std::shared_ptr<state> m_state;
     std::atomic<std::uint32_t> &m_word;
-    std::atomic<std::uint32_t> &m_park;
 };
 
 }

@@ -105,7 +105,7 @@ bool produce_shm(const std::string &fqn)
     std::memcpy(claim.slab.data(), &k_payload, sizeof(k_payload));
     if(ring.commit(claim.position, sizeof(k_payload)) != pio::loan_status::ok)
         return false;
-    plexus::native::notifier_signal(ring.notify_generation());
+    plexus::native::notifier_signal(ring.header().notify_generation);
     return true;
 }
 
@@ -163,11 +163,11 @@ TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic c
         REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
-        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
+        plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t shm_got = 0;
-        bridge.arm(
+        bridge.arm(*channel.waiter_slot(),
                 [&]
                 {
                     pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)

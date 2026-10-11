@@ -3,6 +3,7 @@
 
 #include "plexus/asio/shm/detail/fd_doorbell.h"
 
+#include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/detail/notifier_bridge.h"
 
@@ -57,19 +58,9 @@ class sem_notifier
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
 
-    sem_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park, std::string_view region_name)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_waiter()
-            , m_state(std::make_shared<state>(executor, word, park, sem_name_for(region_name)))
-    {
-    }
-
-    // A single-process harness binds an owned park fallback and a private semaphore no second
-    // process opens.
-    sem_notifier(typename Policy::executor_type executor, std::atomic<std::uint32_t> &word)
-            : m_park_fallback(::plexus::shm::k_park_empty)
-            , m_waiter()
-            , m_state(std::make_shared<state>(executor, word, m_park_fallback, private_sem_name()))
+    sem_notifier(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header, std::string_view region_name)
+            : m_waiter()
+            , m_state(std::make_shared<state>(executor, header.notify_generation, header.park_state, sem_name_for(region_name)))
     {
     }
 
@@ -91,16 +82,17 @@ public:
             ::sem_post(m_state->sem);
     }
 
-    void arm(drain_fn drain)
+    ::plexus::shm::arm_status arm(std::uint32_t, drain_fn drain)
     {
         state &s = *m_state;
         s.bridge.arm(std::move(drain));
         if(!open_semaphore(s) || !open_pipe(s))
-            return;
+            return ::plexus::shm::arm_status::exhausted;
         s.doorbell.attach(s.bridge.executor());
         detail::relay_wakes(m_state, s.doorbell, s.bridge);
         s.stop.store(false, std::memory_order_release);
         m_waiter = std::thread([&s] { wait_loop(s); });
+        return ::plexus::shm::arm_status::armed;
     }
 
     // The join precedes the doorbell close so the worker never pokes a torn pipe.
@@ -129,12 +121,6 @@ private:
         std::string name = "/pxn.";
         name.append(region_name);
         return name;
-    }
-
-    static std::string private_sem_name()
-    {
-        static std::atomic<unsigned> counter{0};
-        return "/pxn.t." + std::to_string(counter.fetch_add(1, std::memory_order_relaxed));
     }
 
     // O_EXCL settles ownership: the creator unlinks the name on teardown, an attacher only closes.
@@ -186,7 +172,6 @@ private:
         }
     }
 
-    std::atomic<std::uint32_t> m_park_fallback;
     std::thread m_waiter;
     std::shared_ptr<state> m_state;
 };

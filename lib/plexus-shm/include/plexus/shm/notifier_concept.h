@@ -1,8 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_NOTIFIER_CONCEPT_H
 #define HPP_GUARD_PLEXUS_SHM_NOTIFIER_CONCEPT_H
 
+#include "plexus/shm/arm_status.h"
+
 #include "plexus/detail/compat.h"
 
+#include <cstdint>
 #include <concepts>
 
 namespace plexus::shm {
@@ -10,10 +13,11 @@ namespace plexus::shm {
 // The cross-process wakeup seam, defined in core so no core translation unit pulls
 // a kernel futex or asio header. disarm() must run BEFORE the subscribers the drain
 // touches are destroyed -- the non-negotiable teardown ordering the registry enforces.
+// The arm slot is the waiter's registered cursor index in the ring's control header.
 template<typename T>
-concept notifier = requires(T &n, plexus::detail::move_only_function<void()> drain) {
+concept notifier = requires(T &n, std::uint32_t slot, plexus::detail::move_only_function<void()> drain) {
     { n.signal() } -> std::same_as<void>;
-    n.arm(std::move(drain));
+    { n.arm(slot, std::move(drain)) } -> std::same_as<arm_status>;
     { n.disarm() } -> std::same_as<void>;
 };
 

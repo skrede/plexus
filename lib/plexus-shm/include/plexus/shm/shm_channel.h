@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <span>
 #include <thread>
 #include <utility>
@@ -79,6 +80,11 @@ public:
                 return;
             deliver(msg.as_wire_bytes());
         }
+    }
+
+    std::optional<std::uint32_t> waiter_slot() const noexcept
+    {
+        return m_subscriber.cursor_index();
     }
 
 private:

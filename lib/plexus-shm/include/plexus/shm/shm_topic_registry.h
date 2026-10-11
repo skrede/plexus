@@ -20,7 +20,6 @@
 
 #include "plexus/detail/compat.h"
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -47,13 +46,13 @@ public:
     using deliver_fn  = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
     // A notifier that wakes on a cross-process futex is NOT default-constructible (it binds to
-    // the word + the user's executor), so the binder injects that construction without coupling
-    // the registry to a concrete notifier ctor.
-    using notifier_binder = plexus::detail::move_only_function<void(std::optional<Notifier> &, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &, std::string_view)>;
+    // the ring's control header + the user's executor), so the binder injects that construction
+    // without coupling the registry to a concrete notifier ctor.
+    using notifier_binder = plexus::detail::move_only_function<void(std::optional<Notifier> &, control_header_t &, std::string_view)>;
 
     static notifier_binder default_notifier_binder() noexcept
     {
-        return [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &, std::atomic<std::uint32_t> &, std::string_view) { slot.emplace(); };
+        return [](std::optional<Notifier> &slot, control_header_t &, std::string_view) { slot.emplace(); };
     }
 
     // max_ring_slab_bytes defaults to the shipped k_max_ring_slab_bytes; the acquire fails
@@ -190,11 +189,12 @@ private:
     // a second drainer would steal messages.
     void bind_entry(entry &e, const std::string &fqn, ring_direction direction, acquire_result verdict)
     {
-        m_bind_notifier(e.notify, e.ring.notify_generation(), e.ring.park_state(), region_name_for(fqn, direction, m_region_ns));
+        m_bind_notifier(e.notify, e.ring.header(), region_name_for(fqn, direction, m_region_ns));
         e.channel.emplace(e.ring, *e.notify, m_reliability, m_congestion);
         e.verdict  = verdict;
         e.refcount = 1;
-        e.notify->arm([&e] { e.deliver_pending(); });
+        if(const std::optional<std::uint32_t> slot = e.channel->waiter_slot())
+            e.notify->arm(*slot, [&e] { e.deliver_pending(); });
     }
 
     // Non-negotiable ordering: disarm the notifier BEFORE the channel (and the subscriber its

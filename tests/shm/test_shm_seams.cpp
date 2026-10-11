@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <utility>
 
@@ -58,9 +59,10 @@ struct stub_notifier
         ++signals;
     }
 
-    void arm(plexus::detail::move_only_function<void()> drain)
+    arm_status arm(std::uint32_t, plexus::detail::move_only_function<void()> drain)
     {
         m_drain = std::move(drain);
+        return arm_status::armed;
     }
 
     void disarm()
@@ -106,7 +108,7 @@ TEST_CASE("seams: a stub notifier satisfies notifier and carries a move-only dra
     stub_notifier n;
 
     int drained = 0;
-    n.arm([&] { ++drained; });
+    n.arm(0, [&] { ++drained; });
     REQUIRE(n.m_drain);
 
     // The drain is move-only: invoking it through the stub runs the callback.

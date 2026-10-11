@@ -2,12 +2,11 @@
 
 #include "plexus/asio/asio_policy.h"
 
+#include "plexus/shm/ring_layout.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
-
-#include <atomic>
-#include <cstdint>
 
 // The liburing usage-requirement proof: this TU drives the io_uring notifier's arm/signal/disarm,
 // which call io_uring_queue_init / io_uring_register_eventfd / io_uring_submit /
@@ -21,13 +20,13 @@
 TEST_CASE("shm.liburing_link plexus::asio::shm transitively carries liburing", "[shm][link]")
 {
     ::asio::io_context io;
-    std::atomic<std::uint32_t> word{0};
-    std::atomic<std::uint32_t> park{0};
+    plexus::shm::control_header_t header{};
+    header.consumer_capacity = 1;
 
-    plexus::asio::shm::ring_notifier<plexus::asio::asio_policy> notifier{io, word, park};
+    plexus::asio::shm::ring_notifier<plexus::asio::asio_policy> notifier{io, header, ""};
 
     bool drained = false;
-    notifier.arm([&] { drained = true; });
+    notifier.arm(0, [&] { drained = true; });
     notifier.signal();
     io.poll();
     notifier.disarm();

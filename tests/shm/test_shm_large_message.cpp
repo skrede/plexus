@@ -19,6 +19,8 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/noop_notifier.h"
+
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -76,8 +78,9 @@ struct futex_signal_notifier
         if(generation)
             plexus::native::notifier_signal(*generation);
     }
-    void arm(plexus::detail::move_only_function<void()>)
+    pio::arm_status arm(std::uint32_t, plexus::detail::move_only_function<void()>)
     {
+        return pio::arm_status::armed;
     }
     void disarm() noexcept
     {
@@ -89,18 +92,7 @@ static_assert(pio::notifier<futex_signal_notifier>, "futex_signal_notifier must 
 // shmr: the reactor-reaped variant. On the publish side it does NOT issue a futex wake
 // (the reactor reaps the CQE); the cross-process read here spins on the ring exactly as
 // the existing xproc proofs do, so the data path is exercised independent of the wake.
-struct spin_notifier
-{
-    void signal() noexcept
-    {
-    }
-    void arm(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void disarm() noexcept
-    {
-    }
-};
+using spin_notifier = plexus::testing::noop_notifier;
 
 static_assert(pio::notifier<spin_notifier>, "spin_notifier must satisfy the notifier seam");
 
@@ -206,10 +198,10 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, pio::
     posix_shm_region_broker broker;
     // The binder constructs each ring's notifier over the in-region generation word, so a
     // futex variant's signal() wakes across address spaces (the spin variant ignores it).
-    typename member_t::notifier_binder binder = [](std::optional<Notifier> &slot, std::atomic<std::uint32_t> &gen, std::atomic<std::uint32_t> &, std::string_view)
+    typename member_t::notifier_binder binder = [](std::optional<Notifier> &slot, pio::control_header_t &header, std::string_view)
     {
         if constexpr(std::is_constructible_v<Notifier, std::atomic<std::uint32_t> *>)
-            slot.emplace(&gen);
+            slot.emplace(&header.notify_generation);
         else
             slot.emplace();
     };

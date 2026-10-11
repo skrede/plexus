@@ -7,13 +7,14 @@
 
 #include "plexus/native/shm_region_broker.h"
 
+#include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_mux_member.h"
 
 #include "plexus/muxify.h"
 
-#include <atomic>
+#include <asio/io_context.hpp>
+
 #include <string>
-#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <type_traits>
@@ -26,8 +27,8 @@ using shm_member = ::plexus::shm::shm_mux_member<::plexus::native::shm_region_br
 
 inline ::plexus::shm::shm_topic_registry<::plexus::native::shm_region_broker, shm_notifier<muxify<asio_policy>>>::notifier_binder make_bridge_binder(::asio::io_context &io)
 {
-    return [&io](std::optional<shm_notifier<muxify<asio_policy>>> &slot, std::atomic<std::uint32_t> &word, std::atomic<std::uint32_t> &park, std::string_view region_name)
-    { emplace_shm_notifier(slot, io, word, park, region_name); };
+    return [&io](std::optional<shm_notifier<muxify<asio_policy>>> &slot, ::plexus::shm::control_header_t &header, std::string_view region_name)
+    { slot.emplace(io, header, region_name); };
 }
 
 // The broker is borrowed (it must outlive the member); the binder captures `io` so each ring's

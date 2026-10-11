@@ -195,8 +195,6 @@ struct recording_notifier
     recording_notifier()                                      = default;
     recording_notifier(const recording_notifier &)            = delete;
     recording_notifier &operator=(const recording_notifier &) = delete;
-    recording_notifier(recording_notifier &&)                 = default;
-    recording_notifier &operator=(recording_notifier &&)      = default;
 
     ~recording_notifier()
     {
@@ -207,9 +205,10 @@ struct recording_notifier
     void signal() noexcept
     {
     }
-    void arm(plexus::detail::move_only_function<void()>)
+    arm_status arm(std::uint32_t, plexus::detail::move_only_function<void()>)
     {
         armed = true;
+        return arm_status::armed;
     }
     void disarm() noexcept
     {

@@ -19,6 +19,8 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/noop_notifier.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
@@ -69,18 +71,7 @@ constexpr std::size_t k_kib = 1024;
 
 // A default-constructible no-op notifier: the cross-process subscriber spins to consume,
 // so the wake is orthogonal to the per-peer medium DECISION this oracle asserts.
-struct spin_notifier
-{
-    void signal() noexcept
-    {
-    }
-    void arm(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void disarm() noexcept
-    {
-    }
-};
+using spin_notifier = plexus::testing::noop_notifier;
 
 static_assert(pio::notifier<spin_notifier>, "spin_notifier must satisfy the notifier seam");
 

@@ -114,8 +114,8 @@ bool two_subscriber_producer(const std::vector<std::string> &args)
     // Open the SAME named semaphore the parent armed (arm derives "/pxn."+region_name) and ring it.
     // The child never runs its own reactor; the wait is only ever the parent's.
     ::asio::io_context child_io;
-    pas::shm_notifier<test_policy> doorbell(child_io, ring.notify_generation(), ring.park_state(), args[0]);
-    doorbell.arm([] {});
+    pas::shm_notifier<test_policy> doorbell(child_io, ring.header(), args[0]);
+    doorbell.arm(0, [] {});
     doorbell.signal();
     return true;
 }
@@ -153,11 +153,11 @@ TEST_CASE("shm.xproc_two_subscriber a macos cross-process shm wake delivers one 
         REQUIRE(sub_b.registered());
 
         ::asio::io_context io;
-        pas::shm_notifier<test_policy> notifier(io, ring.notify_generation(), ring.park_state(), ctrl_name);
+        pas::shm_notifier<test_policy> notifier(io, ring.header(), ctrl_name);
 
         std::uint32_t got_a = 0;
         std::uint32_t got_b = 0;
-        notifier.arm(
+        notifier.arm(*sub_a.cursor_index(),
                 [&]
                 {
                     pio::taken_message m;

@@ -109,13 +109,13 @@ bool flood(const std::string &fqn, coord *c)
     // landing exactly as disarm() runs is the race the asan proof must clear.
     for(int i = 0; i < 2000; ++i)
     {
-        plexus::native::notifier_signal(ring.notify_generation());
+        plexus::native::notifier_signal(ring.header().notify_generation);
         if(c->tearing_down.load(std::memory_order_acquire) == 1 && i > 50)
             break; // a few more after the consumer began tearing down, then stop
     }
     // A final burst strictly during/after the teardown signal.
     for(int i = 0; i < 64; ++i)
-        plexus::native::notifier_signal(ring.notify_generation());
+        plexus::native::notifier_signal(ring.header().notify_generation);
     c->producer_done.store(1, std::memory_order_release);
     return true;
 }
@@ -157,10 +157,10 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state", 
         // teardown the proof exercises; the explicit disarm() before scope exit is
         // the stop-first edge.
         {
-            plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.notify_generation());
+            plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");
             pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
-            bridge.arm(
+            bridge.arm(*channel.waiter_slot(),
                     [&]
                     {
                         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};

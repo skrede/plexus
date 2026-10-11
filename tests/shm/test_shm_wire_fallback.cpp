@@ -24,6 +24,8 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/noop_notifier.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -66,18 +68,7 @@ constexpr std::size_t k_kib = 1024;
 // (as every existing xproc proof does), so the wake is orthogonal to the per-message
 // ROUTE this test asserts. The real cross-process futex wake is covered by the
 // bridge/dual-delivery proofs.
-struct spin_notifier
-{
-    void signal() noexcept
-    {
-    }
-    void arm(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void disarm() noexcept
-    {
-    }
-};
+using spin_notifier = plexus::testing::noop_notifier;
 
 static_assert(pio::notifier<spin_notifier>, "spin_notifier must satisfy the notifier seam");
 

@@ -1,9 +1,11 @@
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_CONGESTED_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_CONGESTED_COMMON_H
+
 // Backpressure + observable congestion: a best_effort ring with every slot pinned
 // returns congested off send() (OBSERVABLE, never a silent drop). A reliable
 // producer with a lagging consumer blocks losslessly -- every value arrives in
 // order, none skipped. And the reliable blocking spin/yield path allocates nothing
 // across N sends (the alloc-counter idiom).
-#pragma once
 
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/loan_status.h"
@@ -16,6 +18,8 @@
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
+
+#include "support/noop_notifier.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -34,18 +38,7 @@ using namespace plexus::shm;
 
 // A no-op notifier satisfying the seam (this TU exercises the loan/publish gate,
 // not the wakeup; the channel still requires a notifier reference).
-struct null_notifier
-{
-    void signal() noexcept
-    {
-    }
-    void arm(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void disarm() noexcept
-    {
-    }
-};
+using null_notifier = plexus::testing::noop_notifier;
 
 static_assert(notifier<null_notifier>, "null_notifier must satisfy the notifier seam");
 
@@ -91,4 +84,6 @@ inline std::uint32_t as_u32(std::span<const std::byte> b)
     return v;
 }
 
-} // namespace shm_congested_fixture
+}
+
+#endif
