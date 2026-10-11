@@ -6,16 +6,18 @@
     #define PLEXUS_HAS_IO_URING_FUTEX 0
 #endif
 
+#include "plexus/asio/shm/linux/futex_notifier.h"
 #if PLEXUS_HAS_IO_URING_FUTEX
     #include "plexus/asio/shm/linux/uring_notifier.h"
 #endif
-#include "plexus/asio/shm/linux/futex_notifier.h"
+
+#include "plexus/shm/fallback_notifier.h"
 
 namespace plexus::asio::shm {
 
 #if PLEXUS_HAS_IO_URING_FUTEX
 template<typename Policy>
-using ring_notifier = ring_notifier_uring<Policy>;
+using ring_notifier = ::plexus::shm::fallback_notifier<ring_notifier_uring<Policy>, ring_notifier_threaded<Policy>>;
 #else
 template<typename Policy>
 using ring_notifier = ring_notifier_threaded<Policy>;

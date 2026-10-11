@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SHM_TOPIC_REGISTRY_H
 #define HPP_GUARD_PLEXUS_SHM_SHM_TOPIC_REGISTRY_H
 
+#include "plexus/shm/arm_status.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/notifier_concept.h"
@@ -65,6 +66,8 @@ public:
             , m_bind_notifier(std::move(bind_notifier))
             , m_max_ring_slab_bytes(max_ring_slab_bytes)
             , m_region_ns(std::move(region_ns))
+            , m_last_failure()
+            , m_entries()
     {
     }
 
@@ -95,8 +98,13 @@ public:
         const acquire_result verdict = detail::topic_open_ring(*this, *e, fqn, direction, max_payload, mode, consumer_capacity, amode);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
-
-        bind_entry(*e, fqn, direction, verdict);
+        // A waiter whose notifier cannot arm is never woken, so the acquire fails and the caller keeps its other transports.
+        if(const arm_status armed = detail::topic_bind(*this, *e, fqn, direction, verdict); armed != arm_status::armed)
+        {
+            teardown(*e);
+            m_last_failure = acquire_failure{acquire_bound::notifier, 0, 0, region_status::ok, armed};
+            return acquire_result::failed;
+        }
         m_entries.emplace(k, std::move(e));
         return verdict;
     }
@@ -183,19 +191,8 @@ private:
     friend ::plexus::shm::acquire_result detail::topic_join(R &, E &, const std::string &, const std::string &);
     template<typename R>
     friend bool detail::topic_region_exists(R &, const std::string &);
-
-    // The channel must be built AFTER the ring is bound (its subscriber registers a cursor over the
-    // live ring). The armed drain is the ONE drain authority for the ring's single consumer cursor:
-    // a second drainer would steal messages.
-    void bind_entry(entry &e, const std::string &fqn, ring_direction direction, acquire_result verdict)
-    {
-        m_bind_notifier(e.notify, e.ring.header(), region_name_for(fqn, direction, m_region_ns));
-        e.channel.emplace(e.ring, *e.notify, m_reliability, m_congestion);
-        e.verdict  = verdict;
-        e.refcount = 1;
-        if(const std::optional<std::uint32_t> slot = e.channel->waiter_slot())
-            e.notify->arm(*slot, [&e] { e.deliver_pending(); });
-    }
+    template<typename R, typename E>
+    friend ::plexus::shm::arm_status detail::topic_bind(R &, E &, const std::string &, ::plexus::shm::ring_direction, ::plexus::shm::acquire_result);
 
     // Non-negotiable ordering: disarm the notifier BEFORE the channel (and the subscriber its
     // drain touches) is destroyed, so a wake racing teardown can never post a drain onto a

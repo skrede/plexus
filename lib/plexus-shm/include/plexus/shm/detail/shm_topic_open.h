@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_OPEN_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_OPEN_H
 
+#include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/broadcast_ring.h"
@@ -86,6 +87,21 @@ shm::acquire_result topic_open_ring(Registry &r, Entry &e, const std::string &fq
         return topic_join(r, e, ctrl_name, slab_name);
     r.m_last_failure = shm::acquire_failure{shm::acquire_bound::os_allocator, shm::control_region_bytes(geom.cell_count), 0, cs};
     return shm::acquire_result::failed;
+}
+
+// The channel must be built AFTER the ring is bound (its subscriber registers a cursor over the live ring). The armed
+// drain is the ONE drain authority for the ring's single consumer cursor: a second drainer would steal messages. A
+// waiter without a cursor slot has nothing to wake and reports armed.
+template<typename Registry, typename Entry>
+shm::arm_status topic_bind(Registry &r, Entry &e, const std::string &fqn, shm::ring_direction direction, shm::acquire_result verdict)
+{
+    r.m_bind_notifier(e.notify, e.ring.header(), shm::region_name_for(fqn, direction, r.m_region_ns));
+    e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
+    e.verdict  = verdict;
+    e.refcount = 1;
+    if(const std::optional<std::uint32_t> slot = e.channel->waiter_slot())
+        return e.notify->arm(*slot, [&e] { e.deliver_pending(); });
+    return shm::arm_status::armed;
 }
 
 }

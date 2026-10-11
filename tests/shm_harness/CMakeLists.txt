@@ -26,7 +26,7 @@ function(plexus_add_shm_harness_test name)
 endfunction()
 
 if(LINUX)
-    plexus_add_shm_harness_test(test_shm_harness test_shm_harness_baseline.cpp)
+    plexus_add_shm_harness_test(test_shm_harness test_shm_harness_baseline.cpp test_shm_harness_wire.cpp)
 endif()
 
 # Every case in this executable is an expected failure that pins a same-host delivery defect; the label keeps the set
@@ -41,9 +41,8 @@ if(LINUX)
         PROPERTIES LABELS "shm-red" TIMEOUT 300)
 endif()
 
-# On the threaded notifier floor a denied subscriber is still woken, so the case would pass and its expected-failure
-# tag would fail the suite.
-if(LINUX AND PLEXUS_LIBURING_HAS_FUTEX)
+# The subscriber denies itself io_uring with a seccomp filter before it builds its node.
+if(LINUX)
     plexus_add_shm_harness_test(test_shm_harness_denial test_shm_harness_denial.cpp)
 endif()
 

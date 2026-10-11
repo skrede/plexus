@@ -9,7 +9,7 @@
 
 using namespace shm_harness;
 
-TEST_CASE("harness a subscriber denied io_uring still receives every message", "[shm][harness][!shouldfail]")
+TEST_CASE("harness a subscriber denied io_uring still receives every message", "[shm][harness]")
 {
     topology topo{"shm_harness.denial." + std::to_string(plexus::testing::process_id()), 2};
     REQUIRE(topo.created());

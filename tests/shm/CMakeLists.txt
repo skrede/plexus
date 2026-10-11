@@ -438,6 +438,41 @@ target_link_libraries(test_shm_registry_arm PRIVATE
 
 catch_discover_tests(test_shm_registry_arm TEST_PREFIX "shm.")
 
+# The fallback composite over injected legs and the threaded leg.
+if(TARGET plexus::asio::shm AND LINUX)
+    add_executable(test_shm_fallback_notifier test_shm_fallback_notifier.cpp)
+
+    target_include_directories(test_shm_fallback_notifier PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_fallback_notifier PRIVATE
+        plexus::shm
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_fallback_notifier TEST_PREFIX "shm.")
+endif()
+
+# The io_uring futex-wait completion classifier and the production composite's engaged leg.
+if(TARGET plexus::asio::shm AND LINUX AND PLEXUS_LIBURING_HAS_FUTEX)
+    add_executable(test_shm_uring_cqe test_shm_uring_cqe.cpp)
+
+    target_include_directories(test_shm_uring_cqe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_uring_cqe PRIVATE
+        plexus::shm
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_uring_cqe TEST_PREFIX "shm.")
+endif()
+
 # The ring memory cost query (header-only core): ring_memory_for equals the layout
 # helpers AND the bytes the registry actually requests from the broker for a
 # (payload, capacity) table, pinning the depth-32 16 MiB figure (512 MiB) so a

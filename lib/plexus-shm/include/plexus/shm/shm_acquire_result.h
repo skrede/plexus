@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SHM_ACQUIRE_RESULT_H
 #define HPP_GUARD_PLEXUS_SHM_SHM_ACQUIRE_RESULT_H
 
+#include "plexus/shm/arm_status.h"
 #include "plexus/shm/region_broker_concept.h"
 
 #include <cstdint>
@@ -30,14 +31,27 @@ enum class acquire_bound : std::uint8_t
     none,
     slab_ceiling,
     os_allocator,
+    notifier,
 };
 
+// limit_bytes is set for the slab_ceiling bound only, broker for os_allocator only, arm for notifier only.
 struct acquire_failure
 {
-    acquire_bound bound       = acquire_bound::none;
-    std::uint64_t ask_bytes   = 0;
-    std::uint64_t limit_bytes = 0;                 // the slab ceiling (slab_ceiling bound only)
-    region_status broker      = region_status::ok; // the OS verdict (os_allocator bound only)
+    explicit acquire_failure(acquire_bound bound = acquire_bound::none, std::uint64_t ask_bytes = 0, std::uint64_t limit_bytes = 0, region_status broker = region_status::ok,
+                             arm_status arm = arm_status::armed) noexcept
+            : arm(arm)
+            , bound(bound)
+            , broker(broker)
+            , ask_bytes(ask_bytes)
+            , limit_bytes(limit_bytes)
+    {
+    }
+
+    arm_status arm;
+    acquire_bound bound;
+    region_status broker;
+    std::uint64_t ask_bytes;
+    std::uint64_t limit_bytes;
 };
 
 }

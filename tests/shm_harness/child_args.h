@@ -13,7 +13,7 @@
 
 namespace shm_harness {
 
-inline constexpr std::uint32_t k_node_fixed_args = 8;
+inline constexpr std::uint32_t k_node_fixed_args = 9;
 
 struct node_args
 {
@@ -25,6 +25,7 @@ struct node_args
     bool hint;
     bool deny;
     bool crossed;
+    std::string composition;
     std::vector<std::uint16_t> ports;
 };
 
@@ -54,7 +55,7 @@ inline std::optional<node_args> parse_node_args(const std::vector<std::string> &
     if(!index || !count || *count > k_max_nodes || *index >= *count || argv.size() != k_node_fixed_args + *count)
         return std::nullopt;
 
-    node_args out{argv[0], *index, *count, argv[3], argv[4], argv[5] == "1", argv[6] == "1", argv[7] == "1", {}};
+    node_args out{argv[0], *index, *count, argv[3], argv[4], argv[5] == "1", argv[6] == "1", argv[7] == "1", argv[8], {}};
     for(std::uint32_t i = 0; i < *count; ++i)
     {
         const std::optional<std::uint32_t> port = to_u32(argv[k_node_fixed_args + i]);

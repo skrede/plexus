@@ -1,12 +1,22 @@
 #include "child_args.h"
 #include "node_driver.h"
 #include "seccomp_deny.h"
+#include "notifier_legs.h"
 #include "topology_block.h"
 
 #include "support/xproc_control.h"
 #include "support/xproc_harness.h"
 
+#include "plexus/asio/asio_policy.h"
+#include "plexus/asio/asio_transport.h"
+#include "plexus/asio/unix_transport.h"
 #include "plexus/asio/same_host_transports.h"
+
+#include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/fallback_notifier.h"
+
+#include "plexus/native/shm_region_broker.h"
+#include "plexus/native/machine_fingerprint.h"
 
 #include "plexus/node.h"
 #include "plexus/node_id.h"
@@ -18,6 +28,8 @@
 #include "plexus/discovery/contact_card.h"
 #include "plexus/discovery/static_discovery.h"
 
+#include "plexus/io/congestion.h"
+#include "plexus/io/reliability.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/reconnect_config.h"
 
@@ -89,6 +101,8 @@ plexus::io::subscriber_qos subscriber_qos_for(bool hint)
     return qos;
 }
 
+using denied_member = plexus::shm::shm_mux_member<plexus::native::shm_region_broker, plexus::shm::fallback_notifier<plexus::testing::denied_primary, plexus::testing::denied_floor>>;
+
 template<typename Node>
 void update_connected(Node &node, const node_args &args, node_slot &slot)
 {
@@ -101,12 +115,9 @@ void update_connected(Node &node, const node_args &args, node_slot &slot)
     slot.connected.store(connected, std::memory_order_release);
 }
 
-void run_node(const node_args &args, node_slot &slot)
+template<typename Node>
+void serve_node(::asio::io_context &io, Node &node, const node_args &args, node_slot &slot)
 {
-    ::asio::io_context io;
-    plexus::discovery::static_discovery disc{peer_cards(args)};
-    plexus::asio::same_host_transports transports{io};
-    auto node = transports.make_node(disc, harness_id(args.index), dial_opts());
     node.listen({"tcp", "127.0.0.1:" + std::to_string(args.ports[args.index])});
 
     std::optional<plexus::publisher<>> pub;
@@ -124,6 +135,39 @@ void run_node(const node_args &args, node_slot &slot)
         io.run_for(1ms);
         update_connected(node, args, slot);
     }
+}
+
+void run_same_host(const node_args &args, node_slot &slot)
+{
+    ::asio::io_context io;
+    plexus::discovery::static_discovery disc{peer_cards(args)};
+    plexus::asio::same_host_transports transports{io};
+    auto node = transports.make_node(disc, harness_id(args.index), dial_opts());
+    serve_node(io, node, args, slot);
+}
+
+// The production leaves with a shared-memory member whose notifiers all fail to arm; the fingerprint is the real one,
+// so the node attempts the same-host upgrade exactly as the production composition does.
+void run_arm_denied(const node_args &args, node_slot &slot)
+{
+    ::asio::io_context io;
+    plexus::discovery::static_discovery disc{peer_cards(args)};
+    plexus::native::shm_region_broker broker;
+    denied_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    plexus::asio::unix_transport local{io};
+    plexus::asio::asio_transport remote{io};
+    plexus::node_options opts        = dial_opts();
+    opts.handshake.local_fingerprint = plexus::native::read_machine_fingerprint();
+    plexus::node<plexus::asio::asio_policy, denied_member, plexus::asio::unix_transport, plexus::asio::asio_transport> node{io, disc, harness_id(args.index), shm, local, remote, opts};
+    serve_node(io, node, args, slot);
+}
+
+void run_node(const node_args &args, node_slot &slot)
+{
+    if(args.composition == composition_name(node_composition::arm_denied))
+        run_arm_denied(args, slot);
+    else
+        run_same_host(args, slot);
 }
 
 // The parent-death signal keeps a child from outliving a parent that was killed before it could reap it.

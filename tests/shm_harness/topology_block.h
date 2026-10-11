@@ -32,6 +32,19 @@ inline std::string_view role_name(node_role role)
     return "";
 }
 
+// same_host builds the node through the production same-host composition; arm_denied swaps in a shared-memory member
+// whose every notifier fails to arm.
+enum class node_composition : std::uint32_t
+{
+    same_host,
+    arm_denied,
+};
+
+inline std::string_view composition_name(node_composition composition)
+{
+    return composition == node_composition::arm_denied ? "arm_denied" : "same_host";
+}
+
 enum class dial_wiring : std::uint32_t
 {
     one_way,

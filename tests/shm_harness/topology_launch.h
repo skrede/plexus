@@ -50,11 +50,12 @@ public:
         return m_block.has_value() && m_count <= k_max_nodes;
     }
 
-    bool spawn_node(std::uint32_t index, node_role role, bool hint, bool deny)
+    bool spawn_node(std::uint32_t index, node_role role, bool hint, bool deny, node_composition composition = node_composition::same_host)
     {
         const bool crossed = m_wiring == dial_wiring::crossed;
         std::vector<std::string> args{m_name.str(),     std::to_string(index), std::to_string(m_count), m_fqn, std::string(role_name(role)),
                                       hint ? "1" : "0", deny ? "1" : "0",      crossed ? "1" : "0"};
+        args.emplace_back(composition_name(composition));
         for(const std::uint16_t port : m_ports)
             args.push_back(std::to_string(port));
         return launch(index, "shm_harness.node", args);
