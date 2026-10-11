@@ -1,0 +1,115 @@
+#include "sem_support.h"
+
+#include "support/heap_ring.h"
+#include "support/xproc_harness.h"
+
+#include "plexus/shm/arm_status.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/shm_acquire_result.h"
+
+#include "plexus/io/congestion.h"
+#include "plexus/io/reliability.h"
+
+#include <asio/io_context.hpp>
+
+#include <chrono>
+#include <string>
+#include <thread>
+#include <vector>
+#include <csignal>
+#include <cstdint>
+#include <iostream>
+
+#include <fcntl.h>
+#include <semaphore.h>
+#include <sys/prctl.h>
+
+namespace {
+
+using namespace shm_harness;
+using namespace std::chrono_literals;
+
+constexpr std::uint32_t k_arm_cycles    = 100;
+constexpr std::uint32_t k_flood_signals = 100'000;
+
+constexpr plexus::shm::ring_direction k_request = plexus::shm::ring_direction::request;
+
+void settle(::asio::io_context &io, std::chrono::milliseconds span)
+{
+    io.restart();
+    io.run_for(span);
+}
+
+// The first cycle settles so this process's waiter queues on the shared semaphore behind the parked peer's.
+bool sem_cycler(const std::vector<std::string> &argv)
+{
+    ::prctl(PR_SET_PDEATHSIG, SIGKILL);
+    if(argv.size() != 1)
+        return false;
+
+    ::asio::io_context io;
+    plexus::native::posix_shm_region_broker broker;
+    sem_registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, posix_sem_leg::binder(io)};
+    for(std::uint32_t cycle = 0; cycle < k_arm_cycles; ++cycle)
+    {
+        if(registry.acquire(argv[0], k_request, 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) == plexus::shm::acquire_result::failed)
+            return false;
+        settle(io, cycle == 0 ? 200ms : 1ms);
+        registry.release(argv[0], k_request);
+    }
+    return true;
+}
+
+// The waiter stops consuming the shared count only once it blocks, so a count unchanged across a settle means the
+// waiter is either blocked or idle.
+void wait_until_waiter_settles(const std::string &sem_name)
+{
+    sem_t *sem = ::sem_open(sem_name.c_str(), 0);
+    if(sem == SEM_FAILED)
+    {
+        std::this_thread::sleep_for(1s);
+        return;
+    }
+    int previous = -1;
+    int current  = -2;
+    for(std::uint32_t poll = 0; poll < 25 && current != previous; ++poll)
+    {
+        previous = current;
+        std::this_thread::sleep_for(200ms);
+        ::sem_getvalue(sem, &current);
+    }
+    ::sem_close(sem);
+    std::cout << "sem_flood settled count=" << current << std::endl;
+}
+
+// The reactor is never polled, so every wake the waiter relays stays in its wake pipe.
+bool sem_flood(const std::vector<std::string> &argv)
+{
+    ::prctl(PR_SET_PDEATHSIG, SIGKILL);
+    if(argv.size() != 1)
+        return false;
+
+    plexus::testing::heap_ring heap{16, 64};
+    ::asio::io_context io;
+    const std::string region = plexus::shm::region_name_for(argv[0], k_request);
+    sem_notifier notifier{io, heap.ring().header(), region};
+    if(!heap.created() || notifier.arm(0, [] {}) != plexus::shm::arm_status::armed)
+        return false;
+
+    std::thread signaler(
+            [&notifier]
+            {
+                for(std::uint32_t signal = 0; signal < k_flood_signals; ++signal)
+                    notifier.signal();
+            });
+    signaler.join();
+    wait_until_waiter_settles(sem_name_for(region));
+    notifier.disarm();
+    return true;
+}
+
+[[maybe_unused]] const bool s_cycler_registered = plexus::testing::register_xproc_child("shm_harness.sem_cycler", &sem_cycler);
+[[maybe_unused]] const bool s_flood_registered  = plexus::testing::register_xproc_child("shm_harness.sem_flood", &sem_flood);
+
+}

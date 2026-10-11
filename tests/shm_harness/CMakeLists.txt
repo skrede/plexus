@@ -50,3 +50,38 @@ endif()
 if(LINUX)
     plexus_add_shm_harness_test(test_shm_wake_stress wake_roles.cpp test_shm_wake_stress.cpp PROPERTIES TIMEOUT 300)
 endif()
+
+function(plexus_add_shm_xproc_test name)
+    add_executable(${name} xproc_main.cpp ${ARGN})
+
+    target_include_directories(${name} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${PROJECT_SOURCE_DIR}/tests/shm)
+
+    target_link_libraries(${name} PRIVATE
+        plexus::shm
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        plexus::wire
+        plexus::testing
+        Catch2::Catch2)
+
+    catch_discover_tests(${name} TEST_PREFIX "shm.")
+endfunction()
+
+# One publisher process and two subscriber processes, each with its own registry and notifier on one ring; it runs on
+# every platform.
+plexus_add_shm_xproc_test(test_shm_three_process three_process_roles.cpp test_shm_three_process.cpp)
+
+# Every case is an expected failure that runs the POSIX-semaphore notifier on Linux: a disarm whose stop wake another
+# process's waiter takes, a wake pipe filled while the reactor is stalled, and a stale semaphore adopted by name. A
+# case that can hang runs its hanging side in a child the parent kills after a bound.
+if(LINUX)
+    plexus_add_shm_xproc_test(test_shm_sem_notifier
+        three_process_roles.cpp
+        sem_roles.cpp
+        test_shm_sem_teardown.cpp
+        test_shm_sem_pipe.cpp
+        test_shm_sem_adoption.cpp)
+endif()
