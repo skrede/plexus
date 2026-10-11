@@ -1,0 +1,181 @@
+#include "node_driver.h"
+#include "seccomp_deny.h"
+#include "topology_block.h"
+
+#include "support/xproc_control.h"
+#include "support/xproc_harness.h"
+
+#include "plexus/asio/same_host_transports.h"
+
+#include "plexus/node.h"
+#include "plexus/node_id.h"
+#include "plexus/publisher.h"
+#include "plexus/topic_qos.h"
+#include "plexus/subscriber.h"
+#include "plexus/node_options.h"
+
+#include "plexus/discovery/contact_card.h"
+#include "plexus/discovery/static_discovery.h"
+
+#include "plexus/io/subscriber_qos.h"
+#include "plexus/io/reconnect_config.h"
+
+#include <asio/io_context.hpp>
+
+#include <span>
+#include <chrono>
+#include <string>
+#include <vector>
+#include <csignal>
+#include <cstddef>
+#include <cstdint>
+#include <charconv>
+#include <optional>
+#include <string_view>
+
+#include <sys/prctl.h>
+
+namespace {
+
+using namespace shm_harness;
+using namespace std::chrono_literals;
+
+struct node_args
+{
+    std::string block;
+    std::uint32_t index;
+    std::uint32_t count;
+    std::string fqn;
+    std::string role;
+    bool hint;
+    bool deny;
+    std::vector<std::uint16_t> ports;
+};
+
+std::optional<std::uint32_t> to_u32(std::string_view text)
+{
+    std::uint32_t value     = 0;
+    const char *const end   = text.data() + text.size();
+    const auto [last, errc] = std::from_chars(text.data(), end, value);
+    if(errc != std::errc{} || last != end)
+        return std::nullopt;
+    return value;
+}
+
+std::optional<node_args> parse_node_args(const std::vector<std::string> &argv)
+{
+    const std::optional<std::uint32_t> index = argv.size() >= 7 ? to_u32(argv[1]) : std::nullopt;
+    const std::optional<std::uint32_t> count = argv.size() >= 7 ? to_u32(argv[2]) : std::nullopt;
+    if(!index || !count || *count > k_max_nodes || *index >= *count || argv.size() != 7 + *count)
+        return std::nullopt;
+
+    node_args out{argv[0], *index, *count, argv[3], argv[4], argv[5] == "1", argv[6] == "1", {}};
+    for(std::uint32_t i = 0; i < *count; ++i)
+    {
+        const std::optional<std::uint32_t> port = to_u32(argv[7 + i]);
+        if(!port || *port > 0xFFFFu)
+            return std::nullopt;
+        out.ports.push_back(static_cast<std::uint16_t>(*port));
+    }
+    return out;
+}
+
+plexus::node_id harness_id(std::uint32_t index)
+{
+    plexus::node_id id{};
+    id[0] = std::byte(0x40 + index);
+    return id;
+}
+
+// Only the higher-indexed node of each pair knows the other's card, so exactly one side dials.
+std::vector<plexus::discovery::service_info> lower_cards(const node_args &args)
+{
+    std::vector<plexus::discovery::service_info> cards;
+    for(std::uint32_t peer = 0; peer < args.index; ++peer)
+    {
+        const auto card = plexus::discovery::assemble_contact_card(harness_id(peer), {{"tcp", args.ports[peer]}});
+        cards.push_back({"shm_harness." + std::to_string(peer), plexus::io::endpoint{"", "127.0.0.1"}, card});
+    }
+    return cards;
+}
+
+plexus::node_options dial_opts()
+{
+    plexus::node_options opts;
+    opts.reconnect    = plexus::io::reconnect_config{20ms, 500ms, std::nullopt, std::nullopt};
+    opts.redial_seed  = 0xC0FFEEu;
+    opts.dial_eagerly = true;
+    return opts;
+}
+
+plexus::topic_qos topic_qos_for(bool hint)
+{
+    plexus::topic_qos qos;
+    qos.dispatch = hint ? plexus::io::dispatch_hint::frequent : plexus::io::dispatch_hint::none;
+    return qos;
+}
+
+plexus::io::subscriber_qos subscriber_qos_for(bool hint)
+{
+    plexus::io::subscriber_qos qos;
+    qos.dispatch = hint ? plexus::io::dispatch_hint::frequent : plexus::io::dispatch_hint::none;
+    return qos;
+}
+
+template<typename Node>
+void update_connected(Node &node, const node_args &args, node_slot &slot)
+{
+    std::uint32_t connected = 0;
+    for(std::uint32_t peer = 0; peer < args.index; ++peer)
+    {
+        if(node.router().is_connected(harness_id(peer)))
+            ++connected;
+    }
+    slot.connected.store(connected, std::memory_order_release);
+}
+
+void run_node(const node_args &args, node_slot &slot)
+{
+    ::asio::io_context io;
+    plexus::discovery::static_discovery disc{lower_cards(args)};
+    plexus::asio::same_host_transports transports{io};
+    auto node = transports.make_node(disc, harness_id(args.index), dial_opts());
+    node.listen({"tcp", "127.0.0.1:" + std::to_string(args.ports[args.index])});
+
+    std::optional<plexus::publisher<>> pub;
+    if(args.role != role_name(node_role::sub))
+        pub.emplace(node, args.fqn, topic_qos_for(args.hint));
+    node_driver driver{slot, args.index, pub};
+    std::optional<plexus::subscriber<>> sub;
+    if(args.role != role_name(node_role::pub))
+        sub.emplace(node, args.fqn, subscriber_qos_for(args.hint), [&driver](std::span<const std::byte> bytes) { driver.receive(bytes); });
+
+    slot.ready.store(1, std::memory_order_release);
+    while(driver.serve())
+    {
+        io.restart();
+        io.run_for(1ms);
+        update_connected(node, args, slot);
+    }
+}
+
+// The parent-death signal keeps a child from outliving a parent that was killed before it could reap it.
+bool node_child(const std::vector<std::string> &argv)
+{
+    ::prctl(PR_SET_PDEATHSIG, SIGKILL);
+    const std::optional<node_args> args = parse_node_args(argv);
+    if(!args || (args->deny && !deny_io_uring()))
+        return false;
+    auto block = plexus::testing::xproc_shared<topology_block>::attach(args->block);
+    if(!block)
+        return false;
+
+    node_slot &slot = block->get().nodes[args->index];
+    run_node(*args, slot);
+    slot.exit_code.store(0, std::memory_order_release);
+    return true;
+}
+
+[[maybe_unused]] const bool s_node_registered = plexus::testing::register_xproc_child("shm_harness.node", &node_child);
+
+}
