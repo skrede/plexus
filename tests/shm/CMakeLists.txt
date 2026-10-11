@@ -780,6 +780,15 @@ target_link_libraries(test_medium_coordinator PRIVATE
 
 catch_discover_tests(test_medium_coordinator TEST_PREFIX "shm.")
 
+# A medium that loses its ring waiter drops every lane the coordinator holds for the topic.
+add_executable(test_coordinator_medium_lost test_coordinator_medium_lost.cpp)
+
+target_link_libraries(test_coordinator_medium_lost PRIVATE
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_coordinator_medium_lost TEST_PREFIX "shm.")
+
 # The bilateral, consumer-sovereign upgrade via demand-driven convergence (xproc):
 # two real processes each decide INDEPENDENTLY whether to attempt the shared-memory
 # acquire from their OWN dispatch hint (no hint on the wire), converge on the same

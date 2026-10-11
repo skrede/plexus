@@ -7,6 +7,7 @@
 #include <vector>
 #include <cstddef>
 #include <memory>
+#include <iterator>
 #include <algorithm>
 #include <string_view>
 #include <unordered_map>
@@ -64,6 +65,17 @@ bool erase_ring(coordinator_held<Channel, Receive> &held, std::string_view node_
         return true;
     }
     return false;
+}
+
+// Erases the fqn's rings from every peer, and every peer left with none.
+template<typename Channel, typename Receive>
+void erase_fqn(coordinator_held<Channel, Receive> &held, std::string_view fqn)
+{
+    for(auto it = held.begin(); it != held.end();)
+    {
+        std::erase_if(it->second, [&](const auto &r) { return r.fqn == fqn; });
+        it = it->second.empty() ? held.erase(it) : std::next(it);
+    }
 }
 
 // Returns the companion channel when the message fits, else nullptr so the pair keeps the wire

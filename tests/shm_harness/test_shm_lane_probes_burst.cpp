@@ -27,7 +27,7 @@ TEST_CASE("lane_probe a send-only companion with no consumer never refuses a bur
     ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
     auto member    = plexus::asio::shm::make_shm_member(io, broker);
-    auto companion = member.mint_companion(fqn);
+    auto companion = member.mint_companion(fqn, nullptr);
     REQUIRE(companion);
 
     std::uint32_t refused = 0;

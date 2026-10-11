@@ -4,6 +4,7 @@
 #include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_topic_registry.h"
 
@@ -28,7 +29,8 @@ namespace plexus::shm {
 // The per-topic byte_channel the shm mux member hands up, wrapping ONE live ring behind the
 // byte_channel verbs the multiplexer erases. close() releases the ring (refcount tears it
 // down + unlinks at 1->0). on_protocol_close never fires (no byte-stream framing on a ring).
-// The registry outlives every channel it mints.
+// The registry outlives every channel it mints. When the ring's waiter is lost, lost runs, or
+// with none the channel closes as any byte_channel whose medium died.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_byte_channel
@@ -36,11 +38,14 @@ class shm_byte_channel
 public:
     using registry_type = shm_topic_registry<Broker, Notifier>;
 
-    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn, io::endpoint remote) noexcept
+    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn, io::endpoint remote, waiter_loss::lost_fn lost = nullptr)
             : m_registry(registry)
             , m_channel(channel)
             , m_fqn(std::move(fqn))
             , m_remote(std::move(remote))
+            , m_loss(registry.watch_loss(m_fqn, ring_direction::request, lost ? std::move(lost) : waiter_loss::lost_fn{[this] { close(); }}))
+            , m_scheduler_key(io::detail::next_scheduler_key())
+            , m_released(false)
     {
     }
 
@@ -146,8 +151,9 @@ private:
     shm_channel<Notifier> &m_channel;
     std::string m_fqn;
     io::endpoint m_remote;
-    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()};
-    bool m_released = false;
+    loss_watch m_loss;
+    std::uint64_t m_scheduler_key;
+    bool m_released;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
     plexus::detail::move_only_function<void()> m_on_closed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
@@ -158,7 +164,7 @@ private:
 // The RAII receive lane over a co-host companion ring, drained by the registry's armed
 // notifier (posted on the node executor, NO drain thread). Destruction clears the sink BEFORE
 // dropping the refcount (disarm-before-destroy), so a wake in flight never delivers onto a
-// torn-down sink and a release at 1->0 unmaps the ring.
+// torn-down sink and a release at 1->0 unmaps the ring. lost runs if the ring's waiter is lost.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_companion_consumer
@@ -166,9 +172,10 @@ class shm_companion_consumer
 public:
     using registry_type = shm_topic_registry<Broker, Notifier>;
 
-    shm_companion_consumer(registry_type &registry, std::string fqn) noexcept
+    shm_companion_consumer(registry_type &registry, std::string fqn, waiter_loss::lost_fn lost)
             : m_registry(registry)
             , m_fqn(std::move(fqn))
+            , m_loss(registry.watch_loss(m_fqn, ring_direction::request, std::move(lost)))
     {
     }
 
@@ -184,6 +191,7 @@ public:
 private:
     registry_type &m_registry;
     std::string m_fqn;
+    loss_watch m_loss;
 };
 
 }

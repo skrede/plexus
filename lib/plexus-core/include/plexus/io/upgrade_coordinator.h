@@ -96,6 +96,13 @@ public:
         m_held.erase(std::string{node_name});
     }
 
+    // The medium can no longer serve the fqn: every peer's lanes for it drop, leaving each pair on the wire until
+    // its next up-edge mints afresh. The hint stays so that up-edge can still upgrade.
+    void on_medium_lost(std::string_view fqn)
+    {
+        detail::erase_fqn(m_held, fqn);
+    }
+
 private:
     using ring      = detail::coordinator_ring<Channel, upgrade_receive>;
     using ring_list = std::vector<ring>;

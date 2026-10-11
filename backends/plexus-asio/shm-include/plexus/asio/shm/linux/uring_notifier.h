@@ -31,7 +31,7 @@ namespace plexus::asio::shm {
 // Lands a cross-process futex wake in the user's reactor turn without a plexus-owned thread: a
 // private io_uring submits IORING_OP_FUTEX_WAIT on its slot's park word, and its registered eventfd
 // is the doorbell watched on the user's io_context. A completion the kernel cannot serve posts the
-// injected demotion instead of re-submitting.
+// injected demotion as unsupported, and a wait it cannot queue again as exhausted, instead of re-submitting.
 template<typename Policy>
 class ring_notifier_uring
 {
@@ -53,13 +53,13 @@ class ring_notifier_uring
         bool ring_live;
         detail::fd_doorbell doorbell;
         ::plexus::shm::control_header_t &header;
-        plexus::detail::move_only_function<void()> demote_cb;
+        plexus::detail::move_only_function<void(::plexus::shm::arm_status)> demote_cb;
         ::plexus::shm::detail::notifier_bridge<Policy> bridge;
     };
 
 public:
     using drain_fn  = plexus::detail::move_only_function<void()>;
-    using demote_fn = plexus::detail::move_only_function<void()>;
+    using demote_fn = plexus::detail::move_only_function<void(::plexus::shm::arm_status)>;
 
     ring_notifier_uring(typename Policy::executor_type executor, ::plexus::shm::control_header_t &header, std::string_view)
             : m_state(std::make_shared<state>(executor, header))
@@ -151,24 +151,24 @@ private:
         if(verdict == cqe_verdict::stop)
             return;
         if(verdict == cqe_verdict::demote)
-            return post_demotion(s);
+            return post_demotion(s, ::plexus::shm::arm_status::unsupported);
         const std::uint32_t snapshot = ::plexus::shm::park_snapshot(s->header);
         ::plexus::shm::detail::post_drain(s, s->bridge);
         if(!park_and_wait(*s, snapshot))
-            return post_demotion(s);
+            return post_demotion(s, ::plexus::shm::arm_status::exhausted);
         watch(s);
     }
 
     // The demotion disarms this leg, which clears the callback, so it is moved out before it runs.
-    static void post_demotion(const std::shared_ptr<state> &s)
+    static void post_demotion(const std::shared_ptr<state> &s, ::plexus::shm::arm_status reason)
     {
         Policy::post(s->bridge.executor(),
-                     [s]
+                     [s, reason]
                      {
                          demote_fn demotion = std::move(s->demote_cb);
                          s->demote_cb       = nullptr;
                          if(demotion)
-                             demotion();
+                             demotion(reason);
                      });
     }
 

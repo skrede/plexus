@@ -10,6 +10,7 @@
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/detail/shm_topic_open.h"
@@ -33,11 +34,11 @@
 
 namespace plexus::shm {
 
-// The demand-driven lifecycle owner of every live (topic, direction) ring: a first acquire
-// MINTS the ring (or ATTACHES to a peer's), each further acquire bumps a refcount, and the
-// matching releases tear it down at 1 -> 0 (the creator also unlinks). It borrows the broker
-// by reference and owns one notifier per entry. Templated on the broker + notifier seams so
-// core pulls no POSIX/asio header.
+// The demand-driven lifecycle owner of every live (topic, direction) ring: a first acquire MINTS the ring (or
+// ATTACHES to a peer's), each further acquire bumps a refcount, and the matching releases tear it down at 1 -> 0 (the
+// creator also unlinks). A waiter lost after its acquire tells each holder watching it and fails further acquires of
+// its key. It borrows the broker by reference and owns one notifier per entry. Templated on the broker + notifier
+// seams so core pulls no POSIX/asio header.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_topic_registry
@@ -56,8 +57,7 @@ public:
         return [](std::optional<Notifier> &slot, control_header_t &, std::string_view) { slot.emplace(); };
     }
 
-    // max_ring_slab_bytes defaults to the shipped k_max_ring_slab_bytes; the acquire fails
-    // closed above it.
+    // max_ring_slab_bytes defaults to the shipped k_max_ring_slab_bytes; the acquire fails closed above it.
     shm_topic_registry(Broker &broker, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = default_notifier_binder(),
                        std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes, std::string region_ns = {}) noexcept
             : m_broker(broker)
@@ -88,10 +88,7 @@ public:
     {
         const key k{fqn, direction};
         if(auto it = m_entries.find(k); it != m_entries.end())
-        {
-            ++it->second->refcount;
-            return it->second->verdict;
-        }
+            return detail::topic_reacquire(*it->second, m_last_failure);
 
         auto e                       = std::make_unique<entry>();
         m_last_failure               = acquire_failure{};
@@ -143,9 +140,15 @@ public:
     shm_channel<Notifier> *channel_for(const std::string &fqn, ring_direction direction)
     {
         auto it = m_entries.find(key{fqn, direction});
-        if(it == m_entries.end() || !it->second->channel)
+        if(it == m_entries.end() || !it->second->channel || it->second->loss->status() != arm_status::armed)
             return nullptr;
         return &*it->second->channel;
+    }
+
+    loss_watch watch_loss(const std::string &fqn, ring_direction direction, waiter_loss::lost_fn lost)
+    {
+        auto it = m_entries.find(key{fqn, direction});
+        return loss_watch{it == m_entries.end() ? nullptr : it->second->loss, std::move(lost)};
     }
 
     void drain_channels(deliver_fn &deliver)

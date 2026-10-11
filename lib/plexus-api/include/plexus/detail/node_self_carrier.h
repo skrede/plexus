@@ -29,12 +29,12 @@ struct self_carrier_handle
 // for a node with no self-session). Reuses mint_companion/mint_receive_companion as-is; replaces only
 // the session-keyed trigger (this is driven by the node's subscribe-gate, not same_host_for) and the
 // session-keyed receive routing (deliver_cb, not inject_upgrade_receive). Names no shm type — the
-// member is reached generically by the caller.
-template<typename EngineChannel, typename Member, typename DeliverCb>
-self_carrier_handle<EngineChannel> install_self_carrier(Member &shm_member, const std::string &fqn, DeliverCb deliver_cb)
+// member is reached generically by the caller. Both halves run a copy of lost_cb if the ring's waiter is lost.
+template<typename EngineChannel, typename Member, typename DeliverCb, typename LostCb>
+self_carrier_handle<EngineChannel> install_self_carrier(Member &shm_member, const std::string &fqn, DeliverCb deliver_cb, LostCb lost_cb)
 {
-    auto write = wrap_companion<EngineChannel>(shm_member.mint_companion(fqn));
-    auto read  = shm_member.mint_receive_companion(fqn, [deliver = std::move(deliver_cb)](std::span<const std::byte> frame) mutable { deliver(frame); });
+    auto write = wrap_companion<EngineChannel>(shm_member.mint_companion(fqn, lost_cb));
+    auto read  = shm_member.mint_receive_companion(fqn, [deliver = std::move(deliver_cb)](std::span<const std::byte> frame) mutable { deliver(frame); }, std::move(lost_cb));
     return self_carrier_handle<EngineChannel>{std::move(write), std::shared_ptr<void>{std::move(read)}};
 }
 

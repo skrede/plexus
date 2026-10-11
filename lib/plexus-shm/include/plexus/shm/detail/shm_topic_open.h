@@ -6,6 +6,7 @@
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_acquire_result.h"
 
 #include <string>
@@ -89,6 +90,16 @@ shm::acquire_result topic_open_ring(Registry &r, Entry &e, const std::string &fq
     return shm::acquire_result::failed;
 }
 
+// A notifier that can lose its waiter after arming reports the loss to every holder watching the entry.
+template<typename Entry>
+shm::arm_status topic_arm(Entry &e, std::uint32_t slot)
+{
+    if constexpr(shm::demotable_notifier<typename Entry::notifier_type>)
+        return e.notify->arm(slot, [&e] { e.deliver_pending(); }, [loss = e.loss](shm::arm_status status) { loss->report(status); });
+    else
+        return e.notify->arm(slot, [&e] { e.deliver_pending(); });
+}
+
 // The channel must be built AFTER the ring is bound (its subscriber registers a cursor over the live ring). The armed
 // drain is the ONE drain authority for the ring's single consumer cursor: a second drainer would steal messages. A
 // waiter without a cursor slot has nothing to wake and reports armed.
@@ -100,8 +111,21 @@ shm::arm_status topic_bind(Registry &r, Entry &e, const std::string &fqn, shm::r
     e.verdict  = verdict;
     e.refcount = 1;
     if(const std::optional<std::uint32_t> slot = e.channel->waiter_slot())
-        return e.notify->arm(*slot, [&e] { e.deliver_pending(); });
+        return topic_arm(e, *slot);
     return shm::arm_status::armed;
+}
+
+// A key whose waiter was lost fails every acquire until its last holder releases it, so the next demand arms afresh.
+template<typename Entry>
+shm::acquire_result topic_reacquire(Entry &e, shm::acquire_failure &failure)
+{
+    if(const shm::arm_status lost = e.loss->status(); lost != shm::arm_status::armed)
+    {
+        failure = shm::acquire_failure{shm::acquire_bound::notifier, 0, 0, shm::region_status::ok, lost};
+        return shm::acquire_result::failed;
+    }
+    ++e.refcount;
+    return e.verdict;
 }
 
 }

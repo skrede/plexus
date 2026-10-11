@@ -19,24 +19,17 @@ enum class fallback_tier : std::uint8_t
     secondary
 };
 
-// A notifier that can learn after arming that it cannot serve its waiter: it runs the injected demotion on the
-// executor, after the handler that discovered it has returned.
-template<typename T>
-concept demotable_notifier = requires(T &n, std::uint32_t slot, plexus::detail::move_only_function<void()> drain, plexus::detail::move_only_function<void()> demote) {
-    { n.signal() } -> std::same_as<void>;
-    { n.arm(slot, std::move(drain), std::move(demote)) } -> std::same_as<arm_status>;
-    { n.disarm() } -> std::same_as<void>;
-};
-
 // Arms the primary and falls back to the secondary when the primary cannot arm or later demotes. Each leg receives a
 // forwarding drain, so a failed leg never consumes the waiter's drain. The legs hold the forwarding callbacks only
-// while armed and disarm clears them, so the callbacks reach this object only while it is alive.
+// while armed and disarm clears them, so the callbacks reach this object only while it is alive. A runtime demotion
+// whose secondary cannot arm either is itself a demotion, so composites nest.
 template<typename Primary, typename Secondary>
     requires demotable_notifier<Primary> && notifier<Secondary>
 class fallback_notifier
 {
 public:
     using drain_fn = plexus::detail::move_only_function<void()>;
+    using lost_fn  = plexus::detail::move_only_function<void(arm_status)>;
 
     template<typename... Args>
         requires std::constructible_from<Primary, Args &...> && std::constructible_from<Secondary, Args &...>
@@ -44,6 +37,7 @@ public:
             : m_primary(args...)
             , m_secondary(args...)
             , m_drain_cb()
+            , m_lost_cb()
             , m_slot(0)
             , m_engaged(fallback_tier::none)
             , m_primary_status(arm_status::armed)
@@ -70,9 +64,16 @@ public:
 
     arm_status arm(std::uint32_t slot, drain_fn drain)
     {
+        return arm(slot, std::move(drain), nullptr);
+    }
+
+    // lost runs once, on the executor, when a runtime demotion finds that the secondary cannot arm either.
+    arm_status arm(std::uint32_t slot, drain_fn drain, lost_fn lost)
+    {
         m_slot           = slot;
         m_drain_cb       = std::move(drain);
-        m_primary_status = m_primary.arm(slot, forward_drain(), [this] { demote(); });
+        m_lost_cb        = std::move(lost);
+        m_primary_status = m_primary.arm(slot, forward_drain(), [this](arm_status status) { demote(status); });
         if(m_primary_status == arm_status::armed)
         {
             m_engaged = fallback_tier::primary;
@@ -90,6 +91,7 @@ public:
             m_secondary.disarm();
         m_engaged  = fallback_tier::none;
         m_drain_cb = nullptr;
+        m_lost_cb  = nullptr;
     }
 
     fallback_tier engaged() const noexcept
@@ -106,6 +108,7 @@ private:
     Primary m_primary;
     Secondary m_secondary;
     drain_fn m_drain_cb;
+    lost_fn m_lost_cb;
     std::uint32_t m_slot;
     fallback_tier m_engaged;
     arm_status m_primary_status;
@@ -129,13 +132,19 @@ private:
         return status;
     }
 
-    void demote()
+    // The loss may destroy this notifier, so its callback runs from a local and nothing touches this afterwards.
+    void demote(arm_status status)
     {
         if(m_engaged != fallback_tier::primary)
             return;
         m_primary.disarm();
-        m_primary_status = arm_status::unsupported;
-        arm_secondary();
+        m_primary_status          = status;
+        const arm_status fallback = arm_secondary();
+        if(fallback == arm_status::armed || !m_lost_cb)
+            return;
+        lost_fn lost = std::move(m_lost_cb);
+        m_lost_cb    = nullptr;
+        lost(fallback);
     }
 };
 

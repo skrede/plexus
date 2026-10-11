@@ -3,6 +3,7 @@
 
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/ring_geometry_mode.h"
 
@@ -11,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <cstdint>
+#include <utility>
 
 namespace plexus::shm::detail {
 
@@ -45,9 +47,11 @@ shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn, shm::
 
 // Mint a channel over the ring for ep, acquiring it first unless a prior can_acquire probe
 // already holds it (channel_for non-null — reuse that held reference so the refcount stays at
-// one held by the minted channel). nullptr on a broker failure. ep.address is the fqn.
+// one held by the minted channel). nullptr on a broker failure. ep.address is the fqn. lost runs
+// if the ring's waiter is lost; with none the channel closes.
 template<typename Member>
-auto mux_open(Member &m, const io::endpoint &ep, shm::acquire_mode amode = shm::acquire_mode::reclaim_stale) -> std::unique_ptr<typename Member::channel_type>
+auto mux_open(Member &m, const io::endpoint &ep, shm::acquire_mode amode = shm::acquire_mode::reclaim_stale, shm::waiter_loss::lost_fn lost = nullptr)
+        -> std::unique_ptr<typename Member::channel_type>
 {
     auto *ch = m.m_registry.channel_for(ep.address, shm::ring_direction::request);
     if(ch == nullptr) // no probe held it: acquire fresh
@@ -59,7 +63,7 @@ auto mux_open(Member &m, const io::endpoint &ep, shm::acquire_mode amode = shm::
     }
     if(ch == nullptr)
         return nullptr;
-    return std::make_unique<typename Member::channel_type>(m.m_registry, *ch, ep.address, ep);
+    return std::make_unique<typename Member::channel_type>(m.m_registry, *ch, ep.address, ep, std::move(lost));
 }
 
 }

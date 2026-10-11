@@ -13,7 +13,8 @@
 
 namespace plexus::testing {
 
-using leg_fn = plexus::detail::move_only_function<void()>;
+using leg_fn    = plexus::detail::move_only_function<void()>;
+using demote_fn = plexus::detail::move_only_function<void(plexus::shm::arm_status)>;
 
 struct denied_primary
 {
@@ -30,7 +31,7 @@ struct denied_primary
     {
     }
 
-    plexus::shm::arm_status arm(std::uint32_t, leg_fn, leg_fn)
+    plexus::shm::arm_status arm(std::uint32_t, leg_fn, demote_fn)
     {
         return plexus::shm::arm_status::denied;
     }
@@ -65,14 +66,14 @@ struct denied_floor
     }
 };
 
-// Arms, then posts its demotion the way a primary reports an unsupported completion; disarm drops a demotion
-// still in flight.
+// Arms, then posts its demotion the way a primary reports a completion the kernel cannot serve; disarm drops a
+// demotion still in flight.
 template<typename Policy>
 class demoting_primary
 {
 public:
     demoting_primary(typename Policy::executor_type executor, plexus::shm::control_header_t &, std::string_view)
-            : m_demote_cb(std::make_shared<leg_fn>())
+            : m_demote_cb(std::make_shared<demote_fn>())
             , m_executor(executor)
     {
     }
@@ -81,16 +82,16 @@ public:
     {
     }
 
-    plexus::shm::arm_status arm(std::uint32_t, leg_fn, leg_fn demote)
+    plexus::shm::arm_status arm(std::uint32_t, leg_fn, demote_fn demote)
     {
         *m_demote_cb = std::move(demote);
         Policy::post(m_executor,
                      [held = m_demote_cb]
                      {
-                         leg_fn demotion = std::move(*held);
-                         *held           = nullptr;
+                         demote_fn demotion = std::move(*held);
+                         *held              = nullptr;
                          if(demotion)
-                             demotion();
+                             demotion(plexus::shm::arm_status::unsupported);
                      });
         return plexus::shm::arm_status::armed;
     }
@@ -101,7 +102,7 @@ public:
     }
 
 private:
-    std::shared_ptr<leg_fn> m_demote_cb;
+    std::shared_ptr<demote_fn> m_demote_cb;
     typename Policy::executor_type m_executor;
 };
 

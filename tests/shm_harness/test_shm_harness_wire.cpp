@@ -32,7 +32,7 @@ TEST_CASE("harness both ends denied every notifier deliver every message over th
     REQUIRE(sub.duplicates == 0);
 }
 
-TEST_CASE("harness both ends that lose every notifier at runtime deliver every message over the wire", "[shm][harness][!shouldfail]")
+TEST_CASE("harness both ends that lose every notifier at runtime deliver every message over the wire", "[shm][harness]")
 {
     topology topo{"shm_harness.lost." + std::to_string(plexus::testing::process_id()), 2};
     REQUIRE(topo.created());

@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <utility>
 #include <string_view>
+#include <system_error>
 
 namespace plexus::asio::shm {
 
@@ -81,8 +82,7 @@ public:
         s.doorbell.attach(s.bridge.executor());
         detail::relay_wakes(m_state, s.doorbell, s.bridge);
         s.stop.store(false, std::memory_order_release);
-        m_waiter = std::thread([&s] { wait_loop(s); });
-        return ::plexus::shm::arm_status::armed;
+        return start_waiter(s) ? ::plexus::shm::arm_status::armed : ::plexus::shm::arm_status::exhausted;
     }
 
     // The join precedes the close so the waiter never pokes a closed eventfd. The stop store and the waiter's stop
@@ -102,6 +102,20 @@ public:
     }
 
 private:
+    // A thread the system refuses (std::system_error) is an exhausted resource the caller can fall back from.
+    bool start_waiter(state &s)
+    {
+        try
+        {
+            m_waiter = std::thread([&s] { wait_loop(s); });
+        }
+        catch(const std::system_error &)
+        {
+            return false;
+        }
+        return true;
+    }
+
     // The snapshot precedes the poke, so the drain it triggers covers every publish up to the snapshot; a later
     // publish either fails the recheck or finds the word PARKED and wakes it.
     static void wait_loop(state &s) noexcept

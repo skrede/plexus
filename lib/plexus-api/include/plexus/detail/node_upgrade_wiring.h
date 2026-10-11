@@ -65,39 +65,48 @@ io::selection_hook resolve_hook([[maybe_unused]] Transports &...transports)
         return io::first_candidate{};
 }
 
-// Install the companion-ring mint and receive gates for one shm member into the engine's
-// coordinator, capturing the member by reference (it outlives the node-owned glue). The minted
-// concrete channel is wrapped into the engine's byte_channel before the coordinator retains it.
+// A lost ring waiter drops every lane the coordinator holds for the fqn, so each pair keeps the wire. The engine
+// outlives the coordinator and therefore every lane that carries this.
+template<typename Engine>
+plexus::detail::move_only_function<void()> drop_lanes_on_loss(Engine &engine, std::string fqn)
+{
+    return [&engine, fqn = std::move(fqn)] { engine.coordinator().on_medium_lost(fqn); };
+}
+
 template<typename Engine, typename Member>
-// NOLINTNEXTLINE(readability-function-size)
+io::upgrade_mint<typename Engine::channel_type> mint_send_lane(Engine &engine, Member &member, std::string_view fqn)
+{
+    const std::string key{fqn};
+    std::unique_ptr<typename Member::channel_type> ch = member.mint_companion(key, drop_lanes_on_loss(engine, key));
+    if(!ch)
+        return {};
+    auto fits = member.companion_route(key);
+    return {wrap_companion<typename Engine::channel_type>(std::move(ch)), std::move(fits)};
+}
+
+// Each drained frame is injected into the matching peer session, resolved by node_name. The drain posts on the node's
+// executor, so inject runs on an executor turn with no drain thread. The returned owner is never called: dropping it on
+// peer-dead runs the RAII handle's dtor (clear sink, release ring). A null handle declines and the subscriber keeps the
+// wire.
+template<typename Engine, typename Member>
+io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::string_view node_name, std::string_view fqn)
+{
+    const std::string key{fqn};
+    auto deliver = [&engine, peer = std::string{node_name}](std::span<const std::byte> frame) { engine.inject_upgrade_receive(peer, frame); };
+    auto handle  = member.mint_receive_companion(key, std::move(deliver), drop_lanes_on_loss(engine, key));
+    if(!handle)
+        return {};
+    return {[h = std::move(handle)]() mutable { (void)h; }};
+}
+
+// Install the companion-ring mint and receive gates for one shm member into the engine's coordinator, capturing the
+// member and the engine by reference (both outlive the node-owned glue). The minted concrete channel is wrapped into
+// the engine's byte_channel before the coordinator retains it.
+template<typename Engine, typename Member>
 void install_same_host_upgrade(Engine &engine, Member &member)
 {
-    using engine_channel = typename Engine::channel_type;
-    engine.on_upgrade_gate(
-            [&member](std::string_view fqn) -> io::upgrade_mint<engine_channel>
-            {
-                const std::string key{fqn};
-                std::unique_ptr<typename Member::channel_type> ch = member.mint_companion(key);
-                if(!ch)
-                    return {};
-                auto fits = member.companion_route(key);
-                return {wrap_companion<engine_channel>(std::move(ch)), std::move(fits)};
-            });
-    // Each drained frame is injected into the matching peer session, resolved by node_name. The
-    // drain posts on the node's executor, so inject runs on an executor turn with no drain thread.
-    // The returned owner is never called: dropping it on peer-dead runs the RAII handle's dtor
-    // (clear sink, release ring). It captures the engine by reference (it outlives the coordinator).
-    // A null handle declines and the subscriber keeps the wire.
-    engine.on_upgrade_receive_gate(
-            [&member, &engine](std::string_view node_name, std::string_view fqn) -> io::upgrade_receive
-            {
-                const std::string key{fqn};
-                const std::string peer{node_name};
-                auto handle = member.mint_receive_companion(key, [&engine, peer](std::span<const std::byte> frame) { engine.inject_upgrade_receive(peer, frame); });
-                if(!handle)
-                    return {};
-                return {[h = std::move(handle)]() mutable { (void)h; }};
-            });
+    engine.on_upgrade_gate([&engine, &member](std::string_view fqn) { return mint_send_lane(engine, member, fqn); });
+    engine.on_upgrade_receive_gate([&engine, &member](std::string_view node_name, std::string_view fqn) { return mint_receive_lane(engine, member, node_name, fqn); });
 }
 
 }

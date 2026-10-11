@@ -6,6 +6,7 @@
 #include "plexus/detail/compat.h"
 
 #include <cstdint>
+#include <utility>
 #include <concepts>
 
 namespace plexus::shm {
@@ -18,6 +19,15 @@ template<typename T>
 concept notifier = requires(T &n, std::uint32_t slot, plexus::detail::move_only_function<void()> drain) {
     { n.signal() } -> std::same_as<void>;
     { n.arm(slot, std::move(drain)) } -> std::same_as<arm_status>;
+    { n.disarm() } -> std::same_as<void>;
+};
+
+// A notifier that can learn after arming that it cannot serve its waiter: it runs the injected demotion with the reason
+// on the executor, after the handler that discovered it has returned.
+template<typename T>
+concept demotable_notifier = requires(T &n, std::uint32_t slot, plexus::detail::move_only_function<void()> drain, plexus::detail::move_only_function<void(arm_status)> demote) {
+    { n.signal() } -> std::same_as<void>;
+    { n.arm(slot, std::move(drain), std::move(demote)) } -> std::same_as<arm_status>;
     { n.disarm() } -> std::same_as<void>;
 };
 

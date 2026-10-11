@@ -63,7 +63,8 @@ void teardown_shm_self_carrier(Node &n, const std::string &fqn)
 }
 
 // Mint the node-local shm self-ring for the fqn, record its write half as the self-route (a
-// publish fans into the ring), and bind the read half to re-enter the node's own dispatch.
+// publish fans into the ring), and bind the read half to re-enter the node's own dispatch. A lost
+// ring waiter tears the carrier down; the next pub/sub seam that re-drives the sync mints afresh.
 template<typename Node>
 void install_shm_self_carrier(Node &n, const std::string &fqn)
 {
@@ -72,7 +73,8 @@ void install_shm_self_carrier(Node &n, const std::string &fqn)
     n.for_each_shm_member(
             [&](auto &m)
             {
-                auto carrier = detail::install_self_carrier<typename Node::engine_channel>(m, fqn, [&n](std::span<const std::byte> framed) { self_carrier_bytes(n, framed); });
+                auto deliver = [&n](std::span<const std::byte> framed) { self_carrier_bytes(n, framed); };
+                auto carrier = detail::install_self_carrier<typename Node::engine_channel>(m, fqn, deliver, [&n, fqn] { teardown_shm_self_carrier(n, fqn); });
                 if(!carrier.write)
                     return;
                 n.m_engine.messages().attach_local(fqn, *carrier.write, n.m_service_name, qos, tid);

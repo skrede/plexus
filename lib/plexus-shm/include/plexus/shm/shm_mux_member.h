@@ -139,26 +139,26 @@ public:
 
     // The additive fast path a co-host (peer, topic) pair runs ALONGSIDE its wire session. Unlike
     // can_acquire it mints for ANY provisioned mode (the wire stays the recorded fail-safe). The
-    // returned channel holds the refcount and releases it on destruction.
-    std::unique_ptr<channel_type> mint_companion(const std::string &fqn)
+    // returned channel holds the refcount and releases it on destruction; lost runs if the ring's waiter is lost.
+    std::unique_ptr<channel_type> mint_companion(const std::string &fqn, waiter_loss::lost_fn lost)
     {
         // join_live: the co-host subscriber may have minted this companion ring first, so a
         // clobbering unlink would split the pair onto two rings.
-        return detail::mux_open(*this, io::endpoint{"shm", fqn}, acquire_mode::join_live);
+        return detail::mux_open(*this, io::endpoint{"shm", fqn}, acquire_mode::join_live, std::move(lost));
     }
 
-    // The receive half of the companion model: attach the request-direction ring as a CONSUMER
-    // for a co-host subscriber (sharing the ONE ring the publisher writes) and install on_frame
-    // as the entry's consumer sink. Returns an RAII handle whose destruction clears the sink and
-    // releases the ring (1->0 unmaps); nullptr on a broker failure. The framed bytes are
-    // header-on, so the caller feeds them into the SAME receive entry the wire session feeds.
-    std::unique_ptr<shm_companion_consumer<Broker, Notifier>> mint_receive_companion(const std::string &fqn,
-                                                                                     plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame)
+    // The receive half of the companion model: attach the request-direction ring as a CONSUMER for a co-host subscriber
+    // (sharing the ONE ring the publisher writes) and install on_frame as the entry's consumer sink. Returns an RAII
+    // handle whose destruction clears the sink and releases the ring (1->0 unmaps); nullptr on a broker failure. The
+    // framed bytes are header-on, so the caller feeds them into the SAME receive entry the wire session feeds. lost
+    // runs if the ring's waiter is lost.
+    std::unique_ptr<shm_companion_consumer<Broker, Notifier>>
+    mint_receive_companion(const std::string &fqn, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame, waiter_loss::lost_fn lost)
     {
         const auto g = detail::mux_resolve(*this, fqn, ring_direction::request);
         if(m_registry.acquire(fqn, ring_direction::request, g.max_payload, g.mode, g.consumer_capacity, acquire_mode::join_live) == acquire_result::failed)
             return nullptr;
-        auto handle = std::make_unique<shm_companion_consumer<Broker, Notifier>>(m_registry, fqn);
+        auto handle = std::make_unique<shm_companion_consumer<Broker, Notifier>>(m_registry, fqn, std::move(lost));
         m_registry.set_consumer_sink(fqn, ring_direction::request,
                                      [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable { cb(std::span<const std::byte>{wb.data(), wb.size()}); });
         return handle;
@@ -247,7 +247,7 @@ public:
 
 private:
     template<typename M>
-    friend auto detail::mux_open(M &, const io::endpoint &, shm::acquire_mode) -> std::unique_ptr<typename M::channel_type>;
+    friend auto detail::mux_open(M &, const io::endpoint &, shm::acquire_mode, shm::waiter_loss::lost_fn) -> std::unique_ptr<typename M::channel_type>;
     template<typename M>
     friend detail::shm_resolved_geometry detail::mux_resolve(const M &, const std::string &, shm::ring_direction);
 

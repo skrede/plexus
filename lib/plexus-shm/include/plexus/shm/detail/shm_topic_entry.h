@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_ENTRY_H
 
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
@@ -11,6 +12,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include <memory>
 #include <string>
 #include <cstddef>
 #include <optional>
@@ -39,11 +41,13 @@ struct shm_topic_key_hash
 
 // One live ring's owned state, pinned by the registry's unique_ptr so the non-movable
 // ring/channel/notifier hold stable addresses. The channel must destruct BEFORE the notifier
-// so a disarm-then-teardown keeps the wake off a destroyed subscriber.
+// so a disarm-then-teardown keeps the wake off a destroyed subscriber. The waiter loss is shared
+// with a report in flight, which may outlive the entry.
 template<typename Broker, typename Notifier>
 struct shm_topic_entry
 {
-    using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using notifier_type = Notifier;
+    using deliver_fn    = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
     shm_topic_entry()
             : control()
@@ -55,6 +59,7 @@ struct shm_topic_entry
             , refcount(0)
             , creator(false)
             , sink()
+            , loss(std::make_shared<waiter_loss>())
     {
     }
 
@@ -68,6 +73,7 @@ struct shm_topic_entry
     bool creator;
     // Unset = the wake-drain discards (the send-only default).
     deliver_fn sink;
+    std::shared_ptr<waiter_loss> loss;
 
     // The ONE place the cursor is taken, so the armed wake and the attach-time catch-up
     // share it without racing a second drainer.
