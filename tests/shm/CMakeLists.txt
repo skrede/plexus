@@ -438,6 +438,24 @@ target_link_libraries(test_shm_registry_arm PRIVATE
 
 catch_discover_tests(test_shm_registry_arm TEST_PREFIX "shm.")
 
+# A waiter lost after its acquire armed it, over the platform broker and the fallback composite's injected legs.
+if(TARGET plexus::asio)
+    add_executable(test_shm_registry_loss test_shm_registry_loss.cpp)
+
+    target_include_directories(test_shm_registry_loss PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_registry_loss PRIVATE
+        plexus::shm
+        plexus::asio
+        plexus::native
+        plexus::core
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_registry_loss TEST_PREFIX "shm.")
+endif()
+
 # The fallback composite over injected legs and the threaded leg.
 if(TARGET plexus::asio::shm AND LINUX)
     add_executable(test_shm_fallback_notifier test_shm_fallback_notifier.cpp)

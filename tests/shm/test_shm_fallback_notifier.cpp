@@ -18,6 +18,10 @@
 #include <thread>
 #include <cstdint>
 
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/resource.h>
+
 namespace {
 
 using plexus::asio::asio_policy;
@@ -25,6 +29,20 @@ using plexus::shm::arm_status;
 using plexus::shm::fallback_tier;
 using plexus::testing::take_all;
 using threaded_leg = plexus::asio::shm::ring_notifier_threaded<asio_policy>;
+
+// RLIMIT_NPROC bounds the user's tasks, so a zero limit refuses every new thread of this process; an exception that
+// escapes the arm terminates the child.
+arm_status arm_threaded_without_threads() noexcept
+{
+    ::asio::io_context io;
+    plexus::testing::heap_ring heap{16, 64};
+    plexus::shm::slot_subscriber sub(heap.ring());
+    threaded_leg leg(io, heap.ring().header(), "");
+    const ::rlimit none{0, 0};
+    if(::setrlimit(RLIMIT_NPROC, &none) != 0)
+        return arm_status::armed;
+    return leg.arm(*sub.cursor_index(), [] {});
+}
 
 }
 
@@ -82,4 +100,19 @@ TEST_CASE("fallback_notifier both legs denied reports denied with no leg engaged
     CHECK(notifier.arm(0, [] {}) == arm_status::denied);
     CHECK(notifier.engaged() == fallback_tier::none);
     CHECK(notifier.primary_status() == arm_status::denied);
+}
+
+TEST_CASE("fallback_notifier a threaded leg whose thread cannot start reports exhausted", "[shm][fallback_notifier][!shouldfail]")
+{
+    if(::geteuid() == 0)
+        SKIP("root is exempt from RLIMIT_NPROC");
+    const ::pid_t child = ::fork();
+    REQUIRE(child >= 0);
+    if(child == 0)
+        ::_exit(arm_threaded_without_threads() == arm_status::exhausted ? 0 : 1);
+
+    int status = 0;
+    REQUIRE(::waitpid(child, &status, 0) == child);
+    CHECK(WIFEXITED(status));
+    CHECK(WEXITSTATUS(status) == 0);
 }

@@ -43,6 +43,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 
 #include <sys/prctl.h>
 
@@ -102,6 +103,8 @@ plexus::io::subscriber_qos subscriber_qos_for(bool hint)
 }
 
 using denied_member = plexus::shm::shm_mux_member<plexus::native::shm_region_broker, plexus::shm::fallback_notifier<plexus::testing::denied_primary, plexus::testing::denied_floor>>;
+using lost_notifier = plexus::shm::fallback_notifier<plexus::testing::demoting_primary<plexus::asio::asio_policy>, plexus::testing::denied_floor>;
+using lost_member   = plexus::shm::shm_mux_member<plexus::native::shm_region_broker, lost_notifier>;
 
 template<typename Node>
 void update_connected(Node &node, const node_args &args, node_slot &slot)
@@ -146,28 +149,31 @@ void run_same_host(const node_args &args, node_slot &slot)
     serve_node(io, node, args, slot);
 }
 
-// The production leaves with a shared-memory member whose notifiers all fail to arm; the fingerprint is the real one,
-// so the node attempts the same-host upgrade exactly as the production composition does.
-void run_arm_denied(const node_args &args, node_slot &slot)
+// The production leaves with a test shared-memory member; the fingerprint is the real one, so the node attempts the
+// same-host upgrade exactly as the production composition does.
+template<typename Member, typename Bind>
+void run_test_member(const node_args &args, node_slot &slot, Bind bind)
 {
     ::asio::io_context io;
     plexus::discovery::static_discovery disc{peer_cards(args)};
     plexus::native::shm_region_broker broker;
-    denied_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    Member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, bind(io)};
     plexus::asio::unix_transport local{io};
     plexus::asio::asio_transport remote{io};
     plexus::node_options opts        = dial_opts();
     opts.handshake.local_fingerprint = plexus::native::read_machine_fingerprint();
-    plexus::node<plexus::asio::asio_policy, denied_member, plexus::asio::unix_transport, plexus::asio::asio_transport> node{io, disc, harness_id(args.index), shm, local, remote, opts};
+    plexus::node<plexus::asio::asio_policy, Member, plexus::asio::unix_transport, plexus::asio::asio_transport> node{io, disc, harness_id(args.index), shm, local, remote, opts};
     serve_node(io, node, args, slot);
 }
 
 void run_node(const node_args &args, node_slot &slot)
 {
     if(args.composition == composition_name(node_composition::arm_denied))
-        run_arm_denied(args, slot);
-    else
-        run_same_host(args, slot);
+        return run_test_member<denied_member>(args, slot, [](::asio::io_context &) { return denied_member::registry_type::default_notifier_binder(); });
+    if(args.composition == composition_name(node_composition::runtime_lost))
+        return run_test_member<lost_member>(args, slot, [](::asio::io_context &io) -> lost_member::notifier_binder
+                                            { return [&io](std::optional<lost_notifier> &n, plexus::shm::control_header_t &h, std::string_view name) { n.emplace(io, h, name); }; });
+    run_same_host(args, slot);
 }
 
 // The parent-death signal keeps a child from outliving a parent that was killed before it could reap it.
