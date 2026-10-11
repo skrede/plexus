@@ -18,6 +18,7 @@ target_include_directories(plexus-asio INTERFACE
     $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(plexus-asio INTERFACE
+    plexus::plexus
     plexus::core
     plexus::wire
     plexus::stream
@@ -47,21 +48,24 @@ install(EXPORT plexusAsioTargets
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus
     FILE plexus-asio-targets.cmake)
 
-# The gated Linux shared-memory reactor + composition. Its headers live under a
+# The gated shared-memory reactor bridges + composition. Their headers live under a
 # SEPARATE shm-include/ root, NOT the unconditional include/ above: only this
 # fragment puts shm-include/ on the compiler include path, and only when the shm
 # backend is ON. So a bare plexus::asio consumer (crypto, mdnspp, the generic asio
-# part) has no path to plexus/asio/shm/linux/* — the directory boundary is a real
-# compile barrier, not a convention. Linking plexus::asio gives the composition's
-# cross-root includes (udp/asio/unix transports) their include/ path back, and
-# plexus::native supplies the broker the liburing-bearing headers compose over.
+# part) has no path to plexus/asio/shm/* — the directory boundary is a real
+# compile barrier, not a convention, and PLEXUS_SAME_HOST_SHM_BACKEND travels with
+# that path so the same-host composition selects shm exactly when it is reachable.
+# Linking plexus::asio gives the composition's cross-root includes (udp/asio/unix
+# transports) their include/ path back, and plexus::native supplies the region broker.
 if(PLEXUS_ENABLE_SHM_BACKEND)
     add_library(plexus-asio-shm INTERFACE)
     add_library(plexus::asio::shm ALIAS plexus-asio-shm)
 
     target_include_directories(plexus-asio-shm INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/shm-include>
-        $<INSTALL_INTERFACE:shm-include>)
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+    target_compile_definitions(plexus-asio-shm INTERFACE PLEXUS_SAME_HOST_SHM_BACKEND)
 
     target_link_libraries(plexus-asio-shm INTERFACE
         plexus::asio

@@ -4,7 +4,7 @@ namespace plexus::native {
 
 std::string_view backend_version() noexcept
 {
-    return "0.1.0";
+    return PLEXUS_PROJECT_VERSION;
 }
 
 }

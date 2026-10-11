@@ -59,6 +59,8 @@ target_link_libraries(test_shm_scaffold PRIVATE
     plexus::native
     Catch2::Catch2WithMain)
 
+target_compile_definitions(test_shm_scaffold PRIVATE PLEXUS_TEST_PROJECT_VERSION="${PROJECT_VERSION}")
+
 catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 
 # The header-only broadcast ring + loan/take family. These TUs include ONLY the

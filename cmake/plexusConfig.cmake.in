@@ -38,16 +38,19 @@ macro(_plexus_load_component comp)
                 find_dependency(OpenSSL)
                 _plexus_load_component(asio)
             elseif("${comp}" STREQUAL "asio-shm")
-                # The shm-include headers call io_uring_* directly; the exported targets
-                # file references PkgConfig::LIBURING (and plexus::asio / plexus::native), so
-                # an installed consumer recreates that imported target here.
+                # On Linux the shm-include headers call io_uring_* directly and the exported
+                # targets file references PkgConfig::LIBURING, so an installed consumer
+                # recreates that imported target here; other hosts carry no liburing.
                 _plexus_resolve_asio_leaf()
                 _plexus_load_component(asio)
                 _plexus_load_component(native)
-                find_dependency(PkgConfig)
-                pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
+                if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+                    find_dependency(PkgConfig)
+                    pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
+                endif()
             endif()
-            include("${_plexus_comp_file}")
+            # The nested loads above share this macro's variables, so the path is rebuilt from the argument.
+            include("${CMAKE_CURRENT_LIST_DIR}/plexus-${comp}-targets.cmake")
             set(plexus_${comp}_FOUND TRUE)
         else()
             set(plexus_${comp}_FOUND FALSE)

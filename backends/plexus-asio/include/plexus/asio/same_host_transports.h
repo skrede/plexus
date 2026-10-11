@@ -27,11 +27,11 @@ namespace plexus::asio {
 
 // A portable same-host composition: the most accelerated same-host substrate the platform
 // offers is selected behind this header, with no platform conditional in consumer code — shm +
-// AF_UNIX + TCP on Linux, AF_UNIX + TCP elsewhere. The ctor's `region` is the shm-region
-// namespace (Linux only): an empty region shares rings by topic, a distinct region isolates this
-// composition's same-host shm from unrelated co-host apps.
-//
-// LIFETIME: the set OWNS the leaves (and, on Linux, the shm region broker) and BORROWS the
+// AF_UNIX + TCP on Linux, macOS and Windows when the shared-memory backend is linked, AF_UNIX +
+// TCP otherwise. The ctor's `region` is the shm-region namespace (ignored without shared memory):
+// an empty region shares rings by topic, a distinct region isolates this composition's same-host
+// shm from unrelated co-host apps.
+// LIFETIME: the set OWNS the leaves (and, with shared memory, the shm region broker) and BORROWS the
 // io_context. make_node returns a node that BORROWS those leaves, so this object MUST OUTLIVE
 // every node minted from it (and the io_context must outlive this object). Non-copyable /
 // non-movable: the borrowed node leaves pin this object's address.
@@ -50,7 +50,7 @@ public:
 #else
     using set_type = transport_set<unix_transport, asio_transport>;
 
-    explicit same_host_transports(::asio::io_context &io, [[maybe_unused]] std::string_view region = "")
+    explicit same_host_transports(::asio::io_context &io, std::string_view = "")
             : m_set(io)
     {
     }
@@ -64,14 +64,14 @@ public:
 #if PLEXUS_SAME_HOST_SHM
     // opts is taken by value: the default-fill of an absent local_fingerprint is local to this
     // call and never mutates the caller's aggregate; a caller-supplied value is left untouched.
-    node<asio_policy, shm::shm_member, unix_transport, asio_transport> make_node(discovery::discovery &disc, const plexus::node_id &id, node_options opts)
+    basic_node<asio_policy, shm::shm_member, unix_transport, asio_transport> make_node(discovery::discovery &disc, const plexus::node_id &id, node_options opts)
     {
         if(opts.handshake.local_fingerprint.is_null())
             opts.handshake.local_fingerprint = ::plexus::native::read_machine_fingerprint();
         return m_set.template make_node<asio_policy>(disc, id, opts);
     }
 #else
-    node<asio_policy, unix_transport, asio_transport> make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
+    basic_node<asio_policy, unix_transport, asio_transport> make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
     {
         return m_set.template make_node<asio_policy>(disc, id, opts);
     }

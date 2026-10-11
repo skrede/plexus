@@ -55,6 +55,8 @@ target_link_libraries(plexus-native PUBLIC
     plexus::wire
     plexus::stream)
 
+target_compile_definitions(plexus-native PRIVATE PLEXUS_PROJECT_VERSION="${PROJECT_VERSION}")
+
 target_compile_features(plexus-native PUBLIC cxx_std_20)
 
 set_target_properties(plexus-native PROPERTIES EXPORT_NAME native)

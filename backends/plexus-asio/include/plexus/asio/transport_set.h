@@ -106,7 +106,7 @@ public:
     transport_set &operator=(transport_set &&)      = delete;
 
     template<typename Policy>
-    node<Policy, Transports...> make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
+    basic_node<Policy, Transports...> make_node(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts)
     {
         return make_node_impl<Policy>(disc, id, opts, std::index_sequence_for<Transports...>{});
     }
@@ -139,9 +139,9 @@ private:
     };
 
     template<typename Policy, std::size_t... Is>
-    node<Policy, Transports...> make_node_impl(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts, std::index_sequence<Is...>)
+    basic_node<Policy, Transports...> make_node_impl(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts, std::index_sequence<Is...>)
     {
-        return node<Policy, Transports...>{m_io, disc, id, detail::leaf_at<Is>(m_storage)..., opts};
+        return basic_node<Policy, Transports...>{m_io, disc, id, detail::leaf_at<Is>(m_storage)..., opts};
     }
 
     ::asio::io_context &m_io;

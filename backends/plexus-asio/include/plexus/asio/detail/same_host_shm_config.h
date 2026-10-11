@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_DETAIL_SAME_HOST_SHM_CONFIG_H
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_SAME_HOST_SHM_CONFIG_H
 
-// PLEXUS_SAME_HOST_NO_SHM forces the portable AF_UNIX + TCP branch on any host (it lets the
-// non-shm composition be exercised off a Linux build host).
-#if !defined(PLEXUS_SAME_HOST_NO_SHM) && (defined(__linux__) || defined(_WIN32) || defined(__APPLE__))
+// Shared memory is selected when the plexus::asio::shm target is linked (it carries
+// PLEXUS_SAME_HOST_SHM_BACKEND), and PLEXUS_SAME_HOST_NO_SHM opts out on any host.
+#if defined(PLEXUS_SAME_HOST_SHM_BACKEND) && !defined(PLEXUS_SAME_HOST_NO_SHM) && (defined(__linux__) || defined(_WIN32) || defined(__APPLE__))
     #define PLEXUS_SAME_HOST_SHM 1
 #else
     #define PLEXUS_SAME_HOST_SHM 0

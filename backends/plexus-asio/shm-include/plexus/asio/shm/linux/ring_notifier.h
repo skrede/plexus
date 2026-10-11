@@ -13,11 +13,9 @@
 #include <asio/io_context.hpp>
 #include <asio/post.hpp>
 
-// Set at configure time (backends/plexus-asio/CMakeLists.txt) from a probe for
-// io_uring_prep_futex_wait, which liburing only exposes at >= 2.6. Defaulted here so the header
-// stays self-contained for tooling that does not see the target definition.
+// The configure probe for io_uring_prep_futex_wait (liburing >= 2.6) sets this; an absent define selects the threaded floor.
 #ifndef PLEXUS_HAS_IO_URING_FUTEX
-    #define PLEXUS_HAS_IO_URING_FUTEX 1
+    #define PLEXUS_HAS_IO_URING_FUTEX 0
 #endif
 
 #if PLEXUS_HAS_IO_URING_FUTEX

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(plexus VERSION 0.2.8 LANGUAGES CXX)
+project(plexus VERSION 0.3.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,7 +9,7 @@ option(PLEXUS_ENABLE_ASIO_BACKEND "Build the asio executor/socket/timer backend"
 # Declared at root (ahead of the fragment globs below) so every fragment sees it:
 # the asio backend's gated shm fragment must read the correct value on a fresh
 # configure regardless of the order the lib/ and backends/ fragments are processed.
-option(PLEXUS_ENABLE_SHM_BACKEND "Build the gated POSIX shared-memory backend (linux-first)" OFF)
+option(PLEXUS_ENABLE_SHM_BACKEND "Build the shared-memory backend" OFF)
 option(PLEXUS_BUILD_TESTS "Build the test suite" OFF)
 option(PLEXUS_BUILD_FUZZ_TESTS "Build the libFuzzer harnesses" OFF)
 option(PLEXUS_BUILD_EXAMPLES "Build the examples" OFF)

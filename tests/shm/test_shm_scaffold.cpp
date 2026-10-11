@@ -26,7 +26,7 @@
 
 TEST_CASE("scaffold: the gated shm backend links and runs", "[shm][scaffold]")
 {
-    REQUIRE(plexus::native::backend_version() == "0.1.0");
+    REQUIRE(plexus::native::backend_version() == PLEXUS_TEST_PROJECT_VERSION);
 }
 
 #if !defined(_WIN32)
