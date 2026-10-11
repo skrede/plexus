@@ -6,16 +6,14 @@
 #if defined(_WIN32)
     #include <windows.h>
 #else
-    #include <cerrno>
     #include <spawn.h>
     #include <unistd.h>
-
-    #include <sys/wait.h>
 #endif
 
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <optional>
 #include <string_view>
 
 #if !defined(_WIN32)
@@ -82,12 +80,9 @@ inline std::wstring xproc_quote(const std::wstring &s)
     return out;
 }
 
-// Re-exec self as a child with the role marker + key + names; wait on process
-// exit and return the child exit code (a negative value flags a launch failure).
-inline int xproc_launch_and_wait(std::string_view key, const std::vector<std::string> &args)
+inline std::wstring xproc_command_line(const std::wstring &exe, std::string_view key, const std::vector<std::string> &args)
 {
-    const std::wstring exe = xproc_self_exe_wide();
-    std::wstring cmd       = xproc_quote(exe);
+    std::wstring cmd = xproc_quote(exe);
     cmd += L' ';
     cmd += xproc_widen(k_xproc_role_marker);
     cmd += L' ';
@@ -97,7 +92,15 @@ inline int xproc_launch_and_wait(std::string_view key, const std::vector<std::st
         cmd += L' ';
         cmd += xproc_quote(xproc_widen(a));
     }
+    return cmd;
+}
 
+using xproc_child_handle = HANDLE;
+
+inline std::optional<xproc_child_handle> xproc_spawn(std::string_view key, const std::vector<std::string> &args)
+{
+    const std::wstring exe = xproc_self_exe_wide();
+    const std::wstring cmd = xproc_command_line(exe, key, args);
     std::vector<wchar_t> mutable_cmd(cmd.begin(), cmd.end());
     mutable_cmd.push_back(L'\0');
 
@@ -105,14 +108,9 @@ inline int xproc_launch_and_wait(std::string_view key, const std::vector<std::st
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
     if(!::CreateProcessW(exe.c_str(), mutable_cmd.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
-        return -1;
-
-    ::WaitForSingleObject(pi.hProcess, INFINITE);
-    DWORD code = 1;
-    ::GetExitCodeProcess(pi.hProcess, &code);
-    ::CloseHandle(pi.hProcess);
+        return std::nullopt;
     ::CloseHandle(pi.hThread);
-    return static_cast<int>(code);
+    return pi.hProcess;
 }
 
 #else
@@ -127,9 +125,7 @@ inline std::string xproc_self_exe()
     return argv.empty() ? std::string() : argv.front();
 }
 
-// posix_spawn the current binary (NOT fork) with the role marker + key + names;
-// waitpid the child through EINTR and return its exit code (negative on failure).
-inline int xproc_launch_and_wait(std::string_view key, const std::vector<std::string> &args)
+inline std::vector<std::string> xproc_child_argv(std::string_view key, const std::vector<std::string> &args)
 {
     std::vector<std::string> parts;
     parts.reserve(args.size() + 3);
@@ -138,24 +134,25 @@ inline int xproc_launch_and_wait(std::string_view key, const std::vector<std::st
     parts.emplace_back(key);
     for(const auto &a : args)
         parts.emplace_back(a);
+    return parts;
+}
 
+using xproc_child_handle = pid_t;
+
+// posix_spawn rather than fork, so the child is a fresh image that re-opens every shared object by name.
+inline std::optional<xproc_child_handle> xproc_spawn(std::string_view key, const std::vector<std::string> &args)
+{
+    std::vector<std::string> parts = xproc_child_argv(key, args);
     std::vector<char *> argv;
     argv.reserve(parts.size() + 1);
     for(auto &p : parts)
         argv.push_back(p.data());
     argv.push_back(nullptr);
 
-    pid_t pid          = 0;
-    const int spawn_rc = ::posix_spawn(&pid, parts.front().c_str(), nullptr, nullptr, argv.data(), environ);
-    if(spawn_rc != 0)
-        return -1;
-
-    int status = 0;
-    while(::waitpid(pid, &status, 0) < 0 && errno == EINTR)
-        ;
-    if(WIFEXITED(status))
-        return WEXITSTATUS(status);
-    return -1;
+    pid_t pid = 0;
+    if(::posix_spawn(&pid, parts.front().c_str(), nullptr, nullptr, argv.data(), environ) != 0)
+        return std::nullopt;
+    return pid;
 }
 
 #endif

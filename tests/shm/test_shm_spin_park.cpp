@@ -1,25 +1,26 @@
-#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/taken_message.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/slot_publisher.h"
 #include "plexus/shm/slot_subscriber.h"
-#include "plexus/shm/taken_message.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <span>
 #include <atomic>
 #include <chrono>
+#include <limits>
+#include <thread>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <span>
-#include <thread>
-#include <vector>
 
-// The adaptive spin-then-park consumer policy at the slot_subscriber take seam (Tuning 3).
+// The adaptive spin-then-park consumer policy at the slot_subscriber take seam.
 // Proves the GENERIC consumer spin policy (the park MECHANISM stays the backend notifier):
 //   * budget=0 (always-park): an empty ring returns empty immediately — the futex floor.
 //   * budget>0: a message already in the ring is taken without spinning.
@@ -108,42 +109,34 @@ TEST_CASE("shm.spin_park: a present message is taken regardless of the spin budg
 
 TEST_CASE("shm.spin_park: a message landing during the spin window is caught without parking", "[shm][spin_park]")
 {
-    constexpr int k_iterations = 50;
-    int caught_by_spin         = 0;
-    for(int iter = 0; iter < k_iterations; ++iter)
+    // The budget is effectively unbounded relative to the 20 us publish delay, so every in-window publish is caught.
+    constexpr std::int32_t k_iterations = 50;
+    for(std::int32_t iter = 0; iter < k_iterations; ++iter)
     {
         fixture f;
-        // A large budget so the spin window comfortably covers the publisher's delay.
-        slot_subscriber sub{f.ring, /*spin_budget=*/4'000'000};
+        slot_subscriber sub{f.ring, std::numeric_limits<std::uint32_t>::max()};
+        const std::uint32_t expected = 0xABCD0000u | static_cast<std::uint32_t>(iter);
 
-        std::atomic<bool> go{false};
+        std::atomic<bool> entered{false};
         std::thread producer(
                 [&]
                 {
-                    while(!go.load(std::memory_order_acquire))
-                    { /* spin to align */
-                    }
+                    while(!entered.load(std::memory_order_acquire))
+                        std::this_thread::yield();
                     std::this_thread::sleep_for(std::chrono::microseconds(20));
-                    f.publish(0xABCD0000u | static_cast<std::uint32_t>(iter));
+                    f.publish(expected);
                 });
 
-        go.store(true, std::memory_order_release);
         taken_message msg;
-        const loan_status st = sub.take(msg); // spins; should catch the late publish
+        entered.store(true, std::memory_order_release);
+        const loan_status st = sub.take(msg);
         producer.join();
 
-        if(st == loan_status::ok)
-        {
-            std::uint32_t got = 0;
-            std::memcpy(&got, msg.as_wire_bytes().data(), sizeof(got));
-            REQUIRE(got == (0xABCD0000u | static_cast<std::uint32_t>(iter)));
-            ++caught_by_spin;
-        }
+        REQUIRE(st == loan_status::ok);
+        std::uint32_t got = 0;
+        std::memcpy(&got, msg.as_wire_bytes().data(), sizeof(got));
+        REQUIRE(got == expected);
     }
-    // The spin must catch the in-window arrival the vast majority of the time (a rare
-    // scheduler hiccup may exceed even the large budget, falling to empty — that is the
-    // park path, not a defect). Require it caught at least most of the runs.
-    REQUIRE(caught_by_spin >= k_iterations - 2);
 }
 
 TEST_CASE("shm.spin_park: an idle subscriber with a budget terminates to empty (parks)", "[shm][spin_park]")

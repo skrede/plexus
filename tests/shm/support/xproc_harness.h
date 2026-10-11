@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_XPROC_HARNESS_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_XPROC_HARNESS_H
 
-#include "xproc_launch.h"
+#include "xproc_process.h"
 
 #if !defined(_WIN32)
     #include <sys/mman.h>
@@ -10,7 +10,9 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <utility>
+#include <optional>
 #include <string_view>
 
 // The cross-process test substrate every SHM xproc case reuses. It launches a
@@ -46,6 +48,16 @@ inline bool register_xproc_child(std::string key, xproc_child_fn fn)
     return true;
 }
 
+namespace detail {
+
+inline std::int32_t xproc_launch_and_wait(std::string_view key, const std::vector<std::string> &args)
+{
+    std::optional<xproc_process> child = xproc_process::spawn(key, args);
+    return child ? child->wait() : -1;
+}
+
+}
+
 // The outcome of a cross-process round-trip: did the child routine return true,
 // and did the parent predicate (run after the child exited) return true.
 struct xproc_outcome
@@ -67,7 +79,7 @@ template<typename ParentFn>
 xproc_outcome run_xproc(std::string_view child_key, const std::vector<std::string> &child_args, ParentFn &&parent)
 {
     xproc_outcome outcome;
-    const int status = detail::xproc_launch_and_wait(child_key, child_args);
+    const std::int32_t status = detail::xproc_launch_and_wait(child_key, child_args);
     if(status < 0)
         return outcome;
 

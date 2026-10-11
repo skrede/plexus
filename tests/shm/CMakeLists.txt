@@ -757,6 +757,20 @@ target_link_libraries(test_shm_stale_reclaim PRIVATE
 
 catch_discover_tests(test_shm_stale_reclaim TEST_PREFIX "shm.")
 
+# A custom main() dispatches the re-exec'd child role before the Catch2 session, so it links the main-less Catch2.
+add_executable(test_shm_xproc_process test_shm_xproc_process.cpp)
+
+target_include_directories(test_shm_xproc_process PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_xproc_process PRIVATE
+    plexus::shm
+    plexus::native
+    plexus::testing
+    Catch2::Catch2)
+
+catch_discover_tests(test_shm_xproc_process TEST_PREFIX "shm.")
+
 # The Windows two-process / two-subscriber cross-process wake + delivery proof (xproc): a parent
 # creates the named regions + ring, registers TWO subscriber cursors, and arms one named-event
 # doorbell; a re-exec'd child re-opens the regions BY NAME, publishes one value, and rings the
