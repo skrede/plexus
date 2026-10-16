@@ -140,7 +140,7 @@ struct relay_downstream
 
 }
 
-TEST_CASE("graph change payload: a returning relay flips an unreachable origin back to reachable — one "
+TEST_CASE("graph change payload: a returning relay flips an unreachable origin back to reachable; one "
           "reachable delta, never a disappeared+appeared churn, and a stale report flips nothing",
           "[graph][change][payload][reachable][recover]")
 {

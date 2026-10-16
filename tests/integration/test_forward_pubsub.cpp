@@ -110,7 +110,7 @@ TEST_CASE("forward_pubsub_transit: two distinct publishes each deliver once down
 }
 
 TEST_CASE("forward_pubsub_transit: a purely-locally-demanded topic (only a self-route subscriber) originates "
-          "nothing — no forwarded envelope onto the self-channel",
+          "nothing; no forwarded envelope onto the self-channel",
           "[integration][forward_pubsub][purely-local]")
 {
     manual_clock::reset();

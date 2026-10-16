@@ -23,7 +23,7 @@ using namespace default_discovery_lan_fixture;
 // MANUAL step and stays UNPROVEN in this single-host run. The loopback proxy does NOT satisfy it.
 
 TEST_CASE("default_discovery_lan two configless nodes reach mutual awareness over real multicast "
-          "loopback — same-host PROXY for the discovery mechanism, NOT the two-host claim",
+          "loopback; same-host PROXY for the discovery mechanism, NOT the two-host claim",
           "[integration][discovery][default_discovery_lan]")
 {
     constexpr int k_runs          = 5;

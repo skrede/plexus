@@ -135,7 +135,7 @@ TEST_CASE("demand propagation: a downstream subscribe drives an upstream subscri
     REQUIRE(link.relay_received.front().second == "hello-a");
 }
 
-TEST_CASE("demand propagation: a forward-scope pattern refuses an out-of-scope topic entirely — it never "
+TEST_CASE("demand propagation: a forward-scope pattern refuses an out-of-scope topic entirely; it never "
           "propagates upstream even when a downstream consumer demands it",
           "[integration][forward][demand][scope]")
 {

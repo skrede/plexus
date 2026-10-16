@@ -40,7 +40,7 @@ discovery_options universe_opts(std::string_view label, universe_scoping scoping
 }
 
 TEST_CASE("cross-universe nodes stay mutually unaware over real multicast while a same-run "
-          "same-universe control rendezvous — the compare partitions, not a dead socket",
+          "same-universe control rendezvous; the compare partitions, not a dead socket",
           "[integration][discovery][universe]")
 {
     constexpr int k_runs          = 3;
@@ -94,7 +94,7 @@ TEST_CASE("cross-universe nodes stay mutually unaware over real multicast while 
 }
 
 TEST_CASE("two hard-scoped same-universe nodes rendezvous on the derived group over real multicast "
-          "even with an unparsable base group — the effective-group wiring proof",
+          "even with an unparsable base group; the effective-group wiring proof",
           "[integration][discovery][universe]")
 {
     constexpr int k_runs          = 3;

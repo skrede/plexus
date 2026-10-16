@@ -11,7 +11,7 @@
 
 using namespace plexus::testing::graph_change_fixture;
 
-TEST_CASE("graph change teardown: the coarse signal is posted, never synchronous — no fire without an "
+TEST_CASE("graph change teardown: the coarse signal is posted, never synchronous; no fire without an "
           "intervening drain",
           "[graph][change][teardown]")
 {
