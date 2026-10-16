@@ -33,6 +33,7 @@ using namespace shm_harness;
 using namespace std::chrono_literals;
 
 constexpr std::uint32_t k_rounds = 10;
+constexpr std::array<std::uint32_t, 2> k_subscribers{1, 2};
 
 // One publisher process and two subscriber processes, each with its own registry and notifier on one ring. Every
 // waiter is parked before a round's single publish, so a wake that reaches only one of them shows as a missed round.
@@ -50,11 +51,21 @@ public:
 
     bool start()
     {
-        if(!m_block || !spawn(k_three_publisher) || !armed(k_three_publisher))
+        if(!m_block)
+        {
+            std::cout << "three_process start: the shared block was not created" << std::endl;
             return false;
-        const bool ready = spawn(1) && spawn(2) && armed(1) && armed(2);
+        }
+        if(!spawn(k_three_publisher) || !armed(k_three_publisher))
+            return report_refusal(k_three_publisher);
+        for(const std::uint32_t index : k_subscribers)
+            if(!spawn(index))
+                return report_refusal(index);
+        for(const std::uint32_t index : k_subscribers)
+            if(!armed(index))
+                return report_refusal(index);
         std::this_thread::sleep_for(200ms);
-        return ready;
+        return true;
     }
 
     // Returns each subscriber's latency in microseconds, or nothing for a subscriber the publish did not reach.
@@ -90,6 +101,19 @@ private:
         const std::string_view key = index == k_three_publisher ? "shm_harness.three_pub" : "shm_harness.three_sub";
         m_children[index]          = plexus::testing::xproc_process::spawn(key, {m_name.str(), std::to_string(index), m_fqn, m_notifier});
         return m_children[index].has_value();
+    }
+
+    bool report_refusal(std::uint32_t index)
+    {
+        std::optional<plexus::testing::xproc_process> &child = m_children[index];
+        std::cout << "three_process start: role " << index << (child ? " did not arm" : " did not spawn");
+        if(child)
+        {
+            const std::optional<std::int32_t> status = child->wait_for(0ms);
+            std::cout << (status ? ", exit status " + std::to_string(*status) : std::string(", still running"));
+        }
+        std::cout << std::endl;
+        return false;
     }
 
     bool armed(std::uint32_t index)

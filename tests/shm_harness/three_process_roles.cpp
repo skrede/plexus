@@ -30,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <optional>
 
 #if defined(__linux__)
@@ -82,6 +83,13 @@ bool publish_stamp(Registry &registry, const std::string &fqn)
     return channel != nullptr && channel->send(payload) == plexus::shm::loan_status::ok;
 }
 
+bool report_failure(const plexus::shm::acquire_failure &failure)
+{
+    std::cout << "three_process role acquire failed: bound=" << static_cast<std::uint32_t>(failure.bound) << " arm=" << static_cast<std::uint32_t>(failure.arm)
+              << " broker=" << static_cast<std::uint32_t>(failure.broker) << " ask_bytes=" << failure.ask_bytes << " limit_bytes=" << failure.limit_bytes << std::endl;
+    return false;
+}
+
 template<typename Registry>
 bool serve_commands(Registry &registry, ::asio::io_context &io, const std::string &fqn, three_role_slot &slot)
 {
@@ -110,7 +118,7 @@ bool run_role(const std::string &fqn, three_role_slot &slot, bool publisher)
     typename Leg::registry::broker_type broker;
     typename Leg::registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, Leg::binder(io)};
     if(registry.acquire(fqn, k_request, 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) == plexus::shm::acquire_result::failed)
-        return false;
+        return report_failure(registry.last_acquire_failure());
 
     if(!publisher)
         registry.set_consumer_sink(fqn, k_request, [&slot](plexus::wire_bytes<plexus::shm::shm_slot_owner> message) { record_delivery(slot, message); });
@@ -128,7 +136,10 @@ bool run_three_role(const std::vector<std::string> &argv, bool publisher)
     const std::optional<std::uint32_t> index = argv.size() == 4 ? to_u32(argv[1]) : std::nullopt;
     auto block                               = plexus::testing::xproc_shared<three_process_block>::attach(argv.empty() ? std::string() : argv[0]);
     if(!index || *index >= k_three_roles || (*index == k_three_publisher) != publisher || !block)
+    {
+        std::cout << "three_process role: invalid arguments or the shared block did not attach" << std::endl;
         return false;
+    }
 
     three_role_slot &slot = block->get().roles[*index];
     if(argv[3] == k_platform_notifier)
@@ -137,6 +148,7 @@ bool run_three_role(const std::vector<std::string> &argv, bool publisher)
     if(argv[3] == k_posix_sem_notifier)
         return run_role<posix_sem_leg>(argv[2], slot, publisher);
 #endif
+    std::cout << "three_process role: unknown notifier " << argv[3] << std::endl;
     return false;
 }
 
