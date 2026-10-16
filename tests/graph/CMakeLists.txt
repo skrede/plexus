@@ -119,7 +119,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         plexus::discovery
         Catch2::Catch2WithMain)
-    catch_discover_tests(test_graph_two_universe TEST_PREFIX "graph.")
+    catch_discover_tests(test_graph_two_universe TEST_PREFIX "graph."
+        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback LABELS "live-multicast")
 endif()
 
 # The cross-participant propagation oracle: a two-node inproc pair driving real sessions, so it
