@@ -43,7 +43,7 @@ public:
     three_process(std::string fqn, std::string_view notifier)
             : m_fqn(std::move(fqn))
             , m_notifier(notifier)
-            , m_name("shm_harness.three_block.")
+            , m_name("shm_harness.three.")
             , m_block(plexus::testing::xproc_shared<three_process_block>::create(m_name.str()))
             , m_children()
     {
