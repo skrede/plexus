@@ -435,6 +435,20 @@ target_link_libraries(test_shm_registry PRIVATE
 
 catch_discover_tests(test_shm_registry TEST_PREFIX "shm.")
 
+# A join over a co-host ring its creator has not finished minting, over an in-memory broker that withholds regions.
+add_executable(test_shm_registry_join test_shm_registry_join.cpp)
+
+target_include_directories(test_shm_registry_join PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_registry_join PRIVATE
+    plexus::shm
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_registry_join TEST_PREFIX "shm.")
+
 # A notifier that cannot arm must fail the acquire, over the platform broker.
 add_executable(test_shm_registry_arm test_shm_registry_arm.cpp)
 
@@ -797,6 +811,16 @@ target_link_libraries(test_coordinator_medium_lost PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_coordinator_medium_lost TEST_PREFIX "shm.")
+
+# The forwarder's delivery order across a late wire-to-companion switch and across a subscriber attach.
+add_executable(test_shm_switch_order test_shm_switch_order.cpp)
+
+target_link_libraries(test_shm_switch_order PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_switch_order TEST_PREFIX "shm.")
 
 # The bilateral, consumer-sovereign upgrade via demand-driven convergence (xproc):
 # two real processes each decide INDEPENDENTLY whether to attempt the shared-memory

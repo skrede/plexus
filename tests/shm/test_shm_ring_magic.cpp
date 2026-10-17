@@ -35,6 +35,11 @@ TEST_CASE("ring_magic a region stamped with the current magic attaches", "[shm][
     REQUIRE(attach_stamped(k_ring_magic) == loan_status::ok);
 }
 
+TEST_CASE("ring_magic a region whose creator has not stamped it yet is not refused as foreign", "[shm][ring_magic][!shouldfail]")
+{
+    REQUIRE(attach_stamped(0) != loan_status::rejected);
+}
+
 TEST_CASE("ring_magic every slot's park word sits on one cache line apart from the cursors", "[shm][ring_magic]")
 {
     backing_region control(control_region_bytes(k_cells));
