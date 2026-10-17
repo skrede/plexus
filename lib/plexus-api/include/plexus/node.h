@@ -573,7 +573,7 @@ private:
         for_each_shm_member(
                 [this](auto &m)
                 {
-                    m_engine.on_upgrade_policy(m.upgrade_policy());
+                    m_engine.coordinator().on_policy(m.upgrade_policy());
                     detail::install_same_host_upgrade(m_engine, m);
                 });
     }

@@ -422,21 +422,6 @@ public:
         return m_coordinator;
     }
 
-    void on_upgrade_policy(plexus::detail::move_only_function<bool(bool, dispatch_hint)> policy)
-    {
-        m_coordinator.on_policy(std::move(policy));
-    }
-
-    void on_upgrade_gate(plexus::detail::move_only_function<upgrade_mint<channel_type>(std::string_view)> mint)
-    {
-        m_coordinator.on_gate(std::move(mint));
-    }
-
-    void on_upgrade_receive_gate(plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> mint)
-    {
-        m_coordinator.on_receive_gate(std::move(mint));
-    }
-
     void inject_upgrade_receive(std::string_view node_name, std::span<const std::byte> frame)
     {
         if(session_type *s = m_registry.session_for_name(node_name))

@@ -1,10 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_UPGRADE_COORDINATOR_H
 #define HPP_GUARD_PLEXUS_IO_UPGRADE_COORDINATOR_H
 
-#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/dispatch_hint.h"
-#include "plexus/io/detail/upgrade_rings.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
+
+#include "plexus/io/detail/upgrade_lanes.h"
+#include "plexus/io/detail/upgrade_rings.h"
 
 #include "plexus/detail/compat.h"
 
@@ -29,6 +31,8 @@ namespace plexus::io {
 template<typename Registry, typename Channel>
 class upgrade_coordinator
 {
+    using ring = detail::coordinator_ring<Channel, upgrade_receive>;
+
 public:
     explicit upgrade_coordinator(Registry &registry) noexcept
             : m_registry(registry)
@@ -77,9 +81,9 @@ public:
     void on_edge(std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
     {
         if(dir == demand_transition::up)
-            on_up(node_name, fqn, role);
+            detail::lane_up(*this, node_name, fqn, role);
         else
-            on_down(node_name, fqn);
+            detail::lane_down(*this, node_name, fqn);
     }
 
     // The publish fan's per-message route: the retained companion channel for (node_name, fqn)
@@ -104,58 +108,21 @@ public:
     }
 
 private:
-    using ring      = detail::coordinator_ring<Channel, upgrade_receive>;
-    using ring_list = std::vector<ring>;
+    Registry &m_registry;
+    detail::coordinator_held<Channel, upgrade_receive> m_held;
+    std::unordered_map<std::string, dispatch_hint> m_hints;
+    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)> m_mint;
+    plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> m_receive_mint;
+    plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
 
-    void on_up(std::string_view node_name, std::string_view fqn, demand_role role)
-    {
-        if(detail::find_ring(m_held, node_name, fqn) != nullptr)
-            return;
-        if(!run_policy(m_registry.same_host_for(node_name), hint_for(fqn)))
-            return;
-        if(role == demand_role::subscriber)
-            attach_receive(node_name, fqn);
-        else
-            mint_send(node_name, fqn);
-    }
-
-    // A declined gate keeps the wire receive path — nothing is retained.
-    void attach_receive(std::string_view node_name, std::string_view fqn)
-    {
-        if(!m_receive_mint)
-            return;
-        upgrade_receive received = m_receive_mint(node_name, fqn);
-        if(!received.engaged())
-            return;
-        ring r;
-        r.fqn     = std::string{fqn};
-        r.receive = std::move(received);
-        m_held[std::string{node_name}].push_back(std::move(r));
-    }
-
-    // A declined gate keeps the wire send path — nothing is retained.
-    void mint_send(std::string_view node_name, std::string_view fqn)
-    {
-        if(!m_mint)
-            return;
-        upgrade_mint<Channel> minted = m_mint(fqn);
-        if(!minted.channel)
-            return; // gate declined (broker failure): the wire stays
-        ring r;
-        r.fqn     = std::string{fqn};
-        r.channel = std::move(minted.channel);
-        r.fits    = std::move(minted.fits);
-        m_held[std::string{node_name}].push_back(std::move(r));
-    }
-
-    void on_down(std::string_view node_name, std::string_view fqn)
-    {
-        detail::erase_ring(m_held, node_name, fqn);
-        // Last demand for the fqn gone: drop its hint so a churn of distinct topic names
-        // cannot grow m_hints without bound (a re-subscribe re-records it from the declare path).
-        if(!detail::any_holder(m_held, fqn))
-            m_hints.erase(std::string{fqn});
-    }
+    template<typename C>
+    friend void detail::lane_up(C &, std::string_view, std::string_view, demand_role);
+    template<typename C>
+    friend void detail::lane_attach(C &, std::string_view, std::string_view);
+    template<typename C>
+    friend void detail::lane_mint(C &, std::string_view, std::string_view);
+    template<typename C>
+    friend void detail::lane_down(C &, std::string_view, std::string_view);
 
     bool run_policy(bool same_host, dispatch_hint own_hint)
     {
@@ -167,13 +134,6 @@ private:
         auto it = m_hints.find(std::string{fqn});
         return it == m_hints.end() ? dispatch_hint::none : it->second;
     }
-
-    Registry &m_registry;
-    std::unordered_map<std::string, ring_list> m_held;
-    std::unordered_map<std::string, dispatch_hint> m_hints;
-    plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)> m_mint;
-    plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> m_receive_mint;
-    plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
 };
 
 }

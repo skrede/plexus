@@ -1,13 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_EGRESS_SCHEDULER_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_EGRESS_SCHEDULER_H
 
-#include "plexus/io/congestion.h"
-#include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/priority_band_queue.h"
-#include "plexus/wire_bytes.h"
+#include "plexus/io/detail/egress_channel_traits.h"
+
+#include "plexus/io/congestion.h"
 
 #include "plexus/policy.h"
+#include "plexus/wire_bytes.h"
 
 #include <span>
 #include <utility>
@@ -16,14 +17,6 @@
 #include <unordered_map>
 
 namespace plexus::io::detail {
-
-// The low-water gate FALLBACK: the scheduler keeps feeding a destination only while its
-// queued byte occupancy is below the gate — the priority-ordered backlog must live in the
-// bands, NOT in the channel's FIFO. The gate tracks the channel's OWN write-queue byte cap
-// (see low_water_of) so the band hand-off and the channel's admission stay in lockstep; this
-// constant is only the bound for a banded channel that publishes no finite cap, sized at one
-// max-message so the channel holds roughly one frame in flight and the bands hold the rest.
-constexpr std::size_t k_low_water = io::fragmentation_limits::max_message_size;
 
 // The forwarder-owned, per-destination priority-band egress scheduler. It sits BETWEEN
 // the publish fan-out loop and channel.send(): publish enqueues a framed buffer into the
@@ -71,7 +64,7 @@ public:
     // short-circuit never has a bounded band backlog, so it never drops here (none).
     drop_cause enqueue(Channel &ch, std::size_t band, io::congestion congestion, wire_bytes<> frame)
     {
-        if constexpr(!can_poll())
+        if constexpr(!can_poll<Channel>())
         {
             // inproc/sink: no bounded band backlog, so congestion is moot. The owner
             // converts to a span for the direct send — byte-identical to the pre-owner
@@ -114,27 +107,7 @@ public:
     }
 
 private:
-    // True when the Channel exposes a backpressure occupancy read — the banding gate.
-    static constexpr bool can_poll()
-    {
-        if constexpr(requires(Channel &c) { c.backpressured(); })
-            return true;
-        else
-            return false;
-    }
-
-    // The stable map key for a channel: its per-construction scheduler_key() (so a reconnect
-    // at a reused heap address cannot collide with a freed channel's band entry), read via a
-    // capability probe mirroring can_poll(). A channel without the verb is the inproc/sink
-    // short-circuit that never reaches m_queues, so its key is never the banding path — the
-    // 0 branch only exists so the no-verb case still instantiates.
-    static std::uint64_t key_of(Channel &ch)
-    {
-        if constexpr(requires(Channel &c) { c.scheduler_key(); })
-            return ch.scheduler_key();
-        else
-            return 0;
-    }
+    std::unordered_map<std::uint64_t, priority_band_queue> m_queues;
 
     // Pop the highest non-empty band and send it while the channel has headroom for THAT
     // frame's bytes; leave any remaining backlog priority-ordered in the bands for the next
@@ -161,36 +134,6 @@ private:
             q.pop_highest();
         }
     }
-
-    // The channel has room for a frame of this size while its queued occupancy plus the
-    // frame stays within the low-water gate; a channel with no backpressure signal always
-    // admits (the short-circuit path). The low-water gate keeps the priority-ordered backlog
-    // in the bands (not the channel FIFO) under contention, but an IDLE channel admits a
-    // single frame of ANY size — the channel's own write-queue cap is the real per-frame
-    // bound — so a large single message (above the low-water band gate) is not stranded in
-    // the bands forever. Without the idle short-circuit a message larger than the low-water
-    // gate could never hand off, capping the message-size envelope at the gate.
-    bool admits(Channel &ch, std::size_t size) const
-    {
-        if constexpr(can_poll())
-            return ch.backpressured() == 0 || ch.backpressured() + size <= low_water_of(ch);
-        else
-            return true;
-    }
-
-    // The low-water bound for THIS channel: its own write-queue byte cap when it publishes one
-    // (so the band hand-off and the channel's admission stay in lockstep — a deepened cap is fed
-    // deeper, a shallow one is never over-fed past what the channel will accept), else the shared
-    // fallback for a banded channel that exposes occupancy but no finite cap.
-    static std::size_t low_water_of(Channel &ch)
-    {
-        if constexpr(requires(Channel &c) { c.write_queue_capacity(); })
-            return ch.write_queue_capacity();
-        else
-            return k_low_water;
-    }
-
-    std::unordered_map<std::uint64_t, priority_band_queue> m_queues;
 };
 
 }

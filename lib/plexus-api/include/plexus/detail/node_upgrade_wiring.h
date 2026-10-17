@@ -105,8 +105,8 @@ io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::strin
 template<typename Engine, typename Member>
 void install_same_host_upgrade(Engine &engine, Member &member)
 {
-    engine.on_upgrade_gate([&engine, &member](std::string_view fqn) { return mint_send_lane(engine, member, fqn); });
-    engine.on_upgrade_receive_gate([&engine, &member](std::string_view node_name, std::string_view fqn) { return mint_receive_lane(engine, member, node_name, fqn); });
+    engine.coordinator().on_gate([&engine, &member](std::string_view fqn) { return mint_send_lane(engine, member, fqn); });
+    engine.coordinator().on_receive_gate([&engine, &member](std::string_view node_name, std::string_view fqn) { return mint_receive_lane(engine, member, node_name, fqn); });
 }
 
 }

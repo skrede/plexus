@@ -12,6 +12,7 @@
 #include "plexus/shm/shm_byte_channel.h"
 #include "plexus/shm/shm_topic_registry.h"
 #include "plexus/shm/shm_preference_hook.h"
+#include "plexus/shm/detail/shm_companion.h"
 #include "plexus/shm/detail/shm_mux_acquire.h"
 
 #include "plexus/io/byte_channel.h"
@@ -64,6 +65,7 @@ class shm_mux_member
 public:
     using channel_type    = shm_byte_channel<Broker, Notifier>;
     using registry_type   = shm_topic_registry<Broker, Notifier>;
+    using consumer_type   = shm_companion_consumer<Broker, Notifier>;
     using notifier_binder = typename registry_type::notifier_binder;
 
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
@@ -142,9 +144,7 @@ public:
     // returned channel holds the refcount and releases it on destruction; lost runs if the ring's waiter is lost.
     std::unique_ptr<channel_type> mint_companion(const std::string &fqn, waiter_loss::lost_fn lost)
     {
-        // join_live: the co-host subscriber may have minted this companion ring first, so a
-        // clobbering unlink would split the pair onto two rings.
-        return detail::mux_open(*this, io::endpoint{"shm", fqn}, acquire_mode::join_live, std::move(lost));
+        return detail::companion_send(*this, fqn, std::move(lost));
     }
 
     // The receive half of the companion model: attach the request-direction ring as a CONSUMER for a co-host subscriber
@@ -152,16 +152,10 @@ public:
     // handle whose destruction clears the sink and releases the ring (1->0 unmaps); nullptr on a broker failure. The
     // framed bytes are header-on, so the caller feeds them into the SAME receive entry the wire session feeds. lost
     // runs if the ring's waiter is lost.
-    std::unique_ptr<shm_companion_consumer<Broker, Notifier>>
-    mint_receive_companion(const std::string &fqn, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame, waiter_loss::lost_fn lost)
+    std::unique_ptr<consumer_type> mint_receive_companion(const std::string &fqn, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame,
+                                                          waiter_loss::lost_fn lost)
     {
-        const auto g = detail::mux_resolve(*this, fqn, ring_direction::request);
-        if(m_registry.acquire(fqn, ring_direction::request, g.max_payload, g.mode, g.consumer_capacity, acquire_mode::join_live) == acquire_result::failed)
-            return nullptr;
-        auto handle = std::make_unique<shm_companion_consumer<Broker, Notifier>>(m_registry, fqn, std::move(lost));
-        m_registry.set_consumer_sink(fqn, ring_direction::request,
-                                     [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable { cb(std::span<const std::byte>{wb.data(), wb.size()}); });
-        return handle;
+        return detail::companion_receive(*this, fqn, std::move(on_frame), std::move(lost));
     }
 
     registry_type &registry() noexcept

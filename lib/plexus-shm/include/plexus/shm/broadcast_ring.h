@@ -128,35 +128,6 @@ public:
         return loan_status::ok;
     }
 
-    // The reliable claim with no consumer gating: size>slot_capacity -> rejected; a free cell
-    // won -> ok; ring full -> congested.
-    loan_status claim(std::size_t size, claim_result &out) noexcept
-    {
-        if(size > m_slot_capacity)
-            return loan_status::rejected;
-
-        std::uint64_t pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
-        for(;;)
-        {
-            cell_t &c               = cell_at(pos);
-            const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-            const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(pos);
-            if(dif == 0)
-            {
-                if(m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
-                    break;
-            }
-            else if(dif < 0)
-                return loan_status::congested;
-            else
-                pos = m_header->enqueue_pos.load(std::memory_order_relaxed);
-        }
-
-        out.position = pos;
-        out.slab     = slot_span(pos);
-        return loan_status::ok;
-    }
-
     // Claims a free cell honoring the backpressure policy and the consumer gate.
     // reliable -> congested when the slowest registered cursor has not passed the
     // cell (and spins out a transient pin); best-effort -> overwrite-latest,
