@@ -129,7 +129,7 @@ private:
                 [this, gen](std::error_code ec)
                 {
                     if(ec)
-                        return; // cancelled by a new frame, completion, or shutdown
+                        return; // canceled by a new frame, completion, or shutdown
                     // An already-expired timer's completion is queued with ec==success and cannot be
                     // recalled by cancel(); a generation bumped by any re-arm or cancel since this wait
                     // armed marks the completion stale, so it must not close a channel that moved on.

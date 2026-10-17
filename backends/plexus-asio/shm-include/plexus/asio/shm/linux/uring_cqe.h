@@ -17,7 +17,7 @@ enum class cqe_verdict : std::uint8_t
     demote
 };
 
-// A wake, a value mismatch at registration (-EAGAIN) and an interrupted wait re-arm; a cancelled wait stops; any other
+// A wake, a value mismatch at registration (-EAGAIN) and an interrupted wait re-arm; a canceled wait stops; any other
 // error means the kernel cannot serve the futex wait, so re-submitting would only spin.
 inline cqe_verdict classify_futex_cqe(std::int32_t res) noexcept
 {

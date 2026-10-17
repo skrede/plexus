@@ -57,7 +57,7 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
             arq.cancel(); // the owner tears it down
             REQUIRE(arq.resolved());
         }
-        io.poll(); // a cancelled timer must not fire on a dead ARQ
+        io.poll(); // a canceled timer must not fire on a dead ARQ
         SUCCEED();
     }
 }

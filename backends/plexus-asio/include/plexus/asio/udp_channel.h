@@ -94,8 +94,8 @@ public:
     udp_channel &operator=(udp_channel &&)      = delete;
 
     // Never posts on_closed (a this-capturing post could outlive the channel); close() does. The
-    // ARQ retransmit timers are cancelled FIRST so a timer firing after the channel dies is a
-    // cancelled no-op.
+    // ARQ retransmit timers are canceled FIRST so a timer firing after the channel dies is a
+    // canceled no-op.
     //
     // LIFETIME: every inbound datagram posts a this-capturing delivery through post_on_data, so the
     // owner MUST drain/quiesce the executor before destroying the channel — the dtor cannot cancel

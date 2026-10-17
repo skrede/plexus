@@ -12,7 +12,7 @@
 namespace plexus {
 
 // expires_after has no return constraint: a steady-timer backend may return the
-// count of cancelled waits.
+// count of canceled waits.
 template<typename T>
 concept timer = requires(T &t, std::chrono::milliseconds dur, detail::move_only_function<void(std::error_code)> handler) {
     t.expires_after(dur);

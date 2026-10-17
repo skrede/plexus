@@ -155,7 +155,7 @@ TEST_CASE("a call whose provider never replies fires exactly one timeout once th
 TEST_CASE("a call answered before the deadline fires success and no later timeout (cancel-on-match)", "[procedure][timeout]")
 {
     // The negative: a provider that DOES reply before the deadline resolves the call
-    // with success; advancing the clock past the (now-cancelled) deadline afterward
+    // with success; advancing the clock past the (now-canceled) deadline afterward
     // produces NO second (timeout) callback. Proves cancel-on-match disarms the timer.
     for(int iter = 0; iter < 100; ++iter)
     {
@@ -184,7 +184,7 @@ TEST_CASE("a call answered before the deadline fires success and no later timeou
         REQUIRE(got == rpc_status::success);
         REQUIRE(ret == param);
 
-        // Now cross the deadline: the cancelled timer must NOT fire a second time.
+        // Now cross the deadline: the canceled timer must NOT fire a second time.
         manual_clock::advance(deadline + std::chrono::milliseconds(1));
         link.drive();
         REQUIRE(fired == 1);

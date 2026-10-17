@@ -45,8 +45,7 @@ std::string read_host_name()
 #elif defined(__APPLE__)
 
 // macOS exposes no /etc/machine-id; a hostname-only seed is the minimum viable
-// fingerprint. The FNV-1a path tolerates an empty machine-id, and an IOKit
-// IOPlatformUUID enrichment is an on-host follow-up.
+// fingerprint. The FNV-1a path tolerates an empty machine-id.
 std::string read_machine_id()
 {
     return {};

@@ -196,7 +196,7 @@ private:
                 [this, seq](std::error_code ec)
                 {
                     if(ec || m_dead)
-                        return; // cancelled by ack/teardown — never fire dead
+                        return; // canceled by ack/teardown — never fire dead
                     on_rto(seq);
                 });
     }

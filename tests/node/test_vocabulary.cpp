@@ -102,7 +102,7 @@ TEST_CASE("call_errc category name is stable across codes", "[vocabulary][call_e
 
 TEST_CASE("distinct call_errc map to distinct codes", "[vocabulary][call_errc]")
 {
-    REQUIRE(make_error_code(call_errc::timeout) != make_error_code(call_errc::cancelled));
+    REQUIRE(make_error_code(call_errc::timeout) != make_error_code(call_errc::canceled));
     REQUIRE(make_error_code(call_errc::no_provider) != make_error_code(call_errc::error));
 }
 
@@ -110,7 +110,7 @@ TEST_CASE("from_rpc_status maps every failure status", "[vocabulary][call_errc]"
 {
     REQUIRE(from_rpc_status(rpc_status::error) == call_errc::error);
     REQUIRE(from_rpc_status(rpc_status::timeout) == call_errc::timeout);
-    REQUIRE(from_rpc_status(rpc_status::cancelled) == call_errc::cancelled);
+    REQUIRE(from_rpc_status(rpc_status::canceled) == call_errc::canceled);
     REQUIRE(from_rpc_status(rpc_status::no_handler) == call_errc::no_handler);
     REQUIRE(from_rpc_status(rpc_status::deserialize_failed) == call_errc::deserialize_failed);
     REQUIRE(from_rpc_status(rpc_status::topic_not_found) == call_errc::topic_not_found);

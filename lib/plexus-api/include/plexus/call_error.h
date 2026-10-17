@@ -15,7 +15,7 @@ enum class call_errc : std::uint8_t
 {
     error               = 1,
     timeout             = 2,
-    cancelled           = 3,
+    canceled            = 3,
     no_handler          = 4,
     deserialize_failed  = 5,
     topic_not_found     = 8,
@@ -42,8 +42,8 @@ inline call_errc from_rpc_status(wire::rpc_status status) noexcept
             return call_errc::error;
         case wire::rpc_status::timeout:
             return call_errc::timeout;
-        case wire::rpc_status::cancelled:
-            return call_errc::cancelled;
+        case wire::rpc_status::canceled:
+            return call_errc::canceled;
         case wire::rpc_status::no_handler:
             return call_errc::no_handler;
         case wire::rpc_status::deserialize_failed:
@@ -78,8 +78,8 @@ public:
                 return "call failed";
             case call_errc::timeout:
                 return "call timed out";
-            case call_errc::cancelled:
-                return "call cancelled";
+            case call_errc::canceled:
+                return "call canceled";
             case call_errc::no_handler:
                 return "no handler for call";
             case call_errc::deserialize_failed:

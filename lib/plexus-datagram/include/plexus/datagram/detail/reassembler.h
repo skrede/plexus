@@ -188,7 +188,7 @@ private:
                 [this, msg_id](std::error_code ec)
                 {
                     if(ec || m_dead)
-                        return;    // cancelled by completion / teardown
+                        return;    // canceled by completion / teardown
                     evict(msg_id); // best-effort reclaim of the stalled partial
                     emit_drop(plexus::io::detail::drop_cause::reassembly_evicted);
                 });

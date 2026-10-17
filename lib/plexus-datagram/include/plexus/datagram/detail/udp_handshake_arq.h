@@ -104,7 +104,7 @@ private:
                 [this](std::error_code ec)
                 {
                     if(ec)
-                        return; // cancelled by resolution/teardown
+                        return; // canceled by resolution/teardown
                     if(m_attempt >= m_ladder.size())
                         return surrender();
                     transmit();

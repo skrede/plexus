@@ -18,9 +18,9 @@ namespace plexus::io {
 // The receiving node's own control-plane universe stamp plus the loop-safety bounds an inbound
 // peer_report is admitted under. universe/universe_pattern mirror discovery_options: a node stamps
 // here the same universe it advertises on, because the origin's universe rides the report but the
-// RECEIVER's own is host-side config — no session field carries it (the pre-authorized config-stamp
-// fallback). hop_budget defaults to depth-1 admission; dedup_depth sizes each candidate row's
-// per-origin replay window. The numerics stay parametric (swept later), never pinned in a mechanism.
+// RECEIVER's own is host-side config — no session field carries it. hop_budget defaults to depth-1
+// admission; dedup_depth sizes each candidate row's per-origin replay window. The numerics stay
+// parametric, never pinned in a mechanism.
 struct report_options
 {
     std::uint32_t universe = discovery::k_default_universe;
@@ -29,7 +29,7 @@ struct report_options
     std::size_t dedup_depth    = wire::udp_dedup_window::depth_max;
     // Flood bounds against a hostile authenticated relay: the distinct reported origins one reporter
     // may install, and the topic edges one reported origin may fold. Reject-and-count past either
-    // ceiling; a direct peer is never affected. Numerics stay parametric (swept later), never pinned.
+    // ceiling; a direct peer is never affected. Numerics stay parametric, never pinned.
     std::size_t max_reported_origins = 256;
     std::size_t max_report_topics    = 256;
 };

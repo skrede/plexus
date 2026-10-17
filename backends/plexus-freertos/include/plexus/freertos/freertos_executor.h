@@ -126,7 +126,7 @@ public:
 
 private:
     // The tick is read only here, and only when some timer could actually fire —
-    // never for an armed-but-handlerless or cancelled timer. The scan over the
+    // never for an armed-but-handlerless or canceled timer. The scan over the
     // (complete) timer type is out-of-line in the timer header.
     static TickType_t now_ticks() noexcept
     {

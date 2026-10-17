@@ -229,7 +229,7 @@ private:
 
     // The fragment/reassemble blocks, owned members the channel drives directly: the splitter
     // encodes into m_frag_scratch (reused); the bounded reassembler (built lazily on the first
-    // inbound fragment) sits on the decrypted drain_inbound path. Its timeout timer is cancelled
+    // inbound fragment) sits on the decrypted drain_inbound path. Its timeout timer is canceled
     // in the dtor FIRST so a post-teardown fire is a guarded no-op.
     std::vector<std::byte> m_frag_scratch; // reused fragment-encode buffer
     std::uint16_t m_out_msg_id{0};         // per-message fragment grouping id (sender)

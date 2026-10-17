@@ -80,7 +80,7 @@ public:
         m_dialing = false;
     }
 
-    // Forget means forget: awareness for this peer was withdrawn, so an armed backoff is cancelled
+    // Forget means forget: awareness for this peer was withdrawn, so an armed backoff is canceled
     // and any further redial is refused until a fresh start() re-authorizes it. A dial already
     // issued to the transport is denied at the build seam, which consults redial_denied().
     void deny_redial()

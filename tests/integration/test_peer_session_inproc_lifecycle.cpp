@@ -166,7 +166,7 @@ TEST_CASE("inproc peer_session: completing before the deadline cancels the timer
         REQUIRE(l.requester->is_complete());
         REQUIRE(l.responder->is_complete());
 
-        // Advance well past the (now-cancelled) deadline: NO abort fires, epoch intact.
+        // Advance well past the (now-canceled) deadline: NO abort fires, epoch intact.
         const auto epoch = l.requester->session_id();
         manual_clock::advance(deadline + std::chrono::seconds(10));
         l.drive();
