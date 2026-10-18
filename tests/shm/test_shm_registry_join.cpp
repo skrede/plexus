@@ -1,3 +1,4 @@
+#include "support/region_names.h"
 #include "support/noop_notifier.h"
 #include "support/delaying_broker.h"
 
@@ -42,12 +43,12 @@ std::string fresh_fqn(const char *tag)
 struct peer_ring
 {
     peer_ring(delaying_broker &broker, const std::string &fqn, bool stamp)
-            : ctrl_name(plexus::shm::region_name_for(fqn, ring_direction::request))
+            : ctrl_name(plexus::testing::region_name(fqn, plexus::node_id{}))
     {
         REQUIRE(broker.create(ctrl_name, plexus::shm::control_region_bytes(k_cells), {}, control) == region_status::ok);
         REQUIRE(broker.create(ctrl_name + ".s", plexus::shm::slab_region_bytes(k_cells, k_slot), {}, slab) == region_status::ok);
         if(stamp)
-            REQUIRE(plexus::shm::broadcast_ring::create(control.bytes(), slab.bytes(), k_cells, k_slot, ring) == plexus::shm::loan_status::ok);
+            REQUIRE(plexus::shm::broadcast_ring::create(control.bytes(), slab.bytes(), k_cells, k_slot, plexus::node_id{}, ring) == plexus::shm::loan_status::ok);
     }
 
     std::string ctrl_name;
@@ -58,7 +59,7 @@ struct peer_ring
 
 acquire_result join(registry &reg, const std::string &fqn)
 {
-    return reg.acquire(fqn, ring_direction::request, k_slot, plexus::shm::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
+    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, k_slot, plexus::shm::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
 }
 
 }

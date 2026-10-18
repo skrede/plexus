@@ -1,10 +1,11 @@
+#include "support/region_names.h"
+
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 
 #include "plexus/testing/platform.h"
 
@@ -21,13 +22,12 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 
-// The shm-region NAMESPACE folded into region_name_for. Two unrelated co-host apps that pick
+// The shm-region NAMESPACE folded into the ring name. Two unrelated co-host apps that pick
 // distinct namespaces compute distinct region names for the same topic and never collide on a
 // shared region. This proves the property cross-process (fork): a producer mints regions under
 // namespace "alpha"; a consumer attaching under "alpha" RECEIVES the value (convergence), and a
 // consumer attaching under "beta" CANNOT attach the producer's region (isolation — the names
-// differ, so no cross-delivery). The empty-namespace name equals the namespace-less name, so the
-// existing shm rings are unchanged (back-compat, asserted at the naming layer here too).
+// differ, so no cross-delivery).
 
 namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
@@ -37,11 +37,11 @@ namespace {
 
 std::string control_name(const std::string &fqn, std::string_view ns)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request, ns);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher(), plexus::discovery::k_default_universe, ns);
 }
 std::string slab_name(const std::string &fqn, std::string_view ns)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request, ns) + ".s";
+    return control_name(fqn, ns) + ".s";
 }
 
 struct coord
@@ -79,7 +79,7 @@ void run_consumer(coord *c, const std::string &fqn, std::string_view ns)
     if(attached)
     {
         pio::broadcast_ring ring;
-        if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) == pio::loan_status::ok)
+        if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) == pio::loan_status::ok)
         {
             std::uint32_t idx = 0;
             if(ring.register_cursor(idx) == pio::loan_status::ok)
@@ -141,7 +141,7 @@ TEST_CASE("shm.region_namespace same namespace converges and a different one is 
                 pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), ring) == pio::loan_status::ok);
         c->regions_ready.store(1, std::memory_order_release);
 
         while(c->consumer_armed.load(std::memory_order_acquire) == 0)

@@ -32,7 +32,7 @@ inline ::plexus::shm::shm_topic_registry<::plexus::native::shm_region_broker, sh
 }
 
 // The broker is borrowed (it must outlive the member); the binder captures `io` so each ring's
-// notifier wakes on that reactor. An empty region_ns shares rings by topic (the default); a
+// notifier wakes on that reactor. An empty region_ns shares rings host-wide (the default); a
 // distinct namespace isolates this application's same-host shm from unrelated co-host apps.
 inline shm_member make_shm_member(::asio::io_context &io, ::plexus::native::shm_region_broker &broker, io::reliability rel = io::reliability::reliable,
                                   io::congestion cong = io::congestion::block, std::string region_ns = {})

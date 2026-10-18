@@ -73,7 +73,7 @@ struct ring_fixture
 
     ring_fixture()
     {
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), Cells, Slot, ring) == loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), Cells, Slot, plexus::node_id{}, ring) == loan_status::ok);
     }
 };
 

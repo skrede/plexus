@@ -221,12 +221,12 @@ TEST_CASE("shm.ring_memory_query ring_memory_for matches the bytes the registry 
     const ring_geometry g           = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, capacity);
     const std::size_t expected_slab = slab_region_bytes(g.cell_count, g.slot_capacity);
 
-    REQUIRE(registry.acquire("topic.query", ring_direction::request, payload, ring_geometry_mode::reliable_preserving, capacity) == acquire_result::created);
+    REQUIRE(registry.acquire("topic.query", ring_direction::request, plexus::node_id{}, payload, ring_geometry_mode::reliable_preserving, capacity) == acquire_result::created);
 
     REQUIRE(store.slab_requests.size() == 1);
     REQUIRE(store.slab_requests.front() == expected_slab);
     // And the query a consumer would have run beforehand matches that slab term.
     REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, capacity) == control_region_bytes(g.cell_count) + expected_slab);
 
-    registry.release("topic.query", ring_direction::request);
+    registry.release("topic.query", ring_direction::request, plexus::node_id{});
 }

@@ -2,6 +2,7 @@
 #include "region_doorbells.h"
 
 #include "support/heap_ring.h"
+#include "support/region_names.h"
 #include "support/alloc_counter.h"
 
 #include "plexus/shm/arm_status.h"
@@ -35,7 +36,7 @@ bool signal_parked_waiter(shm_harness::sem_notifier &notifier, const plexus::shm
 // The reactor is never run, so the window counts the producer's signal path and the waiter's park cycle alone.
 TEST_CASE("sem_alloc the signal path allocates nothing after the first wake", "[shm][sem_alloc]")
 {
-    const std::string region = plexus::shm::region_name_for("shm_harness.sem_alloc." + std::to_string(plexus::testing::process_id()), plexus::shm::ring_direction::request);
+    const std::string region = plexus::testing::region_name("shm_harness.sem_alloc." + std::to_string(plexus::testing::process_id()), plexus::testing::test_publisher());
     const shm_harness::region_doorbells doorbells{region};
     plexus::testing::heap_ring heap{16, 64};
     plexus::shm::slot_subscriber subscriber{heap.ring()};

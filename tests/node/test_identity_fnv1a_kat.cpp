@@ -36,32 +36,32 @@ std::uint64_t endpoint_low(std::string_view scheme, std::string_view address)
 
 }
 
-TEST_CASE("fnv1a kat: the node id low lane of the empty name is the offset basis", "[node][fnv1a][kat][!shouldfail]")
+TEST_CASE("fnv1a kat: the node id low lane of the empty name is the offset basis", "[node][fnv1a][kat]")
 {
     REQUIRE(node_low("") == 0xcbf29ce484222325ull);
 }
 
-TEST_CASE("fnv1a kat: the node id low lane of a single byte", "[node][fnv1a][kat][!shouldfail]")
+TEST_CASE("fnv1a kat: the node id low lane of a single byte", "[node][fnv1a][kat]")
 {
     REQUIRE(node_low("a") == 0xaf63dc4c8601ec8cull);
 }
 
-TEST_CASE("fnv1a kat: the node id low lane of a short string", "[node][fnv1a][kat][!shouldfail]")
+TEST_CASE("fnv1a kat: the node id low lane of a short string", "[node][fnv1a][kat]")
 {
     REQUIRE(node_low("foobar") == 0x85944171f73967e8ull);
 }
 
-TEST_CASE("fnv1a kat: the endpoint id low lane of an empty endpoint", "[node][fnv1a][kat][!shouldfail]")
+TEST_CASE("fnv1a kat: the endpoint id low lane of an empty endpoint", "[node][fnv1a][kat]")
 {
     REQUIRE(endpoint_low("", "") == 0xaf63bd4c8601b7dfull);
 }
 
-TEST_CASE("fnv1a kat: the endpoint id low lane of a scheme with no address", "[node][fnv1a][kat][!shouldfail]")
+TEST_CASE("fnv1a kat: the endpoint id low lane of a scheme with no address", "[node][fnv1a][kat]")
 {
     REQUIRE(endpoint_low("foobar", "") == 0x34531ca7168b8f38ull);
 }
 
-TEST_CASE("fnv1a kat: the endpoint id low lane of a scheme and an address", "[node][fnv1a][kat][!shouldfail]")
+TEST_CASE("fnv1a kat: the endpoint id low lane of a scheme and an address", "[node][fnv1a][kat]")
 {
     REQUIRE(endpoint_low("foo", "bar") == 0x8a5f40d8243888aaull);
 }

@@ -33,7 +33,7 @@ class wake_stress
 public:
     explicit wake_stress(std::uint32_t consumers)
             : m_fqn("shm_harness.wake." + std::to_string(plexus::testing::process_id()))
-            , m_regions(m_fqn)
+            , m_regions(m_fqn, {plexus::testing::test_publisher()})
             , m_consumers(consumers)
             , m_name("shm_harness.wake_block.")
             , m_block(plexus::testing::xproc_shared<wake_block>::create(m_name.str()))

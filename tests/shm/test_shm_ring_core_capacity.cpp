@@ -11,7 +11,7 @@ TEST_CASE("ring_core: the reliable-reclaim scan is bounded by the registered hig
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring ring;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, ring) == loan_status::ok);
 
     // A fresh ring scans nothing (no registered consumer gates reclamation).
     REQUIRE(ring.registered_high_water() == 0);
@@ -73,18 +73,18 @@ TEST_CASE("ring_core: attach re-reads and bounds-checks the header", "[shm][ring
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring creator;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, creator) == loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, creator) == loan_status::ok);
 
     // A second ring attaches the SAME backing spans and re-reads the geometry.
     broadcast_ring attacher;
-    REQUIRE(broadcast_ring::attach(control.span(), slab.span(), attacher) == loan_status::ok);
+    REQUIRE(broadcast_ring::attach(control.span(), slab.span(), plexus::node_id{}, attacher) == loan_status::ok);
     REQUIRE(attacher.cell_count() == k_cells);
     REQUIRE(attacher.slot_capacity() == k_slot);
 
     // A control region with no magic yet is a ring its creator has not stamped, not a foreign one.
     backing_region unstamped_control(control_region_bytes(k_cells));
     broadcast_ring unstamped;
-    REQUIRE(broadcast_ring::attach(unstamped_control.span(), slab.span(), unstamped) == loan_status::unstamped);
+    REQUIRE(broadcast_ring::attach(unstamped_control.span(), slab.span(), plexus::node_id{}, unstamped) == loan_status::unstamped);
 }
 
 TEST_CASE("ring_core: a per-ring consumer_capacity bounds cursor registration", "[shm][ring_core]")
@@ -97,7 +97,7 @@ TEST_CASE("ring_core: a per-ring consumer_capacity bounds cursor registration", 
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring ring;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring, k_capacity) == loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, ring, k_capacity) == loan_status::ok);
 
     // The first C registrations succeed; the (C+1)th rejects below the absolute cap.
     std::uint32_t idx[k_capacity] = {};
@@ -114,7 +114,7 @@ TEST_CASE("ring_core: a per-ring consumer_capacity bounds cursor registration", 
 
     // An attacher re-reads the stamped capacity from the header.
     broadcast_ring attacher;
-    REQUIRE(broadcast_ring::attach(control.span(), slab.span(), attacher) == loan_status::ok);
+    REQUIRE(broadcast_ring::attach(control.span(), slab.span(), plexus::node_id{}, attacher) == loan_status::ok);
     std::uint32_t a_idx[k_capacity] = {};
     for(std::uint64_t i = 0; i < k_capacity; ++i)
         REQUIRE(attacher.register_cursor(a_idx[i]) == loan_status::ok);
@@ -131,12 +131,12 @@ TEST_CASE("ring_core: create rejects an out-of-range consumer_capacity", "[shm][
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring zero;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, zero, 0) == loan_status::rejected);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, zero, 0) == loan_status::rejected);
 
     broadcast_ring over;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, over, k_max_consumers + 1) == loan_status::rejected);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, over, k_max_consumers + 1) == loan_status::rejected);
 
     // The shipped default (omitted argument) resolves to the absolute cap and admits it.
     broadcast_ring def;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, def) == loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, def) == loan_status::ok);
 }

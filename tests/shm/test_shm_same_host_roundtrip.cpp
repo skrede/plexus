@@ -1,3 +1,5 @@
+#include "support/region_names.h"
+
 #include "plexus/native/machine_fingerprint.h"
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
@@ -5,7 +7,6 @@
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 
 #include "plexus/testing/platform.h"
 
@@ -57,11 +58,11 @@ coord *map_coord()
 // so the two regions never collide).
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher());
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher()) + ".s";
 }
 
 constexpr std::uint32_t k_payload = 0xC0FFEEu;
@@ -95,7 +96,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
             if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
             {
                 pio::broadcast_ring ring;
-                if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) == pio::loan_status::ok)
+                if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) == pio::loan_status::ok)
                 {
                     std::uint32_t idx = 0;
                     if(ring.register_cursor(idx) == pio::loan_status::ok)
@@ -144,7 +145,7 @@ TEST_CASE("shm.same_host_roundtrip two processes round-trip a value over a named
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), ring) == pio::loan_status::ok);
         c->regions_ready.store(1, std::memory_order_release);
 
         // Wait for the consumer to register its cursor at the tail BEFORE publishing,

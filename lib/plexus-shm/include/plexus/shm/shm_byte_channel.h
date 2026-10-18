@@ -15,6 +15,7 @@
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/wire/close_cause.h"
+#include "plexus/node_id.h"
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
@@ -39,12 +40,13 @@ class shm_byte_channel
 public:
     using registry_type = shm_topic_registry<Broker, Notifier>;
 
-    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn, io::endpoint remote, waiter_loss::lost_fn lost = nullptr)
+    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn, const node_id &publisher, io::endpoint remote, waiter_loss::lost_fn lost = nullptr)
             : m_registry(registry)
             , m_channel(channel)
+            , m_publisher(publisher)
             , m_fqn(std::move(fqn))
             , m_remote(std::move(remote))
-            , m_loss(registry.watch_loss(m_fqn, ring_direction::request, lost ? std::move(lost) : waiter_loss::lost_fn{[this] { close(); }}))
+            , m_loss(registry.watch_loss(m_fqn, ring_direction::request, m_publisher, lost ? std::move(lost) : waiter_loss::lost_fn{[this] { close(); }}))
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_released(false)
     {
@@ -56,7 +58,7 @@ public:
     ~shm_byte_channel()
     {
         if(!m_released)
-            m_registry.release(m_fqn, ring_direction::request);
+            m_registry.release(m_fqn, ring_direction::request, m_publisher);
     }
 
     // An oversize payload surfaces message_too_large, a stalled reliable path would_block; the
@@ -84,7 +86,7 @@ public:
         if(m_released)
             return;
         m_released = true;
-        m_registry.release(m_fqn, ring_direction::request);
+        m_registry.release(m_fqn, ring_direction::request, m_publisher);
         if(m_on_closed)
             m_on_closed();
     }
@@ -150,6 +152,7 @@ private:
 
     registry_type &m_registry;
     shm_channel<Notifier> &m_channel;
+    node_id m_publisher;
     std::string m_fqn;
     io::endpoint m_remote;
     loss_watch m_loss;

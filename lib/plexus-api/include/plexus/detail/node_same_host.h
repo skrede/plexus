@@ -6,6 +6,7 @@
 #include <tuple>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <type_traits>
 
@@ -56,13 +57,15 @@ void provision_same_host_ring(Node &n, std::string_view fqn, std::size_t effecti
     for_each_shm_member(n, [&](auto &m) { m.set_topic_geometry(key, effective_bytes, m.geometry_from(geometry)); });
 }
 
-// No shm member is inert: no gate and no policy installed.
+// Each shm member learns the node's id and universe before any ring is minted. No shm member is inert: no gate and no
+// policy installed.
 template<typename Node>
-void install_upgrade_coordinator(Node &n)
+void install_upgrade_coordinator(Node &n, std::uint32_t universe)
 {
     for_each_shm_member(n,
-                        [&n](auto &m)
+                        [&n, universe](auto &m)
                         {
+                            m.bind_node(n.m_id, universe);
                             n.m_engine.coordinator().on_policy(m.upgrade_policy());
                             install_same_host_upgrade(n.m_engine, m);
                         });

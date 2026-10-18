@@ -84,16 +84,20 @@ io::upgrade_mint<typename Engine::channel_type> mint_send_lane(Engine &engine, M
     return {wrap_companion<typename Engine::channel_type>(std::move(ch)), std::move(fits)};
 }
 
-// Each drained frame is injected into the matching peer session, resolved by node_name. The drain posts on the node's
-// executor, so inject runs on an executor turn with no drain thread. The returned owner is never called: dropping it on
-// peer-dead runs the RAII handle's dtor (clear sink, release ring). A null handle declines with the member's reason and
-// the subscriber keeps the wire.
+// The publisher's ring is named by the identity its session proved, never by the slot key, which on an accepted session
+// is provisional; a session not yet complete declines as transient. Each drained frame is injected into the matching peer
+// session, resolved by node_name, on an executor turn with no drain thread. The returned owner is never called: dropping
+// it on peer-dead runs the RAII handle's dtor (clear sink, release ring). A null handle declines with the member's reason
+// and the subscriber keeps the wire.
 template<typename Engine, typename Member>
 io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::string_view node_name, std::string_view fqn)
 {
+    const auto *session = engine.registry().session_for_name(node_name);
+    if(session == nullptr || !session->is_complete())
+        return io::upgrade_receive{io::fallback_reason::transient};
     const std::string key{fqn};
     auto deliver = [&engine, peer = std::string{node_name}](std::span<const std::byte> frame) { engine.inject_upgrade_receive(peer, frame); };
-    auto handle  = member.mint_receive_companion(key, std::move(deliver), drop_lanes_on_loss(engine, key));
+    auto handle  = member.mint_receive_companion(key, session->peer_identity(), std::move(deliver), drop_lanes_on_loss(engine, key));
     if(!handle)
         return io::upgrade_receive{member.last_fallback_reason()};
     return io::upgrade_receive{[h = std::move(handle)]() mutable { (void)h; }};

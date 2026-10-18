@@ -2,6 +2,7 @@
 #include "wake_block.h"
 #include "wake_producer.h"
 
+#include "support/region_names.h"
 #include "support/xproc_control.h"
 #include "support/xproc_harness.h"
 
@@ -66,18 +67,20 @@ bool serve_consumer(const std::string &fqn, wake_block &block, wake_consumer_slo
     ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
     registry_for<Notifier> registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, binder_on<Notifier>(io)};
-    const plexus::shm::acquire_result acquired = registry.acquire(fqn, k_request, 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
+    const plexus::shm::acquire_result acquired =
+            registry.acquire(fqn, k_request, plexus::testing::test_publisher(), 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
     if(acquired == plexus::shm::acquire_result::failed)
         return false;
 
-    registry.set_consumer_sink(fqn, k_request, [&slot](plexus::wire_bytes<plexus::shm::shm_slot_owner>) { slot.received.fetch_add(1, std::memory_order_acq_rel); });
+    registry.set_consumer_sink(fqn, k_request, plexus::testing::test_publisher(),
+                               [&slot](plexus::wire_bytes<plexus::shm::shm_slot_owner>) { slot.received.fetch_add(1, std::memory_order_acq_rel); });
     slot.ready.store(1, std::memory_order_release);
     while(block.leave.load(std::memory_order_acquire) == 0)
     {
         io.restart();
         io.run_for(1ms);
     }
-    registry.release(fqn, k_request);
+    registry.release(fqn, k_request, plexus::testing::test_publisher());
     return true;
 }
 
@@ -98,7 +101,7 @@ bool wake_consumer(const std::vector<std::string> &argv)
 bool attach_ring(plexus::native::posix_shm_region_broker &broker, const std::string &name, attached_ring &out)
 {
     return broker.attach(name, out.control) == plexus::shm::region_status::ok && broker.attach(name + ".s", out.slab) == plexus::shm::region_status::ok &&
-            plexus::shm::broadcast_ring::attach(out.control.bytes(), out.slab.bytes(), out.ring) == plexus::shm::loan_status::ok;
+            plexus::shm::broadcast_ring::attach(out.control.bytes(), out.slab.bytes(), plexus::testing::test_publisher(), out.ring) == plexus::shm::loan_status::ok;
 }
 
 bool run_trials(burst_producer &producer, std::uint32_t trials)
@@ -124,7 +127,7 @@ bool wake_producer(const std::vector<std::string> &argv)
         return false;
 
     plexus::native::posix_shm_region_broker broker;
-    const std::string region = plexus::shm::region_name_for(argv[1], k_request);
+    const std::string region = plexus::testing::region_name(argv[1], plexus::testing::test_publisher());
     attached_ring attached;
     if(!attach_ring(broker, region, attached))
         return false;

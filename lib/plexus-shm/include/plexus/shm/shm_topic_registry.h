@@ -18,6 +18,10 @@
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+
+#include "plexus/discovery/universe.h"
+
+#include "plexus/node_id.h"
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
@@ -32,7 +36,7 @@
 
 namespace plexus::shm {
 
-// The demand-driven lifecycle owner of every live (topic, direction) ring: a first acquire MINTS the ring (or
+// The demand-driven lifecycle owner of every live (topic, direction, publisher) ring: a first acquire MINTS the ring (or
 // ATTACHES to a peer's), each further acquire bumps a refcount, and the matching releases tear it down at 1 -> 0 (the
 // creator also unlinks). A waiter lost after its acquire tells each holder watching it and fails further acquires of
 // its key. It borrows the broker by reference and owns one notifier per entry. Templated on the broker + notifier
@@ -57,10 +61,11 @@ public:
 
     // max_ring_slab_bytes defaults to the shipped k_max_ring_slab_bytes; the acquire fails closed above it.
     shm_topic_registry(Broker &broker, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = default_notifier_binder(),
-                       std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes, std::string region_ns = {}) noexcept
+                       std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes, std::string region_ns = {}, std::uint32_t universe = discovery::k_default_universe) noexcept
             : m_broker(broker)
             , m_reliability(rel)
             , m_congestion(cong)
+            , m_universe(universe)
             , m_bind_notifier(std::move(bind_notifier))
             , m_max_ring_slab_bytes(max_ring_slab_bytes)
             , m_region_ns(std::move(region_ns))
@@ -76,27 +81,28 @@ public:
 
     ~shm_topic_registry()
     {
-        teardown_all();
+        for(auto &[k, e] : m_entries)
+            e->teardown();
     }
 
-    // A repeat acquire of a live key bumps the refcount and returns its prior verdict; a first
-    // acquire mints (or attaches to a peer's) ring (max_payload 0 -> default).
-    acquire_result acquire(const std::string &fqn, ring_direction direction, std::uint32_t max_payload, ring_geometry_mode mode = ring_geometry_mode::reliable_preserving,
-                           std::uint32_t consumer_capacity = 0, acquire_mode amode = acquire_mode::reclaim_stale)
+    // A repeat acquire of a live key bumps the refcount and returns its prior verdict; a first acquire mints (or attaches
+    // to a peer's) ring (max_payload 0 -> default). Each publisher of a topic owns its own ring.
+    acquire_result acquire(const std::string &fqn, ring_direction direction, const node_id &publisher, std::uint32_t max_payload,
+                           ring_geometry_mode mode = ring_geometry_mode::reliable_preserving, std::uint32_t consumer_capacity = 0, acquire_mode amode = acquire_mode::reclaim_stale)
     {
-        const key k{fqn, direction};
+        const key k{fqn, direction, publisher};
         if(auto it = m_entries.find(k); it != m_entries.end())
             return detail::topic_reacquire(*it->second, m_last_failure);
 
         auto e                       = std::make_unique<entry>();
         m_last_failure               = acquire_failure{};
-        const acquire_result verdict = detail::topic_open_ring(*this, *e, fqn, direction, max_payload, mode, consumer_capacity, amode);
+        const acquire_result verdict = detail::topic_open_ring(*this, *e, k, max_payload, mode, consumer_capacity, amode);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
         // A waiter whose notifier cannot arm is never woken, so the acquire fails and the caller keeps its other transports.
-        if(const arm_status armed = detail::topic_bind(*this, *e, fqn, direction, verdict); armed != arm_status::armed)
+        if(const arm_status armed = detail::topic_bind(*this, *e, k, verdict); armed != arm_status::armed)
         {
-            teardown(*e);
+            e->teardown();
             m_last_failure = acquire_failure{acquire_bound::notifier, 0, 0, region_status::ok, armed};
             return acquire_result::failed;
         }
@@ -104,37 +110,36 @@ public:
         return verdict;
     }
 
-    void release(const std::string &fqn, ring_direction direction)
+    void release(const std::string &fqn, ring_direction direction, const node_id &publisher)
     {
-        const key k{fqn, direction};
-        auto it = m_entries.find(k);
+        auto it = m_entries.find(key{fqn, direction, publisher});
         if(it == m_entries.end())
             return;
         if(--it->second->refcount > 0)
             return;
-        teardown(*it->second);
+        it->second->teardown();
         m_entries.erase(it);
     }
 
-    void set_consumer_sink(const std::string &fqn, ring_direction direction, deliver_fn sink)
+    void set_consumer_sink(const std::string &fqn, ring_direction direction, const node_id &publisher, deliver_fn sink)
     {
-        detail::topic_set_sink(m_entries, fqn, direction, std::move(sink));
+        detail::topic_set_sink(m_entries, key{fqn, direction, publisher}, std::move(sink));
     }
 
     // Called on the receive companion's teardown BEFORE its ring release (disarm-before-destroy).
-    void clear_consumer_sink(const std::string &fqn, ring_direction direction)
+    void clear_consumer_sink(const std::string &fqn, ring_direction direction, const node_id &publisher)
     {
-        detail::topic_clear_sink(m_entries, fqn, direction);
+        detail::topic_clear_sink(m_entries, key{fqn, direction, publisher});
     }
 
-    shm_channel<Notifier> *channel_for(const std::string &fqn, ring_direction direction)
+    shm_channel<Notifier> *channel_for(const std::string &fqn, ring_direction direction, const node_id &publisher)
     {
-        return detail::topic_channel(m_entries, fqn, direction);
+        return detail::topic_channel(m_entries, key{fqn, direction, publisher});
     }
 
-    loss_watch watch_loss(const std::string &fqn, ring_direction direction, waiter_loss::lost_fn lost)
+    loss_watch watch_loss(const std::string &fqn, ring_direction direction, const node_id &publisher, waiter_loss::lost_fn lost)
     {
-        return detail::topic_watch_loss(m_entries, fqn, direction, std::move(lost));
+        return detail::topic_watch_loss(m_entries, key{fqn, direction, publisher}, std::move(lost));
     }
 
     std::size_t live_count() const noexcept
@@ -154,6 +159,17 @@ public:
         m_max_ring_slab_bytes = bytes;
     }
 
+    // Names every ring minted or attached AFTER it is set, so rings of different universes never meet.
+    void bind_universe(std::uint32_t universe) noexcept
+    {
+        m_universe = universe;
+    }
+
+    std::uint32_t universe() const noexcept
+    {
+        return m_universe;
+    }
+
 private:
     using key   = detail::shm_topic_key;
     using entry = detail::shm_topic_entry<Broker, Notifier>;
@@ -161,6 +177,7 @@ private:
     Broker &m_broker;
     io::reliability m_reliability;
     io::congestion m_congestion;
+    std::uint32_t m_universe;
     notifier_binder m_bind_notifier;
     std::uint64_t m_max_ring_slab_bytes;
     std::string m_region_ns;
@@ -168,27 +185,10 @@ private:
     detail::shm_topic_map<entry> m_entries;
 
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const std::string &, ::plexus::shm::ring_direction, std::uint32_t, ::plexus::shm::ring_geometry_mode,
-                                                                 std::uint32_t, ::plexus::shm::acquire_mode);
+    friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, std::uint32_t, ::plexus::shm::ring_geometry_mode, std::uint32_t,
+                                                                 ::plexus::shm::acquire_mode);
     template<typename R, typename E>
-    friend ::plexus::shm::arm_status detail::topic_bind(R &, E &, const std::string &, ::plexus::shm::ring_direction, ::plexus::shm::acquire_result);
-
-    // Non-negotiable ordering: disarm the notifier BEFORE the channel (and the subscriber its
-    // drain touches) is destroyed, so a wake racing teardown can never post a drain onto a
-    // destroyed subscriber.
-    void teardown(entry &e) noexcept
-    {
-        if(e.notify)
-            e.notify->disarm();
-        e.channel.reset();
-    }
-
-    void teardown_all() noexcept
-    {
-        for(auto &[k, e] : m_entries)
-            teardown(*e);
-        m_entries.clear();
-    }
+    friend ::plexus::shm::arm_status detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::acquire_result);
 };
 
 }

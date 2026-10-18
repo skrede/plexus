@@ -171,6 +171,6 @@ TEST_CASE("handshake codec: the status cutoff still rejects an undefined byte un
 
 TEST_CASE("handshake codec: the protocol version gates the layout change", "[handshake][codec][fingerprint]")
 {
-    static_assert(k_protocol_version == 7); // the appended region is a layout change a skewed peer must reject
-    CHECK(k_protocol_version == 7);
+    static_assert(k_protocol_version == 8); // the appended region is a layout change a skewed peer must reject
+    CHECK(k_protocol_version == 8);
 }

@@ -26,7 +26,7 @@ function(plexus_add_shm_harness_test name)
 endfunction()
 
 if(LINUX)
-    plexus_add_shm_harness_test(test_shm_harness test_shm_harness_baseline.cpp test_shm_harness_wire.cpp)
+    plexus_add_shm_harness_test(test_shm_harness test_shm_harness_baseline.cpp test_shm_harness_wire.cpp test_shm_harness_fan_in.cpp)
 endif()
 
 # Every case in this executable is an expected failure that pins a same-host delivery defect; the label keeps the set

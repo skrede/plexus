@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPOLOGY_LAUNCH_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPOLOGY_LAUNCH_H
 
+#include "node_config.h"
 #include "topic_regions.h"
 #include "launch_helpers.h"
 #include "topology_block.h"
@@ -30,7 +31,7 @@ public:
             , m_wiring(wiring)
             , m_ports(free_tcp_ports(count))
             , m_name("shm_harness.")
-            , m_regions(m_fqn)
+            , m_regions(m_fqn, harness_ids(count))
             , m_block(plexus::testing::xproc_shared<topology_block>::create(m_name.str()))
             , m_nodes()
     {

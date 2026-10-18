@@ -2,6 +2,7 @@
 #include "region_doorbells.h"
 
 #include "support/heap_ring.h"
+#include "support/region_names.h"
 #include "support/xproc_harness.h"
 
 #include "plexus/shm/arm_status.h"
@@ -55,10 +56,11 @@ bool sem_cycler(const std::vector<std::string> &argv)
     sem_registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, posix_sem_leg::binder(io)};
     for(std::uint32_t cycle = 0; cycle < k_arm_cycles; ++cycle)
     {
-        if(registry.acquire(argv[0], k_request, 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) == plexus::shm::acquire_result::failed)
+        if(registry.acquire(argv[0], k_request, plexus::testing::test_publisher(), 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
+           plexus::shm::acquire_result::failed)
             return false;
         settle(io, cycle == 0 ? 200ms : 1ms);
-        registry.release(argv[0], k_request);
+        registry.release(argv[0], k_request, plexus::testing::test_publisher());
     }
     return true;
 }
@@ -95,7 +97,7 @@ bool sem_flood(const std::vector<std::string> &argv)
     plexus::testing::heap_ring heap{16, 64};
     plexus::shm::slot_subscriber subscriber{heap.ring()};
     ::asio::io_context io;
-    const std::string region = plexus::shm::region_name_for(argv[0], k_request);
+    const std::string region = plexus::testing::region_name(argv[0], plexus::testing::test_publisher());
     sem_notifier notifier{io, heap.ring().header(), region};
     const std::uint32_t slot = subscriber.cursor_index().value_or(0);
     if(!heap.created() || !subscriber.cursor_index() || notifier.arm(slot, [] {}) != plexus::shm::arm_status::armed)

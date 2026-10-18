@@ -90,7 +90,7 @@ public:
     }
 
     // region_ns is the static shm-region namespace forwarded to the shm leaf: empty (the
-    // default) shares rings by topic, a distinct namespace isolates this set's same-host shm
+    // default) shares rings host-wide, a distinct namespace isolates this set's same-host shm
     // from unrelated co-host apps.
     template<typename Broker>
     transport_set(::asio::io_context &io, Broker &broker, std::string region_ns = {})

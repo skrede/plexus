@@ -1,3 +1,5 @@
+#include "support/region_names.h"
+
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
@@ -5,7 +7,6 @@
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_selection.h"
 
 #include "plexus/io/congestion.h"
@@ -28,10 +29,9 @@
 // The bilateral, consumer-sovereign shared-memory upgrade via DEMAND-DRIVEN
 // CONVERGENCE. Two real processes over the POSIX broker each decide INDEPENDENTLY
 // whether to attempt the SHM acquire from their OWN dispatch hint
-// (attempt_shm_upgrade) — NOTHING about the hint
-// is exchanged on the wire. When both attempt, they converge on the SAME
-// deterministically-named ring (region_name_for) the same way they converge on the
-// name, and a value flows over shared memory. The cases proved:
+// (attempt_shm_upgrade) — NOTHING about the hint is exchanged on the wire. When both
+// attempt, they converge on the publisher's named ring and a value flows over shared
+// memory. The cases proved:
 //   (a) a hint that sizes the ring (the publisher's max_payload) lets a wide value fit;
 //   (b) a hint with NO max_payload upgrades on the DEFAULT geometry (the
 //       subscriber-only sizing fallback — the consumer rescues itself);
@@ -61,11 +61,11 @@ coord *map_coord()
 
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher());
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher()) + ".s";
 }
 
 // The subscriber process: it attaches the converged ring (creating the
@@ -84,7 +84,7 @@ bool subscribe_shm(const std::string &fqn, coord *c, std::uint32_t want_payload)
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
-    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) != pio::loan_status::ok)
         return false;
 
     std::uint32_t idx = 0;
@@ -115,8 +115,8 @@ bool subscribe_shm(const std::string &fqn, coord *c, std::uint32_t want_payload)
 
 // A publisher-driven SHM round-trip: the publisher (parent) mints + sizes the ring
 // (max_payload, 0 -> default), the subscriber (child) converges + consumes. Returns
-// whether the value crossed over shared memory. region_name_for is the only thing
-// either end shares; the hint never rides the wire.
+// whether the value crossed over shared memory. The publisher's ring name is the only
+// thing either end shares; the hint never rides the wire.
 bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_payload, std::uint32_t payload)
 {
     coord *c = map_coord();
@@ -133,10 +133,9 @@ bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_paylo
         ::_exit(ok ? 0 : 1);
     }
 
-    // The publisher mints + sizes the ring on the demand-driven path: the same
-    // region_name_for naming + max_payload geometry the shm_topic_registry::acquire
-    // uses internally (0 -> the default geometry). The direction is request (a pub/sub
-    // topic). Both ends derive the names from the fqn alone — the convergence.
+    // The publisher mints + sizes the ring on the demand-driven path: the same naming
+    // + max_payload geometry the shm_topic_registry::acquire uses internally (0 -> the
+    // default geometry). Both ends derive the names from the fqn and publisher alone.
     posix_shm_region_broker broker;
     region_handle ctrl, slab;
     const std::optional<std::uint32_t> want = publisher_max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{publisher_max_payload};
@@ -144,7 +143,7 @@ bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_paylo
     REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
     REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
     pio::broadcast_ring ring;
-    REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
+    REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), ring) == pio::loan_status::ok);
     c->publisher_ready.store(1, std::memory_order_release);
 
     while(c->subscriber_armed.load(std::memory_order_acquire) == 0)

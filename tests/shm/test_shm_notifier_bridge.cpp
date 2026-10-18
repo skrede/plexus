@@ -1,3 +1,5 @@
+#include "support/region_names.h"
+
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -7,7 +9,6 @@
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_channel.h"
 #include "plexus/shm/shm_slot_owner.h"
 
@@ -40,8 +41,7 @@
 // The parent drives ONLY its user-owned io_context (run_for) -- there is no
 // plexus-spawned loop. The cross-process futex wake reaps the io_uring CQE on a
 // reactor turn, POSTS the arm()'d drain onto the io_context, and the drain hands
-// the published value up through the shm_channel (the registry's drain primitive).
-// Looped N>=100 in-body; the ctest binary is re-run >=3 times for reproducibility.
+// the published value up through the shm_channel (the registry's drain primitive). Looped N>=100 in-body.
 
 namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
@@ -78,11 +78,11 @@ coord *map_coord()
 
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher());
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher()) + ".s";
 }
 
 constexpr std::uint32_t k_payload = 0xBEEF1234u;
@@ -97,7 +97,7 @@ bool produce(const std::string &fqn)
         return false;
 
     pio::broadcast_ring ring;
-    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) != pio::loan_status::ok)
         return false;
 
     pio::broadcast_ring::claim_result claim;
@@ -122,7 +122,7 @@ bool produce_gated(const std::string &fqn)
         return false;
 
     pio::broadcast_ring ring;
-    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) != pio::loan_status::ok)
         return false;
 
     pio::broadcast_ring::claim_result claim;
@@ -169,7 +169,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
         plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");
@@ -249,7 +249,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
         plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");

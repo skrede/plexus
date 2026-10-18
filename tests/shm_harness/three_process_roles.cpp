@@ -5,6 +5,7 @@
     #include "sem_support.h"
 #endif
 
+#include "support/region_names.h"
 #include "support/xproc_control.h"
 #include "support/xproc_harness.h"
 
@@ -79,7 +80,7 @@ bool publish_stamp(Registry &registry, const std::string &fqn)
     const std::int64_t stamp = now_ns();
     std::array<std::byte, sizeof(stamp)> payload{};
     std::memcpy(payload.data(), &stamp, sizeof(stamp));
-    auto *channel = registry.channel_for(fqn, k_request);
+    auto *channel = registry.channel_for(fqn, k_request, plexus::testing::test_publisher());
     return channel != nullptr && channel->send(payload) == plexus::shm::loan_status::ok;
 }
 
@@ -117,14 +118,16 @@ bool run_role(const std::string &fqn, three_role_slot &slot, bool publisher)
     ::asio::io_context io;
     typename Leg::registry::broker_type broker;
     typename Leg::registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, Leg::binder(io)};
-    if(registry.acquire(fqn, k_request, 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) == plexus::shm::acquire_result::failed)
+    if(registry.acquire(fqn, k_request, plexus::testing::test_publisher(), 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
+       plexus::shm::acquire_result::failed)
         return report_failure(registry.last_acquire_failure());
 
     if(!publisher)
-        registry.set_consumer_sink(fqn, k_request, [&slot](plexus::wire_bytes<plexus::shm::shm_slot_owner> message) { record_delivery(slot, message); });
+        registry.set_consumer_sink(fqn, k_request, plexus::testing::test_publisher(),
+                                   [&slot](plexus::wire_bytes<plexus::shm::shm_slot_owner> message) { record_delivery(slot, message); });
     slot.armed.store(1, std::memory_order_release);
     const bool served = serve_commands(registry, io, fqn, slot);
-    registry.release(fqn, k_request);
+    registry.release(fqn, k_request, plexus::testing::test_publisher());
     return served;
 }
 

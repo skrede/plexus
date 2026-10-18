@@ -2,6 +2,7 @@
 #include "region_doorbells.h"
 
 #include "support/heap_ring.h"
+#include "support/region_names.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/region_naming.h"
@@ -47,7 +48,7 @@ bool destroy_with_pending_drain(plexus::testing::heap_ring &heap, const std::str
 
 TEST_CASE("sem_pending a notifier destroyed with a wake pending touches no freed state", "[shm][sem_pending]")
 {
-    const std::string region = plexus::shm::region_name_for("shm_harness.sem_pending." + std::to_string(plexus::testing::process_id()), plexus::shm::ring_direction::request);
+    const std::string region = plexus::testing::region_name("shm_harness.sem_pending." + std::to_string(plexus::testing::process_id()), plexus::testing::test_publisher());
     const region_doorbells doorbells{region};
     plexus::testing::heap_ring heap{16, 64};
     plexus::shm::slot_subscriber subscriber{heap.ring()};

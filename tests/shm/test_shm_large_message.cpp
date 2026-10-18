@@ -6,7 +6,6 @@
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_topic_registry.h"
@@ -19,6 +18,7 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/region_names.h"
 #include "support/noop_notifier.h"
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -47,10 +47,9 @@
 // variants (shmn = a real cross-process futex wake; shmr = the reactor-reaped path,
 // represented here by the spinning-consumer read the cross-process xproc proofs use —
 // the full io_uring reactor wake is covered by the bridge/dual-delivery proofs). Busy-
-// poll shm is EXCLUDED. The large cells run >= 2 times in one ctest invocation (the
-// no-success-from-a-single-run discipline). The probe-higher cell proves a payload above
-// the chosen ceiling FAILS CLOSED under reliable_preserving (no silent best-effort) and
-// round-trips under EXPLICIT best_effort_large.
+// poll shm is EXCLUDED. The large cells run >= 2 times in one ctest invocation. The
+// probe-higher cell proves a payload above the chosen ceiling FAILS CLOSED under
+// reliable_preserving (no silent best-effort) and round-trips under EXPLICIT best_effort_large.
 
 namespace pio = plexus::shm;
 using plexus::io::endpoint;
@@ -112,11 +111,11 @@ coord *map_coord()
 
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher());
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher()) + ".s";
 }
 
 // Fill a buffer with a position-dependent byte pattern so a torn or truncated message
@@ -142,7 +141,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c, const std::vector<std
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
-    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) != pio::loan_status::ok)
         return false;
 
     std::uint32_t idx = 0;
@@ -206,6 +205,7 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, pio::
             slot.emplace();
     };
     member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, std::move(binder)};
+    plexus::testing::bind_test_publisher(member);
 
     // The producer-side provisioning: the publisher's effective payload width + mode +
     // capacity reach ring_geometry_for through the live acquire (not the unit registry).

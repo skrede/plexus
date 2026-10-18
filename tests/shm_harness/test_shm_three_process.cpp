@@ -6,6 +6,7 @@
     #include "region_doorbells.h"
 #endif
 
+#include "support/region_names.h"
 #include "support/xproc_control.h"
 #include "support/xproc_harness.h"
 #include "support/xproc_process.h"
@@ -155,8 +156,8 @@ void require_every_round(std::string_view notifier)
 {
     const std::string fqn = "shm_harness.three." + std::to_string(plexus::testing::process_id());
 #if !defined(_WIN32)
-    const topic_regions regions{fqn};
-    const region_doorbells doorbells{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
+    const topic_regions regions{fqn, {plexus::testing::test_publisher()}};
+    const region_doorbells doorbells{plexus::testing::region_name(fqn, plexus::testing::test_publisher())};
 #endif
     three_process topology{fqn, notifier};
     REQUIRE(topology.start());

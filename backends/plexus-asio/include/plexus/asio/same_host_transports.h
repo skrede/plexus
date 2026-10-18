@@ -29,7 +29,7 @@ namespace plexus::asio {
 // offers is selected behind this header, with no platform conditional in consumer code — shm +
 // AF_UNIX + TCP on Linux, macOS and Windows when the shared-memory backend is linked, AF_UNIX +
 // TCP otherwise. The ctor's `region` is the shm-region namespace (ignored without shared memory):
-// an empty region shares rings by topic, a distinct region isolates this composition's same-host
+// an empty region shares rings host-wide, a distinct region isolates this composition's same-host
 // shm from unrelated co-host apps.
 // LIFETIME: the set OWNS the leaves (and, with shared memory, the shm region broker) and BORROWS the
 // io_context. make_node returns a node that BORROWS those leaves, so this object MUST OUTLIVE

@@ -3,6 +3,7 @@
 #include "region_doorbells.h"
 #include "three_process_block.h"
 
+#include "support/region_names.h"
 #include "support/xproc_control.h"
 #include "support/xproc_harness.h"
 #include "support/xproc_process.h"
@@ -49,8 +50,8 @@ std::optional<plexus::testing::xproc_process> spawn_parked(const std::string &bl
 TEST_CASE("sem_teardown a waiter's disarm completes while another process waits on the same ring", "[shm][sem_teardown]")
 {
     const std::string fqn = "shm_harness.sem_teardown." + std::to_string(plexus::testing::process_id());
-    const topic_regions regions{fqn};
-    const region_doorbells doorbells{plexus::shm::region_name_for(fqn, plexus::shm::ring_direction::request)};
+    const topic_regions regions{fqn, {plexus::testing::test_publisher()}};
+    const region_doorbells doorbells{plexus::testing::region_name(fqn, plexus::testing::test_publisher())};
     const plexus::testing::scoped_shm_name name{"shm_harness.sem_teardown_block."};
     auto block = plexus::testing::xproc_shared<three_process_block>::create(name.str());
     REQUIRE(block);

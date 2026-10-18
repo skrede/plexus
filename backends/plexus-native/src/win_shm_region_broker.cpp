@@ -19,9 +19,8 @@ constexpr std::string::size_type k_name_max = 255;
 // the broker owns the prefix, the caller passes a bare name (the bare-hex token).
 constexpr const char *k_canonical_prefix = "Local\\plexus.";
 
-// Reject empty names and names carrying a namespace separator (the sanitized name
-// is the caller portion only; the broker prepends the prefix, which owns its own
-// backslash), then length-bound the composed name.
+// Reject empty names and names carrying a namespace separator (the sanitized name is the caller portion only; the
+// broker prepends the prefix, which owns its own backslash), then length-bound the composed name.
 shm_error sanitize_region_name(std::string_view logical, std::string &out_canonical)
 {
     if(logical.empty())
@@ -66,6 +65,15 @@ shm_error map_last_error(DWORD e)
     }
 }
 
+// The view length VirtualQuery reports at attach then equals the length the creator records in the ring header.
+std::size_t granularity_round_up(std::size_t n)
+{
+    SYSTEM_INFO info{};
+    ::GetSystemInfo(&info);
+    const auto unit = static_cast<std::size_t>(info.dwAllocationGranularity);
+    return ((n + unit - 1) / unit) * unit;
+}
+
 // Fold the backend-internal status onto the core status the concept returns, so
 // core never observes a DWORD or shm_error.
 plexus::shm::region_status to_status(shm_error e)
@@ -107,9 +115,7 @@ plexus::shm::region_status win_shm_region_broker::finish_create_map(void *mappin
     return plexus::shm::region_status::ok;
 }
 
-// No fstat analog: VirtualQuery recovers the committed view length. RegionSize
-// rounds up to allocation granularity (>= the true size), which is safe because
-// broadcast_ring::attach re-reads geometry from the in-region header.
+// No fstat analog: VirtualQuery recovers the view length, which equals the creator's granularity-rounded section size.
 plexus::shm::region_status win_shm_region_broker::finish_attach_map(void *mapping, region_handle &out)
 {
     HANDLE h   = static_cast<HANDLE>(mapping);
@@ -145,14 +151,14 @@ plexus::shm::region_status win_shm_region_broker::create(std::string_view name, 
     if(const auto status = sanitize_region_name(name, canonical); status != shm_error::ok)
         return to_status(status);
 
-    // Named mappings are refcounted and auto-free on last-handle-close, so there
-    // is no orphan to reclaim.
+    // Named mappings are refcounted and auto-free on last-handle-close, so there is no orphan to reclaim.
     (void)opts.unlink_stale_on_create;
 
     const std::wstring wname = widen(canonical);
     detail::win_owner_only_security security;
-    const auto wide = static_cast<std::uint64_t>(bytes);
-    HANDLE h        = ::CreateFileMappingW(INVALID_HANDLE_VALUE, security.get(), PAGE_READWRITE, static_cast<DWORD>(wide >> 32), static_cast<DWORD>(wide & 0xFFFFFFFFu), wname.c_str());
+    const std::size_t length = granularity_round_up(bytes);
+    const auto wide          = static_cast<std::uint64_t>(length);
+    HANDLE h = ::CreateFileMappingW(INVALID_HANDLE_VALUE, security.get(), PAGE_READWRITE, static_cast<DWORD>(wide >> 32), static_cast<DWORD>(wide & 0xFFFFFFFFu), wname.c_str());
     if(h == nullptr)
         return to_status(map_last_error(::GetLastError()));
     if(::GetLastError() == ERROR_ALREADY_EXISTS)
@@ -160,7 +166,7 @@ plexus::shm::region_status win_shm_region_broker::create(std::string_view name, 
         ::CloseHandle(h);
         return plexus::shm::region_status::already_exists;
     }
-    return finish_create_map(h, bytes, out);
+    return finish_create_map(h, length, out);
 }
 
 plexus::shm::region_status win_shm_region_broker::attach(std::string_view name, region_handle &out)

@@ -5,9 +5,18 @@
 #include "plexus/shm/ring_header.h"
 
 #include <cstddef>
+#include <cstdint>
 
 namespace plexus::shm {
 
+// Hard maxima on a ring's geometry, checked before any size is computed from a peer-written header. A slot never exceeds
+// the 1 GiB region bound every broker enforces, and the two maxima keep every product below in 64-bit range.
+inline constexpr std::uint64_t k_max_cells         = 1ull << 16;
+inline constexpr std::uint64_t k_max_slot_capacity = 1ull << 30;
+
+static_assert((k_max_cells * (k_max_slot_capacity + 7u)) / k_max_cells == k_max_slot_capacity + 7u, "the geometry maxima must keep cells times stride in range");
+
+// The three size functions below are only ever called with geometry bounded by those maxima, so none of them wraps.
 // Round a byte count up to the next multiple of eight so a slot base laid out
 // at i*slot_capacity, over a page-aligned slab base, is always 8-aligned.
 constexpr std::size_t round_up_8(std::size_t bytes) noexcept

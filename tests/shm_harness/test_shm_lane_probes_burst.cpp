@@ -23,10 +23,11 @@ TEST_CASE("lane_probe a send-only companion with no consumer never refuses a bur
 {
     constexpr std::uint32_t burst = 600;
     const std::string fqn         = probe_fqn("burst");
-    const topic_regions regions{fqn};
+    const topic_regions regions{fqn, {plexus::testing::test_publisher()}};
     ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
-    auto member    = plexus::asio::shm::make_shm_member(io, broker);
+    auto member = plexus::asio::shm::make_shm_member(io, broker);
+    plexus::testing::bind_test_publisher(member);
     auto companion = member.mint_companion(fqn, nullptr);
     REQUIRE(companion);
 

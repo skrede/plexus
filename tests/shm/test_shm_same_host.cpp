@@ -1,9 +1,14 @@
 #include "plexus/io/host_fingerprint.h"
 #include "plexus/shm/region_naming.h"
 
+#include "plexus/discovery/universe.h"
+
+#include "plexus/node_id.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
+#include <string_view>
 
 // The same-host identity layer: the null-guarded fingerprint compare
 // and the deterministic, direction-discriminated region naming. Both ends compute
@@ -13,6 +18,15 @@
 using namespace plexus::shm;
 using plexus::io::host_fingerprint;
 using plexus::io::is_same_host;
+
+namespace {
+
+std::string name_of(std::string_view fqn, std::string_view ns = {}, ring_direction direction = ring_direction::request)
+{
+    return region_name_for(fqn, plexus::node_id{}, plexus::discovery::k_default_universe, direction, ns);
+}
+
+}
 
 TEST_CASE("same_host: a null peer fingerprint is never same-host", "[shm][same_host]")
 {
@@ -40,45 +54,40 @@ TEST_CASE("same_host: region naming is deterministic and direction-discriminated
 {
     const std::string fqn = "robot/telemetry/imu";
 
-    const std::string req1 = region_name_for(fqn, ring_direction::request);
-    const std::string req2 = region_name_for(fqn, ring_direction::request);
-    const std::string resp = region_name_for(fqn, ring_direction::response);
+    const std::string req1 = name_of(fqn);
+    const std::string req2 = name_of(fqn);
+    const std::string resp = name_of(fqn, {}, ring_direction::response);
 
     // Deterministic: same input -> same name across calls.
     REQUIRE(req1 == req2);
-    REQUIRE(region_name_for(fqn, ring_direction::response) == region_name_for(fqn, ring_direction::response));
+    REQUIRE(name_of(fqn, {}, ring_direction::response) == name_of(fqn, {}, ring_direction::response));
 
     // Direction-discriminated: request and response name distinct rings.
     REQUIRE(req1 != resp);
 
     // A different fqn names a different region.
-    REQUIRE(region_name_for("robot/telemetry/gps", ring_direction::request) != req1);
+    REQUIRE(name_of("robot/telemetry/gps") != req1);
 }
 
-TEST_CASE("same_host: the region namespace isolates names and an empty namespace is back-compat", "[shm][same_host][namespace]")
+TEST_CASE("same_host: the region namespace isolates names", "[shm][same_host][namespace]")
 {
     const std::string fqn = "robot/telemetry/imu";
 
-    // BACK-COMPAT: an empty namespace yields byte-identical names to the namespace-less
-    // overload, in BOTH directions — so every existing region name is unchanged.
-    REQUIRE(region_name_for(fqn, ring_direction::request, "") == region_name_for(fqn, ring_direction::request));
-    REQUIRE(region_name_for(fqn, ring_direction::response, "") == region_name_for(fqn, ring_direction::response));
-
     // CONVERGENCE: the SAME namespace + SAME topic -> the SAME name (both peers meet it).
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") == region_name_for(fqn, ring_direction::request, "app-a"));
+    REQUIRE(name_of(fqn, "app-a") == name_of(fqn, "app-a"));
 
     // ISOLATION: DIFFERENT namespaces, SAME topic -> DISTINCT names (no collision), and a
-    // non-empty namespace differs from the shared-by-topic default.
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") != region_name_for(fqn, ring_direction::request, "app-b"));
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") != region_name_for(fqn, ring_direction::request));
+    // non-empty namespace differs from the empty one.
+    REQUIRE(name_of(fqn, "app-a") != name_of(fqn, "app-b"));
+    REQUIRE(name_of(fqn, "app-a") != name_of(fqn));
 
     // The namespace stays direction-discriminated within one namespace.
-    REQUIRE(region_name_for(fqn, ring_direction::request, "app-a") != region_name_for(fqn, ring_direction::response, "app-a"));
+    REQUIRE(name_of(fqn, "app-a") != name_of(fqn, "app-a", ring_direction::response));
 }
 
 TEST_CASE("same_host: a region name is bare lowercase hex", "[shm][same_host]")
 {
-    const std::string name = region_name_for("any/topic", ring_direction::request);
+    const std::string name = name_of("any/topic");
 
     REQUIRE(name.size() == 16);
     for(char c : name)

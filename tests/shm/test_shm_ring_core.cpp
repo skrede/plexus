@@ -87,7 +87,7 @@ TEST_CASE("ring_core: claim/commit/consume round-trips a payload single-process"
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring ring;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, ring) == loan_status::ok);
 
     std::uint32_t cursor_index = 0;
     REQUIRE(ring.register_cursor(cursor_index) == loan_status::ok);

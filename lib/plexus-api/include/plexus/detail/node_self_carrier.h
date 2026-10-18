@@ -34,7 +34,8 @@ template<typename EngineChannel, typename Member, typename DeliverCb, typename L
 self_carrier_handle<EngineChannel> install_self_carrier(Member &shm_member, const std::string &fqn, DeliverCb deliver_cb, LostCb lost_cb)
 {
     auto write = wrap_companion<EngineChannel>(shm_member.mint_companion(fqn, lost_cb));
-    auto read  = shm_member.mint_receive_companion(fqn, [deliver = std::move(deliver_cb)](std::span<const std::byte> frame) mutable { deliver(frame); }, std::move(lost_cb));
+    auto read  = shm_member.mint_receive_companion(
+            fqn, shm_member.self_id(), [deliver = std::move(deliver_cb)](std::span<const std::byte> frame) mutable { deliver(frame); }, std::move(lost_cb));
     return self_carrier_handle<EngineChannel>{std::move(write), std::shared_ptr<void>{std::move(read)}};
 }
 

@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_RING_HEADER_H
 #define HPP_GUARD_PLEXUS_SHM_RING_HEADER_H
 
+#include "plexus/node_id.h"
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -31,7 +33,7 @@ inline constexpr std::size_t k_max_consumers = 16;
 // Magic + version word stamped by the creator into the control header and
 // re-validated by an attacher before it trusts any other header field. A
 // mismatch means the region is foreign or a layout-incompatible build.
-inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'34'00ull; // "PLXRNG4\0"
+inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
 
 // The cursor position of a slot registered but not yet gating: a fresh cursor does not hold back
 // reclamation until it reads its first slot.
@@ -70,8 +72,8 @@ struct alignas(k_cache_line) cursor_t
 
 // Control header placement-new'd at the front of the control+cells region. The
 // single hot producer counter (enqueue_pos) sits on its own cache line; the
-// immutable config block and the consumer-cursor array each start on their own
-// line so none of them shares with the producer counter. The cells follow the
+// immutable config block (two lines) and the consumer-cursor array each start on
+// their own line so none of them shares with the producer counter. The cells follow the
 // header in the same region (see control_region_bytes); the payload slab is a
 // SEPARATE region so its base is independently page-aligned and slot i is at a
 // pure i*slot_capacity offset (every slot base stays 8-aligned for the codec
@@ -92,6 +94,12 @@ struct control_header_t
     // below stays the fixed cap, so this is a bound over a fixed region, never a
     // variable-length tail: any value in [1, k_max_consumers] is representable.
     std::uint64_t consumer_capacity;
+
+    // The region sizes exactly as the creator's broker mapped them and the publishing node's id, so an attacher
+    // checks the regions it mapped and the ring's owner before trusting any size it computes from the header.
+    std::uint64_t control_bytes;
+    std::uint64_t slab_bytes;
+    node_id publisher;
 
     alignas(k_cache_line) cursor_t cursors[k_max_consumers];
 
@@ -139,18 +147,17 @@ static_assert(std::atomic<std::uint32_t>::is_always_lock_free, "ring refcount/fl
 static_assert(std::is_standard_layout_v<cursor_t>, "cursor_t must be standard-layout for SHM placement");
 static_assert(std::is_standard_layout_v<control_header_t>, "control_header_t must be standard-layout for SHM placement");
 
-// Pin the cross-process layout: enqueue_pos line + config line + cursor array +
-// notify_generation line + park line + high_water line, each cache-line-aligned.
-// consumer_capacity rides the existing config line (it fits the 64 bytes alongside
-// magic/cell_count/slot_capacity/mask), so it does not grow the header. An
+// Pin the cross-process layout: enqueue_pos line + two config lines + cursor array +
+// notify_generation line + park line + high_water line, each cache-line-aligned. An
 // unintended field add/reorder (which would shift every in-region offset and
 // silently mismap a peer) fails the build here. A deliberate layout change updates
 // this size AND bumps k_ring_magic so an old region fails-closed on attach.
-static_assert(sizeof(control_header_t) == k_cache_line * 2 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 3,
+static_assert(sizeof(control_header_t) == k_cache_line * 3 + k_max_consumers * sizeof(cursor_t) + k_cache_line * 3,
               "control_header_t layout drift -- update the size guard and bump k_ring_magic");
 static_assert(sizeof(cursor_t) == k_cache_line, "cursor_t must stay one cache line");
 static_assert(sizeof(control_header_t::park) == k_cache_line && alignof(control_header_t) >= k_cache_line, "the park words must fill exactly one cache line");
-static_assert(offsetof(control_header_t, park) == k_cache_line * 3 + k_max_consumers * sizeof(cursor_t), "the park line must follow the notify_generation line");
+static_assert(offsetof(control_header_t, park) == k_cache_line * 4 + k_max_consumers * sizeof(cursor_t), "the park line must follow the notify_generation line");
+static_assert(offsetof(control_header_t, publisher) + sizeof(node_id) <= offsetof(control_header_t, cursors), "the config block must end before the cursor array");
 static_assert(k_max_consumers <= 32, "a 32-bit parked-slot mask must cover every cursor");
 
 }

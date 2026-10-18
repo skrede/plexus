@@ -6,12 +6,12 @@
 
 namespace plexus::wire {
 
-// Stable fqn -> topic_hash via 64-bit FNV-1a: deterministic for identical bytes on every
+// Stable fqn -> topic_hash via 64-bit FNV-1a (IETF draft-eastlake-fnv-21): deterministic for identical bytes on every
 // platform (unlike std::hash, which is toolchain-defined) — the only correct property for an
 // identifier two peers must agree on.
 inline std::uint64_t fqn_topic_hash(std::string_view fqn) noexcept
 {
-    std::uint64_t h = 1469598103934665603ull;
+    std::uint64_t h = 14695981039346656037ull;
     for(char c : fqn)
     {
         h ^= static_cast<std::uint64_t>(static_cast<unsigned char>(c));

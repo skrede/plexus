@@ -1,4 +1,5 @@
 #include "child_args.h"
+#include "node_config.h"
 #include "node_driver.h"
 #include "topology_block.h"
 
@@ -64,14 +65,14 @@ publish_fn registry_publisher(::asio::io_context &io, channel_type &channel, nod
 }
 
 // A publisher sizes the ring for the default message size, the geometry a default node publisher provisions; a
-// subscriber passes 0 and adopts the geometry of the ring it joins.
+// subscriber passes 0 and adopts the geometry of the ring it joins. Every role names the ring of node 0, the publisher.
 channel_type *join_ring(registry_type &registry, const std::string &fqn, bool publishes)
 {
     const std::size_t message_bytes = publishes ? plexus::io::global_default_max_message_bytes : 0;
     const std::uint32_t max_payload = plexus::shm::upgrade_ring_max_payload(k_request, static_cast<std::uint32_t>(message_bytes));
     const plexus::shm::acquire_result acquired =
-            registry.acquire(fqn, k_request, max_payload, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
-    return acquired == plexus::shm::acquire_result::failed ? nullptr : registry.channel_for(fqn, k_request);
+            registry.acquire(fqn, k_request, harness_id(0), max_payload, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
+    return acquired == plexus::shm::acquire_result::failed ? nullptr : registry.channel_for(fqn, k_request, harness_id(0));
 }
 
 bool run_registry(const registry_args &args, node_slot &slot)
@@ -86,7 +87,7 @@ bool run_registry(const registry_args &args, node_slot &slot)
 
     node_driver driver{slot, args.index, publishes ? registry_publisher(io, *channel, slot) : publish_fn{}};
     if(!publishes)
-        registry.set_consumer_sink(args.fqn, k_request, [&driver](plexus::wire_bytes<plexus::shm::shm_slot_owner> wb) { driver.receive({wb.data(), wb.size()}); });
+        registry.set_consumer_sink(args.fqn, k_request, harness_id(0), [&driver](plexus::wire_bytes<plexus::shm::shm_slot_owner> wb) { driver.receive({wb.data(), wb.size()}); });
 
     slot.ready.store(1, std::memory_order_release);
     while(driver.serve())
@@ -94,7 +95,7 @@ bool run_registry(const registry_args &args, node_slot &slot)
         io.restart();
         io.run_for(1ms);
     }
-    registry.release(args.fqn, k_request);
+    registry.release(args.fqn, k_request, harness_id(0));
     return true;
 }
 

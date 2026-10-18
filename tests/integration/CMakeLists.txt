@@ -1534,6 +1534,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # Linux-only); the broker + the region naming come from plexus::native/plexus::asio::shm.
     if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm AND NOT WIN32)
         add_executable(test_node_xproc_shm test_node_xproc_shm.cpp)
+        target_include_directories(test_node_xproc_shm PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)
         target_link_libraries(test_node_xproc_shm PRIVATE
             plexus::plexus
             plexus::core

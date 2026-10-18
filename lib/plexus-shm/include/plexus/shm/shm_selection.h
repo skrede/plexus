@@ -23,7 +23,7 @@ enum class same_host_medium : std::uint8_t
 
 // shared-memory eligible iff the peer is same-host AND either side declared a qualifying
 // dispatch hint (the hint is the OR of both ends, combined by the caller). Both ends
-// independently converge on region_name_for(fqn) with NO wire exchange.
+// independently compute the publisher's region name with NO wire exchange.
 inline same_host_medium select_same_host_medium(io::host_fingerprint peer, io::host_fingerprint local, io::dispatch_hint combined_hint) noexcept
 {
     if(io::is_same_host(peer, local) && io::any_set(combined_hint))
@@ -46,11 +46,20 @@ inline same_host_medium route_message_medium(ring_geometry_mode mode, std::size_
 // Whether THIS end attempts the same-host shared-memory acquire for a (peer, topic).
 // Purely LOCAL (this end's same-host verdict + its own dispatch hint), exchanges
 // nothing on the wire. Both ends run it independently and, when true, each acquires the
-// SAME deterministically-named ring. EITHER end's qualifying hint upgrades the pair; a
+// publisher's deterministically-named ring. EITHER end's qualifying hint upgrades the pair; a
 // non-same-host pair never upgrades regardless of the hint.
 inline bool attempt_shm_upgrade(bool same_host, io::dispatch_hint own_hint) noexcept
 {
     return same_host && io::any_set(own_hint);
+}
+
+// Whether THIS end attempts the shared-memory ring acquire for a (peer, topic). A plain function pointer keeps the
+// carrying surface trivially copyable; it can only DECLINE the upgrade (the same_host gate inside the default holds).
+using upgrade_policy_fn = bool (*)(bool same_host, io::dispatch_hint own_hint);
+
+inline bool default_upgrade_policy(bool same_host, io::dispatch_hint own_hint) noexcept
+{
+    return attempt_shm_upgrade(same_host, own_hint);
 }
 
 // A publisher (request direction) sizes the ring to its declared max_payload; a

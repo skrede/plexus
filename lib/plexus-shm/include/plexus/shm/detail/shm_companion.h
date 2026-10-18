@@ -12,6 +12,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/upgrade_channel.h"
 
+#include "plexus/node_id.h"
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
@@ -70,15 +71,15 @@ std::unique_ptr<typename Member::channel_type> companion_send(Member &m, const s
 }
 
 template<typename Member>
-std::unique_ptr<typename Member::consumer_type> companion_receive(Member &m, const std::string &fqn, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame,
-                                                                  shm::waiter_loss::lost_fn lost)
+std::unique_ptr<typename Member::consumer_type> companion_receive(Member &m, const std::string &fqn, const node_id &publisher,
+                                                                  plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame, shm::waiter_loss::lost_fn lost)
 {
     auto &registry                = m.registry();
     const shm_resolved_geometry g = mux_resolve(m, fqn, shm::ring_direction::request);
-    if(registry.acquire(fqn, shm::ring_direction::request, g.max_payload, g.mode, g.consumer_capacity, shm::acquire_mode::join_live) == shm::acquire_result::failed)
+    if(registry.acquire(fqn, shm::ring_direction::request, publisher, g.max_payload, g.mode, g.consumer_capacity, shm::acquire_mode::join_live) == shm::acquire_result::failed)
         return nullptr;
-    auto handle = std::make_unique<typename Member::consumer_type>(registry, fqn, std::move(lost));
-    registry.set_consumer_sink(fqn, shm::ring_direction::request,
+    auto handle = std::make_unique<typename Member::consumer_type>(registry, fqn, publisher, std::move(lost));
+    registry.set_consumer_sink(fqn, shm::ring_direction::request, publisher,
                                [cb = std::move(on_frame)](::plexus::wire_bytes<shm::shm_slot_owner> wb) mutable { cb(std::span<const std::byte>{wb.data(), wb.size()}); });
     return handle;
 }

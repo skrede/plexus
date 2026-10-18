@@ -26,16 +26,16 @@ inline constexpr std::uint32_t k_skip_len = 0xFFFF'FFFFu;
 
 // One descriptor cell of the Vyukov bounded MPMC ring. It stores a DESCRIPTOR,
 // never the payload bytes and never a pointer: the control+cells region and the
-// payload slab map at different virtual addresses in each process, so a cell
-// carries payload_offset (a byte offset into the slab), not an address.
+// payload slab map at different virtual addresses in each process, and a cell's
+// slab slot is derived from its position (slot = position & mask), never stored.
 //
 // `sequence` is the Vyukov per-cell sequence AND the generation counter in one
 // 64-bit field: it encodes both the index and the lap, so a slow consumer
 // detects a recycled cell via an int64 difference rather than aliasing an old
 // lap with a new one. It is 64-bit on purpose -- a narrower counter wraps and
 // aliases laps (the prior narrow-sequence wrap bug class). The producer writes
-// payload_offset/payload_len BEFORE the release store of `sequence`; a consumer
-// loads `sequence` with acquire BEFORE reading the descriptor.
+// payload_len BEFORE the release store of `sequence`; a consumer loads `sequence`
+// with acquire BEFORE reading the descriptor.
 //
 // SEQUENCE STATES for a cell whose slot serves ring position `pos` (its prior
 // occupant was at `pos - cell_count`). With dif = (int64)sequence - (int64)pos:
@@ -62,12 +62,12 @@ inline constexpr std::uint32_t k_skip_len = 0xFFFF'FFFFu;
 // to the dif==0 marker for `pos`), so a racing peer or a pinning reader observes
 // the slot leave its filled state before any byte is written.
 //
-// payload_offset/payload_len are atomic and accessed memory_order_relaxed UNDER
-// the seq release/acquire pairing: the seq store/load is the real synchronization
-// edge that orders the payload-byte writes, so the descriptor fields need no
-// independent ordering, but they must be atomic so a best-effort lap-overwrite
-// racing a stale-cursor reader is not a data race (a benign-but-real report TSan
-// would otherwise flag on the raw scalar).
+// payload_len is atomic and accessed memory_order_relaxed UNDER the seq
+// release/acquire pairing: the seq store/load is the real synchronization edge
+// that orders the payload-byte writes, so the descriptor needs no independent
+// ordering, but it must be atomic so a best-effort lap-overwrite racing a
+// stale-cursor reader is not a data race (a benign-but-real report TSan would
+// otherwise flag on the raw scalar).
 //
 // `take_refcount` pins the slot while a consumer holds an outstanding read. The
 // best-effort overwrite and the consumer's take() form a Dekker mutual-announce
@@ -78,7 +78,6 @@ inline constexpr std::uint32_t k_skip_len = 0xFFFF'FFFFu;
 struct alignas(k_cache_line) cell_t
 {
     std::atomic<std::uint64_t> sequence;
-    std::atomic<std::uint64_t> payload_offset;
     std::atomic<std::uint32_t> payload_len;
     std::atomic<std::uint32_t> take_refcount;
 };
@@ -88,6 +87,7 @@ struct alignas(k_cache_line) cell_t
 #endif
 
 static_assert(std::is_standard_layout_v<cell_t>, "cell_t must be standard-layout for SHM placement");
+static_assert(sizeof(cell_t) == k_cache_line, "cell_t must stay one cache line");
 
 }
 

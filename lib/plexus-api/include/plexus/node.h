@@ -241,7 +241,7 @@ public:
         detail::advertise_card(*this);
         m_disc.browse([this](const discovery::service_info &peer) { detail::note_from_card(*this, peer); });
         m_disc.on_withdrawn([this](const discovery::service_info &peer) { detail::forget_from_card(*this, peer); });
-        detail::install_upgrade_coordinator(*this);
+        detail::install_upgrade_coordinator(*this, opts.report.universe);
         install_self_loopback();
         m_engine.capture().set_default(opts.capture.to_rule());
         m_engine.post_participant({io::participant_edge::created, m_id});
@@ -838,7 +838,7 @@ private:
     template<typename N, typename F>
     friend void detail::for_each_shm_member(N &, F &&);
     template<typename N>
-    friend void detail::install_upgrade_coordinator(N &);
+    friend void detail::install_upgrade_coordinator(N &, std::uint32_t);
     template<typename N>
     friend void detail::sync_shm_self_carrier(N &, std::string_view);
     template<typename N>

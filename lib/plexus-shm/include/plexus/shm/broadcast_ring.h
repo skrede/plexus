@@ -68,15 +68,15 @@ public:
     broadcast_ring(broadcast_ring &&)                 = delete;
     broadcast_ring &operator=(broadcast_ring &&)      = delete;
 
-    static loan_status create(std::span<std::byte> control, std::span<std::byte> slab, std::uint64_t cell_count, std::uint64_t slot_capacity, broadcast_ring &out,
-                              std::uint64_t consumer_capacity = k_max_consumers) noexcept
+    static loan_status create(std::span<std::byte> control, std::span<std::byte> slab, std::uint64_t cell_count, std::uint64_t slot_capacity, const node_id &publisher,
+                              broadcast_ring &out, std::uint64_t consumer_capacity = k_max_consumers) noexcept
     {
-        return detail::ring_create(control, slab, cell_count, slot_capacity, out, consumer_capacity);
+        return detail::ring_create(control, slab, cell_count, slot_capacity, publisher, out, consumer_capacity);
     }
 
-    static loan_status attach(std::span<std::byte> control, std::span<std::byte> slab, broadcast_ring &out) noexcept
+    static loan_status attach(std::span<std::byte> control, std::span<std::byte> slab, const node_id &publisher, broadcast_ring &out) noexcept
     {
-        return detail::ring_attach(control, slab, out);
+        return detail::ring_attach(control, slab, publisher, out);
     }
 
     loan_status claim_with_policy(std::size_t size, io::reliability rel, io::congestion, claim_result &out) noexcept

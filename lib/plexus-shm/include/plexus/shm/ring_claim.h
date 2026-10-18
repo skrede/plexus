@@ -156,7 +156,6 @@ loan_status ring_commit(Ring &r, std::uint64_t position, std::size_t filled_len)
         return loan_status::rejected;
 
     cell_t &c = r.cell_at(position);
-    c.payload_offset.store(static_cast<std::uint64_t>(position & r.m_mask) * r.m_stride, std::memory_order_relaxed);
     c.payload_len.store(static_cast<std::uint32_t>(filled_len), std::memory_order_relaxed);
     c.sequence.store(position + 1, std::memory_order_release);
     return loan_status::ok;

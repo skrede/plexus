@@ -68,7 +68,7 @@ catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 # (the ring drives a caller-supplied anonymous mapped span), proving the family is
 # POSIX/asio-free. They link plexus::shm for the family include path, plexus::core
 # for the engine, and the xproc harness header path.
-add_executable(test_shm_ring_core test_shm_ring_core.cpp test_shm_ring_core_capacity.cpp test_shm_ring_magic.cpp)
+add_executable(test_shm_ring_core test_shm_ring_core.cpp test_shm_ring_core_capacity.cpp test_shm_ring_magic.cpp test_shm_ring_attach_bounds.cpp)
 
 target_include_directories(test_shm_ring_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
@@ -331,6 +331,7 @@ if(NOT WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_same_host_roundtrip PRIVATE
+        plexus::plexus
         plexus::shm
         plexus::native
         plexus::wire
@@ -351,6 +352,7 @@ if(NOT WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_region_namespace PRIVATE
+        plexus::plexus
         plexus::shm
         plexus::native
         plexus::wire
@@ -442,6 +444,7 @@ target_include_directories(test_shm_registry_join PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_registry_join PRIVATE
+    plexus::plexus
     plexus::shm
     plexus::core
     plexus::testing
@@ -449,10 +452,25 @@ target_link_libraries(test_shm_registry_join PRIVATE
 
 catch_discover_tests(test_shm_registry_join TEST_PREFIX "shm.")
 
+# Rings are named per publisher and universe: two universes or two publishers never share a ring, over an in-memory broker.
+add_executable(test_shm_region_universe test_shm_region_universe.cpp)
+
+target_include_directories(test_shm_region_universe PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_region_universe PRIVATE
+    plexus::shm
+    plexus::plexus
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_region_universe TEST_PREFIX "shm.")
+
 # A notifier that cannot arm must fail the acquire, over the platform broker.
 add_executable(test_shm_registry_arm test_shm_registry_arm.cpp)
 
 target_link_libraries(test_shm_registry_arm PRIVATE
+    plexus::plexus
     plexus::shm
     plexus::native
     plexus::core
@@ -469,6 +487,7 @@ if(TARGET plexus::asio)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_registry_loss PRIVATE
+        plexus::plexus
         plexus::shm
         plexus::asio
         plexus::native
@@ -605,6 +624,7 @@ if(LIBURING_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_notifier_bridge PRIVATE
+    plexus::plexus
     plexus::shm
         plexus::asio
         plexus::asio::shm
@@ -625,6 +645,7 @@ if(LIBURING_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_teardown_race PRIVATE
+    plexus::plexus
     plexus::shm
         plexus::asio
         plexus::asio::shm
@@ -645,6 +666,7 @@ if(LIBURING_FOUND)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(posix_test_shm_dual_delivery PRIVATE
+    plexus::plexus
     plexus::shm
         plexus::asio
         plexus::asio::shm
@@ -846,6 +868,7 @@ if(NOT WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_bilateral PRIVATE
+        plexus::plexus
         plexus::shm
         plexus::native
         plexus::wire
@@ -871,6 +894,7 @@ if(NOT WIN32 AND NOT APPLE)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_large_message PRIVATE
+        plexus::plexus
         plexus::shm
         plexus::native
         plexus::wire
@@ -933,6 +957,7 @@ if(NOT WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR})
 
     target_link_libraries(test_shm_wire_fallback PRIVATE
+        plexus::plexus
         plexus::shm
         plexus::core
         plexus::native

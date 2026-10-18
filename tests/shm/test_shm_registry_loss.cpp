@@ -1,5 +1,7 @@
 #include "notifier_legs.h"
 
+#include "support/region_names.h"
+
 #include "plexus/asio/asio_policy.h"
 
 #include "plexus/shm/arm_status.h"
@@ -55,7 +57,7 @@ bool region_exists(const std::string &fqn)
 {
     plexus::native::shm_region_broker broker;
     plexus::native::shm_region_handle handle;
-    return broker.attach(plexus::shm::region_name_for(fqn, ring_direction::request), handle) == plexus::shm::region_status::ok;
+    return broker.attach(plexus::testing::region_name(fqn, plexus::node_id{}), handle) == plexus::shm::region_status::ok;
 }
 
 }
@@ -67,20 +69,20 @@ TEST_CASE("registry_loss a waiter lost at runtime fails every acquire of its key
     registry reg{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
     const std::string fqn = fresh_fqn("latch");
 
-    REQUIRE(reg.acquire(fqn, ring_direction::request, 0) == acquire_result::created);
+    REQUIRE(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::created);
     io.run();
 
-    CHECK(reg.acquire(fqn, ring_direction::request, 0) == acquire_result::failed);
+    CHECK(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::failed);
     CHECK(reg.last_acquire_failure().bound == plexus::shm::acquire_bound::notifier);
     CHECK(reg.last_acquire_failure().arm == arm_status::denied);
-    CHECK(reg.channel_for(fqn, ring_direction::request) == nullptr);
+    CHECK(reg.channel_for(fqn, ring_direction::request, plexus::node_id{}) == nullptr);
 
-    reg.release(fqn, ring_direction::request);
+    reg.release(fqn, ring_direction::request, plexus::node_id{});
     CHECK(reg.live_count() == 0);
     CHECK_FALSE(region_exists(fqn));
 
-    REQUIRE(reg.acquire(fqn, ring_direction::request, 0) == acquire_result::created);
-    reg.release(fqn, ring_direction::request);
+    REQUIRE(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::created);
+    reg.release(fqn, ring_direction::request, plexus::node_id{});
 }
 
 TEST_CASE("registry_loss each holder watching a lost waiter is told once and the last release unlinks the ring", "[shm][registry_loss]")
@@ -104,7 +106,7 @@ TEST_CASE("registry_loss each holder watching a lost waiter is told once and the
         receive.reset();
     };
     send    = shm.mint_companion(fqn, drop_send);
-    receive = shm.mint_receive_companion(fqn, [](std::span<const std::byte>) {}, drop_receive);
+    receive = shm.mint_receive_companion(fqn, shm.self_id(), [](std::span<const std::byte>) {}, drop_receive);
     REQUIRE(send);
     REQUIRE(receive);
     io.run();
@@ -133,7 +135,7 @@ TEST_CASE("registry_loss a holder an earlier told holder released is not told", 
         receive.reset();
     };
     send    = shm.mint_companion(fqn, drop_both);
-    receive = shm.mint_receive_companion(fqn, [](std::span<const std::byte>) {}, [&receive_told] { ++receive_told; });
+    receive = shm.mint_receive_companion(fqn, shm.self_id(), [](std::span<const std::byte>) {}, [&receive_told] { ++receive_told; });
     io.run();
 
     CHECK(send_told == 1);

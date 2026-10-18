@@ -30,6 +30,14 @@ inline plexus::node_id harness_id(std::uint32_t index)
     return id;
 }
 
+inline std::vector<plexus::node_id> harness_ids(std::uint32_t count)
+{
+    std::vector<plexus::node_id> ids;
+    for(std::uint32_t index = 0; index < count; ++index)
+        ids.push_back(harness_id(index));
+    return ids;
+}
+
 // One-way wiring gives only the higher-indexed node of each pair the other's card, so exactly one side dials; crossed
 // wiring gives every node every card, so both sides of each pair dial.
 inline bool dials(const node_args &args, std::uint32_t peer)

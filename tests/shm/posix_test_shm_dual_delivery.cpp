@@ -1,3 +1,5 @@
+#include "support/region_names.h"
+
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -7,7 +9,6 @@
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_channel.h"
 #include "plexus/shm/shm_slot_owner.h"
 
@@ -47,8 +48,7 @@
 //     and the drain delivers the value over the shm_channel.
 //   * the WIRE leg — for the SAME topic, a loopback TCP peer delivers the SAME bytes over
 //     a real socket; the SHM upgrade never suppressed it.
-// Both are keyed to one topic (the deterministic region name + the loopback peer carry the
-// same fqn). Looped N>=3 in-body; the binary is re-run >=3 process runs for reproducibility.
+// Both are keyed to one topic: the publisher's ring name and the loopback peer carry the same fqn. Looped N>=3 in-body.
 
 namespace pio = plexus::shm;
 using plexus::native::posix_shm_region_broker;
@@ -79,11 +79,11 @@ coord *map_coord()
 
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher());
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher()) + ".s";
 }
 
 constexpr std::uint32_t k_payload = 0xD04D11EFu;
@@ -97,7 +97,7 @@ bool produce_shm(const std::string &fqn)
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
-    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) != pio::loan_status::ok)
         return false;
     pio::broadcast_ring::claim_result claim;
     if(ring.claim_with_policy(sizeof(k_payload), plexus::io::reliability::reliable, plexus::io::congestion::block, claim) != pio::loan_status::ok)
@@ -160,7 +160,7 @@ TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic c
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), ring) == pio::loan_status::ok);
 
         ::asio::io_context io;
         plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");

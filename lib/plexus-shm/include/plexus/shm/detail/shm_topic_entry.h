@@ -8,6 +8,7 @@
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_acquire_result.h"
 
+#include "plexus/node_id.h"
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
@@ -25,10 +26,11 @@ struct shm_topic_key
 {
     std::string fqn;
     ring_direction direction;
+    node_id publisher;
 
     bool operator==(const shm_topic_key &o) const noexcept
     {
-        return direction == o.direction && fqn == o.fqn;
+        return direction == o.direction && publisher == o.publisher && fqn == o.fqn;
     }
 };
 
@@ -36,7 +38,10 @@ struct shm_topic_key_hash
 {
     std::size_t operator()(const shm_topic_key &k) const noexcept
     {
-        return std::hash<std::string>{}(k.fqn) ^ static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
+        std::size_t h = std::hash<std::string>{}(k.fqn) ^ static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
+        for(const std::byte b : k.publisher)
+            h = h * 31u + static_cast<std::size_t>(b);
+        return h;
     }
 };
 
@@ -78,6 +83,15 @@ struct shm_topic_entry
     // Unset = the wake-drain discards (the send-only default).
     deliver_fn sink;
     std::shared_ptr<waiter_loss> loss;
+
+    // Non-negotiable ordering: disarm the notifier BEFORE the channel (and the subscriber its drain touches) is
+    // destroyed, so a wake racing teardown can never post a drain onto a destroyed subscriber.
+    void teardown() noexcept
+    {
+        if(notify)
+            notify->disarm();
+        channel.reset();
+    }
 
     // The ONE place the cursor is taken, so the armed wake and the attach-time catch-up
     // share it without racing a second drainer.

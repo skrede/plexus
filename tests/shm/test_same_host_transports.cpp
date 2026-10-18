@@ -1,3 +1,5 @@
+#include "support/region_names.h"
+
 #include "plexus/asio/same_host_transports.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -6,7 +8,6 @@
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 
 #include "plexus/node_options.h"
 
@@ -61,11 +62,11 @@ coord *map_coord()
 
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher());
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher()) + ".s";
 }
 
 constexpr std::uint32_t k_payload = 0x5A4E0FEEu;
@@ -114,7 +115,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
             if(broker.attach(control_name(fqn), ctrl) == pio::region_status::ok && broker.attach(slab_name(fqn), slab) == pio::region_status::ok)
             {
                 pio::broadcast_ring ring;
-                if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) == pio::loan_status::ok)
+                if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) == pio::loan_status::ok)
                 {
                     std::uint32_t idx = 0;
                     if(ring.register_cursor(idx) == pio::loan_status::ok)
@@ -154,7 +155,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
         pio::broadcast_ring ring;
-        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, ring) == pio::loan_status::ok);
+        REQUIRE(pio::broadcast_ring::create(ctrl.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), ring) == pio::loan_status::ok);
         c->regions_ready.store(1, std::memory_order_release);
 
         while(c->consumer_armed.load(std::memory_order_acquire) == 0)

@@ -29,7 +29,7 @@ public:
             , m_control()
             , m_ring()
             , m_created(plexus::shm::broadcast_ring::create(aligned(m_control, plexus::shm::control_region_bytes(cells)),
-                                                            aligned(m_slab, plexus::shm::slab_region_bytes(cells, slot_bytes)), cells, slot_bytes,
+                                                            aligned(m_slab, plexus::shm::slab_region_bytes(cells, slot_bytes)), cells, slot_bytes, plexus::node_id{},
                                                             m_ring) == plexus::shm::loan_status::ok)
     {
     }

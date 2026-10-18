@@ -16,16 +16,16 @@ loan_status attach_stamped(std::uint64_t magic)
     backing_region slab(slab_region_bytes(k_cells, k_slot));
 
     broadcast_ring creator;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, creator) == loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, creator) == loan_status::ok);
     creator.header().magic.store(magic);
 
     broadcast_ring attacher;
-    return broadcast_ring::attach(control.span(), slab.span(), attacher);
+    return broadcast_ring::attach(control.span(), slab.span(), plexus::node_id{}, attacher);
 }
 
 }
 
-TEST_CASE("ring_magic a region stamped with the previous layout magic fails closed", "[shm][ring_magic][!shouldfail]")
+TEST_CASE("ring_magic a region stamped with the previous layout magic fails closed", "[shm][ring_magic]")
 {
     REQUIRE(attach_stamped(k_previous_ring_magic) == loan_status::rejected);
 }
@@ -45,7 +45,7 @@ TEST_CASE("ring_magic every slot's park word sits on one cache line apart from t
     backing_region control(control_region_bytes(k_cells));
     backing_region slab(slab_region_bytes(k_cells, k_slot));
     broadcast_ring ring;
-    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, ring) == loan_status::ok);
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, plexus::node_id{}, ring) == loan_status::ok);
 
     const auto *base  = reinterpret_cast<const std::byte *>(&ring.header());
     const auto *first = reinterpret_cast<const std::byte *>(&plexus::shm::park_word(ring.header(), 0));

@@ -6,7 +6,6 @@
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/shm_mux_member.h"
-#include "plexus/shm/region_naming.h"
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/byte_channel.h"
@@ -24,6 +23,7 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/region_names.h"
 #include "support/noop_notifier.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -50,10 +50,9 @@
 // larger than the cap over the wire. The carrying medium is ASSERTED per message
 // (a per-channel tap records which medium took it), not assumed: the small message
 // rides the ring (verified byte-exact cross-process), the large message rides the wire.
-// The over-cap (wire-routed) cell repeats in one ctest invocation (the
-// no-success-from-a-single-run discipline). The rescue cell proves a wire_fallback
-// subscriber with NO companion ring still receives every message over the wire — the
-// ring is the small-message fast path, never a correctness dependency.
+// The over-cap (wire-routed) cell repeats in one ctest invocation. The rescue cell proves
+// a wire_fallback subscriber with NO companion ring still receives every message over the
+// wire — the ring is the small-message fast path, never a correctness dependency.
 
 namespace pio = plexus::shm;
 using plexus::io::endpoint;
@@ -221,11 +220,11 @@ coord *map_coord()
 
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher());
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, plexus::testing::test_publisher()) + ".s";
 }
 
 // The SHM subscriber process: attach the converged ring (the deterministic name both
@@ -243,7 +242,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
     if(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
         return false;
     pio::broadcast_ring ring;
-    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) != pio::loan_status::ok)
         return false;
 
     const std::uint64_t want_len  = c->expect_len.load(std::memory_order_acquire);
@@ -301,6 +300,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
 
     posix_shm_region_broker broker;
     member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    plexus::testing::bind_test_publisher(member);
     member.set_topic_geometry(fqn, declared_payload, pio::shm_geometry{capacity, pio::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;

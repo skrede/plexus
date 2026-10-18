@@ -15,7 +15,8 @@ namespace plexus::detail {
 inline node_id hash_node_id(std::string_view name) noexcept
 {
     constexpr std::uint64_t k_prime    = 1099511628211ull;
-    constexpr std::uint64_t k_basis_lo = 1469598103934665603ull;
+    constexpr std::uint64_t k_basis_lo = 14695981039346656037ull;
+    // The high lane is a project lane with its own basis, not reference FNV-1a.
     constexpr std::uint64_t k_basis_hi = 0x9e3779b97f4a7c15ull;
     std::uint64_t lo                   = k_basis_lo;
     std::uint64_t hi                   = k_basis_hi;

@@ -1,5 +1,7 @@
 #include "region_doorbells.h"
 
+#include "support/region_names.h"
+
 #include "plexus/asio/shm/macos/sem_doorbell.h"
 
 #include "plexus/shm/region_naming.h"
@@ -41,7 +43,7 @@ std::int32_t value_by_name(const char *name)
 
 TEST_CASE("sem_adoption a pre-existing semaphore with a residual count is never adopted", "[shm][sem_adoption]")
 {
-    const std::string region = plexus::shm::region_name_for("shm_harness.sem_adoption." + std::to_string(plexus::testing::process_id()), plexus::shm::ring_direction::request);
+    const std::string region = plexus::testing::region_name("shm_harness.sem_adoption." + std::to_string(plexus::testing::process_id()), plexus::testing::test_publisher());
     const shm_harness::region_doorbells doorbells{region};
     const std::string taken = shm_harness::sem_name_for(region, k_slot, k_first_tag);
     sem_t *stale            = ::sem_open(taken.c_str(), O_CREAT | O_EXCL, 0600, 3);

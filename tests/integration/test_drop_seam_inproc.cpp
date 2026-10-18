@@ -699,7 +699,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         backing_region control{control_region_bytes(cells)};
         backing_region slab{slab_region_bytes(cells, slot)};
         broadcast_ring ring;
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, plexus::node_id{}, ring) == loan_status::ok);
         null_notifier notify;
         recording_drop_observer observer;
 
@@ -711,7 +711,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
         stub_broker broker;
         shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
-        shm_byte_channel<stub_broker, null_notifier> bytechan(registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
+        shm_byte_channel<stub_broker, null_notifier> bytechan(registry, channel, "shm-topic", plexus::node_id{}, plexus::io::endpoint{"shm", "shm-topic"});
         bytechan.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
 
         std::uint32_t idx = 0;
@@ -779,7 +779,7 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         backing_region control{control_region_bytes(cells)};
         backing_region slab{slab_region_bytes(cells, slot)};
         broadcast_ring ring;
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, ring) == loan_status::ok);
+        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, plexus::node_id{}, ring) == loan_status::ok);
         null_notifier notify;
 
         shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
@@ -790,7 +790,7 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         // install the engine's posted drop_sink through the ERASED on_drop verb — exactly
         // the call wire_channel_drop makes for a muxed shm node. NO concrete on_drop is bound
         // by the test; remove either the erasure forward or the engine binding and this fails.
-        auto concrete = std::make_unique<shm_byte_channel<stub_broker, null_notifier>>(registry, channel, "shm-topic", plexus::io::endpoint{"shm", "shm-topic"});
+        auto concrete = std::make_unique<shm_byte_channel<stub_broker, null_notifier>>(registry, channel, "shm-topic", plexus::node_id{}, plexus::io::endpoint{"shm", "shm-topic"});
         plexus::io::polymorphic_byte_channel erased(std::make_unique<plexus::io::channel_adapter<shm_byte_channel<stub_broker, null_notifier>>>(std::move(concrete)));
         erased.on_drop(eng.drop_sink());
 

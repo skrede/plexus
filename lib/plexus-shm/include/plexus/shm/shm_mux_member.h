@@ -24,6 +24,8 @@
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 
+#include "plexus/node_id.h"
+
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -37,22 +39,10 @@
 
 namespace plexus::shm {
 
-// Whether THIS end attempts the shared-memory ring acquire for a (peer, topic). A plain
-// function pointer keeps the carrying surface trivially copyable; it can only DECLINE the
-// upgrade (the same_host gate inside the default still holds).
-using upgrade_policy_fn = bool (*)(bool same_host, io::dispatch_hint own_hint);
-
-inline bool default_upgrade_policy(bool same_host, io::dispatch_hint own_hint) noexcept
-{
-    return attempt_shm_upgrade(same_host, own_hint);
-}
-
-// The shared-memory mux member: the SECOND same-host (local-tier) transport, joining AF_UNIX
-// through the multiplexer's multi-member-per-tier seam. dial(ep) demand-acquires the ring for
-// the topic (ep.address is the fqn) and mints an shm_byte_channel on success / fires
-// on_dial_failed otherwise; listen(ep) is the creator side. It OWNS the registry and borrows
-// the broker by reference. Templated on the broker + notifier seams so this core header pulls
-// no POSIX/asio dependency.
+// The shared-memory mux member: the SECOND same-host (local-tier) transport, joining AF_UNIX through the multiplexer's
+// multi-member-per-tier seam. dial(ep) demand-acquires this node's ring for the topic (ep.address is the fqn) and mints
+// an shm_byte_channel on success / fires on_dial_failed otherwise; listen(ep) is the creator side. It OWNS the registry
+// and borrows the broker. Templated on the broker + notifier seams so this core header pulls no POSIX/asio dependency.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_mux_member
@@ -69,11 +59,11 @@ public:
     static constexpr io::transport_kind mux_tier = io::transport_kind::local;
     static constexpr bool mux_prefers_local_fast = true;
 
-    // region_ns is the static shm-region namespace (EMPTY shares rings by topic; a distinct
-    // namespace isolates this application's same-host shm from unrelated apps).
+    // A distinct region_ns isolates this application's same-host rings from unrelated apps; empty shares them.
     shm_mux_member(Broker &broker, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = registry_type::default_notifier_binder(),
                    std::string region_ns = {}) noexcept
             : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes, std::move(region_ns))
+            , m_self()
     {
     }
 
@@ -118,41 +108,52 @@ public:
     {
     }
 
-    // A successful probe LEAVES the ring acquired so the following dial reuses the SAME ring with
-    // no churn; if the hook then declines, abandon() drops the bump. A wire_fallback topic
-    // declines OUTRIGHT (no acquire): its recorded session channel MUST be the wire so an over-cap
-    // message always has a reliable fallback.
+    // A successful probe LEAVES the ring acquired so the following dial reuses the SAME ring with no churn; if the hook
+    // then declines, abandon() drops the bump. A wire_fallback topic declines OUTRIGHT (no acquire): its recorded session
+    // channel MUST be the wire so an over-cap message always has a reliable fallback.
     bool can_acquire(const io::endpoint &ep)
     {
         const auto g = detail::mux_resolve(*this, ep.address, ring_direction::request);
         if(g.mode == ring_geometry_mode::wire_fallback)
             return false;
-        return m_registry.acquire(ep.address, ring_direction::request, g.max_payload, g.mode, g.consumer_capacity) != acquire_result::failed;
+        return m_registry.acquire(ep.address, ring_direction::request, m_self, g.max_payload, g.mode, g.consumer_capacity) != acquire_result::failed;
     }
 
     // Drop a held probe bump the dial did not consume, keeping the refcount honest.
     void abandon(const io::endpoint &ep)
     {
-        m_registry.release(ep.address, ring_direction::request);
+        m_registry.release(ep.address, ring_direction::request, m_self);
     }
 
-    // The additive fast path a co-host (peer, topic) pair runs ALONGSIDE its wire session. Unlike
-    // can_acquire it mints for ANY provisioned mode (the wire stays the recorded fail-safe). The
-    // returned channel holds the refcount and releases it on destruction; lost runs if the ring's waiter is lost.
+    // The additive fast path a co-host (peer, topic) pair runs ALONGSIDE its wire session. Unlike can_acquire it mints for
+    // ANY provisioned mode (the wire stays the recorded fail-safe). The returned channel holds the refcount and releases it
+    // on destruction; lost runs if the ring's waiter is lost.
     std::unique_ptr<channel_type> mint_companion(const std::string &fqn, waiter_loss::lost_fn lost)
     {
         return detail::companion_send(*this, fqn, std::move(lost));
     }
 
-    // The receive half of the companion model: attach the request-direction ring as a CONSUMER for a co-host subscriber
-    // (sharing the ONE ring the publisher writes) and install on_frame as the entry's consumer sink. Returns an RAII
-    // handle whose destruction clears the sink and releases the ring (1->0 unmaps); nullptr on a broker failure. The
-    // framed bytes are header-on, so the caller feeds them into the SAME receive entry the wire session feeds. lost
-    // runs if the ring's waiter is lost.
-    std::unique_ptr<consumer_type> mint_receive_companion(const std::string &fqn, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame,
-                                                          waiter_loss::lost_fn lost)
+    // The receive half of the companion model: attach the publisher's request-direction ring as a CONSUMER and install on_frame
+    // as the entry's consumer sink. Returns an RAII handle whose destruction clears the sink and releases the ring (1->0
+    // unmaps); nullptr on a broker failure. The framed bytes are header-on, so the caller feeds them into the SAME receive
+    // entry the wire session feeds. lost runs if the ring's waiter is lost.
+    std::unique_ptr<consumer_type> mint_receive_companion(const std::string &fqn, const node_id &publisher,
+                                                          plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame, waiter_loss::lost_fn lost)
     {
-        return detail::companion_receive(*this, fqn, std::move(on_frame), std::move(lost));
+        return detail::companion_receive(*this, fqn, publisher, std::move(on_frame), std::move(lost));
+    }
+
+    // The node binds its own id and universe before any ring is minted: its send rings carry its id, and every ring name
+    // carries the universe.
+    void bind_node(const node_id &self, std::uint32_t universe) noexcept
+    {
+        m_self = self;
+        m_registry.bind_universe(universe);
+    }
+
+    const node_id &self_id() const noexcept
+    {
+        return m_self;
     }
 
     registry_type &registry() noexcept
@@ -178,9 +179,8 @@ public:
         return detail::topic_route_geometry(m_geometry, fqn);
     }
 
-    // The runtime-acquire selection hook this member contributes to a multi-candidate local tier:
-    // prefer the ring when it acquires, else fall back to the stream. The companion seam the node
-    // drives generically, so the node never names an shm selection symbol.
+    // The runtime-acquire selection hook this member contributes to a multi-candidate local tier: prefer the ring when it
+    // acquires, else fall back to the stream. The node drives it generically, so it never names an shm selection symbol.
     io::selection_hook companion_selection_hook()
     {
         return prefer_upgradeable_hook(*this);
@@ -207,9 +207,8 @@ public:
         return m_default_geometry;
     }
 
-    // Recover a per-topic override the api carries as an opaque pointer at the declare seam (null =
-    // none, the default). A LOCAL value the producer supplied for this synchronous declare; the
-    // concrete type stays member-side so the generic api names no shm geometry type.
+    // Recover a per-topic override the api carries as an opaque pointer at the declare seam (null = none, the default). A
+    // LOCAL value the producer supplied for this synchronous declare; the concrete type stays member-side.
     shm_geometry geometry_from(const void *override_or_null) const noexcept
     {
         return override_or_null != nullptr ? *static_cast<const shm_geometry *>(override_or_null) : m_default_geometry;
@@ -239,6 +238,7 @@ private:
     }
 
     registry_type m_registry;
+    node_id m_self;
     detail::shm_geometry_map m_geometry;
     shm_geometry m_default_geometry{};
     upgrade_policy_fn m_upgrade_policy{&default_upgrade_policy};

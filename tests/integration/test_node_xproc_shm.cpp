@@ -1,3 +1,5 @@
+#include "support/region_names.h"
+
 #include "plexus/asio/same_host_transports.h"
 
 #include "plexus/node.h"
@@ -11,7 +13,6 @@
 
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry_mode.h"
-#include "plexus/shm/region_naming.h"
 #include "plexus/io/host_fingerprint.h"
 
 #include "plexus/discovery/static_discovery.h"
@@ -139,11 +140,11 @@ std::span<const std::byte> as_bytes(const std::string &s)
 // read-only iff the facade auto-engaged the companion ring, so its region_status IS the medium.
 std::string control_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request);
+    return plexus::testing::region_name(fqn, make_id(0x52));
 }
 std::string slab_name(const std::string &fqn)
 {
-    return pio::region_name_for(fqn, pio::ring_direction::request) + ".s";
+    return plexus::testing::region_name(fqn, make_id(0x52)) + ".s";
 }
 
 bool region_maps(const std::string &fqn)
@@ -199,7 +200,7 @@ bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std
             return false;
     }
     pio::broadcast_ring ring;
-    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), ring) != pio::loan_status::ok)
+    if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), make_id(0x52), ring) != pio::loan_status::ok)
         return false;
 
     std::uint64_t cursor = 0;

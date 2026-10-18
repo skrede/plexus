@@ -15,7 +15,7 @@ namespace plexus::wire {
 // Single-byte protocol version: the EXACT-match hard gate. A peer whose protocol_version
 // differs is rejected outright — no negotiation. A compatibility window (major/minor) layers
 // on top of this gate.
-constexpr std::uint8_t k_protocol_version = 7;
+constexpr std::uint8_t k_protocol_version = 8;
 
 // Wire-stable handshake status byte. Append-only: a value is NEVER reordered or reused; a new
 // status takes the next free integer.

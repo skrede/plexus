@@ -3,8 +3,11 @@
 
 #include "plexus/wire/topic_hash.h"
 
-#include <cstdint>
+#include "plexus/node_id.h"
+
 #include <string>
+#include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 namespace plexus::shm {
@@ -29,30 +32,33 @@ inline std::string bare_hex(std::uint64_t h)
     return out;
 }
 
-// The deterministic region name both ends compute INDEPENDENTLY with no exchange: each
-// hashes the same fqn through the same cross-process-stable fqn hash and meets at the
-// same name. The response direction and a non-empty region_ns each fold a unit-separator
-// (0x1f, which cannot occur in an fqn, so it never aliases a real topic) discriminator
-// into the hashed key before rendering. An empty namespace is byte-identical to the
-// namespace-less name.
-inline std::string region_name_for(std::string_view fqn, ring_direction direction, std::string_view region_ns = "")
-{
-    if(region_ns.empty() && direction == ring_direction::request)
-        return bare_hex(plexus::wire::fqn_topic_hash(fqn));
+namespace detail {
 
-    std::string keyed;
-    if(!region_ns.empty())
-    {
-        keyed += region_ns;
-        keyed.push_back('\x1f');
-    }
-    keyed += fqn;
-    if(direction == ring_direction::response)
-    {
-        keyed.push_back('\x1f');
-        keyed += "response";
-    }
-    return bare_hex(plexus::wire::fqn_topic_hash(keyed));
+inline void append_be32(std::string &key, std::uint32_t v)
+{
+    for(int shift = 24; shift >= 0; shift -= 8)
+        key.push_back(static_cast<char>((v >> shift) & 0xffu));
+}
+
+}
+
+// The deterministic region name both ends compute independently with no exchange. The hashed key is, in this fixed
+// order: the fqn's length (4 big-endian bytes) and bytes, the publisher's 16 id bytes, the universe (4 big-endian
+// bytes), the namespace's length and bytes, then one direction byte. Fixed widths and length prefixes make the key
+// injective, and only its 64-bit hash is rendered, so every name is 16 hex characters.
+inline std::string region_name_for(std::string_view fqn, const node_id &publisher, std::uint32_t universe, ring_direction direction, std::string_view region_ns)
+{
+    std::string key;
+    key.reserve(fqn.size() + region_ns.size() + publisher.size() + 13);
+    detail::append_be32(key, static_cast<std::uint32_t>(fqn.size()));
+    key.append(fqn);
+    for(const std::byte b : publisher)
+        key.push_back(static_cast<char>(b));
+    detail::append_be32(key, universe);
+    detail::append_be32(key, static_cast<std::uint32_t>(region_ns.size()));
+    key.append(region_ns);
+    key.push_back(static_cast<char>(direction));
+    return bare_hex(plexus::wire::fqn_topic_hash(key));
 }
 
 }
