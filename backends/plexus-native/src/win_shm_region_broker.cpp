@@ -55,6 +55,7 @@ shm_error map_last_error(DWORD e)
             return shm_error::not_found;
         case ERROR_ACCESS_DENIED:
             return shm_error::permission_denied;
+        case ERROR_OUTOFMEMORY:
         case ERROR_NOT_ENOUGH_MEMORY:
         case ERROR_COMMITMENT_LIMIT:
             return shm_error::no_space;
@@ -81,6 +82,7 @@ plexus::shm::region_status to_status(shm_error e)
         case shm_error::permission_denied:
             return rs::denied;
         case shm_error::no_space:
+            return rs::no_space;
         case shm_error::name_invalid:
         case shm_error::map_failed:
         case shm_error::unknown:
@@ -177,6 +179,11 @@ plexus::shm::region_status win_shm_region_broker::attach(std::string_view name, 
     if(h == nullptr)
         return to_status(map_last_error(::GetLastError()));
     return finish_attach_map(h, out);
+}
+
+plexus::shm::region_status win_shm_region_broker::unlink(std::string_view)
+{
+    return plexus::shm::region_status::ok;
 }
 
 void win_shm_region_broker::set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy)

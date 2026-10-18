@@ -76,6 +76,7 @@ plexus::shm::region_status to_status(shm_error e)
         case shm_error::permission_denied:
             return rs::denied;
         case shm_error::no_space:
+            return rs::no_space;
         case shm_error::name_invalid:
         case shm_error::map_failed:
         case shm_error::unknown:

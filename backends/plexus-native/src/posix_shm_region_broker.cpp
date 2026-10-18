@@ -20,13 +20,30 @@ namespace {
 // single-owner ring reclaims a crashed creator's orphan). Returns the fd, or -1 with errno set.
 int open_create_excl(const char *canonical, mode_t perms, bool unlink_stale)
 {
-    int fd = ::shm_open(canonical, O_CREAT | O_EXCL | O_RDWR, perms);
+    int fd = ::shm_open(canonical, O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, perms);
     if(fd < 0 && errno == EEXIST && unlink_stale)
     {
         ::shm_unlink(canonical);
-        fd = ::shm_open(canonical, O_CREAT | O_EXCL | O_RDWR, perms);
+        fd = ::shm_open(canonical, O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, perms);
     }
     return fd;
+}
+
+// ftruncate on tmpfs only sets a sparse size; reserving the pages makes an exhausted /dev/shm fail here
+// as no_space instead of raising SIGBUS on the first touch. macOS has no equivalent for a shm descriptor.
+int reserve_pages(int fd, std::size_t length)
+{
+#if defined(__linux__)
+    int rc = 0;
+    do
+        rc = ::posix_fallocate(fd, 0, static_cast<off_t>(length));
+    while(rc == EINTR);
+    return rc;
+#else
+    (void)fd;
+    (void)length;
+    return 0;
+#endif
 }
 
 std::size_t page_round_up(std::size_t n)
@@ -39,9 +56,9 @@ std::size_t page_round_up(std::size_t n)
 
 plexus::shm::region_status posix_shm_region_broker::finish_create(int fd, std::size_t length, std::string canonical, region_handle &out)
 {
-    if(::ftruncate(fd, static_cast<off_t>(length)) != 0)
+    const int e = ::ftruncate(fd, static_cast<off_t>(length)) != 0 ? errno : reserve_pages(fd, length);
+    if(e != 0)
     {
-        const int e = errno;
         ::close(fd);
         ::shm_unlink(canonical.c_str());
         return detail::to_status(detail::map_errno(e));
@@ -110,10 +127,20 @@ plexus::shm::region_status posix_shm_region_broker::attach(std::string_view name
     if(m_attach_policy && !m_attach_policy(canonical))
         return plexus::shm::region_status::denied;
 
-    const int fd = ::shm_open(canonical.c_str(), O_RDWR, 0);
+    const int fd = ::shm_open(canonical.c_str(), O_RDWR | O_CLOEXEC, 0);
     if(fd < 0)
         return detail::to_status(detail::map_errno(errno));
     return finish_attach(fd, std::move(canonical), out);
+}
+
+plexus::shm::region_status posix_shm_region_broker::unlink(std::string_view name)
+{
+    std::string canonical;
+    if(const auto status = detail::sanitize_region_name(name, canonical); status != shm_error::ok)
+        return detail::to_status(status);
+    if(::shm_unlink(canonical.c_str()) != 0)
+        return detail::to_status(detail::map_errno(errno));
+    return plexus::shm::region_status::ok;
 }
 
 void posix_shm_region_broker::set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy)

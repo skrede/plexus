@@ -1,15 +1,20 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
 
+#include "plexus/native/detail/posix_shm_status.h"
+
 #include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cerrno>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <filesystem>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -52,6 +57,27 @@ int mode_of(const std::string &bare)
 bool exists(const std::string &bare)
 {
     return ::access(dev_shm_path(bare).c_str(), F_OK) == 0;
+}
+
+struct descriptor_scan
+{
+    std::int32_t count;
+    bool all_cloexec;
+};
+
+descriptor_scan scan_descriptors(const std::string &bare)
+{
+    descriptor_scan scan{0, true};
+    std::error_code ec;
+    for(const auto &entry : std::filesystem::directory_iterator("/proc/self/fd", ec))
+    {
+        if(std::filesystem::read_symlink(entry.path(), ec) != dev_shm_path(bare))
+            continue;
+        const int fd = std::stoi(entry.path().filename().string());
+        ++scan.count;
+        scan.all_cloexec = scan.all_cloexec && (::fcntl(fd, F_GETFD) & FD_CLOEXEC) != 0;
+    }
+    return scan;
 }
 
 }
@@ -122,4 +148,40 @@ TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orph
 
     REQUIRE_FALSE(exists(name));     // the fresh creator unlinked on release
     ::shm_unlink(canonical.c_str()); // belt-and-braces
+}
+
+TEST_CASE("shm.region_broker opens created and attached regions close-on-exec", "[shm][region_broker]")
+{
+    posix_shm_region_broker broker;
+    const std::string name = unique_name("cloexec");
+    ::shm_unlink((std::string("/plexus.") + name).c_str());
+
+    region_handle creator;
+    REQUIRE(broker.create(name, 4096, pio::create_options{}, creator) == pio::region_status::ok);
+    region_handle attacher;
+    REQUIRE(broker.attach(name, attacher) == pio::region_status::ok);
+
+    const descriptor_scan scan = scan_descriptors(name);
+    REQUIRE(scan.count == 2);
+    REQUIRE(scan.all_cloexec);
+}
+
+TEST_CASE("shm.region_broker reports exhausted shared memory as no space", "[shm][region_broker]")
+{
+    REQUIRE(plexus::native::detail::to_status(plexus::native::detail::map_errno(ENOSPC)) == pio::region_status::no_space);
+}
+
+TEST_CASE("shm.region_broker unlinks a region by its bare name", "[shm][region_broker]")
+{
+    posix_shm_region_broker broker;
+    const std::string name      = unique_name("unlink");
+    const std::string canonical = std::string("/plexus.") + name;
+    const int planted           = ::shm_open(canonical.c_str(), O_CREAT | O_RDWR, 0600);
+    REQUIRE(planted >= 0);
+    ::close(planted);
+    REQUIRE(exists(name));
+
+    REQUIRE(broker.unlink(name) == pio::region_status::ok);
+    REQUIRE_FALSE(exists(name));
+    REQUIRE(broker.unlink(name) == pio::region_status::not_found);
 }

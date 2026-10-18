@@ -18,6 +18,7 @@ namespace plexus::shm {
 //   too_large      -> the requested size exceeds the broker's region ceiling.
 //   incompatible   -> attach() found a region whose header layout is not ours.
 //   failed         -> any other irreducible mapping failure.
+//   no_space       -> the host could not reserve the region's backing memory.
 enum class region_status : std::uint8_t
 {
     ok,
@@ -27,6 +28,7 @@ enum class region_status : std::uint8_t
     too_large,
     incompatible,
     failed,
+    no_space,
 };
 
 // unlink_stale_on_create reclaims a crashed creator's orphaned name before the create
