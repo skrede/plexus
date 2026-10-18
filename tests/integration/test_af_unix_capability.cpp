@@ -133,7 +133,7 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
     plexus::log::null_logger sink;
     pio::message_forwarder<pasio::unix_policy> fwd{sink};
     pio::message_forwarder<pasio::unix_policy>::peer sub{*server_channel, "client-node"};
-    fwd.attach(sub, fqn);
+    REQUIRE(fwd.attach_for_fanout(sub, fqn));
     fwd.publish(fqn, payload);
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);

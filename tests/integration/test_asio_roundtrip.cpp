@@ -81,16 +81,14 @@ std::optional<std::vector<std::byte>> one_roundtrip(std::span<const std::byte> p
         io.poll_one();
 
     // The publisher-side forwarder fans toward the accepted server channel.
-    // attach emits a frame_header-wrapped subscribe control frame: control frames
-    // are now framed identically to data, so the reassembler frames the subscribe
-    // cleanly (it no longer rejects-and-clears on it) and it reassembles alongside
-    // the data frame. The client's frame_router demuxes by frame_header.type — the
-    // subscribe has no registered consumer and is warn-and-dropped, the
-    // unidirectional data routes to its consumer — so no flush loop is needed.
+    // attach_for_fanout answers with a framed subscribe_response, which reassembles
+    // alongside the data frame. The client's frame_router demuxes by frame_header.type:
+    // the response has no registered consumer and is warn-and-dropped, the
+    // unidirectional data routes to its consumer, so no flush loop is needed.
     plexus::log::null_logger sink;
     pio::message_forwarder<pasio::asio_policy> fwd{sink};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "client-node"};
-    fwd.attach(sub, fqn);
+    REQUIRE(fwd.attach_for_fanout(sub, fqn));
 
     fwd.publish(fqn, payload);
 

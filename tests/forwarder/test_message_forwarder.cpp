@@ -112,8 +112,8 @@ TEST_CASE("frame-once fan-out delivers byte-identical frames to each subscriber"
 
         plexus::log::null_logger sink;
         forwarder fwd{sink};
-        fwd.attach(peer_a, "alpha");
-        fwd.attach(peer_b, "alpha");
+        REQUIRE(fwd.attach_for_fanout(peer_a, "alpha"));
+        REQUIRE(fwd.attach_for_fanout(peer_b, "alpha"));
         ex.drain();
         cap_a.frames.clear();
         cap_b.frames.clear();
@@ -138,7 +138,7 @@ TEST_CASE("detach_all stops fan-out", "[forwarder]")
 
     plexus::log::null_logger sink;
     forwarder fwd{sink};
-    fwd.attach(peer, "alpha");
+    REQUIRE(fwd.attach_for_fanout(peer, "alpha"));
     ex.drain();
     cap.frames.clear();
 

@@ -28,7 +28,7 @@ struct one_peer
 
 }
 
-TEST_CASE("subscription_directions a peer's subscribe is answered while this node subscribes to the same topic on that peer", "[forwarder][!shouldfail]")
+TEST_CASE("subscription_directions a peer's subscribe is answered while this node subscribes to the same topic on that peer", "[forwarder]")
 {
     one_peer t;
     REQUIRE(t.fwd.attach(t.peer, "alpha"));
@@ -37,7 +37,7 @@ TEST_CASE("subscription_directions a peer's subscribe is answered while this nod
     REQUIRE(count_subscribe_responses(t.cap) == 1);
 }
 
-TEST_CASE("subscription_directions this node's subscribe goes out while the peer subscribes to the same topic here", "[forwarder][!shouldfail]")
+TEST_CASE("subscription_directions this node's subscribe goes out while the peer subscribes to the same topic here", "[forwarder]")
 {
     one_peer t;
     REQUIRE(t.fwd.attach_for_fanout(t.peer, "alpha"));
@@ -46,7 +46,7 @@ TEST_CASE("subscription_directions this node's subscribe goes out while the peer
     REQUIRE(count_subscribes(t.cap) == 1);
 }
 
-TEST_CASE("subscription_directions this node's unsubscribe goes out while the peer still subscribes here", "[forwarder][!shouldfail]")
+TEST_CASE("subscription_directions this node's unsubscribe goes out while the peer still subscribes here", "[forwarder]")
 {
     one_peer t;
     t.fwd.attach(t.peer, "alpha");
@@ -61,7 +61,7 @@ TEST_CASE("subscription_directions this node's unsubscribe goes out while the pe
     REQUIRE(count_data_frames(t.cap) == 1);
 }
 
-TEST_CASE("subscription_directions the peer's unsubscribe leaves this node's subscription to that peer", "[forwarder][!shouldfail]")
+TEST_CASE("subscription_directions the peer's unsubscribe leaves this node's subscription to that peer", "[forwarder]")
 {
     one_peer t;
     t.fwd.attach(t.peer, "alpha");
@@ -77,7 +77,7 @@ TEST_CASE("subscription_directions the peer's unsubscribe leaves this node's sub
     REQUIRE(count_unsubscribes(t.cap) == 1);
 }
 
-TEST_CASE("subscription_directions subscribing to a peer does not fan this node's publications to it", "[forwarder][!shouldfail]")
+TEST_CASE("subscription_directions subscribing to a peer does not fan this node's publications to it", "[forwarder]")
 {
     one_peer t;
     t.fwd.attach(t.peer, "alpha");
@@ -88,7 +88,7 @@ TEST_CASE("subscription_directions subscribing to a peer does not fan this node'
     REQUIRE(count_data_frames(t.cap) == 0);
 }
 
-TEST_CASE("subscription_directions a peer admitted while this node subscribes to it keeps its own qos", "[forwarder][!shouldfail]")
+TEST_CASE("subscription_directions a peer admitted while this node subscribes to it keeps its own qos", "[forwarder]")
 {
     one_peer t;
     t.fwd.latch("alpha");

@@ -155,18 +155,18 @@ public:
     // Per-(peer, fqn) refcount gate: on 0->1 it emits a subscribe. A call() needs no prior attach.
     bool attach(const peer &p, std::string_view fqn)
     {
-        if(!m_endpoint.attach_gate(p.node_name, fqn))
+        if(!m_endpoint.subscribe_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name);
+        m_endpoint.registry().note_topic(hash, fqn);
         detail::send_subscribe(*this, p.channel, fqn, hash);
         return true;
     }
 
-    // The same gate as attach, but emits a subscribe_response (the reaction to an arriving subscribe).
+    // The peer's subscription, counted apart from attach's: on 0->1 it answers with a subscribe_response.
     bool attach_for_fanout(const peer &p, std::string_view fqn)
     {
-        if(!m_endpoint.attach_gate(p.node_name, fqn))
+        if(!m_endpoint.admit_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name);
@@ -178,11 +178,10 @@ public:
     // Per-(peer, fqn) refcount gate: on 1->0 it emits an unsubscribe.
     bool detach(const peer &p, std::string_view fqn)
     {
-        if(!m_endpoint.detach_gate(p.node_name, fqn))
+        if(!m_endpoint.unsubscribe_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_endpoint.registry().remove_subscriber(hash, p.channel);
-        auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
+        auto req  = wire::encode_unsubscribe_request({.topic_hash = hash});
         send_control(p.channel, wire::msg_type::unsubscribe, req);
         return true;
     }

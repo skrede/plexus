@@ -113,7 +113,7 @@ TEST_CASE("frame-once fan-out: the per-publish allocation does not scale with th
         for(int i = 0; i < subscribers; ++i)
         {
             chs.emplace_back(std::make_unique<sink_channel>(ex));
-            fwd.attach(sink_forwarder::peer{*chs.back(), "node-" + std::to_string(i)}, "alpha");
+            REQUIRE(fwd.attach_for_fanout(sink_forwarder::peer{*chs.back(), "node-" + std::to_string(i)}, "alpha"));
         }
         fwd.publish("alpha", as_bytes(payload)); // warm-up
         plexus::testing::reset_alloc_count();

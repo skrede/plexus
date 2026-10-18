@@ -173,7 +173,7 @@ TEST_CASE("concurrent outstanding calls each resolve to their own response", "[p
     }
 }
 
-TEST_CASE("subscription_directions a peer's procedure subscribe is answered while this node subscribes to the same procedure on that peer", "[procedure][!shouldfail]")
+TEST_CASE("subscription_directions a peer's procedure subscribe is answered while this node subscribes to the same procedure on that peer", "[procedure]")
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);

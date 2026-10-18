@@ -237,7 +237,7 @@ TEST_CASE("steady-state publish->frame-once->fan-out loop stays frame-once: per-
         {
             channels.push_back(std::make_unique<sink_channel>(ex));
             peers.push_back(forwarder::peer{*channels.back(), "node-" + std::to_string(i)});
-            fwd.attach(peers.back(), fqn);
+            REQUIRE(fwd.attach_for_fanout(peers.back(), fqn));
         }
         fwd.publish(fqn, as_bytes(payload)); // warm-up: reach the steady owner-buffer size
         plexus::testing::reset_alloc_count();
@@ -284,7 +284,7 @@ TEST_CASE("steady-state depth-N history-ring retain adds no allocation beyond th
         forwarder fwd{log_sink};
         if(latched)
             fwd.declare(fqn, topic_qos{.latch = true, .depth = N});
-        fwd.attach(peer, fqn);
+        REQUIRE(fwd.attach_for_fanout(peer, fqn));
         // Warm-up: publish N times so EVERY ring slot's handle is first-touched.
         for(std::uint32_t i = 0; i < N; ++i)
             fwd.publish(fqn, as_bytes(payload));
@@ -410,7 +410,7 @@ TEST_CASE("steady-state publish through the egress scheduler bands stays frame-o
         {
             channels.push_back(std::make_unique<banding_sink_channel>(ex));
             peers.push_back(forwarder::peer{*channels.back(), "node-" + std::to_string(i)});
-            fwd.attach(peers.back(), fqn);
+            REQUIRE(fwd.attach_for_fanout(peers.back(), fqn));
         }
         // Warm-up: cycle the in-use band's full pooled ring across all destinations so
         // every band slot's handle is first-touched, plus the scratch + band map nodes.

@@ -7,7 +7,6 @@
 #include "plexus/io/subscriber_qos.h"
 
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/keyed_refcount.h"
 #include "plexus/io/detail/priority_band_queue.h"
 #include "plexus/io/detail/subscriber_dispatch.h"
 
@@ -21,8 +20,8 @@
 namespace plexus::io {
 
 // The passive per-fqn subscriber state the forwarder owns directly: no topic-listener
-// indirection, no framed-byte cache. It holds, per fqn (keyed by the topic_hash), the subscribed
-// peers (registry_subscriber) and the per-(peer, fqn) refcount that gates attach/detach. Every
+// indirection, no framed-byte cache. Subscribers are the peers that subscribed to this node's
+// topics plus same-node self-routes; this node's own subscriptions add only the topic record. Every
 // structure is grown at attach (setup); the fan-out loop only reads, never inserts. Channel is the
 // Policy's byte_channel_type.
 template<typename Channel>
@@ -33,19 +32,12 @@ public:
     using band_drop_counters = detail::band_drop_counters;
     using topic_entry        = detail::registry_topic_entry<Channel>;
 
-    // Bump the (peer, fqn) refcount; returns the post-increment count. The 0->1
-    // result is the gate the forwarder emits a subscribe on.
-    std::uint32_t bump_refcount(std::string_view node_name, std::string_view fqn)
+    // The record fqn_for resolves on the receive tail, without a subscriber.
+    void note_topic(std::uint64_t topic_hash, std::string_view fqn)
     {
-        return m_refcount.bump(node_name, fqn);
-    }
-
-    // Drop the (peer, fqn) refcount; returns the post-decrement count. The 1->0
-    // result is the gate the forwarder emits an unsubscribe on. Returns a large
-    // sentinel when the pair is unknown so the caller treats it as "no transition".
-    std::uint32_t drop_refcount(std::string_view node_name, std::string_view fqn)
-    {
-        return m_refcount.drop(node_name, fqn);
+        auto &entry = m_topics[topic_hash];
+        if(entry.fqn.empty())
+            entry.fqn = std::string{fqn};
     }
 
     void add_subscriber(std::uint64_t topic_hash, std::string_view fqn, Channel &channel, std::string_view node_name, const subscriber_qos &qos = subscriber_qos{},
@@ -118,11 +110,10 @@ public:
         detail::remove_topic_subscriber(m_topics, topic_hash, channel);
     }
 
-    // Drop every fan-out entry and refcount for one peer (peer-death path).
-    void remove_peer(std::string_view node_name, const Channel &channel)
+    // Drop every fan-out entry for one peer channel (peer-death path).
+    void remove_peer(const Channel &channel)
     {
         detail::remove_peer_subscribers(m_topics, channel);
-        m_refcount.forget(node_name);
     }
 
     // The whole per-topic record in ONE lookup, for the hot publish verbs: reading
@@ -187,7 +178,6 @@ private:
     std::unordered_map<std::uint64_t, topic_entry> m_topics;
     mutable std::uint64_t m_last_fqn_hash{0};
     mutable const std::string *m_last_fqn{nullptr};
-    detail::keyed_refcount m_refcount;
     // The per-node monotonic source-identity endpoint-counter allocator. Minted at
     // declare (cold path), never on the hot path. Starts at 1 so 0 stays free as an
     // "unminted" value if ever needed; gid uniqueness comes from node_id ‖ counter.

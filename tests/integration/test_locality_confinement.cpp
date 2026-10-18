@@ -38,8 +38,8 @@ TEST_CASE("locality confinement: the fan-out gate delivers a topic only to its i
 
         plexus::log::null_logger sink;
         forwarder fwd{sink};
-        fwd.attach(forwarder::peer{local_ch, "local-node"}, fqn);
-        fwd.attach(forwarder::peer{remote_ch, "remote-node"}, fqn);
+        REQUIRE(fwd.attach_for_fanout(forwarder::peer{local_ch, "local-node"}, fqn));
+        REQUIRE(fwd.attach_for_fanout(forwarder::peer{remote_ch, "remote-node"}, fqn));
 
         // process-only: reaches NO wire channel (process ships as confinement-only).
         fwd.declare(fqn, plexus::topic_qos{.reach = locality::process});

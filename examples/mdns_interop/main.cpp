@@ -110,7 +110,7 @@ int main()
     plexus::log::null_logger sink;
     pio::message_forwarder<pasio::asio_policy> fwd{sink};
     pio::message_forwarder<pasio::asio_policy>::peer sub{*server_channel, "peer-node"};
-    fwd.attach(sub, fqn);
+    fwd.attach_for_fanout(sub, fqn);
     fwd.publish(fqn, payload);
 
     // Drive the ONE context: the SAME poll loop runs the TCP completions AND the mDNS

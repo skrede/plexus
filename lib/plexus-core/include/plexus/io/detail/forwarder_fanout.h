@@ -69,7 +69,7 @@ bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::o
         f.emit_qos_change(qos_edge::refused, hash, sub_qos, rxo.verdict, subscriber_type_id);
         return false;
     }
-    if(f.m_endpoint.registry().bump_refcount(p.node_name, fqn) != 1u)
+    if(!f.m_endpoint.admit_gate(p.node_name, fqn))
         return false;
     f.m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);
     f.emit_qos_change(rxo.verdict == io::rxo_verdict::degraded ? qos_edge::degraded : qos_edge::accepted, hash, sub_qos, rxo.verdict, subscriber_type_id);

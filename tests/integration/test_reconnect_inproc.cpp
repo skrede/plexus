@@ -555,7 +555,7 @@ TEST_CASE("inproc reconnect: the POST-RECONNECT publish loop stays frame-once (p
         {
             channels.push_back(std::make_unique<sink_channel>(sx));
             peers.push_back(forwarder::peer{*channels.back(), "node-" + std::to_string(i)});
-            fwd.attach(peers.back(), fqn);
+            REQUIRE(fwd.attach_for_fanout(peers.back(), fqn));
         }
         fwd.publish(fqn, as_bytes(payload)); // warm-up: reach the steady owner-buffer size
         plexus::testing::reset_alloc_count();

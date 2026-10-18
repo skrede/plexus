@@ -3,6 +3,8 @@
 
 #include "plexus/io/subscriber_registry.h"
 
+#include "plexus/io/detail/keyed_refcount.h"
+
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/frame_codec.h"
@@ -43,21 +45,33 @@ public:
         return m_next_sequence++;
     }
 
-    // True exactly on the 0->1 refcount transition (the one that puts a wire subscribe out).
-    bool attach_gate(std::string_view node_name, std::string_view fqn)
+    // The two directions never share a count, so neither side's demand gates the other's subscribe,
+    // answer or unsubscribe. Each gate is true exactly on its count's 0->1 or 1->0 transition.
+    bool subscribe_gate(std::string_view node_name, std::string_view fqn)
     {
-        return m_registry.bump_refcount(node_name, fqn) == 1u;
+        return m_subscribed.bump(node_name, fqn) == 1u;
     }
 
-    // True exactly on the 1->0 transition (the one that puts a wire unsubscribe out).
-    bool detach_gate(std::string_view node_name, std::string_view fqn)
+    bool unsubscribe_gate(std::string_view node_name, std::string_view fqn)
     {
-        return m_registry.drop_refcount(node_name, fqn) == 0u;
+        return m_subscribed.drop(node_name, fqn) == 0u;
+    }
+
+    bool admit_gate(std::string_view node_name, std::string_view fqn)
+    {
+        return m_admitted.bump(node_name, fqn) == 1u;
+    }
+
+    bool release_gate(std::string_view node_name, std::string_view fqn)
+    {
+        return m_admitted.drop(node_name, fqn) == 0u;
     }
 
     void remove_peer(const peer &p)
     {
-        m_registry.remove_peer(p.node_name, p.channel);
+        m_registry.remove_peer(p.channel);
+        m_subscribed.forget(p.node_name);
+        m_admitted.forget(p.node_name);
     }
 
     void send_subscribe(channel_type &channel, const wire::subscribe_request &req)
@@ -90,6 +104,8 @@ public:
 private:
     subscriber_registry<channel_type> m_registry;
     std::vector<std::byte> m_control_scratch;
+    detail::keyed_refcount m_subscribed;
+    detail::keyed_refcount m_admitted;
     std::uint64_t m_next_sequence{0};
 };
 

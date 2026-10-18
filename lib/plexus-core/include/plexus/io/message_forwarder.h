@@ -79,10 +79,10 @@ public:
     bool attach(const peer &p, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt,
                 std::string_view type_name = {})
     {
-        if(!m_endpoint.attach_gate(p.node_name, fqn))
+        if(!m_endpoint.subscribe_gate(p.node_name, fqn))
             return false;
         auto hash = wire::fqn_topic_hash(fqn);
-        m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
+        m_endpoint.registry().note_topic(hash, fqn);
         detail::record_remote_topic(*this, p.node_name, fqn, qos, type_id, type_name);
         emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
         detail::send_subscribe(*this, p.channel, fqn, hash, type_id, qos, type_name);

@@ -52,12 +52,10 @@ const std::vector<remembered_demand> &remembered_topics(const Forwarder &f, cons
 template<typename Forwarder, typename Peer>
 bool forwarder_detach(Forwarder &f, const Peer &p, std::string_view fqn)
 {
-    if(!f.m_endpoint.detach_gate(p.node_name, fqn))
+    if(!f.m_endpoint.unsubscribe_gate(p.node_name, fqn))
         return false;
 
     auto hash = wire::fqn_topic_hash(fqn);
-    f.m_endpoint.registry().remove_subscriber(hash, p.channel);
-    f.m_egress.remove(p.channel);
     forget_remote_topic(f, p.node_name, fqn);
 
     auto req = wire::encode_unsubscribe_request({.topic_hash = hash});
@@ -71,7 +69,7 @@ bool forwarder_detach(Forwarder &f, const Peer &p, std::string_view fqn)
 template<typename Forwarder, typename Peer>
 bool forwarder_detach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn)
 {
-    if(fqn.empty() || !f.m_endpoint.detach_gate(p.node_name, fqn))
+    if(fqn.empty() || !f.m_endpoint.release_gate(p.node_name, fqn))
         return false;
     f.m_endpoint.registry().remove_subscriber(wire::fqn_topic_hash(fqn), p.channel);
     f.emit_demand_transition(p.node_name, fqn, demand_transition::down, demand_role::publisher);
