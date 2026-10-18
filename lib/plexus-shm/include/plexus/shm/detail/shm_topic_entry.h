@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <optional>
 #include <functional>
+#include <unordered_map>
 
 namespace plexus::shm::detail {
 
@@ -38,6 +39,9 @@ struct shm_topic_key_hash
         return std::hash<std::string>{}(k.fqn) ^ static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
     }
 };
+
+template<typename Entry>
+using shm_topic_map = std::unordered_map<shm_topic_key, std::unique_ptr<Entry>, shm_topic_key_hash>;
 
 // One live ring's owned state, pinned by the registry's unique_ptr so the non-movable
 // ring/channel/notifier hold stable addresses. The channel must destruct BEFORE the notifier

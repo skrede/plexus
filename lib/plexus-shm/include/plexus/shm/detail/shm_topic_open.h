@@ -1,10 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_OPEN_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_OPEN_H
 
+#include "plexus/shm/detail/shm_topic_join.h"
+
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_naming.h"
-#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_acquire_result.h"
@@ -15,93 +16,51 @@
 
 namespace plexus::shm::detail {
 
-// A successful read-only attach proves the region is live (the handle is discarded).
-template<typename Registry>
-bool topic_region_exists(Registry &r, const std::string &ctrl_name)
-{
-    typename Registry::broker_type::region_handle probe;
-    return r.m_broker.attach(ctrl_name, probe) == shm::region_status::ok;
-}
-
-// The creator path: owns both regions, stamps a fresh ring, unlinks on teardown. The
-// OS-allocator leg of the fail-closed gate names the OS bound on a slab-create failure.
-template<typename Registry, typename Entry>
-shm::acquire_result topic_mint(Registry &r, Entry &e, const std::string &slab_name, const shm::ring_geometry &geom, std::uint64_t consumer_capacity)
+// Rejects an over-ceiling ring before any region is minted (a pure query, no broker touch),
+// so an oversize declaration never orphans the control region.
+inline bool topic_within_ceiling(const shm::ring_geometry &geom, std::uint64_t max_ring_slab_bytes, shm::acquire_failure &failure)
 {
     const std::uint64_t ask = shm::slab_region_bytes(geom.cell_count, geom.slot_capacity);
-    if(const shm::region_status cs = r.m_broker.create(slab_name, ask, shm::create_options{.unlink_stale_on_create = true}, e.slab); cs != shm::region_status::ok)
-    {
-        r.m_last_failure = shm::acquire_failure{shm::acquire_bound::os_allocator, ask, 0, cs};
-        return shm::acquire_result::failed;
-    }
-    if(shm::broadcast_ring::create(e.control.bytes(), e.slab.bytes(), geom.cell_count, geom.slot_capacity, e.ring, consumer_capacity) != shm::loan_status::ok)
-        return shm::acquire_result::failed;
-    e.creator = true;
-    return shm::acquire_result::created;
+    if(ask <= max_ring_slab_bytes)
+        return true;
+    failure = shm::acquire_failure{shm::acquire_bound::slab_ceiling, ask, max_ring_slab_bytes, shm::region_status::ok};
+    return false;
 }
 
-// The attacher path: maps the peer's regions and re-reads the geometry from the control header (never unlinks). A slab
-// missing beside a live control region, or a header not stamped yet, is a creator still minting: a transient join.
-template<typename Registry, typename Entry>
-shm::acquire_result topic_join(Registry &r, Entry &e, const std::string &ctrl_name, const std::string &slab_name)
-{
-    shm::acquire_failure &failure = r.m_last_failure;
-    const auto fail               = [&failure](shm::acquire_bound bound, shm::region_status broker = shm::region_status::ok)
-    {
-        failure = shm::acquire_failure{bound, 0, 0, broker};
-        return shm::acquire_result::failed;
-    };
-    if(const shm::region_status cs = r.m_broker.attach(ctrl_name, e.control); cs != shm::region_status::ok)
-        return fail(shm::acquire_bound::os_allocator, cs);
-    if(const shm::region_status ss = r.m_broker.attach(slab_name, e.slab); ss != shm::region_status::ok)
-        return fail(ss == shm::region_status::not_found ? shm::acquire_bound::transient_join : shm::acquire_bound::os_allocator, ss);
-    switch(shm::broadcast_ring::attach(e.control.bytes(), e.slab.bytes(), e.ring))
-    {
-        case shm::loan_status::ok:
-            return shm::acquire_result::attached;
-        case shm::loan_status::unstamped:
-            return fail(shm::acquire_bound::transient_join);
-        default:
-            return fail(shm::acquire_bound::incompatible);
-    }
-}
-
-// Mints or attaches the two regions for (fqn, direction) and binds the entry's ring. amode is
-// the collision policy: reclaim_stale unlinks an existing name on create; join_live NEVER
+// amode is the collision policy: reclaim_stale unlinks an existing name on create; join_live NEVER
 // unlinks (it attaches first when the region exists, mints only when none does, so two co-host
 // peers converge on the one ring).
+template<typename Broker, typename Entry>
+shm::acquire_result topic_attach_or_mint(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &ctrl_name, const shm::ring_geometry &geom,
+                                         std::uint64_t capacity, shm::acquire_mode amode)
+{
+    const std::string slab_name = ctrl_name + ".s";
+    if(amode == shm::acquire_mode::join_live && topic_region_exists(broker, ctrl_name))
+        return topic_join(broker, failure, e, ctrl_name, slab_name);
+
+    shm::create_options opts;
+    opts.unlink_stale_on_create = amode == shm::acquire_mode::reclaim_stale;
+    const shm::region_status cs = broker.create(ctrl_name, shm::control_region_bytes(geom.cell_count), opts, e.control);
+    if(cs == shm::region_status::ok)
+        return topic_mint(broker, failure, e, slab_name, geom, capacity);
+    if(cs == shm::region_status::already_exists)
+        return topic_join(broker, failure, e, ctrl_name, slab_name);
+    failure = shm::acquire_failure{shm::acquire_bound::os_allocator, shm::control_region_bytes(geom.cell_count), 0, cs};
+    return shm::acquire_result::failed;
+}
+
+// Mints or attaches the two regions for (fqn, direction) and binds the entry's ring.
 template<typename Registry, typename Entry>
-// NOLINTNEXTLINE(readability-function-size)
 shm::acquire_result topic_open_ring(Registry &r, Entry &e, const std::string &fqn, shm::ring_direction direction, std::uint32_t max_payload, shm::ring_geometry_mode mode,
                                     std::uint32_t consumer_capacity, shm::acquire_mode amode)
 {
     const std::string ctrl_name             = shm::region_name_for(fqn, direction, r.m_region_ns);
-    const std::string slab_name             = ctrl_name + ".s";
     const std::optional<std::uint32_t> want = max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
     const std::uint64_t capacity            = consumer_capacity == 0 ? shm::k_max_consumers : consumer_capacity;
     const shm::ring_geometry geom           = shm::ring_geometry_for(want, mode, consumer_capacity);
-
-    // Reject an over-ceiling ring before any region is minted (a pure query, no broker touch),
-    // so an oversize declaration never orphans the control region.
-    const std::uint64_t ask = shm::slab_region_bytes(geom.cell_count, geom.slot_capacity);
-    if(ask > r.m_max_ring_slab_bytes)
-    {
-        r.m_last_failure = shm::acquire_failure{shm::acquire_bound::slab_ceiling, ask, r.m_max_ring_slab_bytes, shm::region_status::ok};
+    if(!topic_within_ceiling(geom, r.m_max_ring_slab_bytes, r.m_last_failure))
         return shm::acquire_result::failed;
-    }
-
-    if(amode == shm::acquire_mode::join_live && topic_region_exists(r, ctrl_name))
-        return topic_join(r, e, ctrl_name, slab_name);
-
-    shm::create_options opts;
-    opts.unlink_stale_on_create = amode == shm::acquire_mode::reclaim_stale;
-    const shm::region_status cs = r.m_broker.create(ctrl_name, shm::control_region_bytes(geom.cell_count), opts, e.control);
-    if(cs == shm::region_status::ok)
-        return topic_mint(r, e, slab_name, geom, capacity);
-    if(cs == shm::region_status::already_exists)
-        return topic_join(r, e, ctrl_name, slab_name);
-    r.m_last_failure = shm::acquire_failure{shm::acquire_bound::os_allocator, shm::control_region_bytes(geom.cell_count), 0, cs};
-    return shm::acquire_result::failed;
+    return topic_attach_or_mint(r.m_broker, r.m_last_failure, e, ctrl_name, geom, capacity, amode);
 }
 
 // A notifier that can lose its waiter after arming reports the loss to every holder watching the entry.

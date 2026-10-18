@@ -2,18 +2,18 @@
 #define HPP_GUARD_PLEXUS_SHM_SHM_TOPIC_REGISTRY_H
 
 #include "plexus/shm/arm_status.h"
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/loan_status.h"
-#include "plexus/shm/notifier_concept.h"
-#include "plexus/shm/region_broker_concept.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_channel.h"
 #include "plexus/shm/waiter_loss.h"
+#include "plexus/shm/region_naming.h"
+#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_acquire_result.h"
+#include "plexus/shm/region_broker_concept.h"
+
 #include "plexus/shm/detail/shm_topic_open.h"
+#include "plexus/shm/detail/shm_topic_sink.h"
 #include "plexus/shm/detail/shm_topic_entry.h"
 
 #include "plexus/io/congestion.h"
@@ -22,15 +22,13 @@
 
 #include "plexus/detail/compat.h"
 
+#include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
-#include <optional>
-#include <span>
-#include <string>
-#include <string_view>
-#include <unordered_map>
 #include <utility>
+#include <optional>
+#include <string_view>
 
 namespace plexus::shm {
 
@@ -118,50 +116,25 @@ public:
         m_entries.erase(it);
     }
 
-    // The entry's wake-drain hands each pending message here instead of discarding; any
-    // already-queued message is delivered NOW so a late-attaching consumer misses nothing.
     void set_consumer_sink(const std::string &fqn, ring_direction direction, deliver_fn sink)
     {
-        auto it = m_entries.find(key{fqn, direction});
-        if(it == m_entries.end())
-            return;
-        it->second->sink = std::move(sink);
-        it->second->deliver_pending();
+        detail::topic_set_sink(m_entries, fqn, direction, std::move(sink));
     }
 
     // Called on the receive companion's teardown BEFORE its ring release (disarm-before-destroy).
     void clear_consumer_sink(const std::string &fqn, ring_direction direction)
     {
-        auto it = m_entries.find(key{fqn, direction});
-        if(it != m_entries.end())
-            it->second->sink = {};
+        detail::topic_clear_sink(m_entries, fqn, direction);
     }
 
     shm_channel<Notifier> *channel_for(const std::string &fqn, ring_direction direction)
     {
-        auto it = m_entries.find(key{fqn, direction});
-        if(it == m_entries.end() || !it->second->channel || it->second->loss->status() != arm_status::armed)
-            return nullptr;
-        return &*it->second->channel;
+        return detail::topic_channel(m_entries, fqn, direction);
     }
 
     loss_watch watch_loss(const std::string &fqn, ring_direction direction, waiter_loss::lost_fn lost)
     {
-        auto it = m_entries.find(key{fqn, direction});
-        return loss_watch{it == m_entries.end() ? nullptr : it->second->loss, std::move(lost)};
-    }
-
-    void drain_channels(deliver_fn &deliver)
-    {
-        for(auto &[k, e] : m_entries)
-            if(e->channel)
-                e->channel->drain(deliver);
-    }
-
-    void drain()
-    {
-        deliver_fn discard = [](::plexus::wire_bytes<shm_slot_owner>) {};
-        drain_channels(discard);
+        return detail::topic_watch_loss(m_entries, fqn, direction, std::move(lost));
     }
 
     std::size_t live_count() const noexcept
@@ -185,15 +158,18 @@ private:
     using key   = detail::shm_topic_key;
     using entry = detail::shm_topic_entry<Broker, Notifier>;
 
+    Broker &m_broker;
+    io::reliability m_reliability;
+    io::congestion m_congestion;
+    notifier_binder m_bind_notifier;
+    std::uint64_t m_max_ring_slab_bytes;
+    std::string m_region_ns;
+    acquire_failure m_last_failure;
+    detail::shm_topic_map<entry> m_entries;
+
     template<typename R, typename E>
     friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const std::string &, ::plexus::shm::ring_direction, std::uint32_t, ::plexus::shm::ring_geometry_mode,
                                                                  std::uint32_t, ::plexus::shm::acquire_mode);
-    template<typename R, typename E>
-    friend ::plexus::shm::acquire_result detail::topic_mint(R &, E &, const std::string &, const ::plexus::shm::ring_geometry &, std::uint64_t);
-    template<typename R, typename E>
-    friend ::plexus::shm::acquire_result detail::topic_join(R &, E &, const std::string &, const std::string &);
-    template<typename R>
-    friend bool detail::topic_region_exists(R &, const std::string &);
     template<typename R, typename E>
     friend ::plexus::shm::arm_status detail::topic_bind(R &, E &, const std::string &, ::plexus::shm::ring_direction, ::plexus::shm::acquire_result);
 
@@ -213,16 +189,6 @@ private:
             teardown(*e);
         m_entries.clear();
     }
-
-    Broker &m_broker;
-    io::reliability m_reliability;
-    io::congestion m_congestion;
-    notifier_binder m_bind_notifier;
-    std::uint64_t m_max_ring_slab_bytes;
-    std::string m_region_ns;
-    acquire_failure m_last_failure;
-
-    std::unordered_map<key, std::unique_ptr<entry>, detail::shm_topic_key_hash> m_entries;
 };
 
 }

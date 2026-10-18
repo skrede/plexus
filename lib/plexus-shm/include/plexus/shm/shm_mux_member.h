@@ -1,44 +1,39 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SHM_MUX_MEMBER_H
 #define HPP_GUARD_PLEXUS_SHM_SHM_MUX_MEMBER_H
 
-#include "plexus/shm/region_broker_concept.h"
-#include "plexus/shm/ring_geometry_mode.h"
-#include "plexus/shm/notifier_concept.h"
-#include "plexus/shm/shm_selection.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/region_naming.h"
-#include "plexus/shm/shm_channel.h"
-#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/shm_selection.h"
+#include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_byte_channel.h"
+#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_topic_registry.h"
 #include "plexus/shm/shm_preference_hook.h"
+#include "plexus/shm/region_broker_concept.h"
+#include "plexus/shm/shm_companion_consumer.h"
+
 #include "plexus/shm/detail/shm_companion.h"
 #include "plexus/shm/detail/shm_mux_acquire.h"
+#include "plexus/shm/detail/shm_topic_geometry.h"
 
-#include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
-#include "plexus/io/locality.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
-#include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/scheduler_key.h"
+#include "plexus/io/byte_channel.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
-#include "plexus/wire/close_cause.h"
-#include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
 
+#include <span>
 #include <array>
+#include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
-#include <span>
-#include <string>
 #include <utility>
 #include <string_view>
-#include <unordered_map>
 
 namespace plexus::shm {
 
@@ -67,6 +62,8 @@ public:
     using registry_type   = shm_topic_registry<Broker, Notifier>;
     using consumer_type   = shm_companion_consumer<Broker, Notifier>;
     using notifier_binder = typename registry_type::notifier_binder;
+
+    using resolved_topic_geometry = detail::shm_route_geometry;
 
     static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
     static constexpr io::transport_kind mux_tier = io::transport_kind::local;
@@ -170,29 +167,15 @@ public:
     }
 
     // The declaring publisher records its topic's effective per-message size + geometry here,
-    // BEFORE the dial/listen that mints the ring. A LOCAL value (a remote peer cannot inject a
-    // geometry); an fqn with no entry resolves to the default ring.
+    // BEFORE the dial/listen that mints the ring.
     void set_topic_geometry(const std::string &fqn, std::size_t effective_bytes, shm_geometry geom)
     {
-        m_geometry.insert_or_assign(fqn, detail::shm_provisioned{static_cast<std::uint32_t>(effective_bytes), geom.mode, geom.max_consumers});
+        detail::topic_set_geometry(m_geometry, fqn, effective_bytes, geom);
     }
-
-    // Read by the publish fan-out's per-message wire_fallback size check. An unprovisioned fqn
-    // resolves to the reliable_preserving default.
-    struct resolved_topic_geometry
-    {
-        ring_geometry_mode mode     = ring_geometry_mode::reliable_preserving;
-        std::uint64_t slot_capacity = 0;
-    };
 
     resolved_topic_geometry resolved_geometry_for(const std::string &fqn) const
     {
-        auto it = m_geometry.find(fqn);
-        if(it == m_geometry.end())
-            return {};
-        const auto &p            = it->second;
-        const ring_geometry geom = ring_geometry_for(p.max_payload, p.mode, p.consumer_capacity);
-        return {p.mode, geom.slot_capacity};
+        return detail::topic_route_geometry(m_geometry, fqn);
     }
 
     // The runtime-acquire selection hook this member contributes to a multi-candidate local tier:
@@ -204,12 +187,10 @@ public:
     }
 
     // The per-message route a co-host (peer, topic) pair runs: a message rides the ring when the
-    // resolved mode and capacity route it to shm. Captures the resolved geometry by value, so the
-    // route is fixed at mint time.
+    // resolved mode and capacity route it to shm.
     plexus::detail::move_only_function<bool(std::size_t)> companion_route(const std::string &fqn)
     {
-        const auto g = resolved_geometry_for(fqn);
-        return [mode = g.mode, cap = g.slot_capacity](std::size_t bytes) { return route_message_medium(mode, bytes, cap) == same_host_medium::shm; };
+        return detail::topic_companion_route(m_geometry, fqn);
     }
 
     // The registry already defaults to k_max_ring_slab_bytes, so a caller need only invoke this
@@ -258,7 +239,7 @@ private:
     }
 
     registry_type m_registry;
-    std::unordered_map<std::string, detail::shm_provisioned> m_geometry;
+    detail::shm_geometry_map m_geometry;
     shm_geometry m_default_geometry{};
     upgrade_policy_fn m_upgrade_policy{&default_upgrade_policy};
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted;

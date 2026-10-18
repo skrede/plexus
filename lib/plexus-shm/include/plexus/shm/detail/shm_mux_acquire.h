@@ -6,6 +6,7 @@
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/endpoint.h"
 

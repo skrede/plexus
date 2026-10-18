@@ -38,6 +38,7 @@ if(WIN32)
 else()
     target_sources(plexus-native PRIVATE
         src/region_handle.cpp
+        src/posix_shm_status.cpp
         src/posix_shm_region_broker.cpp)
     if(LINUX)
         target_sources(plexus-native PRIVATE
