@@ -30,8 +30,26 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <system_error>
 
 namespace plexus::io::detail {
+
+// The coordinator's posted re-attempts share one engine timer; a canceled wait (the engine tearing down) touches nothing.
+template<typename Coordinator, typename Timer>
+void install_upgrade_retry(Coordinator &coordinator, Timer &timer)
+{
+    coordinator.set_retry_scheduler(
+            [&coordinator, &timer](std::chrono::milliseconds delay)
+            {
+                timer.expires_after(delay);
+                timer.async_wait(
+                        [&coordinator](std::error_code ec)
+                        {
+                            if(!ec)
+                                coordinator.on_retry_due();
+                        });
+            });
+}
 
 template<typename Engine>
 // NOLINTNEXTLINE(readability-function-size)

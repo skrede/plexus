@@ -10,6 +10,7 @@ namespace plexus::shm {
 //   publish -> { ok }
 //   consume -> { ok, empty, congested, lagged }
 //   take    -> { ok, empty }
+//   attach  -> { ok, rejected, unstamped (the creator has not stamped the ring yet) }
 // `empty` is the would-block alias for take(). `lagged` means the consumer's
 // cursor fell a full ring behind the producer; consume() carries the producer
 // tail in the out-param so the caller jumps its cursor there in one step (take()
@@ -22,6 +23,7 @@ enum class loan_status : std::uint8_t
     rejected,
     empty,
     lagged,
+    unstamped,
     unknown
 };
 

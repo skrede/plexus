@@ -812,6 +812,15 @@ target_link_libraries(test_coordinator_medium_lost PRIVATE
 
 catch_discover_tests(test_coordinator_medium_lost TEST_PREFIX "shm.")
 
+# The coordinator's posted re-attempt of a transient decline: backoff, cap, cancellation, through a manual scheduler.
+add_executable(test_medium_coordinator_retry test_medium_coordinator_retry.cpp)
+
+target_link_libraries(test_medium_coordinator_retry PRIVATE
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_medium_coordinator_retry TEST_PREFIX "shm.")
+
 # The forwarder's delivery order across a late wire-to-companion switch and across a subscriber attach.
 add_executable(test_shm_switch_order test_shm_switch_order.cpp)
 

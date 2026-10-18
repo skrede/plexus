@@ -17,7 +17,7 @@ loan_status attach_stamped(std::uint64_t magic)
 
     broadcast_ring creator;
     REQUIRE(broadcast_ring::create(control.span(), slab.span(), k_cells, k_slot, creator) == loan_status::ok);
-    creator.header().magic = magic;
+    creator.header().magic.store(magic);
 
     broadcast_ring attacher;
     return broadcast_ring::attach(control.span(), slab.span(), attacher);
@@ -35,9 +35,9 @@ TEST_CASE("ring_magic a region stamped with the current magic attaches", "[shm][
     REQUIRE(attach_stamped(k_ring_magic) == loan_status::ok);
 }
 
-TEST_CASE("ring_magic a region whose creator has not stamped it yet is not refused as foreign", "[shm][ring_magic][!shouldfail]")
+TEST_CASE("ring_magic a region whose creator has not stamped it yet is not refused as foreign", "[shm][ring_magic]")
 {
-    REQUIRE(attach_stamped(0) != loan_status::rejected);
+    REQUIRE(attach_stamped(0) == loan_status::unstamped);
 }
 
 TEST_CASE("ring_magic every slot's park word sits on one cache line apart from the cursors", "[shm][ring_magic]")

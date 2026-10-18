@@ -5,8 +5,24 @@
 
 #include <memory>
 #include <cstddef>
+#include <cstdint>
+#include <utility>
 
 namespace plexus::io {
+
+// Why a same-host lane is not engaged; an engaged lane carries none. Only transient is worth a later attempt.
+enum class fallback_reason : std::uint8_t
+{
+    none,
+    transient,
+    retries_exhausted,
+    incompatible_layout,
+    slab_ceiling,
+    os_allocator,
+    notifier_denied,
+    notifier_unsupported,
+    notifier_exhausted,
+};
 
 // The transport-neutral mint result the engine's upgrade coordinator retains. A null channel
 // signals the gate DECLINED — the pair keeps the wire. The coordinator retains the channel
@@ -16,6 +32,24 @@ namespace plexus::io {
 template<typename Channel>
 struct upgrade_mint
 {
+    upgrade_mint() noexcept
+            : reason(fallback_reason::none)
+    {
+    }
+
+    upgrade_mint(std::unique_ptr<Channel> minted, plexus::detail::move_only_function<bool(std::size_t)> route) noexcept
+            : reason(fallback_reason::none)
+            , channel(std::move(minted))
+            , fits(std::move(route))
+    {
+    }
+
+    explicit upgrade_mint(fallback_reason declined) noexcept
+            : reason(declined)
+    {
+    }
+
+    fallback_reason reason;
     std::unique_ptr<Channel> channel;
     plexus::detail::move_only_function<bool(std::size_t)> fits;
 };
@@ -26,6 +60,23 @@ struct upgrade_mint
 // erasure keeps the coordinator decoupled from the concrete member's handle type.
 struct upgrade_receive
 {
+    upgrade_receive() noexcept
+            : reason(fallback_reason::none)
+    {
+    }
+
+    upgrade_receive(plexus::detail::move_only_function<void()> handle) noexcept
+            : reason(fallback_reason::none)
+            , owner(std::move(handle))
+    {
+    }
+
+    explicit upgrade_receive(fallback_reason declined) noexcept
+            : reason(declined)
+    {
+    }
+
+    fallback_reason reason;
     plexus::detail::move_only_function<void()> owner;
 
     bool engaged() const noexcept

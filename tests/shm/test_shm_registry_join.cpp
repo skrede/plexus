@@ -63,7 +63,7 @@ acquire_result join(registry &reg, const std::string &fqn)
 
 }
 
-TEST_CASE("registry_join a control region whose slab is not there yet is a classified join failure", "[shm][registry_join][!shouldfail]")
+TEST_CASE("registry_join a control region whose slab is not there yet is a classified join failure", "[shm][registry_join]")
 {
     delaying_broker broker;
     registry reg(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
@@ -72,10 +72,10 @@ TEST_CASE("registry_join a control region whose slab is not there yet is a class
     broker.withhold_until(peer.ctrl_name + ".s", delaying_broker::clock::time_point::max());
 
     REQUIRE(join(reg, fqn) == acquire_result::failed);
-    REQUIRE(reg.last_acquire_failure().bound != acquire_bound::none);
+    REQUIRE(reg.last_acquire_failure().bound == acquire_bound::transient_join);
 }
 
-TEST_CASE("registry_join a header its creator has not stamped yet is a classified join failure", "[shm][registry_join][!shouldfail]")
+TEST_CASE("registry_join a header its creator has not stamped yet is a classified join failure", "[shm][registry_join]")
 {
     delaying_broker broker;
     registry reg(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
@@ -83,19 +83,19 @@ TEST_CASE("registry_join a header its creator has not stamped yet is a classifie
     peer_ring peer(broker, fqn, false);
 
     REQUIRE(join(reg, fqn) == acquire_result::failed);
-    REQUIRE(reg.last_acquire_failure().bound != acquire_bound::none);
+    REQUIRE(reg.last_acquire_failure().bound == acquire_bound::transient_join);
 }
 
-TEST_CASE("registry_join a header stamped with a foreign layout is a classified join failure", "[shm][registry_join][!shouldfail]")
+TEST_CASE("registry_join a header stamped with a foreign layout is a classified join failure", "[shm][registry_join]")
 {
     delaying_broker broker;
     registry reg(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
     const std::string fqn = fresh_fqn("foreign");
     peer_ring peer(broker, fqn, true);
-    peer.ring.header().magic = k_foreign_magic;
+    peer.ring.header().magic.store(k_foreign_magic);
 
     REQUIRE(join(reg, fqn) == acquire_result::failed);
-    REQUIRE(reg.last_acquire_failure().bound != acquire_bound::none);
+    REQUIRE(reg.last_acquire_failure().bound == acquire_bound::incompatible);
 }
 
 TEST_CASE("registry_join a withheld slab joins once it appears and a repeat acquire only bumps the refcount", "[shm][registry_join]")

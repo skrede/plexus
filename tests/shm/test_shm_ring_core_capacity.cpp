@@ -81,10 +81,10 @@ TEST_CASE("ring_core: attach re-reads and bounds-checks the header", "[shm][ring
     REQUIRE(attacher.cell_count() == k_cells);
     REQUIRE(attacher.slot_capacity() == k_slot);
 
-    // A foreign / unmapped control region (no magic) is rejected.
-    backing_region foreign_control(control_region_bytes(k_cells));
-    broadcast_ring rejected;
-    REQUIRE(broadcast_ring::attach(foreign_control.span(), slab.span(), rejected) == loan_status::rejected);
+    // A control region with no magic yet is a ring its creator has not stamped, not a foreign one.
+    backing_region unstamped_control(control_region_bytes(k_cells));
+    broadcast_ring unstamped;
+    REQUIRE(broadcast_ring::attach(unstamped_control.span(), slab.span(), unstamped) == loan_status::unstamped);
 }
 
 TEST_CASE("ring_core: a per-ring consumer_capacity bounds cursor registration", "[shm][ring_core]")

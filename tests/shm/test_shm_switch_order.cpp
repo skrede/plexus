@@ -153,7 +153,7 @@ std::span<const std::byte> as_bytes(const std::string &s)
 
 }
 
-TEST_CASE("switch_order a late companion route never overtakes frames queued on the wire", "[shm][switch_order][!shouldfail]")
+TEST_CASE("switch_order a late companion route never overtakes frames queued on the wire", "[shm][switch_order]")
 {
     constexpr std::uint32_t k_switch_at  = 4;
     constexpr std::uint32_t k_unstall_at = 8;
@@ -180,7 +180,7 @@ TEST_CASE("switch_order a late companion route never overtakes frames queued on 
     REQUIRE(log == expected);
 }
 
-TEST_CASE("attach_order the subscriber mints its receive ring before its subscribe leaves", "[shm][attach_order][!shouldfail]")
+TEST_CASE("attach_order the subscriber mints its receive ring before its subscribe leaves", "[shm][attach_order]")
 {
     arrival_log log;
     std::size_t occupancy = 0;

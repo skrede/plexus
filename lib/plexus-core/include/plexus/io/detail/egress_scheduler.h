@@ -80,6 +80,18 @@ public:
         }
     }
 
+    // Nothing is queued toward the destination: no band backlog and, for a banding channel, nothing in its own queue.
+    bool idle(Channel &ch) const
+    {
+        if constexpr(!can_poll<Channel>())
+            return true;
+        else
+        {
+            const auto it = m_queues.find(key_of(ch));
+            return (it == m_queues.end() || !it->second.has_work()) && ch.backpressured() == 0;
+        }
+    }
+
     // Drop a departed peer's bands (peer-death cleanup, called beside the registry removal).
     void remove(Channel &ch)
     {

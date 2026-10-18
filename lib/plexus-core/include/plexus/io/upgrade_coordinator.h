@@ -10,6 +10,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include <chrono>
 #include <memory>
 #include <string>
 #include <cstddef>
@@ -94,9 +95,22 @@ public:
         return detail::route_companion(m_held, node_name, fqn, bytes);
     }
 
+    // Arms a wake after the delay; the owner binds it to one timer whose expiry calls on_retry_due. Unset, a transient
+    // decline is final.
+    void set_retry_scheduler(plexus::detail::move_only_function<void(std::chrono::milliseconds)> schedule)
+    {
+        m_schedule_retry_cb = std::move(schedule);
+    }
+
+    void on_retry_due()
+    {
+        detail::lane_retry(*this);
+    }
+
     // Peer-dead teardown: dropping the held channels runs their destructors (releasing the ring).
     void on_peer_dead(std::string_view node_name)
     {
+        m_retry.erase_peer(node_name);
         m_held.erase(std::string{node_name});
     }
 
@@ -104,23 +118,32 @@ public:
     // its next up-edge mints afresh. The hint stays so that up-edge can still upgrade.
     void on_medium_lost(std::string_view fqn)
     {
+        m_retry.erase_fqn(fqn);
         detail::erase_fqn(m_held, fqn);
     }
 
 private:
     Registry &m_registry;
+    detail::upgrade_retry m_retry;
     detail::coordinator_held<Channel, upgrade_receive> m_held;
     std::unordered_map<std::string, dispatch_hint> m_hints;
     plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)> m_mint;
     plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> m_receive_mint;
     plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
+    plexus::detail::move_only_function<void(std::chrono::milliseconds)> m_schedule_retry_cb;
 
+    template<typename C>
+    friend fallback_reason detail::lane_attach(C &, std::string_view, std::string_view);
+    template<typename C>
+    friend fallback_reason detail::lane_mint(C &, std::string_view, std::string_view);
+    template<typename C>
+    friend fallback_reason detail::lane_engage(C &, std::string_view, std::string_view, demand_role);
+    template<typename C>
+    friend void detail::lane_arm(C &);
     template<typename C>
     friend void detail::lane_up(C &, std::string_view, std::string_view, demand_role);
     template<typename C>
-    friend void detail::lane_attach(C &, std::string_view, std::string_view);
-    template<typename C>
-    friend void detail::lane_mint(C &, std::string_view, std::string_view);
+    friend void detail::lane_retry(C &);
     template<typename C>
     friend void detail::lane_down(C &, std::string_view, std::string_view);
 

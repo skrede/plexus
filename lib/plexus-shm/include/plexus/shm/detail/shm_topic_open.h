@@ -40,16 +40,30 @@ shm::acquire_result topic_mint(Registry &r, Entry &e, const std::string &slab_na
     return shm::acquire_result::created;
 }
 
-// The attacher path: maps the peer's regions and re-reads the geometry from the control
-// header (never unlinks).
+// The attacher path: maps the peer's regions and re-reads the geometry from the control header (never unlinks). A slab
+// missing beside a live control region, or a header not stamped yet, is a creator still minting: a transient join.
 template<typename Registry, typename Entry>
 shm::acquire_result topic_join(Registry &r, Entry &e, const std::string &ctrl_name, const std::string &slab_name)
 {
-    if(r.m_broker.attach(ctrl_name, e.control) != shm::region_status::ok || r.m_broker.attach(slab_name, e.slab) != shm::region_status::ok)
+    shm::acquire_failure &failure = r.m_last_failure;
+    const auto fail               = [&failure](shm::acquire_bound bound, shm::region_status broker = shm::region_status::ok)
+    {
+        failure = shm::acquire_failure{bound, 0, 0, broker};
         return shm::acquire_result::failed;
-    if(shm::broadcast_ring::attach(e.control.bytes(), e.slab.bytes(), e.ring) != shm::loan_status::ok)
-        return shm::acquire_result::failed;
-    return shm::acquire_result::attached;
+    };
+    if(const shm::region_status cs = r.m_broker.attach(ctrl_name, e.control); cs != shm::region_status::ok)
+        return fail(shm::acquire_bound::os_allocator, cs);
+    if(const shm::region_status ss = r.m_broker.attach(slab_name, e.slab); ss != shm::region_status::ok)
+        return fail(ss == shm::region_status::not_found ? shm::acquire_bound::transient_join : shm::acquire_bound::os_allocator, ss);
+    switch(shm::broadcast_ring::attach(e.control.bytes(), e.slab.bytes(), e.ring))
+    {
+        case shm::loan_status::ok:
+            return shm::acquire_result::attached;
+        case shm::loan_status::unstamped:
+            return fail(shm::acquire_bound::transient_join);
+        default:
+            return fail(shm::acquire_bound::incompatible);
+    }
 }
 
 // Mints or attaches the two regions for (fqn, direction) and binds the entry's ring. amode is

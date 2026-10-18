@@ -28,6 +28,8 @@ struct registry_subscriber
     subscriber_qos sub_qos{};
     std::optional<std::uint64_t> type_id;
     std::reference_wrapper<Channel> channel;
+    // Route state the publish fan owns while it reads the registry as const: set once a companion took over the route.
+    mutable bool on_companion{false};
 };
 
 struct band_drop_counters

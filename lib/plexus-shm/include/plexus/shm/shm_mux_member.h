@@ -163,6 +163,12 @@ public:
         return m_registry;
     }
 
+    // Why the last companion mint or receive attach on this member was declined.
+    io::fallback_reason last_fallback_reason() const noexcept
+    {
+        return detail::fallback_of(m_registry.last_acquire_failure());
+    }
+
     // The declaring publisher records its topic's effective per-message size + geometry here,
     // BEFORE the dial/listen that mints the ring. A LOCAL value (a remote peer cannot inject a
     // geometry); an fqn with no entry resolves to the default ring.

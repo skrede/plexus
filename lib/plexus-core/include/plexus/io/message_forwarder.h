@@ -83,9 +83,9 @@ public:
         auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
         detail::record_remote_topic(*this, p.node_name, fqn, qos, type_id, type_name);
+        emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
         send_subscribe(p.channel, fqn, hash, type_id, qos, type_name);
         emit_qos_change(qos_edge::accepted, hash, qos, rxo_verdict::compatible, type_id);
-        emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
         return true;
     }
 

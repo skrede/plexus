@@ -79,15 +79,15 @@ io::upgrade_mint<typename Engine::channel_type> mint_send_lane(Engine &engine, M
     const std::string key{fqn};
     std::unique_ptr<typename Member::channel_type> ch = member.mint_companion(key, drop_lanes_on_loss(engine, key));
     if(!ch)
-        return {};
+        return io::upgrade_mint<typename Engine::channel_type>{member.last_fallback_reason()};
     auto fits = member.companion_route(key);
     return {wrap_companion<typename Engine::channel_type>(std::move(ch)), std::move(fits)};
 }
 
 // Each drained frame is injected into the matching peer session, resolved by node_name. The drain posts on the node's
 // executor, so inject runs on an executor turn with no drain thread. The returned owner is never called: dropping it on
-// peer-dead runs the RAII handle's dtor (clear sink, release ring). A null handle declines and the subscriber keeps the
-// wire.
+// peer-dead runs the RAII handle's dtor (clear sink, release ring). A null handle declines with the member's reason and
+// the subscriber keeps the wire.
 template<typename Engine, typename Member>
 io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::string_view node_name, std::string_view fqn)
 {
@@ -95,8 +95,8 @@ io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::strin
     auto deliver = [&engine, peer = std::string{node_name}](std::span<const std::byte> frame) { engine.inject_upgrade_receive(peer, frame); };
     auto handle  = member.mint_receive_companion(key, std::move(deliver), drop_lanes_on_loss(engine, key));
     if(!handle)
-        return {};
-    return {[h = std::move(handle)]() mutable { (void)h; }};
+        return io::upgrade_receive{member.last_fallback_reason()};
+    return io::upgrade_receive{[h = std::move(handle)]() mutable { (void)h; }};
 }
 
 // Install the companion-ring mint and receive gates for one shm member into the engine's coordinator, capturing the

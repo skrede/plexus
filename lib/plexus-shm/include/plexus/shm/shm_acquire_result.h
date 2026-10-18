@@ -26,15 +26,20 @@ enum class acquire_mode : std::uint8_t
     join_live,
 };
 
+// transient_join: a co-host creator has not finished minting the ring (its slab is missing or its header unstamped), so
+// a later join can succeed; incompatible: the header carries a foreign or older layout.
 enum class acquire_bound : std::uint8_t
 {
     none,
     slab_ceiling,
     os_allocator,
     notifier,
+    transient_join,
+    incompatible,
 };
 
-// limit_bytes is set for the slab_ceiling bound only, broker for os_allocator only, arm for notifier only.
+// limit_bytes is set for the slab_ceiling bound only, broker for os_allocator and a missing-slab transient_join only, arm
+// for notifier only.
 struct acquire_failure
 {
     explicit acquire_failure(acquire_bound bound = acquire_bound::none, std::uint64_t ask_bytes = 0, std::uint64_t limit_bytes = 0, region_status broker = region_status::ok,

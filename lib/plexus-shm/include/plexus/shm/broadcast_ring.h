@@ -77,7 +77,6 @@ public:
 
         auto *header = ::new(control.data()) control_header_t{};
         header->enqueue_pos.store(0, std::memory_order_relaxed);
-        header->magic             = k_ring_magic;
         header->cell_count        = cell_count;
         header->slot_capacity     = slot_capacity;
         header->mask              = cell_count - 1;
@@ -98,21 +97,27 @@ public:
             cells[i].payload_len.store(0, std::memory_order_relaxed);
             cells[i].take_refcount.store(0, std::memory_order_relaxed);
         }
+        // Stamped last with release, so a joiner whose acquire load sees the stamp sees every field and cell above.
+        header->magic.store(k_ring_magic, std::memory_order_release);
 
         out.bind(control, slab, header, cells, cell_count, slot_capacity, cell_count - 1, consumer_capacity);
         return loan_status::ok;
     }
 
     // Re-reads + bounds-checks the config from the control header (never trusts a peer's separate
-    // value): magic + version, power-of-two cell_count, mask == cell_count - 1, and both region
-    // sizes. A foreign or layout-incompatible region is rejected.
+    // value): magic first, then power-of-two cell_count, mask == cell_count - 1, and both region
+    // sizes. A zero magic is a ring its creator has not stamped yet; a foreign or layout-incompatible
+    // region is rejected.
     static loan_status attach(std::span<std::byte> control, std::span<std::byte> slab, broadcast_ring &out) noexcept
     {
         if(control.size() < sizeof(control_header_t))
             return loan_status::rejected;
 
-        auto *header = std::launder(reinterpret_cast<control_header_t *>(control.data()));
-        if(header->magic != k_ring_magic || !is_power_of_two(header->cell_count) || header->slot_capacity == 0)
+        auto *header              = std::launder(reinterpret_cast<control_header_t *>(control.data()));
+        const std::uint64_t magic = header->magic.load(std::memory_order_acquire);
+        if(magic == 0)
+            return loan_status::unstamped;
+        if(magic != k_ring_magic || !is_power_of_two(header->cell_count) || header->slot_capacity == 0)
             return loan_status::rejected;
         if(header->mask != header->cell_count - 1)
             return loan_status::rejected;

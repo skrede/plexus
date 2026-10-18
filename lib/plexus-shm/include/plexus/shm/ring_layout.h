@@ -143,7 +143,7 @@ struct control_header_t
 {
     alignas(k_cache_line) std::atomic<std::uint64_t> enqueue_pos;
 
-    alignas(k_cache_line) std::uint64_t magic;
+    alignas(k_cache_line) std::atomic<std::uint64_t> magic;
     std::uint64_t cell_count;    // power of two
     std::uint64_t slot_capacity; // multiple of 8
     std::uint64_t mask;          // cell_count - 1

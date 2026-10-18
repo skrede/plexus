@@ -122,11 +122,13 @@ public:
             , m_monitor(m_executor)
             , m_peer_liveliness(m_liveliness)
             , m_coordinator(m_registry)
+            , m_retry_timer(executor)
             , m_splice(io::make_forward_ctx(forward))
     {
         m_messages.set_forward_options(forward);
         m_messages.set_consume_relayed(routes.usage != route_usage::never);
         detail::install_routing_sinks(*this);
+        detail::install_upgrade_retry(m_coordinator, m_retry_timer);
         detail::install_splice_refan(*this);
     }
 
@@ -483,6 +485,7 @@ private:
     peer_liveliness<typename LivelinessStorage::arbiter> m_peer_liveliness;
     std::vector<std::reference_wrapper<observer>> m_observers;
     upgrade_coordinator<registry_type, channel_type> m_coordinator;
+    typename Policy::timer_type m_retry_timer;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness_cb;
     ForwardSplice m_splice;
 
