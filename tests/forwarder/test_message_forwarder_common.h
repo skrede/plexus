@@ -104,6 +104,30 @@ inline std::size_t count_unsubscribes(const capture &cap)
     return n;
 }
 
+inline std::size_t count_subscribe_responses(const capture &cap)
+{
+    std::size_t n = 0;
+    for(const auto &f : cap.frames)
+    {
+        auto hdr = plexus::wire::decode_header(f);
+        if(!hdr || hdr->type != plexus::wire::msg_type::subscribe_response)
+            continue;
+        auto inner = std::span<const std::byte>{f}.subspan(plexus::wire::header_size);
+        if(auto resp = plexus::wire::decode_subscribe_response(inner); resp && resp->status == plexus::wire::subscribe_status::subscribed)
+            ++n;
+    }
+    return n;
+}
+
+inline std::size_t count_data_frames(const capture &cap)
+{
+    std::size_t n = 0;
+    for(const auto &f : cap.frames)
+        if(auto hdr = plexus::wire::decode_header(f); hdr && hdr->type == plexus::wire::msg_type::unidirectional)
+            ++n;
+    return n;
+}
+
 // Decode the type_hash of the FIRST subscribe_request in a capture's recorded traffic.
 inline std::optional<std::uint64_t> first_subscribe_type_hash(const capture &cap)
 {

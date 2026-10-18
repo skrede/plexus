@@ -6,7 +6,8 @@
 # core, the wire layer, and the inproc backend; the `forwarder.` ctest prefix lets
 # `ctest -R forwarder` select it. Auto-discovered by the tests glob.
 add_executable(test_message_forwarder test_message_forwarder.cpp
-    test_message_forwarder_receive.cpp test_message_forwarder_alloc.cpp)
+    test_message_forwarder_receive.cpp test_message_forwarder_alloc.cpp
+    test_message_forwarder_directions.cpp)
 
 # tests/ is on the include path so the test can pull in support/alloc_counter.h.
 target_include_directories(test_message_forwarder PRIVATE

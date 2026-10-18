@@ -172,3 +172,20 @@ TEST_CASE("concurrent outstanding calls each resolve to their own response", "[p
             REQUIRE(got[i] == "req-" + std::to_string(i));
     }
 }
+
+TEST_CASE("subscription_directions a peer's procedure subscribe is answered while this node subscribes to the same procedure on that peer", "[procedure][!shouldfail]")
+{
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
+    inproc_channel<> ch(ex);
+    capture cap(ex);
+    auto peer = make_peer(ch, cap, "provider-node");
+
+    plexus::log::null_logger sink;
+    procedure_forwarder fwd{ex, k_long_deadline, sink};
+    REQUIRE(fwd.attach(peer, "svc"));
+    REQUIRE(fwd.attach_for_fanout(peer, "svc"));
+    REQUIRE(fwd.detach(peer, "svc"));
+    ex.drain();
+    REQUIRE(count_subscribes(cap) == 1);
+}
