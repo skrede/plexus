@@ -8,11 +8,14 @@
 #include "plexus/io/observation_events.h"
 
 #include "plexus/io/detail/forwarder_publish.h"
+#include "plexus/io/detail/forwarder_companion.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/topic_hash.h"
 
+#include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -22,6 +25,18 @@ namespace plexus::io::detail {
 inline wire::subscribe_status status_of(io::rxo_verdict v)
 {
     return v == io::rxo_verdict::source_identity_incompatible ? wire::subscribe_status::source_identity_incompatible : wire::subscribe_status::incompatible_qos;
+}
+
+// A degraded verdict admits but carries the degraded-field set, so the accept is non-silent.
+inline std::vector<std::byte> accepted_response(std::uint64_t hash, const io::rxo_result &rxo, bool companion_offered)
+{
+    if(rxo.verdict != io::rxo_verdict::degraded)
+        return wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed, .companion_offered = companion_offered});
+    return wire::encode_subscribe_response({.topic_hash        = hash,
+                                            .status            = wire::subscribe_status::subscribed_degraded,
+                                            .companion_offered = companion_offered,
+                                            .has_degraded      = true,
+                                            .degraded_flags    = rxo.degraded_fields});
 }
 
 // Each refusal replies a status, registers no fan-out entry, and returns false — a per-topic
@@ -58,13 +73,10 @@ bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::o
         return false;
     f.m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);
     f.emit_qos_change(rxo.verdict == io::rxo_verdict::degraded ? qos_edge::degraded : qos_edge::accepted, hash, sub_qos, rxo.verdict, subscriber_type_id);
-    // A degraded verdict admits but carries the degraded-field set, so the accept is non-silent.
-    auto resp = rxo.verdict == io::rxo_verdict::degraded
-            ? wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed_degraded, .has_degraded = true, .degraded_flags = rxo.degraded_fields})
-            : wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed});
-    f.send_control(p.channel, wire::msg_type::subscribe_response, resp);
-    replay_if_latched(f, p, hash);
+    // The up-edge mints and stamps the ring before the response can tell the subscriber it exists.
     f.emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::publisher);
+    f.send_control(p.channel, wire::msg_type::subscribe_response, accepted_response(hash, rxo, holds_lane(f.m_companion_hooks, p.node_name, fqn)));
+    replay_if_latched(f, p, hash);
     return true;
 }
 

@@ -1,3 +1,5 @@
+#include "support/coordinator_lanes.h"
+
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
@@ -22,35 +24,9 @@ using plexus::io::fallback_reason;
 using plexus::io::upgrade_receive;
 using plexus::io::demand_transition;
 using std::chrono::milliseconds;
-
-struct co_host_registry
-{
-    bool same_host_for(std::string_view) const noexcept
-    {
-        return true;
-    }
-};
-
-class counted_lane
-{
-public:
-    explicit counted_lane(std::int32_t &live)
-            : m_live(live)
-    {
-        ++m_live;
-    }
-
-    ~counted_lane()
-    {
-        --m_live;
-    }
-
-    counted_lane(const counted_lane &)            = delete;
-    counted_lane &operator=(const counted_lane &) = delete;
-
-private:
-    std::int32_t &m_live;
-};
+using plexus::testing::counted_lane;
+using plexus::testing::engage_demand;
+using plexus::testing::co_host_registry;
 
 using coordinator = plexus::io::upgrade_coordinator<co_host_registry, counted_lane>;
 
@@ -110,7 +86,7 @@ TEST_CASE("medium_coordinator_retry a transient decline is re-attempted with gro
     std::vector<milliseconds> wakes;
     install(c, gate, wakes);
 
-    c.on_edge("peer", "alpha", demand_transition::up, role);
+    engage_demand(c, "peer", "alpha", role);
     for(std::uint32_t wake = 1; wake <= 3; ++wake)
     {
         REQUIRE(wakes.size() == wake);
@@ -121,7 +97,7 @@ TEST_CASE("medium_coordinator_retry a transient decline is re-attempted with gro
     REQUIRE(gate.live == 1);
 
     c.on_retry_due();
-    c.on_edge("peer", "alpha", demand_transition::up, role);
+    engage_demand(c, "peer", "alpha", role);
     REQUIRE(gate.calls == 4);
     REQUIRE(wakes.size() == 3);
 }

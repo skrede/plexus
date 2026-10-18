@@ -80,6 +80,14 @@ public:
     {
         m_forwarded = std::move(c);
     }
+    void on_companion_ready(consumer c)
+    {
+        m_companion_ready = std::move(c);
+    }
+    void on_companion_withdrawn(consumer c)
+    {
+        m_companion_withdrawn = std::move(c);
+    }
 
     // Decode the header, switch on its type, hand the inner payload to the registered consumer.
     // A short/bad-magic frame or an unknown/unregistered type is warn-and-dropped.
@@ -134,6 +142,10 @@ private:
                 return fire(m_peer_report, inner);
             case wire::msg_type::forwarded:
                 return fire(m_forwarded, inner);
+            case wire::msg_type::companion_ready:
+                return fire(m_companion_ready, inner);
+            case wire::msg_type::companion_withdrawn:
+                return fire(m_companion_withdrawn, inner);
             default:
                 return drop("plexus: router unknown_frame_type");
         }
@@ -172,6 +184,8 @@ private:
     consumer m_declare;
     consumer m_peer_report;
     consumer m_forwarded;
+    consumer m_companion_ready;
+    consumer m_companion_withdrawn;
 };
 
 }

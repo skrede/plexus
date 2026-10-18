@@ -44,6 +44,7 @@ public:
     explicit seen_set(node_slot &slot)
             : m_slot(slot)
             , m_seen()
+            , m_highest()
     {
     }
 
@@ -64,20 +65,34 @@ public:
         else
             m_slot.distinct.fetch_add(1, std::memory_order_release);
         seen.set(m.sequence);
+        note_order(m);
     }
 
     void reset()
     {
         for(auto &seen : m_seen)
             seen.reset();
+        m_highest.fill(std::nullopt);
         m_slot.received.store(0, std::memory_order_release);
         m_slot.distinct.store(0, std::memory_order_release);
         m_slot.duplicates.store(0, std::memory_order_release);
+        m_slot.out_of_order.store(0, std::memory_order_release);
     }
 
 private:
     node_slot &m_slot;
     std::array<std::bitset<k_max_sequence>, k_max_nodes> m_seen;
+    std::array<std::optional<std::uint32_t>, k_max_nodes> m_highest;
+
+    // A sequence below the highest one already seen from the same publisher arrived out of order.
+    void note_order(const traffic_message &m)
+    {
+        std::optional<std::uint32_t> &highest = m_highest[m.publisher];
+        if(highest && m.sequence < *highest)
+            m_slot.out_of_order.fetch_add(1, std::memory_order_release);
+        else
+            highest = m.sequence;
+    }
 };
 
 }

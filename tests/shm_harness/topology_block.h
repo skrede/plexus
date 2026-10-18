@@ -89,6 +89,7 @@ struct node_slot
     std::atomic<std::uint32_t> received;
     std::atomic<std::uint32_t> distinct;
     std::atomic<std::uint32_t> duplicates;
+    std::atomic<std::uint32_t> out_of_order;
     std::atomic<std::uint32_t> warm_seen;
     std::atomic<std::uint32_t> slowest_send_us;
     std::atomic<std::uint32_t> exit_code;
@@ -107,6 +108,7 @@ struct node_counts
     std::uint32_t received;
     std::uint32_t distinct;
     std::uint32_t duplicates;
+    std::uint32_t out_of_order;
     std::uint32_t warm_seen;
     std::uint32_t slowest_send_us;
     plexus::io::fallback_counts fallbacks;
@@ -122,10 +124,9 @@ inline plexus::io::fallback_counts snapshot_fallbacks(const node_slot &s)
 
 inline node_counts snapshot(const node_slot &s)
 {
-    return {s.connected.load(std::memory_order_acquire),       s.published.load(std::memory_order_acquire),
-            s.received.load(std::memory_order_acquire),        s.distinct.load(std::memory_order_acquire),
-            s.duplicates.load(std::memory_order_acquire),      s.warm_seen.load(std::memory_order_acquire),
-            s.slowest_send_us.load(std::memory_order_acquire), snapshot_fallbacks(s)};
+    return {s.connected.load(std::memory_order_acquire), s.published.load(std::memory_order_acquire),       s.received.load(std::memory_order_acquire),
+            s.distinct.load(std::memory_order_acquire),  s.duplicates.load(std::memory_order_acquire),      s.out_of_order.load(std::memory_order_acquire),
+            s.warm_seen.load(std::memory_order_acquire), s.slowest_send_us.load(std::memory_order_acquire), snapshot_fallbacks(s)};
 }
 
 inline std::uint64_t fallbacks_of(const node_counts &c, plexus::io::fallback_reason reason)
@@ -146,7 +147,8 @@ inline std::string fallback_summary(const node_counts &c)
 inline std::string summary(const node_counts &c, bool over_shm)
 {
     return "received=" + std::to_string(c.received) + " distinct=" + std::to_string(c.distinct) + " duplicates=" + std::to_string(c.duplicates) +
-            " warm_seen=" + std::to_string(c.warm_seen) + " connected=" + std::to_string(c.connected) + " shm_region=" + (over_shm ? "1" : "0") + " fallbacks=" + fallback_summary(c);
+            " out_of_order=" + std::to_string(c.out_of_order) + " warm_seen=" + std::to_string(c.warm_seen) + " connected=" + std::to_string(c.connected) +
+            " shm_region=" + (over_shm ? "1" : "0") + " fallbacks=" + fallback_summary(c);
 }
 
 }

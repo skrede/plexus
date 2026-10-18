@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_SUBSCRIBE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_SUBSCRIBE_H
 
+#include "plexus/io/companion_event.h"
+
 #include "plexus/wire/subscribe.h"
 
 #include <span>
@@ -28,6 +30,14 @@ void surface_subscribe_outcome(Session &s, const wire::subscribe_response &resp)
     }
 }
 
+// A refusal attached nothing, so it carries no offer to answer.
+template<typename Session, typename Forwarder>
+void note_offer(const Session &s, Forwarder &messages, const wire::subscribe_response &resp)
+{
+    if(s.is_complete() && !is_refusal(resp.status))
+        messages.note_companion(s.msg_peer(), resp.topic_hash, resp.companion_offered ? companion_event::offered : companion_event::not_offered);
+}
+
 // The anti-wrap guard stays first: a response with no outstanding match is a
 // stray/duplicate/forged frame, dropped before anything else so it can never fire a callback
 // nor wrap m_outstanding_subscribes (which would make ready unreachable for the cycle).
@@ -40,6 +50,7 @@ void on_subscribe_response_received(Session &s, std::span<const std::byte> inner
     if(s.m_outstanding_subscribes == 0)
         return s.m_logger.warn("plexus: subscribe_response with no outstanding match");
     surface_subscribe_outcome(s, *resp);
+    note_offer(s, s.m_messages, *resp);
     --s.m_outstanding_subscribes;
     s.maybe_fire_ready();
 }

@@ -2,11 +2,13 @@
 #define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MEMBER_LANES_H
 
 #include "support/delaying_broker.h"
+#include "support/coordinator_lanes.h"
 
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/io/dispatch_hint.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/upgrade_coordinator.h"
 
@@ -20,16 +22,8 @@
 
 namespace plexus::testing {
 
-struct co_host_registry
-{
-    bool same_host_for(std::string_view) const noexcept
-    {
-        return true;
-    }
-};
-
 // One member's send gate and its registry's reports bound to a coordinator the way the node binds them; the publisher's
-// up-edge toward one co-host peer runs at construction.
+// up-edge toward one co-host peer and that peer's ready answer run at construction.
 template<typename Broker, typename Notifier>
 struct member_lanes
 {
@@ -47,6 +41,7 @@ struct member_lanes
         lanes.set_topic_hint(topic, io::dispatch_hint::frequent);
         plexus::detail::count_member_fallbacks(*this, member);
         lanes.on_edge("peer", topic, io::demand_transition::up, io::demand_role::publisher);
+        lanes.on_companion("peer", topic, io::companion_event::ready);
     }
 
     coordinator_type &coordinator() noexcept

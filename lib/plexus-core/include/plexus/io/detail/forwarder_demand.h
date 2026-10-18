@@ -67,6 +67,17 @@ bool forwarder_detach(Forwarder &f, const Peer &p, std::string_view fqn)
     return true;
 }
 
+// The publisher's half of a clean unsubscribe: the peer's fan-out entry and its lane leave with its demand.
+template<typename Forwarder, typename Peer>
+bool forwarder_detach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn)
+{
+    if(fqn.empty() || !f.m_endpoint.detach_gate(p.node_name, fqn))
+        return false;
+    f.m_endpoint.registry().remove_subscriber(wire::fqn_topic_hash(fqn), p.channel);
+    f.emit_demand_transition(p.node_name, fqn, demand_transition::down, demand_role::publisher);
+    return true;
+}
+
 template<typename Forwarder, typename Peer>
 void forwarder_detach_all(Forwarder &f, const Peer &p)
 {

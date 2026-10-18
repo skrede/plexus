@@ -30,4 +30,5 @@ TEST_CASE("harness one publisher and one hinted subscriber deliver every message
     REQUIRE(sub.received == 20);
     REQUIRE(sub.distinct == 20);
     REQUIRE(sub.duplicates == 0);
+    REQUIRE(sub.out_of_order == 0);
 }

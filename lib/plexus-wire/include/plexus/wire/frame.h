@@ -19,26 +19,28 @@ static_assert(k_max_reassembler_payload_bytes < std::numeric_limits<int>::max(),
 constexpr std::byte magic_byte_0{0x56};
 constexpr std::byte magic_byte_1{0x50};
 
-// Wire-stable message-type byte. Append-only: a value is NEVER reordered or reused; a new
-// msg_type takes the next free integer (0x0D+) and is byte-identical to a peer that never
-// emits it, so it rides WITHIN the current protocol version with no bump.
+// Wire-stable message-type byte. Append-only: a value is NEVER reordered or reused, and a new
+// msg_type takes the next free integer. A peer drops a value it does not know, so a value an
+// older peer must refuse rather than ignore rides a protocol version bump.
 enum class msg_type : uint8_t
 {
-    unidirectional     = 0x01,
-    bidirectional      = 0x02,
-    handshake_req      = 0x03,
-    handshake_resp     = 0x04,
-    subscribe          = 0x05,
-    unsubscribe        = 0x06,
-    fetch_latched      = 0x07,
-    fetch_metadata     = 0x08,
-    rpc_request        = 0x09,
-    rpc_response       = 0x0A,
-    subscribe_response = 0x0B,
-    heartbeat          = 0x0C,
-    declare            = 0x0D,
-    peer_report        = 0x0E,
-    forwarded          = 0x0F
+    unidirectional      = 0x01,
+    bidirectional       = 0x02,
+    handshake_req       = 0x03,
+    handshake_resp      = 0x04,
+    subscribe           = 0x05,
+    unsubscribe         = 0x06,
+    fetch_latched       = 0x07,
+    fetch_metadata      = 0x08,
+    rpc_request         = 0x09,
+    rpc_response        = 0x0A,
+    subscribe_response  = 0x0B,
+    heartbeat           = 0x0C,
+    declare             = 0x0D,
+    peer_report         = 0x0E,
+    forwarded           = 0x0F,
+    companion_ready     = 0x10,
+    companion_withdrawn = 0x11
 };
 
 enum class endpoint_source_type : uint8_t

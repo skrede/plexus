@@ -5,6 +5,7 @@ set(PLEXUS_WIRE_TESTS
     test_varint
     test_length_prefixed_helper
     test_subscribe_qos_codec
+    test_companion_codec
     test_fetch_latched_codec
     test_heartbeat_codec
     test_topic_declaration_codec

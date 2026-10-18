@@ -827,7 +827,7 @@ catch_discover_tests(test_shm_mux TEST_PREFIX "shm.")
 # consumes the forwarder's demand transition, reads same_host, runs the upgrade policy, and
 # acquires/releases the per-topic ring THROUGH the injected gate (the can_acquire/prefer_upgradeable_hook
 # path), never a direct registry acquire — with refcount 0->1/1->0 gating, last-unsubscribe and
-# peer-dead teardown, the bilateral-OR hint, and dual delivery (the wire never suppressed). It also
+# peer-dead teardown, the node's accumulated hint, and dual delivery (the wire never suppressed). It also
 # drives the forwarder's real on_demand_transition emit seam (boundary-only fire, no-op when unset).
 add_executable(test_medium_coordinator test_medium_coordinator.cpp)
 
@@ -866,6 +866,16 @@ target_link_libraries(test_medium_coordinator_reasons PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_medium_coordinator_reasons TEST_PREFIX "shm.")
+
+# Shared memory engages only bilaterally: the publisher offers its ring, the subscriber attaches it when its own policy
+# agrees and answers ready, the publisher routes only after that answer and returns to the wire on a withdrawal.
+add_executable(test_medium_coordinator_engagement test_medium_coordinator_engagement.cpp)
+
+target_link_libraries(test_medium_coordinator_engagement PRIVATE
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_medium_coordinator_engagement TEST_PREFIX "shm.")
 
 # A member's declines, demotions and lost waiters reach the coordinator's counters by reason, over in-memory brokers.
 add_executable(test_medium_coordinator_member_reasons test_medium_coordinator_member_reasons.cpp)

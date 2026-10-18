@@ -33,6 +33,7 @@
 #include "plexus/io/detail/forwarder_fanout.h"
 #include "plexus/io/detail/forwarder_deliver.h"
 #include "plexus/io/detail/forwarder_publish.h"
+#include "plexus/io/detail/forwarder_companion.h"
 #include "plexus/io/detail/forwarder_subscribe.h"
 
 #include "plexus/log/logger.h"
@@ -92,6 +93,11 @@ public:
     bool attach_for_fanout(const peer &p, std::string_view fqn, std::optional<std::uint64_t> subscriber_type_id = std::nullopt, const subscriber_qos &sub_qos = subscriber_qos{})
     {
         return detail::attach_for_fanout(*this, p, fqn, subscriber_type_id, sub_qos);
+    }
+
+    bool detach_for_fanout(const peer &p, std::string_view fqn)
+    {
+        return detail::forwarder_detach_for_fanout(*this, p, fqn);
     }
 
     // Register a same-node self-route as a first-class subscriber: registry add only — no wire
@@ -415,6 +421,22 @@ public:
         m_companion_route_cb = std::move(hook);
     }
 
+    void on_companion(detail::companion_hooks hooks)
+    {
+        m_companion_hooks = std::move(hooks);
+    }
+
+    void note_companion(const peer &p, std::uint64_t topic_hash, companion_event event)
+    {
+        if(m_companion_hooks.event_cb)
+            m_companion_hooks.event_cb(p.node_name, fqn_for(topic_hash), event);
+    }
+
+    void send_companion(const peer &p, std::string_view fqn, companion_event event)
+    {
+        detail::send_companion(m_endpoint, p.channel, fqn, event);
+    }
+
     void on_demand_transition(plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition, demand_role)> hook)
     {
         m_on_demand_transition_cb = std::move(hook);
@@ -565,6 +587,8 @@ private:
     template<typename F, typename P>
     friend bool detail::forwarder_detach(F &, const P &, std::string_view);
     template<typename F, typename P>
+    friend bool detail::forwarder_detach_for_fanout(F &, const P &, std::string_view);
+    template<typename F, typename P>
     friend void detail::forwarder_detach_all(F &, const P &);
     template<typename F, typename C>
     friend void detail::forwarder_detach_local(F &, std::string_view, C &);
@@ -660,6 +684,7 @@ private:
     // Self-route channel pointers recorded at attach_local, refcounted per fqn: the origination gate
     // excludes them from non-local demand so a same-node self-route never receives a forwarded envelope.
     std::unordered_map<const void *, std::size_t> m_self_route_channels;
+    detail::companion_hooks m_companion_hooks;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
     plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> m_on_forward_refan_cb;
     plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> m_on_originate_cb;

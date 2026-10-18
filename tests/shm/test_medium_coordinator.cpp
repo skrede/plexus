@@ -2,6 +2,7 @@
 #include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/io/dispatch_hint.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/peer_context.h"
@@ -25,18 +26,16 @@
 #include <catch2/catch_test_macros.hpp>
 
 // The medium-assert oracle: on a co-host qualifying demand edge the coordinator MINTS the
-// per-topic companion ring channel THROUGH the injected mint gate (the mint_companion path
-// the node installs from its shm member) and RETAINS it — NEVER a direct registry acquire.
-// The oracle records WHICH path served (a mint iff the gate accepted) and asserts dual
-// delivery (the wire attach is never suppressed: a declined/off-host/hint-less pair simply
-// keeps the wire — the coordinator mints nothing). It proves the per-message companion
-// route (a fitting message resolves to the companion, an over-cap wire_fallback message to
-// nullptr), the refcount-like 0->1/1->0 mint/drop gating, and the bounded hint map.
+// per-topic companion ring channel THROUGH the injected mint gate and RETAINS it — NEVER a direct
+// registry acquire. A declined, off-host or hint-less pair keeps the wire. It proves the
+// per-message companion route of a ready lane, the 0->1/1->0 mint/drop gating, and the bounded
+// hint map.
 
 using namespace plexus::shm;
 using plexus::io::demand_transition;
 using plexus::io::demand_role;
 using plexus::io::dispatch_hint;
+using plexus::io::companion_event;
 
 namespace {
 
@@ -243,6 +242,7 @@ TEST_CASE("shm.coordinator the per-message companion route: a fitting message ri
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
+    c.on_companion("node-a", "alpha", companion_event::ready);
     REQUIRE(gate.mints() == 1);
 
     // A message at or under the cap routes to the companion ring; an over-cap message keeps
@@ -267,6 +267,7 @@ TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
+    c.on_companion("node-a", "alpha", companion_event::ready);
     REQUIRE(c.companion_for("node-a", "alpha", 1) != nullptr);
     REQUIRE(c.companion_for("node-a", "alpha", 1u << 20) != nullptr);
 }
@@ -311,12 +312,10 @@ TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
 
-TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive companion, not a send mint", "[shm][coordinator]")
+TEST_CASE("shm.coordinator a co-host SUBSCRIBER attaches the offered receive companion, not a send mint", "[shm][coordinator]")
 {
-    // The receive lane (gap-closure): a subscriber-role edge routes THROUGH the receive gate
-    // (attach the co-host ring as a consumer) and NOT the send mint gate — a subscriber node
-    // never publishes the topic, so no send companion is minted. The companion route stays
-    // nullptr for it (it has no send channel); the wire send path is irrelevant on this side.
+    // A subscriber node never publishes the topic, so its offered ring attaches THROUGH the
+    // receive gate and no send companion is minted.
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
@@ -327,6 +326,7 @@ TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive compan
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
+    c.on_companion("node-a", "alpha", companion_event::offered);
 
     REQUIRE(rgate.attaches() == 1);               // the receive companion attached
     REQUIRE(rgate.live == 1);                     // and is retained by the coordinator
@@ -338,9 +338,7 @@ TEST_CASE("shm.coordinator a co-host SUBSCRIBER 0->1 attaches the receive compan
 
 TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and on peer-dead", "[shm][coordinator]")
 {
-    // The receive lane mirrors the send lane's refcounted teardown: the 1->0 demand edge AND
-    // a peer-dead both drop the receive owner, running the handle dtor (clear sink, release
-    // ring). No leak, no double-free, no dangling drain registration.
+    // The 1->0 demand edge AND a peer-dead both drop the receive owner, running its dtor.
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     receive_recorder rgate;
@@ -350,6 +348,7 @@ TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and
     c.set_topic_hint("beta", dispatch_hint::large);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
+    c.on_companion("node-a", "alpha", companion_event::offered);
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber); // 1->2: no-op
     REQUIRE(rgate.attaches() == 1);
     REQUIRE(rgate.live == 1);
@@ -359,6 +358,7 @@ TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and
 
     // A second topic, then peer-dead drops it too.
     c.on_edge("node-a", "beta", demand_transition::up, demand_role::subscriber);
+    c.on_companion("node-a", "beta", companion_event::offered);
     REQUIRE(rgate.live == 1);
     c.on_peer_dead("node-a");
     REQUIRE(rgate.live == 0);
@@ -366,14 +366,14 @@ TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and
 
 TEST_CASE("shm.coordinator a subscriber edge with no receive gate keeps only the wire (no crash)", "[shm][coordinator]")
 {
-    // A composition with no shm member installs no receive gate: a co-host subscriber edge is
-    // a no-op (the wire receive path stays), exactly as a no-mint-gate publisher edge is.
+    // A composition with no shm member installs no receive gate: an offer is a no-op.
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     coordinator c{reg};
     c.set_topic_hint("alpha", dispatch_hint::frequent);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
+    c.on_companion("node-a", "alpha", companion_event::offered);
     c.on_edge("node-a", "alpha", demand_transition::down, demand_role::subscriber);
     REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
 }
@@ -404,7 +404,7 @@ TEST_CASE("shm.coordinator the default policy auto-engages; an override can disa
     }
 }
 
-TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a hint-less publisher", "[shm][coordinator]")
+TEST_CASE("shm.coordinator the node's own hints accumulate: a subscriber-side hint upgrades a hint-less publisher", "[shm][coordinator]")
 {
     stub_registry reg;
     reg.verdicts["node-a"] = true;
@@ -415,7 +415,7 @@ TEST_CASE("shm.coordinator the bilateral OR: a subscriber-side hint upgrades a h
     c.set_topic_hint("alpha", dispatch_hint::frequent); // subscriber: a qualifying hint
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
-    REQUIRE(gate.mints() == 1); // the OR upgrades the pair
+    REQUIRE(gate.mints() == 1); // the accumulated hint upgrades the pair
 }
 
 TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the topic's hint", "[shm][coordinator]")

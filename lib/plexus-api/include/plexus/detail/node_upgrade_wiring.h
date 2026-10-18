@@ -65,8 +65,8 @@ io::selection_hook resolve_hook([[maybe_unused]] Transports &...transports)
         return io::first_candidate{};
 }
 
-// A lost ring waiter drops every lane the coordinator holds for the fqn, so each pair keeps the wire. The engine
-// outlives the coordinator and therefore every lane that carries this.
+// A lost ring waiter drops every lane the coordinator holds for the fqn and withdraws each receive lane from its
+// publisher, so each pair keeps the wire. The engine outlives the coordinator and therefore every lane that carries this.
 template<typename Engine>
 plexus::detail::move_only_function<void()> drop_lanes_on_loss(Engine &engine, std::string fqn)
 {

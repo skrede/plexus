@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CONTROL_H
 
 #include "plexus/io/frame_router.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/subscribe_qos_wire.h"
 
 #include "plexus/io/detail/peer_session_forward.h"
@@ -10,6 +11,7 @@
 
 #include "plexus/graph/topic_record.h"
 
+#include "plexus/wire/companion.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/fetch_latched.h"
 #include "plexus/wire/topic_declaration.h"
@@ -99,6 +101,33 @@ void on_fetch_latched_received(Session &s, Forwarder &messages, std::span<const 
         messages.fetch_latched(s.msg_peer(), req->topic_hash, req->max_samples);
 }
 
+// Only a complete session speaks for the peer it proved, so a lane is never moved by a peer that has not.
+template<typename Session, typename Forwarder>
+void on_companion_received(Session &s, Forwarder &messages, std::span<const std::byte> inner, companion_event event)
+{
+    if(!s.is_complete())
+        return;
+    if(auto signal = wire::decode_companion(inner))
+        messages.note_companion(s.msg_peer(), signal->topic_hash, event);
+}
+
+template<typename Session, typename Forwarder>
+void on_unsubscribe_received(Session &s, Forwarder &messages, std::span<const std::byte> inner)
+{
+    if(!s.is_complete())
+        return;
+    if(auto req = wire::decode_unsubscribe_request(inner))
+        messages.detach_for_fanout(s.msg_peer(), messages.fqn_for(req->topic_hash));
+}
+
+template<typename Session, typename Forwarder>
+void register_companion_consumers(Session &s, frame_router &router, Forwarder &messages)
+{
+    router.on_companion_ready([&s, &messages](std::span<const std::byte> inner) { on_companion_received(s, messages, inner, companion_event::ready); });
+    router.on_companion_withdrawn([&s, &messages](std::span<const std::byte> inner) { on_companion_received(s, messages, inner, companion_event::withdrawn); });
+    router.on_unsubscribe([&s, &messages](std::span<const std::byte> inner) { on_unsubscribe_received(s, messages, inner); });
+}
+
 template<typename Session, typename Forwarder>
 void register_control_consumers(Session &s, frame_router &router, Forwarder &messages)
 {
@@ -108,6 +137,7 @@ void register_control_consumers(Session &s, frame_router &router, Forwarder &mes
     router.on_forwarded([&s](std::span<const std::byte> inner) { on_forwarded_received(s, inner); });
     router.on_fetch_latched([&s, &messages](std::span<const std::byte> inner) { on_fetch_latched_received(s, messages, inner); });
     router.on_subscribe_response([&s](std::span<const std::byte> inner) { on_subscribe_response_received(s, inner); });
+    register_companion_consumers(s, router, messages);
 }
 
 }

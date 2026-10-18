@@ -29,6 +29,34 @@ TEST_CASE("subscribe response round-trip", "[wire][subscribe]")
     CHECK(decoded->status == subscribe_status::subscribed);
 }
 
+TEST_CASE("subscribe response carries the companion offer beside the degraded byte", "[wire][subscribe]")
+{
+    for(const bool offered : {false, true})
+    {
+        const auto plain    = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .companion_offered = offered});
+        const auto degraded = encode_subscribe_response(
+                {.topic_hash = 0xFEED, .status = subscribe_status::subscribed_degraded, .companion_offered = offered, .has_degraded = true, .degraded_flags = 0x05});
+        const auto plain_decoded    = decode_subscribe_response(plain);
+        const auto degraded_decoded = decode_subscribe_response(degraded);
+
+        REQUIRE(plain.size() == subscribe_response_size);
+        REQUIRE(degraded.size() == subscribe_response_size + 1);
+        REQUIRE(plain_decoded.has_value());
+        REQUIRE(degraded_decoded.has_value());
+        CHECK(plain_decoded->companion_offered == offered);
+        CHECK_FALSE(plain_decoded->has_degraded);
+        CHECK(degraded_decoded->companion_offered == offered);
+        CHECK(degraded_decoded->has_degraded);
+        CHECK(degraded_decoded->degraded_flags == 0x05);
+    }
+}
+
+TEST_CASE("subscribe response shorter than the offer byte is refused", "[wire][subscribe]")
+{
+    const auto encoded = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .companion_offered = true});
+    CHECK_FALSE(decode_subscribe_response(std::span<const std::byte>{encoded.data(), subscribe_response_size - 1}).has_value());
+}
+
 TEST_CASE("subscribe request with long strings", "[wire][subscribe]")
 {
     subscribe_request req{.fqn = std::string(500, '/'), .type_name = std::string(300, 'T'), .topic_hash = 0xABCD, .type_hash = 0xEF01, .source = endpoint_source_type::signal};

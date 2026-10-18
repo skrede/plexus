@@ -76,10 +76,10 @@ constexpr bool k_under_tsan = false;
 // so a fitting payload arriving after engagement crossed shared memory. Engagement is a forked
 // raw consumer attaching the /dev/shm ring directly and observing the exact fitting payload on
 // it, which also corroborates that the fitting genuinely transited SHM (the medium,
-// byte-observable across the process boundary). Before engagement a re-attempted join may leave
-// a fitting payload on the wire. A forced-distinct-fingerprint variant proves the cross-host fail-
-// closed path: no region, every message over the wire. The assertions hold across >=2
-// independent runs with distinct per-run payloads (no success from a single run).
+// byte-observable across the process boundary). Until the subscriber answers ready for its
+// receive companion the fitting payload rides the wire. A forced-distinct-fingerprint variant
+// proves the cross-host fail-closed path: no region, every message over the wire. The assertions
+// hold across >=2 independent runs with distinct per-run payloads (no success from a single run).
 
 namespace pasio = plexus::asio;
 namespace pio   = plexus::shm;
@@ -188,17 +188,17 @@ coord *map_coord()
 // name (both ends derive it from the fqn alone) and spin-consume until the run's distinct
 // fitting payload appears on the ring — proving the publisher's facade routed it over SHM,
 // byte-observable across the process boundary. Bounded by a deadline so a non-engaged ring
-// (a regression) fails rather than hangs.
-bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std::chrono::seconds bound)
+// (a regression) fails rather than hangs. pump keeps the subscriber node answering its publisher's
+// offer meanwhile, since the publisher routes over the ring only after that answer.
+template<typename Pump>
+bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std::chrono::seconds bound, Pump pump)
 {
     posix_shm_region_broker broker;
     region_handle ctrl, slab;
     const auto deadline = std::chrono::steady_clock::now() + bound;
     while(broker.attach(control_name(fqn), ctrl) != pio::region_status::ok || broker.attach(slab_name(fqn), slab) != pio::region_status::ok)
-    {
         if(std::chrono::steady_clock::now() >= deadline)
             return false;
-    }
     pio::broadcast_ring ring;
     if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), make_id(0x52), ring) != pio::loan_status::ok)
         return false;
@@ -206,6 +206,7 @@ bool ring_carries(const std::string &fqn, std::span<const std::byte> needle, std
     std::uint64_t cursor = 0;
     while(std::chrono::steady_clock::now() < deadline)
     {
+        pump();
         pio::broadcast_ring::consume_result out;
         const auto st = ring.consume(cursor, out);
         if(st == pio::loan_status::ok)
@@ -318,9 +319,9 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             pasio::same_host_transports ts{io};
             auto node = ts.make_node(disc, sub_id, same_host ? dial_opts(true) : distinct_fingerprint_opts(true, 0xA1A1A1A1u));
 
-            // The subscriber declares its OWN qualifying same-host hint: the upgrade is
-            // bilateral-LOCAL (each side decides from its own hint with no wire exchange), so
-            // the subscriber must opt in for its receive companion to attach the co-host ring.
+            // The subscriber declares its OWN qualifying same-host hint: shared memory engages only
+            // when both ends' policies allow it (no hint rides the wire), so the subscriber must opt
+            // in for its receive companion to attach the publisher's offered ring.
             plexus::io::subscriber_qos sub_qos;
             sub_qos.dispatch = plexus::io::dispatch_hint::frequent;
 
@@ -341,7 +342,7 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
             if(same_host)
             {
                 plexus::testing::pump_until(io, [&] { return c->ring_ready.load(std::memory_order_acquire) != 0; }, std::chrono::seconds(10));
-                const bool seen   = ring_carries(fqn, as_bytes(small), std::chrono::seconds(10));
+                const bool seen   = ring_carries(fqn, as_bytes(small), std::chrono::seconds(10), [&io] { io.poll(); });
                 const char marker = 'E';
                 c->shm_seen.store(seen && ::write(pipe_fd[1], &marker, 1) == 1 ? 1u : 0u, std::memory_order_release);
             }

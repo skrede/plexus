@@ -119,9 +119,9 @@ public:
         std::erase_if(m_entries, [&](const auto &entry) { return entry.first.fqn == fqn; });
     }
 
-    void erase_pair(std::string_view node_name, std::string_view fqn)
+    void erase_pair(std::string_view node_name, std::string_view fqn, demand_role role)
     {
-        std::erase_if(m_entries, [&](const auto &entry) { return entry.first.node_name == node_name && entry.first.fqn == fqn; });
+        std::erase_if(m_entries, [&](const auto &entry) { return entry.first.node_name == node_name && entry.first.fqn == fqn && entry.first.role == role; });
     }
 
 private:

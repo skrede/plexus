@@ -83,17 +83,19 @@ struct subscribe_response
 {
     uint64_t topic_hash;
     subscribe_status status;
+    // Whether the publisher holds a stamped shared-memory ring for this subscriber, which it may
+    // attach. Always encoded, so an offer the publisher withholds reads as declined, not absent.
+    bool companion_offered = false;
     // The optional trailing degraded-field surface. has_degraded=false (the default) encodes NO
-    // trailing byte, byte-identical to the 9-byte layout; has_degraded=true (a permissive
-    // subscribed_degraded accept) appends one byte carrying the unsatisfied soft-field bitmask.
+    // trailing byte; has_degraded=true (a permissive subscribed_degraded accept) appends one byte
+    // carrying the unsatisfied soft-field bitmask.
     bool has_degraded           = false;
     std::uint8_t degraded_flags = 0;
 };
 
-// Wire FLOOR of an encoded subscribe_response payload: topic_hash(8) + status(1). A permissive
-// degraded-accept appends an OPTIONAL 10th byte; the decoder floor stays at this size so a bare
-// 9-byte response decodes unchanged.
-constexpr std::size_t subscribe_response_size = 9;
+// Wire FLOOR of an encoded subscribe_response payload: topic_hash(8) + status(1) +
+// companion_offered(1). A permissive degraded-accept appends an OPTIONAL 11th byte.
+constexpr std::size_t subscribe_response_size = 10;
 
 struct unsubscribe_request
 {

@@ -1,11 +1,16 @@
+#include "support/coordinator_lanes.h"
+
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/upgrade_channel.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/upgrade_coordinator.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -16,37 +21,11 @@ using plexus::io::demand_role;
 using plexus::io::dispatch_hint;
 using plexus::io::upgrade_mint;
 using plexus::io::upgrade_receive;
+using plexus::io::companion_event;
 using plexus::io::demand_transition;
-
-struct co_host_registry
-{
-    bool same_host_for(std::string_view) const noexcept
-    {
-        return true;
-    }
-};
-
-// One live lane; the count falls when the coordinator drops it.
-class counted_lane
-{
-public:
-    explicit counted_lane(std::int32_t &live)
-            : m_live(live)
-    {
-        ++m_live;
-    }
-
-    ~counted_lane()
-    {
-        --m_live;
-    }
-
-    counted_lane(const counted_lane &)            = delete;
-    counted_lane &operator=(const counted_lane &) = delete;
-
-private:
-    std::int32_t &m_live;
-};
+using plexus::testing::counted_lane;
+using plexus::testing::engage_demand;
+using plexus::testing::co_host_registry;
 
 using coordinator = plexus::io::upgrade_coordinator<co_host_registry, counted_lane>;
 
@@ -72,15 +51,18 @@ void install_gates(coordinator &c, lanes &live)
 
 }
 
-TEST_CASE("coordinator_loss a lost medium drops every peer's send and receive lanes for its fqn only", "[shm][coordinator_loss]")
+TEST_CASE("coordinator_loss a lost medium drops every peer's send and receive lanes for its fqn only and withdraws each receive lane", "[shm][coordinator_loss]")
 {
     co_host_registry reg;
     coordinator c{reg};
     lanes live;
     install_gates(c, live);
-    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
-    c.on_edge("node-b", "alpha", demand_transition::up, demand_role::subscriber);
-    c.on_edge("node-a", "beta", demand_transition::up, demand_role::publisher);
+    std::vector<std::string> withdrawn;
+    c.on_companion_send([&withdrawn](std::string_view node_name, std::string_view fqn, companion_event event)
+                        { withdrawn.push_back(std::string{node_name} + "/" + std::string{fqn} + (event == companion_event::withdrawn ? " withdrawn" : " ready")); });
+    engage_demand(c, "node-a", "alpha", demand_role::publisher);
+    engage_demand(c, "node-b", "alpha", demand_role::subscriber);
+    engage_demand(c, "node-a", "beta", demand_role::publisher);
     REQUIRE(live.sends == 2);
     REQUIRE(live.receives == 1);
 
@@ -90,6 +72,7 @@ TEST_CASE("coordinator_loss a lost medium drops every peer's send and receive la
     CHECK(live.receives == 0);
     CHECK(c.companion_for("node-a", "alpha", 1) == nullptr);
     CHECK(c.companion_for("node-a", "beta", 1) != nullptr);
+    CHECK(withdrawn == std::vector<std::string>{"node-b/alpha ready", "node-b/alpha withdrawn"});
 }
 
 TEST_CASE("coordinator_loss the next up-edge after a lost medium mints afresh", "[shm][coordinator_loss]")
@@ -102,7 +85,7 @@ TEST_CASE("coordinator_loss the next up-edge after a lost medium mints afresh", 
     c.on_medium_lost("alpha");
     REQUIRE(live.sends == 0);
 
-    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
+    engage_demand(c, "node-a", "alpha", demand_role::publisher);
 
     CHECK(live.mints == 2);
     CHECK(live.sends == 1);

@@ -4,6 +4,7 @@
 #include "plexus/io/locality.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/liveness_event.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/peer_liveliness_event.h"
@@ -51,6 +52,22 @@ void install_upgrade_retry(Coordinator &coordinator, Timer &timer)
             });
 }
 
+// A peer's word about a lane reaches the coordinator, and the coordinator's answers leave through that peer's session,
+// which carries them only once complete.
+template<typename Forwarder, typename Coordinator, typename Registry>
+void install_companion_sinks(Forwarder &messages, Coordinator &coordinator, Registry &registry)
+{
+    messages.on_companion({.event_cb      = [&coordinator](std::string_view node_name, std::string_view fqn, companion_event event) { coordinator.on_companion(node_name, fqn, event); },
+                           .holds_lane_cb = [&coordinator](std::string_view node_name, std::string_view fqn) { return coordinator.offers(node_name, fqn); }});
+    coordinator.on_companion_send(
+            [&messages, &registry](std::string_view node_name, std::string_view fqn, companion_event event)
+            {
+                const auto *session = registry.session_for_name(node_name);
+                if(session != nullptr && session->is_complete())
+                    messages.send_companion(session->msg_peer(), fqn, event);
+            });
+}
+
 template<typename Engine>
 // NOLINTNEXTLINE(readability-function-size)
 void install_routing_sinks(Engine &e)
@@ -73,6 +90,7 @@ void install_routing_sinks(Engine &e)
                                       { e.m_coordinator.on_edge(node_name, fqn, dir, role); });
     e.m_messages.on_companion_route([&e](std::string_view node_name, std::string_view fqn, std::size_t bytes) -> channel_type *
                                     { return e.m_coordinator.companion_for(node_name, fqn, bytes); });
+    install_companion_sinks(e.m_messages, e.m_coordinator, e.m_registry);
     e.m_messages.set_capture_wants_payload([&e](std::uint64_t hash) { return e.m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
     // The table copies the borrowed names in and reject-and-counts on overflow, so a peer flooding
     // topics costs a counter, never an eviction and never an abort.

@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_UPGRADE_COORDINATOR_H
 
 #include "plexus/io/dispatch_hint.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 
@@ -22,18 +23,16 @@
 namespace plexus::io {
 
 // The per-(peer, topic) medium-selection coordinator: the JOIN of peer locality (the session's
-// same_host verdict), the per-(peer, fqn) demand up/down transition, and medium provisioning.
-// Engine-owned; it BORROWS the peer-session registry by reference and OWNS the live companion
-// ring channels it mints (no singleton, no shared_from_this). The companion lane is ADDITIVE: the
-// wire attach is NEVER suppressed, so a declined / off-host / hint-less pair simply keeps the
-// wire. The gate is injected as one predicate; a composition with no upgrade member leaves it
-// unset, so the coordinator is inert. The coordinator names no transport: it carries the
-// dispatch_hint opaquely and routes per-message through an injected predicate the medium builds.
+// same_host verdict), the per-(peer, fqn) demand transition, the pair's companion events and medium
+// provisioning. Engine-owned; it BORROWS the peer-session registry and OWNS the companion lanes it
+// holds. A lane is ADDITIVE: the wire attach is NEVER suppressed, so a declined, off-host or
+// unanswered pair keeps the wire. Shared memory engages only when both ends' policies allow it: the
+// publisher offers the ring it minted, the subscriber attaches it and answers ready, and only then
+// does the publisher route over it. The coordinator names no transport; with no gate installed it
+// is inert.
 template<typename Registry, typename Channel>
 class upgrade_coordinator
 {
-    using ring = detail::coordinator_ring<Channel, upgrade_receive>;
-
 public:
     explicit upgrade_coordinator(Registry &registry) noexcept
             : m_registry(registry)
@@ -68,7 +67,7 @@ public:
         m_policy = std::move(policy);
     }
 
-    // Bilateral OR: EITHER end's hint upgrades the pair, so the bits accumulate per fqn. An
+    // The node's own publisher and subscriber hints accumulate per fqn; no hint rides the wire. An
     // fqn with no recorded hint resolves to none (no bit set).
     void set_topic_hint(std::string_view fqn, dispatch_hint hint)
     {
@@ -77,20 +76,37 @@ public:
             it->second = it->second | hint;
     }
 
-    // The forwarder's on_demand_transition body. The up-edge role decides the lane (subscriber
-    // attaches the receive companion, publisher mints the send companion); the down-edge drops
-    // whichever lane this (peer, fqn) held — both teardown paths key the same way.
+    // The forwarder's on_demand_transition body. A publisher's up-edge mints its send lane; a
+    // subscriber's records the demand its publisher's offer may attach. The down-edge drops the lane.
     void on_edge(std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
     {
         if(dir == demand_transition::up)
-            detail::lane_up(*this, node_name, fqn, role);
+            detail::upgrade_lanes::up(*this, node_name, fqn, role);
         else
-            detail::lane_down(*this, node_name, fqn);
+            detail::upgrade_lanes::down(*this, node_name, fqn, role);
     }
 
-    // The publish fan's per-message route: the retained companion channel for (node_name, fqn)
-    // when this message fits the medium decision, else nullptr so it keeps the wire sub.channel
-    // (the dual-delivery fail-safe). An unheld pair or an over-cap message resolves to nullptr.
+    void on_companion(std::string_view node_name, std::string_view fqn, companion_event event)
+    {
+        if(event == companion_event::offered || event == companion_event::not_offered)
+            detail::upgrade_lanes::offer(*this, node_name, fqn, event == companion_event::offered);
+        else
+            detail::upgrade_lanes::answer(*this, node_name, fqn, event);
+    }
+
+    // The subscriber's ready and withdrawn answers leave through this; unset, nothing is answered.
+    void on_companion_send(plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event)> send)
+    {
+        m_companion_send_cb = std::move(send);
+    }
+
+    bool offers(std::string_view node_name, std::string_view fqn) const
+    {
+        return detail::find_ring(m_held, node_name, fqn, demand_role::publisher) != nullptr;
+    }
+
+    // The publish fan's per-message route: the ready lane's channel for (node_name, fqn) when this
+    // message fits the medium decision, else nullptr so it keeps the wire sub.channel.
     Channel *companion_for(std::string_view node_name, std::string_view fqn, std::size_t bytes)
     {
         return detail::route_companion(m_held, node_name, fqn, bytes);
@@ -105,7 +121,7 @@ public:
 
     void on_retry_due()
     {
-        detail::lane_retry(*this);
+        detail::upgrade_lanes::retry(*this);
     }
 
     // Peer-dead teardown: dropping the held channels runs their destructors (releasing the ring).
@@ -115,12 +131,11 @@ public:
         m_held.erase(std::string{node_name});
     }
 
-    // The medium can no longer serve the fqn: every peer's lanes for it drop, leaving each pair on the wire until
-    // its next up-edge mints afresh. The hint stays so that up-edge can still upgrade.
+    // The medium can no longer serve the fqn: every lane for it drops back to the wire and each publisher this node read
+    // from is told. The hint stays so that a later up-edge or offer can still upgrade.
     void on_medium_lost(std::string_view fqn)
     {
-        m_retry.erase_fqn(fqn);
-        detail::erase_fqn(m_held, fqn);
+        detail::upgrade_lanes::lost(*this, fqn);
     }
 
     // Every declined attempt is counted here, and so is each demotion or loss the medium reports for a lane it holds.
@@ -145,23 +160,9 @@ private:
     plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> m_receive_mint;
     plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
     plexus::detail::move_only_function<void(std::chrono::milliseconds)> m_schedule_retry_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event)> m_companion_send_cb;
 
-    template<typename C>
-    friend fallback_reason detail::lane_attach(C &, std::string_view, std::string_view);
-    template<typename C>
-    friend fallback_reason detail::lane_mint(C &, std::string_view, std::string_view);
-    template<typename C>
-    friend fallback_reason detail::lane_engage(C &, std::string_view, std::string_view, demand_role);
-    template<typename C>
-    friend void detail::lane_arm(C &);
-    template<typename C>
-    friend void detail::lane_up(C &, std::string_view, std::string_view, demand_role);
-    template<typename C>
-    friend void detail::lane_reattempt(C &, const detail::retry_key &);
-    template<typename C>
-    friend void detail::lane_retry(C &);
-    template<typename C>
-    friend void detail::lane_down(C &, std::string_view, std::string_view);
+    friend struct detail::upgrade_lanes;
 
     bool run_policy(bool same_host, dispatch_hint own_hint)
     {

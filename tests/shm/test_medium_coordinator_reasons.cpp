@@ -1,5 +1,8 @@
+#include "support/coordinator_lanes.h"
+
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/upgrade_channel.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/upgrade_coordinator.h"
 #include "plexus/io/detail/upgrade_retry.h"
@@ -23,14 +26,9 @@ using plexus::io::fallback_reason;
 using plexus::io::upgrade_receive;
 using plexus::io::demand_transition;
 using std::chrono::milliseconds;
-
-struct co_host_registry
-{
-    bool same_host_for(std::string_view) const noexcept
-    {
-        return true;
-    }
-};
+using plexus::io::companion_event;
+using plexus::testing::engage_demand;
+using plexus::testing::co_host_registry;
 
 struct lane
 {
@@ -100,7 +98,7 @@ TEST_CASE("medium_coordinator_reasons a declined lane counts exactly its reason 
     gate g{UINT32_MAX, reason};
     install(c, g);
 
-    c.on_edge("peer", "alpha", demand_transition::up, role);
+    engage_demand(c, "peer", "alpha", role);
     REQUIRE(c.fallbacks() == counted(reason, 1));
     REQUIRE(c.companion_for("peer", "alpha", 1) == nullptr);
 }
@@ -114,6 +112,7 @@ TEST_CASE("medium_coordinator_reasons a transient decline that later engages cou
     std::vector<milliseconds> wakes;
 
     drive_retries(c, wakes);
+    c.on_companion("peer", "alpha", companion_event::ready);
     REQUIRE(g.calls == 4);
     REQUIRE(c.fallbacks() == counted(fallback_reason::transient, 3));
     REQUIRE(c.companion_for("peer", "alpha", 1) != nullptr);
@@ -143,7 +142,7 @@ TEST_CASE("medium_coordinator_reasons a demotion of an engaged lane is counted w
     install(c, g);
     REQUIRE(c.fallbacks() == fallback_counts{});
 
-    c.on_edge("peer", "alpha", demand_transition::up, demand_role::publisher);
+    engage_demand(c, "peer", "alpha", demand_role::publisher);
     c.count_fallback(fallback_reason::notifier_demoted_denied);
     c.count_fallback(fallback_reason::none);
     REQUIRE(c.fallbacks() == counted(fallback_reason::notifier_demoted_denied, 1));
