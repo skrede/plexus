@@ -60,6 +60,13 @@ target_link_libraries(test_vocabulary PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_vocabulary TEST_PREFIX "node.")
 
+# Reference FNV-1a known answers for the node id and endpoint id low lanes.
+add_executable(test_identity_fnv1a_kat test_identity_fnv1a_kat.cpp)
+target_link_libraries(test_identity_fnv1a_kat PRIVATE
+    plexus::plexus
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_identity_fnv1a_kat TEST_PREFIX "node.")
+
 # The node facade tests: construction/identity/escape-hatch surface and the discovery
 # wiring, over the deterministic inproc backend (no real networking, no owned loop).
 add_executable(test_node_construction test_node_construction.cpp)

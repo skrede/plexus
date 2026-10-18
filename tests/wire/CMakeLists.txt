@@ -9,7 +9,8 @@ set(PLEXUS_WIRE_TESTS
     test_heartbeat_codec
     test_topic_declaration_codec
     test_crc32c
-    test_serial_crc_kat)
+    test_serial_crc_kat
+    test_fnv1a_kat)
 
 foreach(test ${PLEXUS_WIRE_TESTS})
     add_executable(${test} ${test}.cpp)
