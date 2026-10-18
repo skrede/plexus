@@ -14,6 +14,8 @@
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/reconnect_config.h"
 
+#include "plexus/shm/ring_geometry_mode.h"
+
 #include <chrono>
 #include <string>
 #include <vector>
@@ -80,6 +82,14 @@ inline plexus::io::subscriber_qos subscriber_qos_for(bool hint)
     plexus::io::subscriber_qos qos;
     qos.dispatch = hint ? plexus::io::dispatch_hint::frequent : plexus::io::dispatch_hint::none;
     return qos;
+}
+
+// The publisher's own ring geometry; only single_reader overrides the default.
+inline std::optional<plexus::shm::shm_geometry> ring_geometry_for(const node_args &args)
+{
+    if(args.composition != composition_name(node_composition::single_reader))
+        return std::nullopt;
+    return plexus::shm::shm_geometry{1, plexus::shm::ring_geometry_mode::reliable_preserving};
 }
 
 }

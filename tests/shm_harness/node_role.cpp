@@ -78,9 +78,10 @@ void serve_node(::asio::io_context &io, Node &node, const node_args &args, node_
 {
     node.listen({"tcp", "127.0.0.1:" + std::to_string(args.ports[args.index])});
 
+    const std::optional<plexus::shm::shm_geometry> geometry = ring_geometry_for(args);
     std::optional<plexus::publisher<>> pub;
     if(args.role != role_name(node_role::sub))
-        pub.emplace(node, args.fqn, topic_qos_for(args.hint));
+        pub.emplace(node, args.fqn, topic_qos_for(args.hint), false, geometry ? &*geometry : nullptr);
     node_driver driver{slot, args.index, pub ? publish_fn{[&pub](std::span<const std::byte> bytes) { pub->publish(bytes); }} : publish_fn{}};
     std::optional<plexus::subscriber<>> sub;
     if(args.role != role_name(node_role::pub))
