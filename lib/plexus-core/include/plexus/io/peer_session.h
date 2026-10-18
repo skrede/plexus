@@ -8,12 +8,10 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/peer_kind.h"
-#include "plexus/io/null_logger.h"
 #include "plexus/io/frame_router.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/handshake_fsm.h"
-#include "plexus/io/host_identity.h"
 #include "plexus/io/security_seam.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
@@ -29,7 +27,6 @@
 #include "plexus/io/detail/peer_session_handshake.h"
 #include "plexus/io/detail/peer_session_lifecycle.h"
 
-#include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
 
 #include "plexus/log/logger.h"
@@ -40,7 +37,6 @@
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/topic_declaration.h"
-#include "plexus/wire/fetch_latched.h"
 
 #include <span>
 #include <chrono>
@@ -338,6 +334,8 @@ private:
 
     template<typename S>
     friend void detail::register_session_consumers(S &);
+    template<typename S>
+    friend void detail::register_handshake_consumers(S &);
     template<typename S>
     friend void detail::fold_topic_edge(S &, std::string_view, std::string_view, std::optional<std::uint64_t>, graph::topic_role);
     template<typename S>

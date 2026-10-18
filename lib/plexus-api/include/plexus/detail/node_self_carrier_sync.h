@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_DETAIL_NODE_SELF_CARRIER_SYNC_H
 #define HPP_GUARD_PLEXUS_DETAIL_NODE_SELF_CARRIER_SYNC_H
 
+#include "plexus/detail/node_same_host.h"
 #include "plexus/detail/node_self_carrier.h"
 
 #include "plexus/io/message_info.h"
@@ -70,16 +71,16 @@ void install_shm_self_carrier(Node &n, const std::string &fqn)
 {
     const io::subscriber_qos qos          = n.m_subscriptions.qos_for(fqn);
     const std::optional<std::uint64_t> tid = n.m_subscriptions.type_id_for(fqn);
-    n.for_each_shm_member(
-            [&](auto &m)
-            {
-                auto deliver = [&n](std::span<const std::byte> framed) { self_carrier_bytes(n, framed); };
-                auto carrier = detail::install_self_carrier<typename Node::engine_channel>(m, fqn, deliver, [&n, fqn] { teardown_shm_self_carrier(n, fqn); });
-                if(!carrier.write)
-                    return;
-                n.m_engine.messages().attach_local(fqn, *carrier.write, n.m_service_name, qos, tid);
-                n.m_self_carriers.insert_or_assign(fqn, std::move(carrier));
-            });
+    for_each_shm_member(n,
+                        [&](auto &m)
+                        {
+                            auto deliver = [&n](std::span<const std::byte> framed) { self_carrier_bytes(n, framed); };
+                            auto carrier = detail::install_self_carrier<typename Node::engine_channel>(m, fqn, deliver, [&n, fqn] { teardown_shm_self_carrier(n, fqn); });
+                            if(!carrier.write)
+                                return;
+                            n.m_engine.messages().attach_local(fqn, *carrier.write, n.m_service_name, qos, tid);
+                            n.m_self_carriers.insert_or_assign(fqn, std::move(carrier));
+                        });
 }
 
 // The shm self-ring mints/holds an OS region, so it engages ONLY when a same-node publisher AND

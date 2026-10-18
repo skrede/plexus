@@ -47,6 +47,7 @@
 #include "plexus/detail/node_identity.h"
 #include "plexus/detail/node_internals.h"
 #include "plexus/detail/node_rpc_seams.h"
+#include "plexus/detail/node_same_host.h"
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_self_route.h"
 #include "plexus/detail/call_origination.h"
@@ -83,19 +84,6 @@ using node_engine_policy = std::conditional_t<sizeof...(Transports) == 1, Policy
 // match; only a pack with no intra-node member leaves the self-route idle.
 template<typename Policy, typename... Transports>
 constexpr bool pack_has_intra_node = (std::is_same_v<Transports, io::intra_node_transport<Policy>> || ...);
-
-// Keys on the name-free geometry surface (the same probe for_each_shm_member uses), so the predicate
-// names no shm type: a member that provisions per-topic rings matches; a plain leaf does not.
-template<typename M>
-constexpr bool member_has_shm_ring = requires(M &m) {
-    m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry());
-    m.geometry_from(static_cast<const void *>(nullptr));
-};
-
-// True when the pack carries a member with the shm-ring surface — the fallback self-carrier (a
-// node-local shm self-ring) is available when no intra-node transport is present to serve self.
-template<typename... Transports>
-constexpr bool pack_has_shm_member = (member_has_shm_ring<Transports> || ...);
 
 // The variadic ctor lets the node's member-init use ONE in-place construction expression for
 // both glue kinds (this type ignores the leaves; the mux consumes them).
@@ -253,7 +241,7 @@ public:
         detail::advertise_card(*this);
         m_disc.browse([this](const discovery::service_info &peer) { detail::note_from_card(*this, peer); });
         m_disc.on_withdrawn([this](const discovery::service_info &peer) { detail::forget_from_card(*this, peer); });
-        install_upgrade_coordinator();
+        detail::install_upgrade_coordinator(*this);
         install_self_loopback();
         m_engine.capture().set_default(opts.capture.to_rule());
         m_engine.post_participant({io::participant_edge::created, m_id});
@@ -507,7 +495,7 @@ private:
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
-        provision_same_host_ring(fqn, subscriber_effective_bytes(qos), nullptr);
+        detail::provision_same_host_ring(*this, fqn, subscriber_effective_bytes(qos), nullptr);
         m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
         for(const auto &peer : m_known_peers)
@@ -542,7 +530,7 @@ private:
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id, type_name, schema_hint});
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
-        provision_same_host_ring(fqn, effective_bytes, geometry);
+        detail::provision_same_host_ring(*this, fqn, effective_bytes, geometry);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
         detail::note_local_publisher(*this, fqn, type_name, type_id);
     }
@@ -553,60 +541,10 @@ private:
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_dropped, wire::fqn_topic_hash(fqn), std::nullopt});
     }
 
-    // An absent per-topic override (null) resolves to each shm member's own default_geometry(); a
-    // composition with no shm member is a no-op. The override is the opaque carrier the declare
-    // seam crosses; each member recovers its own geometry type from it member-side.
-    void provision_same_host_ring(std::string_view fqn, std::size_t effective_bytes, const void *geometry)
-    {
-        std::string key{fqn};
-        for_each_shm_member([&](auto &m) { m.set_topic_geometry(key, effective_bytes, m.geometry_from(geometry)); });
-    }
-
     std::size_t subscriber_effective_bytes(const io::subscriber_qos &qos) const noexcept
     {
         return qos.requested_max_message_bytes != 0 ? static_cast<std::size_t>(qos.requested_max_message_bytes) : m_max_message_bytes;
     }
-
-    // No shm member is inert: no gate and no policy installed.
-    void install_upgrade_coordinator()
-    {
-        for_each_shm_member(
-                [this](auto &m)
-                {
-                    m_engine.coordinator().on_policy(m.upgrade_policy());
-                    detail::install_same_host_upgrade(m_engine, m);
-                });
-    }
-
-    // The if-constexpr capability check makes a composition with no shm member a compile-time no-op.
-    template<typename F>
-    void for_each_shm_member(F &&fn)
-    {
-        if constexpr(sizeof...(Transports) == 1)
-        {
-            if constexpr(has_topic_geometry<engine_transport>)
-                fn(m_leaf);
-        }
-        else
-        {
-            m_leaf.for_each_member(
-                    [&](auto &m)
-                    {
-                        using M = std::remove_reference_t<decltype(m)>;
-                        if constexpr(has_topic_geometry<M>)
-                            fn(m);
-                    });
-        }
-    }
-
-    // Keys on the member's name-free geometry surface (default_geometry + the opaque-pointer
-    // recover) rather than the concrete override type, so the probe names no shm type: a member
-    // that has these provisions its own ring; a plain leaf is a compile-time no-op.
-    template<typename M>
-    static constexpr bool has_topic_geometry = requires(M &m) {
-        m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry());
-        m.geometry_from(static_cast<const void *>(nullptr));
-    };
 
     void dispatch_message(std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info)
     {
@@ -897,6 +835,10 @@ private:
     friend void detail::note_local_publisher(N &, std::string_view, std::string_view, std::optional<std::uint64_t>);
     template<typename N>
     friend void detail::forget_local_publisher(N &, std::string_view);
+    template<typename N, typename F>
+    friend void detail::for_each_shm_member(N &, F &&);
+    template<typename N>
+    friend void detail::install_upgrade_coordinator(N &);
     template<typename N>
     friend void detail::sync_shm_self_carrier(N &, std::string_view);
     template<typename N>

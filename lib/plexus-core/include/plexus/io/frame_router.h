@@ -94,21 +94,12 @@ public:
     }
 
 private:
-    // NOLINTNEXTLINE(readability-function-size)
     void dispatch(const wire::frame_header &hdr, std::span<const std::byte> inner)
     {
         switch(hdr.type)
         {
             case wire::msg_type::unidirectional:
                 return fire_data(hdr, inner);
-            case wire::msg_type::subscribe:
-                return fire(m_subscribe, inner);
-            case wire::msg_type::fetch_latched:
-                return fire(m_fetch_latched, inner);
-            case wire::msg_type::unsubscribe:
-                return fire(m_unsubscribe, inner);
-            case wire::msg_type::subscribe_response:
-                return fire(m_subscribe_response, inner);
             case wire::msg_type::rpc_request:
                 return fire(m_rpc_request, inner);
             case wire::msg_type::rpc_response:
@@ -119,6 +110,24 @@ private:
                 return fire(m_handshake_resp, inner);
             case wire::msg_type::heartbeat:
                 return fire(m_heartbeat, inner);
+            default:
+                return dispatch_control(hdr.type, inner);
+        }
+    }
+
+    // Reached through dispatch's default, so an unknown type is dropped here.
+    void dispatch_control(wire::msg_type type, std::span<const std::byte> inner)
+    {
+        switch(type)
+        {
+            case wire::msg_type::subscribe:
+                return fire(m_subscribe, inner);
+            case wire::msg_type::fetch_latched:
+                return fire(m_fetch_latched, inner);
+            case wire::msg_type::unsubscribe:
+                return fire(m_unsubscribe, inner);
+            case wire::msg_type::subscribe_response:
+                return fire(m_subscribe_response, inner);
             case wire::msg_type::declare:
                 return fire(m_declare, inner);
             case wire::msg_type::peer_report:

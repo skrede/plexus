@@ -19,6 +19,11 @@
 
 namespace plexus::io::detail {
 
+inline wire::subscribe_status status_of(io::rxo_verdict v)
+{
+    return v == io::rxo_verdict::source_identity_incompatible ? wire::subscribe_status::source_identity_incompatible : wire::subscribe_status::incompatible_qos;
+}
+
 // Each refusal replies a status, registers no fan-out entry, and returns false — a per-topic
 // refusal, never a peer teardown.
 template<typename Forwarder, typename Peer>
@@ -44,7 +49,7 @@ bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::o
     const auto rxo          = io::rxo_check(offered, offers_sid, f.m_global_default, sub_qos);
     if(rxo.verdict == io::rxo_verdict::incompatible_qos || rxo.verdict == io::rxo_verdict::source_identity_incompatible)
     {
-        auto resp = wire::encode_subscribe_response({.topic_hash = hash, .status = Forwarder::status_of(rxo.verdict)});
+        auto resp = wire::encode_subscribe_response({.topic_hash = hash, .status = status_of(rxo.verdict)});
         f.send_control(p.channel, wire::msg_type::subscribe_response, resp);
         f.emit_qos_change(qos_edge::refused, hash, sub_qos, rxo.verdict, subscriber_type_id);
         return false;

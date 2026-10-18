@@ -21,7 +21,6 @@
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/remembered_demand.h"
 #include "plexus/io/observation_events.h"
-#include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/subscriber_registry.h"
 #include "plexus/io/subscription_endpoint.h"
 
@@ -34,6 +33,7 @@
 #include "plexus/io/detail/forwarder_fanout.h"
 #include "plexus/io/detail/forwarder_deliver.h"
 #include "plexus/io/detail/forwarder_publish.h"
+#include "plexus/io/detail/forwarder_subscribe.h"
 
 #include "plexus/log/logger.h"
 
@@ -84,7 +84,7 @@ public:
         m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, qos, type_id);
         detail::record_remote_topic(*this, p.node_name, fqn, qos, type_id, type_name);
         emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::subscriber);
-        send_subscribe(p.channel, fqn, hash, type_id, qos, type_name);
+        detail::send_subscribe(*this, p.channel, fqn, hash, type_id, qos, type_name);
         emit_qos_change(qos_edge::accepted, hash, qos, rxo_verdict::compatible, type_id);
         return true;
     }
@@ -536,6 +536,8 @@ public:
 private:
     template<typename F, typename P>
     friend bool detail::attach_for_fanout(F &, const P &, std::string_view, std::optional<std::uint64_t>, const subscriber_qos &);
+    template<typename F, typename C>
+    friend void detail::send_subscribe(F &, C &, std::string_view, std::uint64_t, std::optional<std::uint64_t>, const subscriber_qos &, std::string_view);
     template<typename F>
     friend void detail::forwarder_drop(F &, std::string_view);
     template<typename F>
@@ -595,43 +597,11 @@ private:
         return *producer_type_id != *subscriber_type_id;
     }
 
-    static wire::subscribe_status status_of(io::rxo_verdict v)
-    {
-        return v == io::rxo_verdict::source_identity_incompatible ? wire::subscribe_status::source_identity_incompatible : wire::subscribe_status::incompatible_qos;
-    }
-
-    void send_subscribe(channel_type &channel, std::string_view fqn, std::uint64_t hash, std::optional<std::uint64_t> type_id = std::nullopt,
-                        const subscriber_qos &sub_qos = subscriber_qos{}, std::string_view type_name = {})
-    {
-        wire::subscribe_request req{.fqn           = std::string{fqn},
-                                    .type_name     = std::string{type_name},
-                                    .type_declared = state_of(type_id, type_name) != wire::type_state::undeclared,
-                                    .topic_hash    = hash,
-                                    .type_hash     = type_id.value_or(0), // 0 = undeclared
-                                    .source        = wire::endpoint_source_type::publisher};
-
-        if(!(sub_qos == subscriber_qos{}))
-        {
-            req.has_qos = true;
-            req.qos     = to_wire_region(sub_qos);
-        }
-        m_endpoint.send_subscribe(channel, req);
-    }
-
-    // A named type is declared; an id with no name is a type declared without one; neither is no
-    // assertion at all. The wire's three states and the subscribe flag both read this one rule.
-    static wire::type_state state_of(std::optional<std::uint64_t> type_id, std::string_view type_name)
-    {
-        if(!type_name.empty())
-            return wire::type_state::declared;
-        return type_id ? wire::type_state::declared_empty : wire::type_state::undeclared;
-    }
-
     // Idempotent per topic: a re-declare replaces the stored assertion rather than stacking a
     // second one, so the replay emits one declaration per declared topic.
     const wire::topic_declaration &remember_declaration(std::string_view fqn, std::uint64_t hash, std::optional<std::uint64_t> type_id, std::string_view type_name)
     {
-        wire::topic_declaration td{hash, type_id.value_or(0), std::string{fqn}, std::string{type_name}, state_of(type_id, type_name)};
+        wire::topic_declaration td{hash, type_id.value_or(0), std::string{fqn}, std::string{type_name}, detail::state_of(type_id, type_name)};
         for(auto &existing : m_local_declarations)
             if(existing.topic_hash == hash)
                 return existing = std::move(td);
