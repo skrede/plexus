@@ -399,6 +399,12 @@ public:
         return m_forward_rpc_dropped;
     }
 
+    // How often a same-host lane was declined, demoted or lost, indexed by fallback_reason.
+    fallback_counts same_host_fallbacks() const noexcept
+    {
+        return m_coordinator.fallbacks();
+    }
+
     io::host_fingerprint local_fingerprint() const noexcept
     {
         return m_build.fsm_cfg.local_fingerprint;

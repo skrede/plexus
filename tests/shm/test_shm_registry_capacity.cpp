@@ -19,6 +19,7 @@
 namespace {
 
 using plexus::shm::acquire_mode;
+using plexus::shm::acquire_bound;
 using plexus::shm::acquire_result;
 using plexus::shm::ring_direction;
 using plexus::testing::delaying_broker;
@@ -39,8 +40,7 @@ acquire_result acquire(registry &reg, const std::string &fqn)
 
 }
 
-TEST_CASE("registry_capacity a co-host acquire past the ring's consumer capacity fails instead of attaching a reader that never receives",
-          "[shm][registry_capacity][!shouldfail]")
+TEST_CASE("registry_capacity a co-host acquire past the ring's consumer capacity fails instead of attaching a reader that never receives", "[shm][registry_capacity]")
 {
     delaying_broker broker;
     registry creator(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
@@ -49,6 +49,7 @@ TEST_CASE("registry_capacity a co-host acquire past the ring's consumer capacity
 
     REQUIRE(acquire(creator, fqn) == acquire_result::created);
     REQUIRE(acquire(joiner, fqn) == acquire_result::failed);
+    REQUIRE(joiner.last_acquire_failure().bound == acquire_bound::consumer_capacity);
     REQUIRE(joiner.live_count() == 0);
     REQUIRE(acquire(creator, fqn) == acquire_result::created);
 }

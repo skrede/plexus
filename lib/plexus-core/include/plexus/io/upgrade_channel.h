@@ -3,6 +3,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include <array>
 #include <memory>
 #include <cstddef>
 #include <cstdint>
@@ -10,7 +11,8 @@
 
 namespace plexus::io {
 
-// Why a same-host lane is not engaged; an engaged lane carries none. Only transient is worth a later attempt.
+// Why a same-host lane is declined, demoted or lost; an engaged lane carries none. Only transient is worth a later
+// attempt. A demoted lane stays engaged on its secondary wake. Values are append-only: they index the counters.
 enum class fallback_reason : std::uint8_t
 {
     none,
@@ -22,7 +24,19 @@ enum class fallback_reason : std::uint8_t
     notifier_denied,
     notifier_unsupported,
     notifier_exhausted,
+    consumer_capacity,
+    not_found,
+    no_space,
+    waiter_lost,
+    notifier_demoted_denied,
+    notifier_demoted_unsupported,
+    notifier_demoted_exhausted,
 };
+
+inline constexpr std::size_t k_fallback_reason_count = static_cast<std::size_t>(fallback_reason::notifier_demoted_exhausted) + 1;
+
+// How often each reason struck, indexed by the reason.
+using fallback_counts = std::array<std::uint64_t, k_fallback_reason_count>;
 
 // The transport-neutral mint result the engine's upgrade coordinator retains. A null channel
 // signals the gate DECLINED — the pair keeps the wire. The coordinator retains the channel

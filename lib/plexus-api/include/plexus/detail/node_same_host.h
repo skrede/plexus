@@ -71,6 +71,13 @@ void install_upgrade_coordinator(Node &n, std::uint32_t universe)
                         });
 }
 
+// A member may outlive the node, so the node withdraws the counting its registry reports into before the engine goes.
+template<typename Node>
+void withdraw_fallback_counting(Node &n)
+{
+    for_each_shm_member(n, [](auto &m) { m.registry().on_fallback(nullptr); });
+}
+
 }
 
 #endif

@@ -1,5 +1,9 @@
 #include "topology_launch.h"
 
+#include "plexus/asio/shm/linux/ring_notifier.h"
+
+#include "plexus/io/upgrade_channel.h"
+
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -9,7 +13,10 @@
 
 using namespace shm_harness;
 
-TEST_CASE("harness a subscriber denied io_uring still receives every message", "[shm][harness]")
+// Without io_uring futex support the threaded wake is the only one, so there is nothing to demote from.
+constexpr bool k_uring_wake = PLEXUS_HAS_IO_URING_FUTEX != 0;
+
+TEST_CASE("harness a subscriber denied io_uring still receives every message and counts its demoted wake", "[shm][harness]")
 {
     topology topo{"shm_harness.denial." + std::to_string(plexus::testing::process_id()), 2};
     REQUIRE(topo.created());
@@ -30,4 +37,6 @@ TEST_CASE("harness a subscriber denied io_uring still receives every message", "
     REQUIRE(sub.received == 20);
     REQUIRE(sub.distinct == 20);
     REQUIRE(sub.duplicates == 0);
+    if constexpr(k_uring_wake)
+        REQUIRE(fallbacks_of(sub, plexus::io::fallback_reason::notifier_demoted_denied) >= 1);
 }

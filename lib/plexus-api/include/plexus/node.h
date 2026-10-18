@@ -17,6 +17,7 @@
 #include "plexus/io/observer.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/intra_node_transport.h"
@@ -275,6 +276,7 @@ public:
         m_engine.remove_observer(m_peer_watch);
         m_engine.post_participant_teardown({io::participant_edge::destroyed, m_id});
 #endif
+        detail::withdraw_fallback_counting(*this);
     }
 
     // An advertised listen requires an EXPLICIT port ("host:port"): a port-0 auto-assign cannot be
@@ -413,6 +415,13 @@ public:
     std::size_t topics_dropped() const noexcept
     {
         return m_engine.topic_table().dropped();
+    }
+
+    // How often a same-host lane was declined, demoted or lost, indexed by io::fallback_reason; a declined or lost
+    // pair keeps the wire.
+    io::fallback_counts same_host_fallbacks() const noexcept
+    {
+        return m_engine.same_host_fallbacks();
     }
 
     // Object-lane deliveries dropped at the demux on a type-witness mismatch.

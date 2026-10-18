@@ -69,10 +69,22 @@ void lane_arm(Coordinator &c)
 template<typename Coordinator>
 void lane_up(Coordinator &c, std::string_view node_name, std::string_view fqn, demand_role role)
 {
-    if(!retryable(lane_engage(c, node_name, fqn, role)) || !c.m_schedule_retry_cb)
+    const fallback_reason reason = lane_engage(c, node_name, fqn, role);
+    c.count_fallback(reason);
+    if(!retryable(reason) || !c.m_schedule_retry_cb)
         return;
     c.m_retry.defer(node_name, fqn, role);
     lane_arm(c);
+}
+
+// Each attempt counts its own decline; a pair that runs out of attempts also counts retries_exhausted, once.
+template<typename Coordinator>
+void lane_reattempt(Coordinator &c, const retry_key &key)
+{
+    const fallback_reason reason = lane_engage(c, key.node_name, key.fqn, key.role);
+    c.count_fallback(reason);
+    if(const fallback_reason stands = c.m_retry.settle(key, reason); stands != reason)
+        c.count_fallback(stands);
 }
 
 // A gate may tear a pair down while this wake runs, so each due pair is re-checked before its re-attempt.
@@ -81,7 +93,7 @@ void lane_retry(Coordinator &c)
 {
     for(const retry_key &key : c.m_retry.take_due())
         if(c.m_retry.contains(key))
-            c.m_retry.settle(key, lane_engage(c, key.node_name, key.fqn, key.role));
+            lane_reattempt(c, key);
     lane_arm(c);
 }
 

@@ -3,6 +3,7 @@
 
 #include "plexus/shm/detail/shm_topic_join.h"
 #include "plexus/shm/detail/shm_topic_entry.h"
+#include "plexus/shm/detail/shm_fallback_reason.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
@@ -10,6 +11,8 @@
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_acquire_result.h"
+
+#include "plexus/io/upgrade_channel.h"
 
 #include <string>
 #include <cstdint>
@@ -64,29 +67,49 @@ shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &
     return topic_attach_or_mint(r.m_broker, r.m_last_failure, e, ctrl_name, geom, key.publisher, capacity, amode);
 }
 
-// A notifier that can lose its waiter after arming reports the loss to every holder watching the entry.
-template<typename Entry>
-shm::arm_status topic_arm(Entry &e, std::uint32_t slot)
+template<typename Report>
+void topic_report(Report &report, io::fallback_reason reason)
 {
-    if constexpr(shm::demotable_notifier<typename Entry::notifier_type>)
-        return e.notify->arm(slot, [&e] { e.deliver_pending(); }, [loss = e.loss](shm::arm_status status) { loss->report(status); });
+    if(report)
+        report(reason);
+}
+
+// A waiter lost after arming is reported once to the registry, then to every holder watching the entry; a notifier
+// that moves to a lesser wake reports each move while it keeps serving the waiter.
+template<typename Entry, typename Report>
+shm::arm_status topic_arm(Entry &e, std::uint32_t slot, Report &report)
+{
+    using notifier_type = typename Entry::notifier_type;
+    auto drain          = [&e] { e.deliver_pending(); };
+    auto lost           = [loss = e.loss, &report](shm::arm_status status)
+    {
+        topic_report(report, io::fallback_reason::waiter_lost);
+        loss->report(status);
+    };
+    if constexpr(shm::demotion_reporting_notifier<notifier_type>)
+        return e.notify->arm(slot, drain, std::move(lost), [&report](shm::arm_status primary) { topic_report(report, detail::demoted_fallback(primary)); });
+    else if constexpr(shm::demotable_notifier<notifier_type>)
+        return e.notify->arm(slot, drain, std::move(lost));
     else
-        return e.notify->arm(slot, [&e] { e.deliver_pending(); });
+        return e.notify->arm(slot, drain);
 }
 
 // The channel must be built AFTER the ring is bound (its subscriber registers a cursor over the live ring). The armed
 // drain is the ONE drain authority for the ring's single consumer cursor: a second drainer would steal messages. A
-// waiter without a cursor slot has nothing to wake and reports armed.
+// subscriber the ring refused a cursor would never receive, so the bind fails rather than attach it.
 template<typename Registry, typename Entry>
-shm::arm_status topic_bind(Registry &r, Entry &e, const shm_topic_key &key, shm::acquire_result verdict)
+shm::acquire_failure topic_bind(Registry &r, Entry &e, const shm_topic_key &key, shm::acquire_result verdict)
 {
     r.m_bind_notifier(e.notify, e.ring.header(), shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns));
     e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
-    e.verdict  = verdict;
-    e.refcount = 1;
-    if(const std::optional<std::uint32_t> slot = e.channel->waiter_slot())
-        return topic_arm(e, *slot);
-    return shm::arm_status::armed;
+    e.verdict                               = verdict;
+    e.refcount                              = 1;
+    const std::optional<std::uint32_t> slot = e.channel->waiter_slot();
+    if(!slot)
+        return shm::acquire_failure{shm::acquire_bound::consumer_capacity};
+    if(const shm::arm_status armed = topic_arm(e, *slot, r.m_fallback_cb); armed != shm::arm_status::armed)
+        return shm::acquire_failure{shm::acquire_bound::notifier, 0, 0, shm::region_status::ok, armed};
+    return shm::acquire_failure{};
 }
 
 // A key whose waiter was lost fails every acquire until its last holder releases it, so the next demand arms afresh.

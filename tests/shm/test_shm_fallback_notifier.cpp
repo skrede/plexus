@@ -16,6 +16,7 @@
 #include <asio/io_context.hpp>
 
 #include <thread>
+#include <vector>
 #include <cstdint>
 
 #include <unistd.h>
@@ -91,6 +92,27 @@ TEST_CASE("fallback_notifier a runtime demotion moves to the threaded leg withou
     CHECK(committed);
     CHECK(plexus::testing::pump_until(io, [&] { return drained == 2; }));
     notifier.disarm();
+}
+
+TEST_CASE("fallback_notifier each move to the secondary, at arm or at runtime, reports the primary's reason once", "[shm][fallback_notifier]")
+{
+    ::asio::io_context io;
+    plexus::testing::heap_ring heap{16, 64};
+    REQUIRE(heap.created());
+    plexus::shm::slot_subscriber sub(heap.ring());
+    std::vector<arm_status> reported;
+    auto report = [&](arm_status primary) { reported.push_back(primary); };
+
+    plexus::shm::fallback_notifier<plexus::testing::denied_primary, threaded_leg> at_arm(io, heap.ring().header(), "");
+    REQUIRE(at_arm.arm(*sub.cursor_index(), [] {}, nullptr, report) == arm_status::armed);
+    CHECK(reported == std::vector<arm_status>{arm_status::denied});
+    at_arm.disarm();
+
+    plexus::shm::fallback_notifier<plexus::testing::demoting_primary<asio_policy>, threaded_leg> at_runtime(io, heap.ring().header(), "");
+    REQUIRE(at_runtime.arm(*sub.cursor_index(), [] {}, nullptr, report) == arm_status::armed);
+    REQUIRE(plexus::testing::pump_until(io, [&] { return at_runtime.engaged() == fallback_tier::secondary; }));
+    CHECK(reported == std::vector<arm_status>{arm_status::denied, arm_status::unsupported});
+    at_runtime.disarm();
 }
 
 TEST_CASE("fallback_notifier a runtime demotion whose secondary cannot arm reports the loss once", "[shm][fallback_notifier]")

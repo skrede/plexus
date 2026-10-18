@@ -103,6 +103,14 @@ io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::strin
     return io::upgrade_receive{[h = std::move(handle)]() mutable { (void)h; }};
 }
 
+// The member's registry reports each lost waiter and each notifier demotion, which the coordinator counts beside the
+// declines it sees itself.
+template<typename Engine, typename Member>
+void count_member_fallbacks(Engine &engine, Member &member)
+{
+    member.registry().on_fallback([&engine](io::fallback_reason reason) { engine.coordinator().count_fallback(reason); });
+}
+
 // Install the companion-ring mint and receive gates for one shm member into the engine's coordinator, capturing the
 // member and the engine by reference (both outlive the node-owned glue). The minted concrete channel is wrapped into
 // the engine's byte_channel before the coordinator retains it.
@@ -111,6 +119,7 @@ void install_same_host_upgrade(Engine &engine, Member &member)
 {
     engine.coordinator().on_gate([&engine, &member](std::string_view fqn) { return mint_send_lane(engine, member, fqn); });
     engine.coordinator().on_receive_gate([&engine, &member](std::string_view node_name, std::string_view fqn) { return mint_receive_lane(engine, member, node_name, fqn); });
+    count_member_fallbacks(engine, member);
 }
 
 }

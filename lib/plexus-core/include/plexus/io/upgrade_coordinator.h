@@ -37,6 +37,7 @@ class upgrade_coordinator
 public:
     explicit upgrade_coordinator(Registry &registry) noexcept
             : m_registry(registry)
+            , m_fallbacks()
     {
     }
 
@@ -122,8 +123,21 @@ public:
         detail::erase_fqn(m_held, fqn);
     }
 
+    // Every declined attempt is counted here, and so is each demotion or loss the medium reports for a lane it holds.
+    void count_fallback(fallback_reason reason) noexcept
+    {
+        if(reason != fallback_reason::none)
+            ++m_fallbacks[static_cast<std::size_t>(reason)];
+    }
+
+    const fallback_counts &fallbacks() const noexcept
+    {
+        return m_fallbacks;
+    }
+
 private:
     Registry &m_registry;
+    fallback_counts m_fallbacks;
     detail::upgrade_retry m_retry;
     detail::coordinator_held<Channel, upgrade_receive> m_held;
     std::unordered_map<std::string, dispatch_hint> m_hints;
@@ -142,6 +156,8 @@ private:
     friend void detail::lane_arm(C &);
     template<typename C>
     friend void detail::lane_up(C &, std::string_view, std::string_view, demand_role);
+    template<typename C>
+    friend void detail::lane_reattempt(C &, const detail::retry_key &);
     template<typename C>
     friend void detail::lane_retry(C &);
     template<typename C>

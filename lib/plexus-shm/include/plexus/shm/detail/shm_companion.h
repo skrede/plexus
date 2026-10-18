@@ -2,15 +2,14 @@
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_COMPANION_H
 
 #include "plexus/shm/detail/shm_mux_acquire.h"
+#include "plexus/shm/detail/shm_fallback_reason.h"
 
-#include "plexus/shm/arm_status.h"
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/upgrade_channel.h"
 
 #include "plexus/node_id.h"
 #include "plexus/wire_bytes.h"
@@ -24,43 +23,6 @@
 #include <utility>
 
 namespace plexus::shm::detail {
-
-inline io::fallback_reason notifier_fallback(shm::arm_status arm) noexcept
-{
-    switch(arm)
-    {
-        case shm::arm_status::denied:
-            return io::fallback_reason::notifier_denied;
-        case shm::arm_status::unsupported:
-            return io::fallback_reason::notifier_unsupported;
-        case shm::arm_status::exhausted:
-            return io::fallback_reason::notifier_exhausted;
-        case shm::arm_status::armed:
-            break;
-    }
-    return io::fallback_reason::none;
-}
-
-// The transport-neutral reason a failed acquire hands the coordinator, which never sees an acquire_bound.
-inline io::fallback_reason fallback_of(const shm::acquire_failure &failure) noexcept
-{
-    switch(failure.bound)
-    {
-        case shm::acquire_bound::transient_join:
-            return io::fallback_reason::transient;
-        case shm::acquire_bound::incompatible:
-            return io::fallback_reason::incompatible_layout;
-        case shm::acquire_bound::slab_ceiling:
-            return io::fallback_reason::slab_ceiling;
-        case shm::acquire_bound::os_allocator:
-            return io::fallback_reason::os_allocator;
-        case shm::acquire_bound::notifier:
-            return notifier_fallback(failure.arm);
-        case shm::acquire_bound::none:
-            break;
-    }
-    return io::fallback_reason::none;
-}
 
 // join_live: the co-host subscriber may have minted this companion ring first, so a clobbering unlink would split the
 // pair onto two rings.

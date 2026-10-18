@@ -858,6 +858,30 @@ target_link_libraries(test_medium_coordinator_retry PRIVATE
 
 catch_discover_tests(test_medium_coordinator_retry TEST_PREFIX "shm.")
 
+# The coordinator counts every decline by its reason, each transient attempt, an exhausted pair once, and a demotion.
+add_executable(test_medium_coordinator_reasons test_medium_coordinator_reasons.cpp)
+
+target_link_libraries(test_medium_coordinator_reasons PRIVATE
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_medium_coordinator_reasons TEST_PREFIX "shm.")
+
+# A member's declines, demotions and lost waiters reach the coordinator's counters by reason, over in-memory brokers.
+add_executable(test_medium_coordinator_member_reasons test_medium_coordinator_member_reasons.cpp)
+
+target_include_directories(test_medium_coordinator_member_reasons PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_medium_coordinator_member_reasons PRIVATE
+    plexus::plexus
+    plexus::shm
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_medium_coordinator_member_reasons TEST_PREFIX "shm.")
+
 # The forwarder's delivery order across a late wire-to-companion switch and across a subscriber attach.
 add_executable(test_shm_switch_order test_shm_switch_order.cpp)
 

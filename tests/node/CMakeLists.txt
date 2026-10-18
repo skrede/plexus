@@ -358,6 +358,18 @@ if(PLEXUS_ENABLE_SHM_BACKEND AND NOT WIN32)
         plexus::native
         Catch2::Catch2WithMain)
     catch_discover_tests(test_node_same_host_identity TEST_PREFIX "node.")
+
+    # The node exposes how often a same-host lane was declined, demoted or lost, by reason.
+    add_executable(test_node_same_host_fallbacks test_node_same_host_fallbacks.cpp)
+    target_link_libraries(test_node_same_host_fallbacks PRIVATE
+        plexus::shm
+        plexus::plexus
+        plexus::core
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_node_same_host_fallbacks TEST_PREFIX "node.")
 endif()
 
 # The two-node native multicast-discovery host proof: two real basic_node instances, each with a

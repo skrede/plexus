@@ -18,6 +18,7 @@
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/upgrade_channel.h"
 
 #include "plexus/discovery/universe.h"
 
@@ -39,8 +40,7 @@ namespace plexus::shm {
 // The demand-driven lifecycle owner of every live (topic, direction, publisher) ring: a first acquire MINTS the ring (or
 // ATTACHES to a peer's), each further acquire bumps a refcount, and the matching releases tear it down at 1 -> 0 (the
 // creator also unlinks). A waiter lost after its acquire tells each holder watching it and fails further acquires of
-// its key. It borrows the broker by reference and owns one notifier per entry. Templated on the broker + notifier
-// seams so core pulls no POSIX/asio header.
+// its key. Templated on the broker and notifier seams so core pulls no POSIX or asio header.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_topic_registry
@@ -49,9 +49,8 @@ public:
     using broker_type = Broker;
     using deliver_fn  = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
-    // A notifier that wakes on a cross-process futex is NOT default-constructible (it binds to
-    // the ring's control header + the user's executor), so the binder injects that construction
-    // without coupling the registry to a concrete notifier ctor.
+    // A notifier that wakes on a cross-process futex is NOT default-constructible (it binds to the ring's control header
+    // and the user's executor), so the binder injects that construction without coupling the registry to its ctor.
     using notifier_binder = plexus::detail::move_only_function<void(std::optional<Notifier> &, control_header_t &, std::string_view)>;
 
     static notifier_binder default_notifier_binder() noexcept
@@ -59,7 +58,6 @@ public:
         return [](std::optional<Notifier> &slot, control_header_t &, std::string_view) { slot.emplace(); };
     }
 
-    // max_ring_slab_bytes defaults to the shipped k_max_ring_slab_bytes; the acquire fails closed above it.
     shm_topic_registry(Broker &broker, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = default_notifier_binder(),
                        std::uint64_t max_ring_slab_bytes = k_max_ring_slab_bytes, std::string region_ns = {}, std::uint32_t universe = discovery::k_default_universe) noexcept
             : m_broker(broker)
@@ -67,6 +65,7 @@ public:
             , m_congestion(cong)
             , m_universe(universe)
             , m_bind_notifier(std::move(bind_notifier))
+            , m_fallback_cb()
             , m_max_ring_slab_bytes(max_ring_slab_bytes)
             , m_region_ns(std::move(region_ns))
             , m_last_failure()
@@ -99,11 +98,11 @@ public:
         const acquire_result verdict = detail::topic_open_ring(*this, *e, k, max_payload, mode, consumer_capacity, amode);
         if(verdict == acquire_result::failed)
             return acquire_result::failed;
-        // A waiter whose notifier cannot arm is never woken, so the acquire fails and the caller keeps its other transports.
-        if(const arm_status armed = detail::topic_bind(*this, *e, k, verdict); armed != arm_status::armed)
+        // A reader with no cursor or an unarmable notifier never receives, so the caller keeps its other transports.
+        if(const acquire_failure bound = detail::topic_bind(*this, *e, k, verdict); bound.bound != acquire_bound::none)
         {
             e->teardown();
-            m_last_failure = acquire_failure{acquire_bound::notifier, 0, 0, region_status::ok, armed};
+            m_last_failure = bound;
             return acquire_result::failed;
         }
         m_entries.emplace(k, std::move(e));
@@ -113,12 +112,16 @@ public:
     void release(const std::string &fqn, ring_direction direction, const node_id &publisher)
     {
         auto it = m_entries.find(key{fqn, direction, publisher});
-        if(it == m_entries.end())
-            return;
-        if(--it->second->refcount > 0)
+        if(it == m_entries.end() || --it->second->refcount > 0)
             return;
         it->second->teardown();
         m_entries.erase(it);
+    }
+
+    // Told once per lost waiter and once per notifier demotion of any live entry, on the executor.
+    void on_fallback(plexus::detail::move_only_function<void(io::fallback_reason)> report)
+    {
+        m_fallback_cb = std::move(report);
     }
 
     void set_consumer_sink(const std::string &fqn, ring_direction direction, const node_id &publisher, deliver_fn sink)
@@ -179,6 +182,7 @@ private:
     io::congestion m_congestion;
     std::uint32_t m_universe;
     notifier_binder m_bind_notifier;
+    plexus::detail::move_only_function<void(io::fallback_reason)> m_fallback_cb;
     std::uint64_t m_max_ring_slab_bytes;
     std::string m_region_ns;
     acquire_failure m_last_failure;
@@ -188,7 +192,7 @@ private:
     friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, std::uint32_t, ::plexus::shm::ring_geometry_mode, std::uint32_t,
                                                                  ::plexus::shm::acquire_mode);
     template<typename R, typename E>
-    friend ::plexus::shm::arm_status detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::acquire_result);
+    friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::acquire_result);
 };
 
 }

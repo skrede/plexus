@@ -31,6 +31,15 @@ concept demotable_notifier = requires(T &n, std::uint32_t slot, plexus::detail::
     { n.disarm() } -> std::same_as<void>;
 };
 
+// A demotable notifier that also reports, with the primary's reason, each time it serves its waiter from a lesser wake
+// than the one it prefers.
+template<typename T>
+concept demotion_reporting_notifier = demotable_notifier<T> &&
+        requires(T &n, std::uint32_t slot, plexus::detail::move_only_function<void()> drain, plexus::detail::move_only_function<void(arm_status)> lost,
+                 plexus::detail::move_only_function<void(arm_status)> demoted) {
+            { n.arm(slot, std::move(drain), std::move(lost), std::move(demoted)) } -> std::same_as<arm_status>;
+        };
+
 }
 
 #endif

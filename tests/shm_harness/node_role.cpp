@@ -28,6 +28,7 @@
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/upgrade_channel.h"
 
 #include <asio/io_context.hpp>
 
@@ -65,6 +66,14 @@ void update_connected(Node &node, const node_args &args, node_slot &slot)
 }
 
 template<typename Node>
+void report_fallbacks(const Node &node, node_slot &slot)
+{
+    const plexus::io::fallback_counts counts = node.same_host_fallbacks();
+    for(std::size_t reason = 0; reason < counts.size(); ++reason)
+        slot.fallbacks[reason].store(static_cast<std::uint32_t>(counts[reason]), std::memory_order_release);
+}
+
+template<typename Node>
 void serve_node(::asio::io_context &io, Node &node, const node_args &args, node_slot &slot)
 {
     node.listen({"tcp", "127.0.0.1:" + std::to_string(args.ports[args.index])});
@@ -83,6 +92,7 @@ void serve_node(::asio::io_context &io, Node &node, const node_args &args, node_
         io.restart();
         io.run_for(1ms);
         update_connected(node, args, slot);
+        report_fallbacks(node, slot);
     }
 }
 
