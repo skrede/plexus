@@ -452,6 +452,21 @@ target_link_libraries(test_shm_registry_join PRIVATE
 
 catch_discover_tests(test_shm_registry_join TEST_PREFIX "shm.")
 
+# A co-host acquire past a ring's consumer capacity, over an in-memory broker two registries share.
+add_executable(test_shm_registry_capacity test_shm_registry_capacity.cpp)
+
+target_include_directories(test_shm_registry_capacity PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_registry_capacity PRIVATE
+    plexus::plexus
+    plexus::shm
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_registry_capacity TEST_PREFIX "shm.")
+
 # Rings are named per publisher and universe: two universes or two publishers never share a ring, over an in-memory broker.
 add_executable(test_shm_region_universe test_shm_region_universe.cpp)
 
