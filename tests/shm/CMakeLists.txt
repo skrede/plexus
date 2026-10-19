@@ -927,7 +927,7 @@ if(NOT WIN32)
 endif()
 
 # The large-message live-mux round-trip (xproc): a publisher declares a sizing
-# shm_geometry and mints the ring through shm_mux_member's ACQUIRE path (not the unit
+# same_host_geometry and mints the ring through shm_mux_member's ACQUIRE path (not the unit
 # registry); a >1 MiB then a 16 MiB payload crosses byte-exact to a converged
 # subscriber, per notifier variant (futex-wake shmn + reactor-reaped/spin shmr;
 # busy-poll shm excluded). The large cells run >= 2 times per ctest invocation. The

@@ -17,12 +17,12 @@
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/shm_topic_registry.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/wire_bytes.h"
 
@@ -68,7 +68,7 @@ bool serve_consumer(const std::string &fqn, wake_block &block, wake_consumer_slo
     plexus::native::posix_shm_region_broker broker;
     registry_for<Notifier> registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, binder_on<Notifier>(io)};
     const plexus::shm::acquire_result acquired =
-            registry.acquire(fqn, k_request, plexus::testing::test_publisher(), 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
+            registry.acquire(fqn, k_request, plexus::testing::test_publisher(), 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
     if(acquired == plexus::shm::acquire_result::failed)
         return false;
 

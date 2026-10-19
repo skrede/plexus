@@ -2,7 +2,6 @@
 #include "plexus/native/region_handle.h"
 
 #include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/shm_mux_member.h"
@@ -13,6 +12,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_executor.h"
@@ -301,7 +301,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     posix_shm_region_broker broker;
     member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
     plexus::testing::bind_test_publisher(member);
-    member.set_topic_geometry(fqn, declared_payload, pio::shm_geometry{capacity, pio::ring_geometry_mode::wire_fallback});
+    member.set_topic_geometry(fqn, declared_payload, plexus::io::same_host_geometry{capacity, plexus::io::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;
     member.on_accepted([&](std::unique_ptr<shm_channel> ch) { companion_ring = std::move(ch); });
@@ -428,7 +428,7 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
 
     posix_shm_region_broker broker;
     member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
-    member.set_topic_geometry(fqn, 2 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
+    member.set_topic_geometry(fqn, 2 * k_kib, plexus::io::same_host_geometry{2u, plexus::io::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;
     member.on_accepted([&](std::unique_ptr<shm_channel> ch) { companion_ring = std::move(ch); });

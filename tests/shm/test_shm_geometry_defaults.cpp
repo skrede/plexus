@@ -1,7 +1,6 @@
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/ring_geometry.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/shm_selection.h"
@@ -33,6 +32,7 @@
 
 using namespace plexus::shm;
 using plexus::io::dispatch_hint;
+using plexus::io::ring_geometry_mode;
 
 namespace {
 
@@ -208,7 +208,7 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
     stub_broker broker{store};
     test_member member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
-    const shm_geometry def = member.default_geometry();
+    const plexus::io::same_host_geometry def = member.default_geometry();
     REQUIRE(def.max_consumers == 0u);
     REQUIRE(def.mode == ring_geometry_mode::reliable_preserving);
 

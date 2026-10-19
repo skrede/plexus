@@ -12,8 +12,8 @@
 #include "plexus/native/machine_fingerprint.h"
 
 #include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/io/host_fingerprint.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/discovery/static_discovery.h"
 #include "plexus/discovery/contact_card.h"
@@ -244,9 +244,9 @@ plexus::topic_qos companion_qos()
     return qos;
 }
 
-pio::shm_geometry companion_geometry()
+plexus::io::same_host_geometry companion_geometry()
 {
-    return pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback};
+    return plexus::io::same_host_geometry{2u, plexus::io::ring_geometry_mode::wire_fallback};
 }
 
 struct medium_result
@@ -374,9 +374,9 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
 
         // The companion QoS plus the wire_fallback geometry make the publish fan split per message: fitting -> SHM,
         // over-cap -> wire.
-        const pio::shm_geometry geometry = companion_geometry();
+        const plexus::io::same_host_geometry geometry = companion_geometry();
         plexus::publisher<> companion_pub{node, fqn, companion_qos(),
-                                          /*emit_source_identity=*/false, &geometry};
+                                          /*emit_source_identity=*/false, geometry};
 
         bool consumer_done  = false;
         bool ring_signaled  = false;

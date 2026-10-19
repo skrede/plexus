@@ -1,8 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_H
 #define HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_H
 
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/ring_layout.h"
+
+#include "plexus/io/same_host_geometry.h"
 
 #include <cassert>
 #include <cstddef>
@@ -47,11 +48,11 @@ constexpr std::uint64_t next_pow2_at_least(std::uint64_t v) noexcept
 
 // Trade depth for width so per-ring memory stays bounded as the slot grows. Beyond the
 // fixed-depth tiers the slot dominates, so the depth pins to the capacity floor.
-inline ring_geometry ring_geometry_tier(std::uint64_t want, std::uint64_t slot, ring_geometry_mode mode, std::uint64_t capacity) noexcept
+inline ring_geometry ring_geometry_tier(std::uint64_t want, std::uint64_t slot, io::ring_geometry_mode mode, std::uint64_t capacity) noexcept
 {
     if(want > 131072)
     {
-        const std::uint64_t depth = mode == ring_geometry_mode::best_effort_large ? next_pow2_at_least(capacity) : next_pow2_strictly_above(capacity);
+        const std::uint64_t depth = mode == io::ring_geometry_mode::best_effort_large ? next_pow2_at_least(capacity) : next_pow2_strictly_above(capacity);
         return ring_geometry{depth, slot};
     }
     if(want > 65536)
@@ -66,26 +67,26 @@ inline ring_geometry ring_geometry_tier(std::uint64_t want, std::uint64_t slot, 
 // Maps a topic's declared max payload, mode, and consumer capacity to a ring geometry.
 // A pure layout query: it never bounds the slab itself (the fail-closed registration
 // path owns that bound + diagnostic).
-inline ring_geometry ring_geometry_for(std::optional<std::uint32_t> max_payload, ring_geometry_mode mode, std::uint32_t consumer_capacity) noexcept
+inline ring_geometry ring_geometry_for(std::optional<std::uint32_t> max_payload, io::ring_geometry_mode mode, std::uint32_t consumer_capacity) noexcept
 {
     const std::uint64_t capacity = consumer_capacity == 0 ? k_max_consumers : consumer_capacity;
     const std::uint64_t want     = max_payload.value_or(0);
     ring_geometry geom           = ring_geometry_tier(want, round_up_8(want), mode, capacity);
     geom.slot_capacity           = round_up_8(geom.slot_capacity);
-    if(mode != ring_geometry_mode::best_effort_large)
+    if(mode != io::ring_geometry_mode::best_effort_large)
         assert(geom.cell_count > capacity && "reliable ring depth not strictly above capacity");
     return geom;
 }
 
 inline ring_geometry ring_geometry_for(std::optional<std::uint32_t> max_payload) noexcept
 {
-    return ring_geometry_for(max_payload, ring_geometry_mode::reliable_preserving, k_max_consumers);
+    return ring_geometry_for(max_payload, io::ring_geometry_mode::reliable_preserving, k_max_consumers);
 }
 
 // The exact byte cost (control+cells region + payload slab region) a ring declared for
 // this payload, mode, and capacity allocates. For wire_fallback it returns the bounded
 // reliable ring's cost (the capped band), not the rerouted large payload.
-inline std::size_t ring_memory_for(std::uint32_t max_payload, ring_geometry_mode mode, std::uint32_t consumer_capacity) noexcept
+inline std::size_t ring_memory_for(std::uint32_t max_payload, io::ring_geometry_mode mode, std::uint32_t consumer_capacity) noexcept
 {
     const ring_geometry geom = ring_geometry_for(max_payload, mode, consumer_capacity);
     return control_region_bytes(geom.cell_count) + slab_region_bytes(geom.cell_count, geom.slot_capacity);

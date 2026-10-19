@@ -59,7 +59,7 @@ struct peer_ring
 
 acquire_result join(registry &reg, const std::string &fqn)
 {
-    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, k_slot, plexus::shm::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
+    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, k_slot, plexus::io::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
 }
 
 }

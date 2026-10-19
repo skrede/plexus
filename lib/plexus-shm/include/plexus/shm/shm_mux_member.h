@@ -6,7 +6,6 @@
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_byte_channel.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_topic_registry.h"
 #include "plexus/shm/shm_preference_hook.h"
 #include "plexus/shm/region_broker_concept.h"
@@ -21,6 +20,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/same_host_geometry.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 
@@ -114,7 +114,7 @@ public:
     bool can_acquire(const io::endpoint &ep)
     {
         const auto g = detail::mux_resolve(*this, ep.address, ring_direction::request);
-        if(g.mode == ring_geometry_mode::wire_fallback)
+        if(g.mode == io::ring_geometry_mode::wire_fallback)
             return false;
         return m_registry.acquire(ep.address, ring_direction::request, m_self, g.max_payload, g.mode, g.consumer_capacity) != acquire_result::failed;
     }
@@ -169,7 +169,7 @@ public:
 
     // The declaring publisher records its topic's effective per-message size + geometry here,
     // BEFORE the dial/listen that mints the ring.
-    void set_topic_geometry(const std::string &fqn, std::size_t effective_bytes, shm_geometry geom)
+    void set_topic_geometry(const std::string &fqn, std::size_t effective_bytes, io::same_host_geometry geom)
     {
         detail::topic_set_geometry(m_geometry, fqn, effective_bytes, geom);
     }
@@ -202,16 +202,9 @@ public:
 
     // The transport-default ring geometry a publisher with no per-topic override resolves against;
     // the default lives on the transport that owns the rings, not on node_options.
-    shm_geometry default_geometry() const noexcept
+    io::same_host_geometry default_geometry() const noexcept
     {
         return m_default_geometry;
-    }
-
-    // Recover a per-topic override the api carries as an opaque pointer at the declare seam (null = none, the default). A
-    // LOCAL value the producer supplied for this synchronous declare; the concrete type stays member-side.
-    shm_geometry geometry_from(const void *override_or_null) const noexcept
-    {
-        return override_or_null != nullptr ? *static_cast<const shm_geometry *>(override_or_null) : m_default_geometry;
     }
 
     // The upgrade policy the medium coordinator consults on a co-host demand edge. The default
@@ -240,7 +233,7 @@ private:
     registry_type m_registry;
     node_id m_self;
     detail::shm_geometry_map m_geometry;
-    shm_geometry m_default_geometry{};
+    io::same_host_geometry m_default_geometry;
     upgrade_policy_fn m_upgrade_policy{&default_upgrade_policy};
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const io::endpoint &)> m_on_dialed;

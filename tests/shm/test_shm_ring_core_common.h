@@ -23,6 +23,7 @@
 namespace shm_ring_core_fixture {
 
 using namespace plexus::shm;
+using plexus::io::ring_geometry_mode;
 
 // Heap-backed standin for a mapped region: a properly-aligned byte buffer the
 // ring places its header/cells (control) or its payload slab over. A real

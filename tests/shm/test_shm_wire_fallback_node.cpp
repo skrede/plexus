@@ -1,6 +1,5 @@
 #include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/shm_mux_member.h"
@@ -9,6 +8,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/same_host_geometry.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
@@ -160,11 +160,11 @@ using mux_t = pcore::multiplexing_transport<member_t, stream_member>;
 // Resolve which member a same-host "shm" dial routed to, with the topic provisioned by the
 // SAME verb the node declare path calls (set_topic_geometry). "shm" => the shm member
 // served it (the ring is preferred); "stream" => the dial fell back to the wire member.
-std::string route_for_mode(const std::string &fqn, pio::ring_geometry_mode mode)
+std::string route_for_mode(const std::string &fqn, pcore::ring_geometry_mode mode)
 {
     posix_shm_region_broker broker;
     member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
-    member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, mode});
+    member.set_topic_geometry(fqn, 4 * k_kib, pcore::same_host_geometry{2u, mode});
 
     stream_member stream;
     mux_t mux{member, stream, {}, plexus::shm::prefer_upgradeable_hook(member)};
@@ -276,9 +276,9 @@ TEST_CASE("shm.wire_fallback_node a wire_fallback topic's same-host channel is t
     // member); the two reliable-ring modes prefer the ring — byte-identical to today.
     const std::string base = "topic.wfbn." + std::to_string(plexus::testing::process_id());
 
-    REQUIRE(route_for_mode(base + ".wfb", pio::ring_geometry_mode::wire_fallback) == "stream");
-    REQUIRE(route_for_mode(base + ".rel", pio::ring_geometry_mode::reliable_preserving) == "shm");
-    REQUIRE(route_for_mode(base + ".bel", pio::ring_geometry_mode::best_effort_large) == "shm");
+    REQUIRE(route_for_mode(base + ".wfb", pcore::ring_geometry_mode::wire_fallback) == "stream");
+    REQUIRE(route_for_mode(base + ".rel", pcore::ring_geometry_mode::reliable_preserving) == "shm");
+    REQUIRE(route_for_mode(base + ".bel", pcore::ring_geometry_mode::best_effort_large) == "shm");
 }
 
 TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without holding a ring refcount", "[shm][wire_fallback][node]")
@@ -292,7 +292,7 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     posix_shm_region_broker broker;
     member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
 
-    member.set_topic_geometry(fqn, 4 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::wire_fallback});
+    member.set_topic_geometry(fqn, 4 * k_kib, pcore::same_host_geometry{2u, pcore::ring_geometry_mode::wire_fallback});
     REQUIRE_FALSE(member.can_acquire(endpoint{"shm", fqn}));
     // No bump was held: a release of an unheld pair is a no-op (the registry's 1->0 gate is
     // never crossed), and the slot for the fqn is absent — proven by a fresh probe still
@@ -300,7 +300,7 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     REQUIRE_FALSE(member.can_acquire(endpoint{"shm", fqn}));
 
     const std::string rel_fqn = "topic.wfbn.refcount.rel." + std::to_string(plexus::testing::process_id());
-    member.set_topic_geometry(rel_fqn, 4 * k_kib, pio::shm_geometry{2u, pio::ring_geometry_mode::reliable_preserving});
+    member.set_topic_geometry(rel_fqn, 4 * k_kib, pcore::same_host_geometry{2u, pcore::ring_geometry_mode::reliable_preserving});
     REQUIRE(member.can_acquire(endpoint{"shm", rel_fqn}));
     member.abandon(endpoint{"shm", rel_fqn}); // drop the held probe bump (the hook chose otherwise)
 }

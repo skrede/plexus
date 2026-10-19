@@ -13,8 +13,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/reconnect_config.h"
-
-#include "plexus/shm/ring_geometry_mode.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include <chrono>
 #include <string>
@@ -85,11 +84,11 @@ inline plexus::io::subscriber_qos subscriber_qos_for(bool hint)
 }
 
 // The publisher's own ring geometry; only single_reader overrides the default.
-inline std::optional<plexus::shm::shm_geometry> ring_geometry_for(const node_args &args)
+inline std::optional<plexus::io::same_host_geometry> ring_geometry_for(const node_args &args)
 {
     if(args.composition != composition_name(node_composition::single_reader))
         return std::nullopt;
-    return plexus::shm::shm_geometry{1, plexus::shm::ring_geometry_mode::reliable_preserving};
+    return plexus::io::same_host_geometry{1, plexus::io::ring_geometry_mode::reliable_preserving};
 }
 
 }

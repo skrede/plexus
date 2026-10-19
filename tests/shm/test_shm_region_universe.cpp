@@ -5,12 +5,12 @@
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_slot_owner.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/shm_topic_registry.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/node_id.h"
 #include "plexus/wire_bytes.h"
@@ -39,7 +39,7 @@ const std::string k_fqn              = "topic.universe";
 
 acquire_result join(registry &r, const plexus::node_id &publisher)
 {
-    return r.acquire(k_fqn, ring_direction::request, publisher, 64, plexus::shm::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
+    return r.acquire(k_fqn, ring_direction::request, publisher, 64, plexus::io::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
 }
 
 void send_n(registry &r, const plexus::node_id &publisher, std::uint32_t n)

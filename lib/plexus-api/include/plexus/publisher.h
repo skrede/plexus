@@ -37,7 +37,8 @@ class publisher<void>
 {
 public:
     template<typename Policy, typename... NodeTs>
-    publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {}, bool emit_source_identity = false, const void *geometry = nullptr)
+    publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const topic_qos &qos = {}, bool emit_source_identity = false,
+              std::optional<io::same_host_geometry> geometry = std::nullopt)
             : m_seam(n.endpoint_seam_for())
             , m_fqn(fqn)
     {

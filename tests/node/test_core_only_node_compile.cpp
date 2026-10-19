@@ -2,8 +2,8 @@
 // facade, built with plexus-shm OFF the include path (this target links plexus::plexus +
 // plexus::core alone). The proof is STRUCTURAL — it must BUILD and LINK naming no shm:: symbol; a
 // facade reaching an shm header on this plain pack would fail header-not-found. The publisher
-// declared below exercises the now-opaque per-topic geometry override path (a const void* at the
-// declare seam), proving it compiles with no shm geometry type in scope.
+// declared below carries a typed per-topic same-host geometry, proving that override is a core
+// type that compiles with no shm header in scope.
 
 #include "plexus/node.h"
 #include "plexus/publisher.h"
@@ -15,6 +15,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/policy.h"
 #include "plexus/node_id.h"
@@ -190,9 +191,8 @@ int main()
     plexus::node_options opts;
     node_t node{ex, disc, self, transport, opts};
 
-    // Declares the topic through the opaque-geometry declare seam (a null const void* override
-    // here): the transport-name-free publisher path compiles with no shm geometry type in scope.
-    plexus::publisher<void> telemetry{node, "telemetry"};
+    // A pack with no shm member ignores the geometry; the typed override still crosses the declare seam.
+    plexus::publisher<void> telemetry{node, "telemetry", {}, false, plexus::io::same_host_geometry{1u, plexus::io::ring_geometry_mode::reliable_preserving}};
     (void)telemetry;
 
     return 0;

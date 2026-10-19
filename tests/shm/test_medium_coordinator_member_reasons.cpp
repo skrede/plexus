@@ -136,7 +136,7 @@ TEST_CASE("medium_coordinator_member a control region that vanishes before the j
 {
     delaying_broker broker;
     noop_registry peer(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
-    REQUIRE(peer.acquire(k_fqn, plexus::shm::ring_direction::request, plexus::node_id{}, 0, plexus::shm::ring_geometry_mode::reliable_preserving, 1,
+    REQUIRE(peer.acquire(k_fqn, plexus::shm::ring_direction::request, plexus::node_id{}, 0, plexus::io::ring_geometry_mode::reliable_preserving, 1,
                          plexus::shm::acquire_mode::join_live) == plexus::shm::acquire_result::created);
     const bool vanished       = GENERATE(true, false);
     const fallback_reason why = vanished ? fallback_reason::not_found : fallback_reason::consumer_capacity;

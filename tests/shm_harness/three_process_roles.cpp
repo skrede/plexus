@@ -14,11 +14,11 @@
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_slot_owner.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/wire_bytes.h"
 
@@ -118,7 +118,7 @@ bool run_role(const std::string &fqn, three_role_slot &slot, bool publisher)
     ::asio::io_context io;
     typename Leg::registry::broker_type broker;
     typename Leg::registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, Leg::binder(io)};
-    if(registry.acquire(fqn, k_request, plexus::testing::test_publisher(), 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
+    if(registry.acquire(fqn, k_request, plexus::testing::test_publisher(), 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
        plexus::shm::acquire_result::failed)
         return report_failure(registry.last_acquire_failure());
 

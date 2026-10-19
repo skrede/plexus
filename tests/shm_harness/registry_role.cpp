@@ -15,12 +15,12 @@
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/shm_slot_owner.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/muxify.h"
 #include "plexus/wire_bytes.h"
@@ -71,7 +71,7 @@ channel_type *join_ring(registry_type &registry, const std::string &fqn, bool pu
     const std::size_t message_bytes = publishes ? plexus::io::global_default_max_message_bytes : 0;
     const std::uint32_t max_payload = plexus::shm::upgrade_ring_max_payload(k_request, static_cast<std::uint32_t>(message_bytes));
     const plexus::shm::acquire_result acquired =
-            registry.acquire(fqn, k_request, harness_id(0), max_payload, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
+            registry.acquire(fqn, k_request, harness_id(0), max_payload, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
     return acquired == plexus::shm::acquire_result::failed ? nullptr : registry.channel_for(fqn, k_request, harness_id(0));
 }
 

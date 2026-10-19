@@ -13,6 +13,7 @@
 #include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/upgrade_channel.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include <string>
 #include <cstdint>
@@ -55,7 +56,7 @@ shm::acquire_result topic_attach_or_mint(Broker &broker, shm::acquire_failure &f
 
 // Mints or attaches the two regions of the key's publisher ring and binds the entry's ring.
 template<typename Registry, typename Entry>
-shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &key, std::uint32_t max_payload, shm::ring_geometry_mode mode, std::uint32_t consumer_capacity,
+shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &key, std::uint32_t max_payload, io::ring_geometry_mode mode, std::uint32_t consumer_capacity,
                                     shm::acquire_mode amode)
 {
     const std::string ctrl_name             = shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns);

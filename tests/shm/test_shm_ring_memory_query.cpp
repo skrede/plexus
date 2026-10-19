@@ -21,13 +21,13 @@
 #include <string>
 #include <vector>
 
-// ring_memory_for is the cost a consumer queries BEFORE it declares a ring, so it must
-// equal two things byte-for-byte: the layout helpers' sum for the geometry
-// ring_geometry_for yields, and the bytes the registry actually requests from the
-// broker at mint. The depth-32 16 MiB figure (512 MiB) is pinned so a regression back to
-// the old depth-17 (or a deep-tier off-by-one) is caught.
+// ring_memory_for is the cost a consumer queries BEFORE it declares a ring, so it must equal two things
+// byte-for-byte: the layout helpers' sum for the geometry ring_geometry_for yields, and the bytes the registry
+// actually requests from the broker at mint. The depth-32 16 MiB figure (512 MiB) is pinned so a regression
+// back to the old depth-17 (or a deep-tier off-by-one) is caught.
 
 using namespace plexus::shm;
+using plexus::io::ring_geometry_mode;
 
 namespace {
 

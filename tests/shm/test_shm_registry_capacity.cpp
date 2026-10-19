@@ -4,10 +4,10 @@
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/shm_topic_registry.h"
-#include "plexus/shm/ring_geometry_mode.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/testing/platform.h"
 
@@ -35,7 +35,7 @@ std::string fresh_fqn(const char *tag)
 
 acquire_result acquire(registry &reg, const std::string &fqn)
 {
-    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, k_slot, plexus::shm::ring_geometry_mode::reliable_preserving, k_capacity, acquire_mode::join_live);
+    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, k_slot, plexus::io::ring_geometry_mode::reliable_preserving, k_capacity, acquire_mode::join_live);
 }
 
 }

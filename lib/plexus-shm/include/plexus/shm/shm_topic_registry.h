@@ -19,6 +19,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/upgrade_channel.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/discovery/universe.h"
 
@@ -75,8 +76,6 @@ public:
 
     shm_topic_registry(const shm_topic_registry &)            = delete;
     shm_topic_registry &operator=(const shm_topic_registry &) = delete;
-    shm_topic_registry(shm_topic_registry &&)                 = delete;
-    shm_topic_registry &operator=(shm_topic_registry &&)      = delete;
 
     ~shm_topic_registry()
     {
@@ -87,7 +86,8 @@ public:
     // A repeat acquire of a live key bumps the refcount and returns its prior verdict; a first acquire mints (or attaches
     // to a peer's) ring (max_payload 0 -> default). Each publisher of a topic owns its own ring.
     acquire_result acquire(const std::string &fqn, ring_direction direction, const node_id &publisher, std::uint32_t max_payload,
-                           ring_geometry_mode mode = ring_geometry_mode::reliable_preserving, std::uint32_t consumer_capacity = 0, acquire_mode amode = acquire_mode::reclaim_stale)
+                           io::ring_geometry_mode mode = io::ring_geometry_mode::reliable_preserving, std::uint32_t consumer_capacity = 0,
+                           acquire_mode amode = acquire_mode::reclaim_stale)
     {
         const key k{fqn, direction, publisher};
         if(auto it = m_entries.find(k); it != m_entries.end())
@@ -189,7 +189,7 @@ private:
     detail::shm_topic_map<entry> m_entries;
 
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, std::uint32_t, ::plexus::shm::ring_geometry_mode, std::uint32_t,
+    friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, std::uint32_t, ::plexus::io::ring_geometry_mode, std::uint32_t,
                                                                  ::plexus::shm::acquire_mode);
     template<typename R, typename E>
     friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::acquire_result);

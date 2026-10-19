@@ -6,6 +6,7 @@
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
+#include "plexus/publisher.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/node_options.h"
 
@@ -14,6 +15,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/testing/platform.h"
 
@@ -21,10 +23,9 @@
 
 #include <asio/io_context.hpp>
 
-#include "plexus/shm/ring_geometry_mode.h"
-
 #include <string>
 #include <cstddef>
+#include <optional>
 #include <type_traits>
 
 // The variadic-leaf shm node composition: a node<asio_policy, shm_member, unix_transport,
@@ -98,15 +99,16 @@ struct probe_codec
 
 }
 
-// Forces the option-3 geometry front-door body (opts.geometry = &geom; delegate to the generic
-// advertise path) to be instantiated and type-checked at compile time, without standing up a live
-// shm region — the xproc round-trip suites own the data-path provisioning.
-template plexus::publisher<probe_codec> pasio::shm::advertise<probe_codec, pasio::shm::node>(pasio::shm::node &, std::string_view, plexus::shm::shm_geometry, plexus::typed_publisher_options,
-                                                                                            probe_codec);
+// Type-checks the generic advertise path on the shm-first pack, whose typed options carry the per-topic geometry, without
+// standing up a live shm region; the xproc round-trip suites own the data-path provisioning.
+template plexus::publisher<probe_codec> pasio::shm::node::advertise<probe_codec>(std::string_view, const plexus::typed_publisher_options &, probe_codec);
+
+static_assert(std::is_same_v<decltype(plexus::typed_publisher_options::geometry), std::optional<plexus::io::same_host_geometry>>,
+              "the per-topic geometry override must be a typed optional");
 
 TEST_CASE("shm.node_composition the backend alias names the shm-first pack", "[shm][mux][node]")
 {
     static_assert(std::is_same_v<pasio::shm::node, plexus::node<pasio::asio_policy, pasio::shm::shm_member, pasio::unix_transport, pasio::asio_transport>>,
                   "plexus::asio::shm::node must name the shm-member-first composition pack");
-    SUCCEED("plexus::asio::shm::node names the shm-member-first pack; the geometry front-door instantiates");
+    SUCCEED("plexus::asio::shm::node names the shm-member-first pack; its generic advertise path instantiates");
 }

@@ -3,23 +3,20 @@
 
 #include "plexus/detail/node_upgrade_wiring.h"
 
+#include "plexus/io/same_host_geometry.h"
+
 #include <tuple>
 #include <string>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 
 namespace plexus::detail {
 
-// Keys on the member's name-free geometry surface (default_geometry + the opaque-pointer recover)
-// rather than the concrete override type, so the probe names no shm type: a member that provisions
-// per-topic rings matches; a plain leaf does not.
 template<typename M>
-constexpr bool member_has_shm_ring = requires(M &m) {
-    m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry());
-    m.geometry_from(static_cast<const void *>(nullptr));
-};
+constexpr bool member_has_shm_ring = requires(M &m) { m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry()); };
 
 // True when the pack carries a member with the shm-ring surface — the fallback self-carrier (a
 // node-local shm self-ring) is available when no intra-node transport is present to serve self.
@@ -47,14 +44,13 @@ void for_each_shm_member(Node &n, F &&fn)
     }
 }
 
-// An absent per-topic override (null) resolves to each shm member's own default_geometry(); a
-// composition with no shm member is a no-op. The override is the opaque carrier the declare
-// seam crosses; each member recovers its own geometry type from it member-side.
+// An absent per-topic override resolves to each shm member's own default_geometry(); a composition with no shm member
+// is a no-op.
 template<typename Node>
-void provision_same_host_ring(Node &n, std::string_view fqn, std::size_t effective_bytes, const void *geometry)
+void provision_same_host_ring(Node &n, std::string_view fqn, std::size_t effective_bytes, std::optional<io::same_host_geometry> geometry)
 {
     std::string key{fqn};
-    for_each_shm_member(n, [&](auto &m) { m.set_topic_geometry(key, effective_bytes, m.geometry_from(geometry)); });
+    for_each_shm_member(n, [&](auto &m) { m.set_topic_geometry(key, effective_bytes, geometry.value_or(m.default_geometry())); });
 }
 
 // Each shm member learns the node's id and universe before any ring is minted. No shm member is inert: no gate and no

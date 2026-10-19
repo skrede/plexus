@@ -8,11 +8,11 @@
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/slot_subscriber.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include <asio/io_context.hpp>
 
@@ -56,7 +56,7 @@ bool sem_cycler(const std::vector<std::string> &argv)
     sem_registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, posix_sem_leg::binder(io)};
     for(std::uint32_t cycle = 0; cycle < k_arm_cycles; ++cycle)
     {
-        if(registry.acquire(argv[0], k_request, plexus::testing::test_publisher(), 0, plexus::shm::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
+        if(registry.acquire(argv[0], k_request, plexus::testing::test_publisher(), 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
            plexus::shm::acquire_result::failed)
             return false;
         settle(io, cycle == 0 ? 200ms : 1ms);

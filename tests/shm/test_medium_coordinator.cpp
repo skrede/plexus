@@ -1,5 +1,5 @@
+#include "plexus/io/same_host_geometry.h"
 #include "plexus/io/upgrade_coordinator.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/companion_event.h"
@@ -84,10 +84,10 @@ using coordinator = plexus::io::upgrade_coordinator<stub_registry, fake_channel>
 struct gate_recorder
 {
     std::vector<std::string> minted;
-    bool accept                 = true;
-    ring_geometry_mode mode     = ring_geometry_mode::reliable_preserving;
-    std::uint64_t slot_capacity = 0;
-    int live                    = 0;
+    bool accept                         = true;
+    plexus::io::ring_geometry_mode mode = plexus::io::ring_geometry_mode::reliable_preserving;
+    std::uint64_t slot_capacity         = 0;
+    int live                            = 0;
 
     plexus::io::upgrade_mint<fake_channel> mint(std::string_view fqn)
     {
@@ -235,7 +235,7 @@ TEST_CASE("shm.coordinator the per-message companion route: a fitting message ri
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     gate_recorder gate;
-    gate.mode          = ring_geometry_mode::wire_fallback;
+    gate.mode          = plexus::io::ring_geometry_mode::wire_fallback;
     gate.slot_capacity = 4096;
     coordinator c{reg};
     install_gate(c, gate);

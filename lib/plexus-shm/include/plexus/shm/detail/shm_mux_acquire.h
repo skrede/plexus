@@ -5,10 +5,10 @@
 #include "plexus/shm/shm_channel.h"
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/shm_selection.h"
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include "plexus/node_id.h"
 
@@ -24,7 +24,7 @@ namespace plexus::shm::detail {
 struct shm_provisioned
 {
     std::uint32_t max_payload       = 0;
-    shm::ring_geometry_mode mode    = shm::ring_geometry_mode::reliable_preserving;
+    io::ring_geometry_mode mode     = io::ring_geometry_mode::reliable_preserving;
     std::uint32_t consumer_capacity = 0;
 };
 
@@ -34,7 +34,7 @@ struct shm_provisioned
 struct shm_resolved_geometry
 {
     std::uint32_t max_payload;
-    shm::ring_geometry_mode mode;
+    io::ring_geometry_mode mode;
     std::uint32_t consumer_capacity;
 };
 
@@ -43,7 +43,7 @@ shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn, shm::
 {
     auto it = m.m_geometry.find(fqn);
     if(it == m.m_geometry.end())
-        return {shm::upgrade_ring_max_payload(direction, 0), shm::ring_geometry_mode::reliable_preserving, 0};
+        return {shm::upgrade_ring_max_payload(direction, 0), io::ring_geometry_mode::reliable_preserving, 0};
     const auto &p = it->second;
     return {shm::upgrade_ring_max_payload(direction, p.max_payload), p.mode, p.consumer_capacity};
 }

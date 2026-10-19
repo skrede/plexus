@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_MODE_H
-#define HPP_GUARD_PLEXUS_SHM_RING_GEOMETRY_MODE_H
+#ifndef HPP_GUARD_PLEXUS_IO_SAME_HOST_GEOMETRY_H
+#define HPP_GUARD_PLEXUS_IO_SAME_HOST_GEOMETRY_H
 
 #include <cstdint>
 
-namespace plexus::shm {
+namespace plexus::io {
 
 // reliable_preserving leads so it is the zero/default (the safe-verdict-first
 // convention): a caller that declares nothing gets the reliable ring.
@@ -25,12 +25,24 @@ enum class ring_geometry_mode : std::uint8_t
     wire_fallback,
 };
 
-// SHM-local provisioning hint. max_consumers 0 = unset (resolves to the shipped
-// capacity floor downstream). Producer-side same-host provisioning only.
-struct shm_geometry
+// A producer-side per-topic same-host ring provisioning hint; max_consumers 0 means unset and resolves to the shipped
+// capacity floor downstream.
+struct same_host_geometry
 {
-    std::uint32_t max_consumers = 0;
-    ring_geometry_mode mode     = ring_geometry_mode::reliable_preserving;
+    constexpr same_host_geometry() noexcept
+            : max_consumers(0)
+            , mode(ring_geometry_mode::reliable_preserving)
+    {
+    }
+
+    constexpr same_host_geometry(std::uint32_t consumers, ring_geometry_mode geometry_mode) noexcept
+            : max_consumers(consumers)
+            , mode(geometry_mode)
+    {
+    }
+
+    std::uint32_t max_consumers;
+    ring_geometry_mode mode;
 };
 
 }

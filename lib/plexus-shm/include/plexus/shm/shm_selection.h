@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SHM_SELECTION_H
 #define HPP_GUARD_PLEXUS_SHM_SHM_SELECTION_H
 
-#include "plexus/shm/ring_geometry_mode.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/host_fingerprint.h"
+#include "plexus/io/same_host_geometry.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -36,9 +36,9 @@ inline same_host_medium select_same_host_medium(io::host_fingerprint peer, io::h
 // (always shm) for the other modes; only wire_fallback AND message_bytes past the
 // capped slot capacity routes to the wire. Reads the LOCAL message size against the
 // LOCALLY-resolved cap, never anything wire-supplied.
-inline same_host_medium route_message_medium(ring_geometry_mode mode, std::size_t message_bytes, std::uint64_t capped_slot_capacity) noexcept
+inline same_host_medium route_message_medium(io::ring_geometry_mode mode, std::size_t message_bytes, std::uint64_t capped_slot_capacity) noexcept
 {
-    if(mode != ring_geometry_mode::wire_fallback)
+    if(mode != io::ring_geometry_mode::wire_fallback)
         return same_host_medium::shm;
     return message_bytes <= capped_slot_capacity ? same_host_medium::shm : same_host_medium::stream;
 }
