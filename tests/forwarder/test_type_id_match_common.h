@@ -4,7 +4,8 @@
 // a real mismatch is refused with subscribe_status::type_mismatch and NO fan-out
 // entry is registered. The type_id rides the already-on-wire subscribe_request
 // type_hash field (0 = undeclared); matching authority is subscribe-time discovery.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_TYPE_ID_MATCH_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_TYPE_ID_MATCH_COMMON_H
 
 #include "plexus/io/message_forwarder.h"
 
@@ -94,4 +95,6 @@ inline plexus::io::subscriber_qos strict_typed()
     return q;
 }
 
-} // namespace type_id_match_fixture
+}
+
+#endif

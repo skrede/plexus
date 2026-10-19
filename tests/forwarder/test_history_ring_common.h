@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_HISTORY_RING_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_HISTORY_RING_COMMON_H
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/subscriber_qos.h"
@@ -74,4 +75,6 @@ inline std::vector<std::string> data_bodies(const capture &cap)
     return bodies;
 }
 
-} // namespace history_ring_fixture
+}
+
+#endif

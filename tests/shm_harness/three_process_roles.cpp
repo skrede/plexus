@@ -1,7 +1,7 @@
 #include "child_args.h"
 #include "three_process_block.h"
 
-#if defined(__linux__)
+#if !defined(_WIN32)
     #include "sem_support.h"
 #endif
 
@@ -147,7 +147,7 @@ bool run_three_role(const std::vector<std::string> &argv, bool publisher)
     three_role_slot &slot = block->get().roles[*index];
     if(argv[3] == k_platform_notifier)
         return run_role<platform_leg>(argv[2], slot, publisher);
-#if defined(__linux__)
+#if !defined(_WIN32)
     if(argv[3] == k_posix_sem_notifier)
         return run_role<posix_sem_leg>(argv[2], slot, publisher);
 #endif

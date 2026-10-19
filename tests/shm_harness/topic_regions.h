@@ -13,8 +13,6 @@
 #include <filesystem>
 #include <system_error>
 
-#include <sys/mman.h>
-
 namespace shm_harness {
 
 // On destruction it unlinks each publisher's request ring for the topic, the control region and its ".s" slab, which a
@@ -34,10 +32,11 @@ public:
 
     ~topic_regions()
     {
+        plexus::native::shm_region_broker broker;
         for(const std::string &region : m_regions)
         {
-            ::shm_unlink(("/plexus." + region).c_str());
-            ::shm_unlink(("/plexus." + region + ".s").c_str());
+            broker.unlink(region);
+            broker.unlink(region + ".s");
         }
     }
 

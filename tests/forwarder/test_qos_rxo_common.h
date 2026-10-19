@@ -5,7 +5,8 @@
 // and permissive mode yielding a degraded verdict with a NON-EMPTY bitmask naming the
 // right soft field (the non-silent guarantee at the pure level). Driven directly
 // against the relations — no I/O, no registry.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_QOS_RXO_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_QOS_RXO_COMMON_H
 
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/subscriber_qos.h"
@@ -43,4 +44,6 @@ using plexus::io::max_message_bytes_compatible;
 // effective-max resolution is observable.
 constexpr std::size_t k_test_global_default = 8u * 1024u * 1024u;
 
-} // namespace qos_rxo_fixture
+}
+
+#endif

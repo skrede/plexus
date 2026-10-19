@@ -136,7 +136,7 @@ TEST_CASE("xproc_control a counter written by a child is read by the parent", "[
 #if !defined(_WIN32)
 // A live handle stands in for a crashed run's leftover: a POSIX name stays linked until something unlinks it, while a
 // Windows object dies with its last handle.
-TEST_CASE("xproc_control a scoped name removes the broker's object left by an earlier run", "[shm][xproc][!shouldfail]")
+TEST_CASE("xproc_control a scoped name removes the broker's object left by an earlier run", "[shm][xproc]")
 {
     const std::string prefix = "xproc.leftover.";
     const std::string bare   = prefix + std::to_string(plexus::testing::process_id());

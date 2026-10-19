@@ -1,7 +1,8 @@
 // Single-process ring proofs over an anonymous mapped span. The ring takes a
 // caller-supplied (control, slab) region pair, so a test maps two heap-backed
 // spans and drives claim/commit/consume with no POSIX broker.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_CORE_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_CORE_COMMON_H
 
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/ring_geometry.h"
@@ -51,4 +52,6 @@ private:
     std::size_t m_size{0};
 };
 
-} // namespace shm_ring_core_fixture
+}
+
+#endif

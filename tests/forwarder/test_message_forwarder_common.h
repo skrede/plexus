@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_MESSAGE_FORWARDER_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_MESSAGE_FORWARDER_COMMON_H
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/wire_forwarder.h"
@@ -172,4 +173,6 @@ inline void resurrect(forwarder &fwd, const forwarder::peer &peer)
         fwd.attach(peer, demand.fqn, demand.qos, demand.type_id);
 }
 
-} // namespace message_forwarder_fixture
+}
+
+#endif

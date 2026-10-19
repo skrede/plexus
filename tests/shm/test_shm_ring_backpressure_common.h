@@ -1,7 +1,8 @@
 // Backpressure proofs over an anonymous mapped span: best_effort overwrite skips
 // a pinned slot (a held take is not stomped); a full-lap-pinned ring returns
 // congested; reliable claim gates on the slowest registered cursor (lossless).
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_BACKPRESSURE_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_BACKPRESSURE_COMMON_H
 
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/slot_subscriber.h"
@@ -67,4 +68,6 @@ struct fixture
     }
 };
 
-} // namespace shm_ring_backpressure_fixture
+}
+
+#endif

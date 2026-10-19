@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_LATCH_FORWARDER_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_LATCH_FORWARDER_COMMON_H
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/subscriber_registry.h"
@@ -85,4 +86,6 @@ inline std::vector<std::string> data_bodies(const capture &cap)
     return bodies;
 }
 
-} // namespace latch_forwarder_fixture
+}
+
+#endif

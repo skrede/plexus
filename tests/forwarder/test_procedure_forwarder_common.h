@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PROCEDURE_FORWARDER_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PROCEDURE_FORWARDER_COMMON_H
 
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/wire_forwarder.h"
@@ -174,4 +175,6 @@ inline std::vector<std::byte> make_response_inner(std::uint64_t corr_id, rpc_sta
     return out;
 }
 
-} // namespace procedure_forwarder_fixture
+}
+
+#endif

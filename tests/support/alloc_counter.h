@@ -6,20 +6,12 @@
 #include <cstdlib>
 #include <new>
 
-// Translation-unit-local allocation counter for the no-hot-path-alloc gate.
-// Including this header in a test TU makes every heap allocation bump an atomic
-// counter. A test snapshots alloc_count(), runs a steady-state loop, and asserts
-// the delta is zero — proving the loop allocated nothing. Header-only and
-// self-contained: it does not depend on any plexus target.
-//
-// Two counting mechanisms, selected at compile time. In a plain build the header
-// replaces the global operator new/delete; because those are replaceable at most
-// once per program, it must then be included in exactly one TU of any executable
-// that links it. Under a sanitizer runtime the operator forms are already defined
-// (strongly, for ThreadSanitizer, which collides at link), so counting instead
-// rides the sanitizer's allocator hook — it observes the same malloc/free the
-// program issues, so the gate keeps running under ASan and TSan rather than being
-// skipped.
+// Allocation counter for the no-hot-path-alloc gate: a test snapshots alloc_count(), runs a steady-state loop and
+// asserts a zero delta. A plain build replaces the global operator new/delete, which a program may do only once, so
+// exactly one translation unit of an executable includes this header; a sanitizer already defines those operators,
+// so a sanitized build counts through the sanitizer's allocator hook instead.
+// The plain tree counts the replaced operator new calls; the sanitized tree counts every allocation the hook sees,
+// including ones that never pass through operator new, so a zero delta on the sanitized tree is the stricter claim.
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
 #define PLEXUS_ALLOC_COUNTER_SANITIZED 1

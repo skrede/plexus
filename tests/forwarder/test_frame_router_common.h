@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_FRAME_ROUTER_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_FRAME_ROUTER_COMMON_H
 
 #include "plexus/io/frame_router.h"
 
@@ -49,4 +50,6 @@ inline std::string to_string(std::span<const std::byte> s)
     return std::string(reinterpret_cast<const char *>(s.data()), s.size());
 }
 
-} // namespace frame_router_fixture
+}
+
+#endif

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PRIORITY_BAND_QUEUE_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PRIORITY_BAND_QUEUE_COMMON_H
 
 #include "plexus/io/detail/priority_band_queue.h"
 #include "plexus/io/congestion.h"
@@ -58,4 +59,6 @@ inline std::vector<std::string> drain_bodies(priority_band_queue &q)
     return out;
 }
 
-} // namespace priority_band_fixture
+}
+
+#endif

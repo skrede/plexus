@@ -2,7 +2,8 @@
 // multicast_discovery over a datagram_socket, discovering each other with no static table and no
 // mdnspp. The live path rides the real udp_multicast_socket; a paired wiring fake delivers the
 // same node->discovery->note_from_card path deterministically without real multicast.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_NODE_NATIVE_DISCOVERY_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_NODE_NATIVE_DISCOVERY_COMMON_H
 
 #include "plexus/discovery/multicast_discovery.h"
 
@@ -109,4 +110,6 @@ private:
 
 static_assert(plexus::stream::datagram_socket<wiring_datagram_socket>);
 
-} // namespace node_native_discovery_fixture
+}
+
+#endif

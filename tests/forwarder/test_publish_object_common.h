@@ -5,7 +5,8 @@
 // path with encode invoked AT MOST ONCE per publish; a latched topic forces exactly
 // one encode even when every live subscriber fast-paths; the caller's slot reference
 // is balanced on every path.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/object_carrier.h"
@@ -102,4 +103,6 @@ inline std::size_t count_data_frames(const sink_peer &s)
 
 constexpr std::uint64_t k_tag = 0x7777;
 
-} // namespace publish_object_fixture
+}
+
+#endif

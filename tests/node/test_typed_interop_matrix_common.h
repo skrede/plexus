@@ -3,7 +3,8 @@
 // asserting the OBSERVABLE outcome — never merely the absence of a crash. The cells split
 // across this file and test_typed_fastpath.cpp; together they cover the full matrix.
 // The codec is a hand-rolled trivial struct codec — plexus never names a serializer.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_TYPED_INTEROP_MATRIX_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_TYPED_INTEROP_MATRIX_COMMON_H
 
 #include "plexus/node.h"
 #include "plexus/publisher.h"
@@ -156,4 +157,6 @@ struct net
     }
 };
 
-} // namespace typed_interop_fixture
+}
+
+#endif

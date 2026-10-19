@@ -4,7 +4,8 @@
 // awareness-only (an active session survives the sweep) and the heartbeat-resets-TTL cases.
 // Every timing assertion advances the clock by hand and drains the inproc step-executor — never a
 // wall-clock sleep.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_IO_TEST_KNOWN_PEERS_AGING_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_IO_TEST_KNOWN_PEERS_AGING_COMMON_H
 
 #include "plexus/io/endpoint_id.h"
 #include "plexus/io/known_peers.h"
@@ -132,4 +133,6 @@ struct aging_pair
     }
 };
 
-} // namespace known_peers_aging_fixture
+}
+
+#endif

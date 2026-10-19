@@ -26,7 +26,7 @@ using sem_policy   = plexus::muxify<plexus::asio::asio_policy>;
 using sem_notifier = plexus::asio::shm::sem_notifier<sem_policy>;
 using sem_registry = plexus::shm::shm_topic_registry<plexus::native::posix_shm_region_broker, sem_notifier>;
 
-// The semaphore notifier compiled on Linux, so its cross-process wake protocol runs where macOS cannot.
+// The POSIX-semaphore notifier: macOS's own notifier, and a second notifier on Linux.
 struct posix_sem_leg
 {
     using registry = sem_registry;

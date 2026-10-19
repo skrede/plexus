@@ -8,7 +8,8 @@
 // publication_sequence it alone decodes from the inner payload. from_intra_process is
 // derived honestly from the delivering channel's locality tier. source_identity stays
 // absent until the gid rides the wire.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_MESSAGE_INFO_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_MESSAGE_INFO_COMMON_H
 
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/message_info.h"
@@ -70,4 +71,6 @@ inline forwarder::peer make_peer(inproc_channel<> &ch, std::string node_name)
     return forwarder::peer{ch, std::move(node_name)};
 }
 
-} // namespace message_info_fixture
+}
+
+#endif

@@ -3,9 +3,7 @@
 
 #include "xproc_process.h"
 
-#if !defined(_WIN32)
-    #include <sys/mman.h>
-#endif
+#include "plexus/native/shm_region_broker.h"
 
 #include <map>
 #include <string>
@@ -24,8 +22,7 @@
 // image cannot receive a C++ closure across exec); the parent passes that key plus
 // the shared-object name(s) as argv. The child's boolean becomes its process exit
 // status; the parent predicate runs STRICTLY AFTER the child exits, so writes the
-// child committed to the shared objects are visible. Header-only; depends only on
-// the portable test helper and the shared-object names, never on a plexus target.
+// child committed to the shared objects are visible.
 
 namespace plexus::testing {
 
@@ -88,11 +85,8 @@ xproc_outcome run_xproc(std::string_view child_key, const std::vector<std::strin
     return outcome;
 }
 
-// A scoped named shared-region token whose name is unique to the calling process
-// (so concurrent ctest shards never collide). On POSIX it shm_unlink()s the name
-// on construction and destruction so a crashed case never orphans a /dev/shm
-// region; on Windows named mappings/events are refcounted and auto-freed when the
-// last handle closes, so the removal is a no-op there.
+// A shared-region name unique to the calling process (so concurrent ctest shards never collide); construction and
+// destruction remove the broker's object for it, so a crashed case never leaves one behind.
 class scoped_shm_name
 {
 public:
@@ -122,9 +116,7 @@ public:
 private:
     void remove() noexcept
     {
-#if !defined(_WIN32)
-        ::shm_unlink(m_name.c_str());
-#endif
+        plexus::native::shm_region_broker{}.unlink(m_name);
     }
 
     std::string m_name;

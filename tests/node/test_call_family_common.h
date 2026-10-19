@@ -2,7 +2,8 @@
 // static_discovery. It proves the byte-identical round-trip + reply_info attribution, the
 // second-local-serve refusal, the drop-to-no_handler retire, and the codec-family spelling
 // equivalence (the explicit two-family vs the symmetric one-family form).
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_CALL_FAMILY_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_CALL_FAMILY_COMMON_H
 
 #include "plexus/node.h"
 #include "plexus/caller.h"
@@ -101,4 +102,6 @@ struct net
     }
 };
 
-} // namespace call_family_fixture
+}
+
+#endif

@@ -5,7 +5,8 @@
 // agree on the class. The mux-level route flip ("udpr" -> the UDP+ARQ member, never TCP)
 // is pinned in test_udp_transport.cpp; this TU pins the transport+channel MODE mechanics
 // underneath it.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_RELIABLE_DATAGRAM_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_RELIABLE_DATAGRAM_COMMON_H
 
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
@@ -71,4 +72,6 @@ enum class action
     drop
 };
 
-} // namespace udp_reliable_datagram_fixture
+}
+
+#endif

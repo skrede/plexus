@@ -3,7 +3,8 @@
 // failure legs, a bytes-procedure interop fallback, and the second-local-serve refusal. The
 // codec is a hand-rolled trivial struct codec defined here — plexus never names a serializer
 // library.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_TYPED_REQRES_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_TYPED_REQRES_COMMON_H
 
 #include "plexus/node.h"
 #include "plexus/caller.h"
@@ -141,4 +142,6 @@ struct net
     }
 };
 
-} // namespace typed_reqres_fixture
+}
+
+#endif

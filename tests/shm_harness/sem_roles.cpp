@@ -21,12 +21,16 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <csignal>
 #include <cstdint>
 #include <iostream>
 
 #include <semaphore.h>
-#include <sys/prctl.h>
+
+#if defined(__linux__)
+    #include <csignal>
+
+    #include <sys/prctl.h>
+#endif
 
 namespace {
 
@@ -47,7 +51,9 @@ void settle(::asio::io_context &io, std::chrono::milliseconds span)
 // The first cycle settles so this process's waiter parks while the peer's waiter is parked on the same ring.
 bool sem_cycler(const std::vector<std::string> &argv)
 {
+#if defined(__linux__)
     ::prctl(PR_SET_PDEATHSIG, SIGKILL);
+#endif
     if(argv.size() != 1)
         return false;
 
@@ -66,17 +72,19 @@ bool sem_cycler(const std::vector<std::string> &argv)
 }
 
 // The waiter stops consuming its semaphore's count only once it blocks, so a count unchanged across a settle means the
-// waiter is either blocked or idle.
+// waiter is either blocked or idle. macOS does not implement sem_getvalue, so there a fixed settle stands in.
 void wait_until_waiter_settles(const std::string &sem_name)
 {
-    sem_t *sem = ::sem_open(sem_name.c_str(), 0);
-    if(sem == SEM_FAILED)
+    sem_t *sem   = ::sem_open(sem_name.c_str(), 0);
+    int current  = -1;
+    int previous = -1;
+    if(sem == SEM_FAILED || ::sem_getvalue(sem, &current) != 0)
     {
+        if(sem != SEM_FAILED)
+            ::sem_close(sem);
         std::this_thread::sleep_for(1s);
         return;
     }
-    int previous = -1;
-    int current  = -2;
     for(std::uint32_t poll = 0; poll < 25 && current != previous; ++poll)
     {
         previous = current;
@@ -90,7 +98,9 @@ void wait_until_waiter_settles(const std::string &sem_name)
 // The reactor is never polled, so every wake the waiter relays stays pending in its wake pipe.
 bool sem_flood(const std::vector<std::string> &argv)
 {
+#if defined(__linux__)
     ::prctl(PR_SET_PDEATHSIG, SIGKILL);
+#endif
     if(argv.size() != 1)
         return false;
 

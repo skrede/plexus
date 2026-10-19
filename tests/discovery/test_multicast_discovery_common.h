@@ -1,7 +1,8 @@
 // A deterministic fake datagram_socket + host policy for the multicast_discovery unit cases:
 // the fake captures every send_multicast payload and lets a test inject an inbound (from, bytes)
 // into the stored on_datagram handler, the unit injection point with no real socket or loop.
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_DISCOVERY_TEST_MULTICAST_DISCOVERY_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_DISCOVERY_TEST_MULTICAST_DISCOVERY_COMMON_H
 
 #include "plexus/discovery/multicast_discovery.h"
 
@@ -146,4 +147,6 @@ struct fake_clock
 using discovery_under_test = plexus::discovery::multicast_discovery<fake_datagram_socket, fake_policy>;
 using discovery_capped     = plexus::discovery::multicast_discovery<fake_datagram_socket, fake_policy, fake_clock>;
 
-} // namespace multicast_discovery_fixture
+}
+
+#endif

@@ -2,7 +2,8 @@
 // exhaustion, and the publish hand-off that transfers the release obligation to the
 // in-flight carrier. A counting type dtor witnesses each release; a borrow on an exhausted
 // pool returns an empty loan (never blocks, never grows).
-#pragma once
+#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_LOAN_POOL_COMMON_H
+#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_LOAN_POOL_COMMON_H
 
 #include "plexus/detail/loan_pool.h"
 #include "plexus/io/object_carrier.h"
@@ -48,4 +49,6 @@ inline void reset_counts()
     counted::constructed = 0;
 }
 
-} // namespace loan_pool_fixture
+}
+
+#endif
