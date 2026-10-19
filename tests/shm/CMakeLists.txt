@@ -122,6 +122,20 @@ target_link_libraries(test_shm_ring_overtake PRIVATE
 
 catch_discover_tests(test_shm_ring_overtake TEST_PREFIX "shm.")
 
+# A loan dropped unpublished becomes a skip every consumer passes, and a best-effort claim stops waiting on a cell whose
+# claim one lap earlier is still in flight.
+add_executable(test_shm_loan_abandon test_shm_loan_abandon.cpp)
+
+target_include_directories(test_shm_loan_abandon PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_loan_abandon PRIVATE
+    plexus::shm
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_loan_abandon TEST_PREFIX "shm.")
+
 # The loan reshape: the move-only intrusive shm_slot_owner, the zero-copy
 # take() returning wire_bytes<shm_slot_owner> (no shared_ptr), and the move-only
 # loaned_buffer / taken_message lifetime (inert moved-from, unpin exactly once).
