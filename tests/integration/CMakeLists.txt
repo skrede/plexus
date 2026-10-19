@@ -1526,12 +1526,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         target_compile_definitions(test_locality_confinement PRIVATE PLEXUS_HAVE_ASIO_MUX)
     endif()
 
-    # The whole-stack co-host shared-memory proof through the public facade: two forked
-    # same_host_transports nodes rendezvous over static_discovery and auto-engage a /dev/shm
-    # ring, the parent asserting the MEDIUM (the region maps iff co-host) plus byte-exact
-    # delivery over >=2 runs and the forced-distinct-fingerprint wire fallback. Gated to the
-    # Linux shared-memory node composition (the /dev/shm region naming + the shm member are
-    # Linux-only); the broker + the region naming come from plexus::native/plexus::asio::shm.
+    # The co-host shared-memory proof forks its two nodes and maps POSIX shared memory, so it builds wherever the shm
+    # backend is on and the platform is not Windows.
     if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm AND NOT WIN32)
         add_executable(test_node_xproc_shm test_node_xproc_shm.cpp)
         target_include_directories(test_node_xproc_shm PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)
