@@ -62,6 +62,8 @@ inline io::fallback_reason fallback_of(const shm::acquire_failure &failure) noex
             return io::fallback_reason::consumer_capacity;
         case shm::acquire_bound::not_found:
             return io::fallback_reason::not_found;
+        case shm::acquire_bound::liveness:
+            return io::fallback_reason::liveness_unavailable;
         case shm::acquire_bound::slab_ceiling:
             return io::fallback_reason::slab_ceiling;
         case shm::acquire_bound::os_allocator:

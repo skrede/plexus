@@ -1,9 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_NATIVE_REGION_HANDLE_H
 #define HPP_GUARD_PLEXUS_NATIVE_REGION_HANDLE_H
 
+#include "plexus/shm/slot_liveness.h"
+
 #include <span>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 
 namespace plexus::native {
 
@@ -13,11 +16,12 @@ class posix_shm_region_broker;
 // always munmaps; a create handle owns the name and unlinks it on release, an
 // attach handle never unlinks. A moved-from handle nulls its fields so its
 // destructor no-ops. The base is page-aligned (mmap guarantees it), hence
-// >=8-aligned for the ring sub-allocator mapped over it.
+// >=8-aligned for the ring sub-allocator mapped over it. Slot holds are open-file-description locks on the handle's
+// own descriptor, so two handles are two holders even in one process.
 class region_handle
 {
 public:
-    region_handle() = default;
+    region_handle() noexcept;
     ~region_handle();
 
     region_handle(const region_handle &)            = delete;
@@ -35,6 +39,12 @@ public:
         return m_base != nullptr;
     }
 
+    plexus::shm::slot_hold hold_slot(std::uint32_t slot) noexcept;
+
+    void release_slot(std::uint32_t slot) noexcept;
+
+    bool slot_held_elsewhere(std::uint32_t slot) const noexcept;
+
 private:
     friend class posix_shm_region_broker;
 
@@ -44,11 +54,13 @@ private:
     // move-assign path) does nothing.
     void reclaim() noexcept;
 
-    int m_fd{-1};
-    void *m_base{nullptr};
-    std::size_t m_length{0};
+    int m_fd;
+    void *m_base;
+    bool m_owns_name;
     std::string m_name;
-    bool m_owns_name{false};
+    std::size_t m_length;
+    // Opened on the first slot call on a host whose shared-memory descriptors take no record lock.
+    mutable int m_sidecar_fd;
 };
 
 }

@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_DELAYING_BROKER_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_DELAYING_BROKER_H
 
+#include "always_live_slots.h"
+
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_broker_concept.h"
 
@@ -41,7 +43,7 @@ struct delaying_region
     std::vector<std::byte> storage;
 };
 
-class delaying_handle
+class delaying_handle : public always_live_slots
 {
 public:
     delaying_handle() noexcept

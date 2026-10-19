@@ -4,10 +4,23 @@
 #include "plexus/shm/ring_cells.h"
 #include "plexus/shm/ring_header.h"
 
+#include <span>
 #include <cstddef>
 #include <cstdint>
 
 namespace plexus::shm {
+
+struct ring_claim_result
+{
+    std::uint64_t position{0};
+    std::span<std::byte> slab;
+};
+
+struct ring_consume_result
+{
+    std::uint64_t position{0};
+    std::span<const std::byte> slab;
+};
 
 // Hard maxima on a ring's geometry, checked before any size is computed from a peer-written header. A slot never exceeds
 // the 1 GiB region bound every broker enforces, and the two maxima keep every product below in 64-bit range.

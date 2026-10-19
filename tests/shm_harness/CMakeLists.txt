@@ -34,9 +34,9 @@ if(LINUX)
         test_shm_harness_write_once.cpp)
 endif()
 
-# Every case in this executable is an expected failure that pins a same-host delivery defect; the label keeps the set
-# listable with ctest -L shm-red. The ring's creator unlinking a live region is a POSIX behavior (Windows mappings
-# are reference counted), so the set is Linux-only. A stalled burst spins for tens of seconds.
+# The cases in this executable pin same-host delivery defects; those still failing carry [!shouldfail], and the label
+# keeps the set listable with ctest -L shm-red. The ring's creator unlinking a live region is a POSIX behavior (Windows
+# mappings are reference counted), so the set is Linux-only. A stalled burst spins for tens of seconds.
 if(LINUX)
     plexus_add_shm_harness_test(test_shm_lane_probes
         registry_role.cpp
@@ -78,6 +78,10 @@ endfunction()
 # One publisher process and two subscriber processes, each with its own registry and notifier on one ring; it runs on
 # every platform.
 plexus_add_shm_xproc_test(test_shm_three_process three_process_roles.cpp test_shm_three_process.cpp)
+
+# A slot a child process holds on a region reads held from the parent until the child is killed; it runs on every
+# platform.
+plexus_add_shm_xproc_test(test_shm_slot_liveness liveness_roles.cpp test_shm_slot_liveness.cpp)
 
 # The POSIX-semaphore notifier, macOS's own and a second notifier on Linux: a disarm while another process's waiter is
 # parked on the ring, a burst of wakes while the reactor is stalled, a semaphore name already taken, and a notifier

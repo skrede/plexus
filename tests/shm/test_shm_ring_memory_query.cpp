@@ -10,6 +10,7 @@
 #include "plexus/detail/compat.h"
 
 #include "support/noop_notifier.h"
+#include "support/always_live_slots.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -34,10 +35,9 @@ namespace {
 constexpr std::size_t k_kib = 1024;
 constexpr std::size_t k_mib = 1024 * 1024;
 
-// A recording broker over heap-backed regions that captures the byte size of every
-// create request, so a test can compare ring_memory_for against what the registry
-// actually asks the allocator for. The control region and the slab region are both
-// recorded; the slab is the one ring_memory_for's slab term must match.
+// A recording broker over heap-backed regions that captures the byte size of every create request, so a test can
+// compare ring_memory_for against what the registry actually asks the allocator for. The control region and the slab
+// region are both recorded; the slab is the one ring_memory_for's slab term must match.
 struct recording_store
 {
     struct region
@@ -66,7 +66,7 @@ struct recording_store
     }
 };
 
-class recording_handle
+class recording_handle : public plexus::testing::always_live_slots
 {
 public:
     recording_handle() = default;

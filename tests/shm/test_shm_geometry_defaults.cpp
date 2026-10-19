@@ -12,6 +12,7 @@
 #include "plexus/detail/compat.h"
 
 #include "support/noop_notifier.h"
+#include "support/always_live_slots.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -38,10 +39,9 @@ namespace {
 
 constexpr std::size_t k_mib = 1024 * 1024;
 
-// A heap-backed region store + broker (the create/attach seam) shared by the
-// fail-closed legs. The OS-allocation-failed leg flips fail_slab_create so the slab
-// create returns region_status::failed, modeling an allocator that cannot map the
-// region the ceiling admitted.
+// A heap-backed region store + broker (the create/attach seam) shared by the fail-closed legs. The OS-allocation-failed
+// leg flips fail_slab_create so the slab create returns region_status::failed, modeling an allocator that cannot map
+// the region the ceiling admitted.
 struct region_store
 {
     struct region
@@ -69,7 +69,7 @@ struct region_store
     }
 };
 
-class stub_handle
+class stub_handle : public plexus::testing::always_live_slots
 {
 public:
     stub_handle() = default;

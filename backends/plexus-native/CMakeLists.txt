@@ -33,11 +33,13 @@ add_library(plexus::native ALIAS plexus-native)
 
 if(WIN32)
     target_sources(plexus-native PRIVATE
+        src/win_slot_mutex.cpp
         src/win_region_handle.cpp
         src/win_shm_region_broker.cpp)
 else()
     target_sources(plexus-native PRIVATE
         src/region_handle.cpp
+        src/posix_slot_lock.cpp
         src/posix_shm_status.cpp
         src/posix_shm_region_broker.cpp)
     if(LINUX)

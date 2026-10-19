@@ -1,12 +1,10 @@
-// The deterministic inproc drop+surrender oracle on
-// the manual virtual clock: it lifts the established-session transport-drop detection out of the
-// harness and into the production receive path, and exercises the surrender->dead query the
-// registry now exposes. Two (and, for the surrender leg, three) engines over one
-// inproc bus, each owning its forwarders, its peer-session registry, its known-
-// peers table and the dial-trigger hook. Every drop is induced by a REAL channel
-// close on the REMOTE engine's accepted end (so the local dialer observes on_error
-// from its own receive path) — this oracle injects nothing; it never calls the
-// driver's established-drop trigger by hand. It proves, looped where behavioral:
+// The deterministic inproc drop+surrender oracle on the manual virtual clock: it lifts the established-session
+// transport-drop detection out of the harness and into the production receive path, and exercises the surrender->dead
+// query the registry now exposes. Two (and, for the surrender leg, three) engines over one inproc bus, each owning its
+// forwarders, its peer-session registry, its known-peers table and the dial-trigger hook. Every drop is induced by a
+// REAL channel close on the REMOTE engine's accepted end (so the local dialer observes on_error from its own receive
+// path) — this oracle injects nothing; it never calls the driver's established-drop trigger by hand. It proves, looped
+// where behavioral:
 //   - real-drop -> automatic re-dial: closing B's accepted end advances A's slot-B
 //     attempt_count by exactly 1 with no injected drop, then re-handshakes a
 //     strictly-later epoch on the next backoff;
@@ -53,6 +51,7 @@
 #include "plexus/wire/frame_codec.h"
 
 #include "shm/support/noop_notifier.h"
+#include "shm/support/always_live_slots.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -307,7 +306,7 @@ private:
 // A move-only handle over a heap region (the single-process stand-in for a mapped
 // segment) the stub broker hands back — only needed so shm_byte_channel's dtor release
 // has a registry to call into; this oracle never acquires a ring through it.
-class stub_region_handle
+class stub_region_handle : public plexus::testing::always_live_slots
 {
 public:
     stub_region_handle() = default;

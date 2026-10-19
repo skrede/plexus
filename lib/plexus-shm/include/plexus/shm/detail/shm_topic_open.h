@@ -9,6 +9,7 @@
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/slot_liveness.h"
 #include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_acquire_result.h"
 
@@ -18,6 +19,7 @@
 #include <string>
 #include <cstdint>
 #include <optional>
+#include <algorithm>
 
 namespace plexus::shm::detail {
 
@@ -97,15 +99,37 @@ shm::arm_status topic_arm(Entry &e, std::uint32_t slot, Report &report)
         return e.notify->arm(slot, drain);
 }
 
+// A cursor's liveness slot is held before the cursor is claimed, so an active cursor whose slot no holder has belongs
+// to a dead process.
+template<typename Entry>
+shm::acquire_failure topic_claim_cursor(Entry &e)
+{
+    const std::uint64_t capacity = std::min<std::uint64_t>(e.ring.header().consumer_capacity, shm::k_max_consumers);
+    for(std::uint32_t i = 0; i < capacity; ++i)
+    {
+        const shm::slot_hold hold = e.control.hold_slot(shm::cursor_slot(i));
+        if(hold == shm::slot_hold::unsupported || hold == shm::slot_hold::failed)
+            return shm::acquire_failure{shm::acquire_bound::liveness};
+        if(hold == shm::slot_hold::busy)
+            continue;
+        if(e.ring.claim_cursor(i))
+        {
+            e.channel->engage_subscriber(i);
+            return shm::acquire_failure{};
+        }
+        e.control.release_slot(shm::cursor_slot(i));
+    }
+    return shm::acquire_failure{shm::acquire_bound::consumer_capacity};
+}
+
 // A subscriber the ring refused a cursor would never receive, so the engagement fails rather than attach it; the caller
 // undoes a failed engagement.
 template<typename Entry, typename Report>
 shm::acquire_failure topic_engage_consumer(Entry &e, Report &report)
 {
-    const std::optional<std::uint32_t> slot = e.channel->engage_subscriber();
-    if(!slot)
-        return shm::acquire_failure{shm::acquire_bound::consumer_capacity};
-    if(const shm::arm_status armed = topic_arm(e, *slot, report); armed != shm::arm_status::armed)
+    if(const shm::acquire_failure claimed = topic_claim_cursor(e); claimed.bound != shm::acquire_bound::none)
+        return claimed;
+    if(const shm::arm_status armed = topic_arm(e, *e.channel->waiter_slot(), report); armed != shm::arm_status::armed)
         return shm::acquire_failure{shm::acquire_bound::notifier, 0, 0, shm::region_status::ok, armed};
     return shm::acquire_failure{};
 }
@@ -117,6 +141,7 @@ shm::acquire_failure topic_bind(Registry &r, Entry &e, const shm_topic_key &key,
 {
     r.m_bind_notifier(e.notify, e.ring.header(), shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns));
     e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
+    e.channel->bind_cursor_liveness([&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); });
     e.verdict = verdict;
     e.hold(role);
     if(role == shm::ring_role::producer)

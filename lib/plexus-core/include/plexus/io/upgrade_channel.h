@@ -13,7 +13,8 @@ namespace plexus::io {
 
 // Why a same-host lane is declined, demoted or lost; an engaged lane carries none. Only transient is worth a later
 // attempt. A demoted lane stays engaged on its secondary wake. not_offered: the publisher's response withheld its ring;
-// withdrawn: a subscriber lost the receive lane it had answered ready. Values are append-only: they index the counters.
+// withdrawn: a subscriber lost the receive lane it had answered ready; liveness_unavailable: the host offers no proof
+// that a reader is alive. Values are append-only: they index the counters.
 enum class fallback_reason : std::uint8_t
 {
     none,
@@ -34,9 +35,10 @@ enum class fallback_reason : std::uint8_t
     notifier_demoted_exhausted,
     not_offered,
     withdrawn,
+    liveness_unavailable,
 };
 
-inline constexpr std::size_t k_fallback_reason_count = static_cast<std::size_t>(fallback_reason::withdrawn) + 1;
+inline constexpr std::size_t k_fallback_reason_count = static_cast<std::size_t>(fallback_reason::liveness_unavailable) + 1;
 
 // How often each reason struck, indexed by the reason.
 using fallback_counts = std::array<std::uint64_t, k_fallback_reason_count>;

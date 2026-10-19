@@ -21,17 +21,28 @@ inline void raise_high_water(control_header_t &h, std::uint32_t want) noexcept
         ;
 }
 
-// out_index starts at k_cursor_idle (not gating); rejected when consumer_capacity slots are already registered.
+// The active word of a cursor a producer is reclaiming: it still gates, and neither a claim nor its owner's unregister
+// can move it, so the reclaimer's liveness probe and its clearing stores cannot land on a newcomer's cursor.
+inline constexpr std::uint32_t k_cursor_reclaiming = 2;
+
+// Claims cursor `index` (it starts at k_cursor_idle, not gating); false when another consumer has it.
+inline bool claim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index) noexcept
+{
+    std::uint32_t expected = 0;
+    if(index >= consumer_capacity || !h.cursors[index].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
+        return false;
+    h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
+    raise_high_water(h, index + 1);
+    return true;
+}
+
+// Rejected when consumer_capacity slots are already registered.
 inline loan_status register_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t &out_index) noexcept
 {
-    const std::uint32_t capacity = static_cast<std::uint32_t>(consumer_capacity);
-    for(std::uint32_t i = 0; i < capacity; ++i)
+    for(std::uint32_t i = 0; i < consumer_capacity; ++i)
     {
-        std::uint32_t expected = 0;
-        if(h.cursors[i].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
+        if(claim_cursor(h, consumer_capacity, i))
         {
-            h.cursors[i].position.store(k_cursor_idle, std::memory_order_release);
-            raise_high_water(h, i + 1);
             out_index = i;
             return loan_status::ok;
         }
@@ -39,12 +50,32 @@ inline loan_status register_cursor(control_header_t &h, std::uint64_t consumer_c
     return loan_status::rejected;
 }
 
+// A cursor a reclaimer has marked is left to it: the idle position no longer gates, and a reclaim pass frees the cursor
+// once the owner's slot is free.
 inline void unregister_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index) noexcept
 {
     if(index >= consumer_capacity)
         return;
     h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
+    std::uint32_t expected = 1;
+    h.cursors[index].active.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
+}
+
+// Frees cursor `index` when owner_alive(index) proves its owner dead; an inactive or already reclaimed index is left.
+template<typename Alive>
+bool reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, Alive &owner_alive) noexcept
+{
+    std::uint32_t expected = 1;
+    if(index >= consumer_capacity || !h.cursors[index].active.compare_exchange_strong(expected, k_cursor_reclaiming, std::memory_order_acq_rel))
+        return false;
+    if(owner_alive(index))
+    {
+        h.cursors[index].active.store(1, std::memory_order_release);
+        return false;
+    }
+    h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
     h.cursors[index].active.store(0, std::memory_order_release);
+    return true;
 }
 
 // Released so the producer's reclamation gate observes it.

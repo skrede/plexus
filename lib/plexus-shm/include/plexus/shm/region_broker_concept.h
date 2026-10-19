@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_REGION_BROKER_CONCEPT_H
 #define HPP_GUARD_PLEXUS_SHM_REGION_BROKER_CONCEPT_H
 
+#include "plexus/shm/slot_liveness.h"
+
 #include "plexus/detail/compat.h"
 
 #include <cstddef>
@@ -45,13 +47,13 @@ struct create_options
 // through an out-param, mirroring the loan/take convention. set_attach_policy injects a
 // cold-path predicate consulted before an attach opens a region (default-allow today).
 template<typename T>
-concept region_broker = requires(T &broker, std::string_view name, std::size_t bytes, const create_options &opts, typename T::region_handle &out,
-                                 plexus::detail::move_only_function<bool(std::string_view)> policy) {
-    typename T::region_handle;
-    { broker.create(name, bytes, opts, out) } -> std::same_as<region_status>;
-    { broker.attach(name, out) } -> std::same_as<region_status>;
-    broker.set_attach_policy(std::move(policy));
-};
+concept region_broker = slot_liveness<typename T::region_handle> &&
+        requires(T &broker, std::string_view name, std::size_t bytes, const create_options &opts, typename T::region_handle &out,
+                 plexus::detail::move_only_function<bool(std::string_view)> policy) {
+            { broker.create(name, bytes, opts, out) } -> std::same_as<region_status>;
+            { broker.attach(name, out) } -> std::same_as<region_status>;
+            broker.set_attach_policy(std::move(policy));
+        };
 
 }
 

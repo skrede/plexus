@@ -73,7 +73,10 @@ private:
         m_warming = command == node_command::warm;
         m_leaving = command == node_command::leave;
         if(command == node_command::reset)
+        {
             m_seen.reset();
+            clear_sends(m_slot.sends);
+        }
         for(std::uint32_t i = 0; command == node_command::publish && m_publish_cb && i < arg; ++i)
             publish_one(false);
     }

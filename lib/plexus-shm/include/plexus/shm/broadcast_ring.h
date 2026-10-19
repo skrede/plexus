@@ -31,23 +31,12 @@ namespace plexus::shm {
 class broadcast_ring
 {
 public:
-    static constexpr std::uint64_t k_cursor_idle = shm::k_cursor_idle;
-
     // No-progress bound, in consecutive relax turns, on a claim's spin: the reliable pin-clear without slowest-cursor motion
     // and the best-effort wait on an uncommitted occupant without enqueue motion.
     static constexpr std::uint32_t k_pin_clear_spin_budget = 256;
 
-    struct claim_result
-    {
-        std::uint64_t position{0};
-        std::span<std::byte> slab;
-    };
-
-    struct consume_result
-    {
-        std::uint64_t position{0};
-        std::span<const std::byte> slab;
-    };
+    using claim_result   = ring_claim_result;
+    using consume_result = ring_consume_result;
 
     broadcast_ring() noexcept
             : m_cells(nullptr)
@@ -103,9 +92,20 @@ public:
         return detail::register_cursor(*m_header, m_consumer_capacity, out_index);
     }
 
+    bool claim_cursor(std::uint32_t index) noexcept
+    {
+        return detail::claim_cursor(*m_header, m_consumer_capacity, index);
+    }
+
     void unregister_cursor(std::uint32_t index) noexcept
     {
         detail::unregister_cursor(*m_header, m_consumer_capacity, index);
+    }
+
+    template<typename Alive>
+    bool reclaim_cursor(std::uint32_t index, Alive &owner_alive) noexcept
+    {
+        return detail::reclaim_cursor(*m_header, m_consumer_capacity, index, owner_alive);
     }
 
     void publish_cursor(std::uint32_t index, std::uint64_t position) noexcept

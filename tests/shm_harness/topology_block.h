@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPOLOGY_BLOCK_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPOLOGY_BLOCK_H
 
+#include "send_histogram.h"
+
 #include "plexus/io/upgrade_channel.h"
 
 #include <array>
@@ -94,6 +96,7 @@ struct node_slot
     std::atomic<std::uint32_t> slowest_send_us;
     std::atomic<std::uint32_t> exit_code;
     std::array<std::atomic<std::uint32_t>, plexus::io::k_fallback_reason_count> fallbacks;
+    send_buckets sends;
 };
 
 struct topology_block
@@ -111,6 +114,7 @@ struct node_counts
     std::uint32_t out_of_order;
     std::uint32_t warm_seen;
     std::uint32_t slowest_send_us;
+    std::uint32_t p99_send_us;
     plexus::io::fallback_counts fallbacks;
 };
 
@@ -124,9 +128,16 @@ inline plexus::io::fallback_counts snapshot_fallbacks(const node_slot &s)
 
 inline node_counts snapshot(const node_slot &s)
 {
-    return {s.connected.load(std::memory_order_acquire), s.published.load(std::memory_order_acquire),       s.received.load(std::memory_order_acquire),
-            s.distinct.load(std::memory_order_acquire),  s.duplicates.load(std::memory_order_acquire),      s.out_of_order.load(std::memory_order_acquire),
-            s.warm_seen.load(std::memory_order_acquire), s.slowest_send_us.load(std::memory_order_acquire), snapshot_fallbacks(s)};
+    return {s.connected.load(std::memory_order_acquire),
+            s.published.load(std::memory_order_acquire),
+            s.received.load(std::memory_order_acquire),
+            s.distinct.load(std::memory_order_acquire),
+            s.duplicates.load(std::memory_order_acquire),
+            s.out_of_order.load(std::memory_order_acquire),
+            s.warm_seen.load(std::memory_order_acquire),
+            s.slowest_send_us.load(std::memory_order_acquire),
+            p99_send_us(s.sends),
+            snapshot_fallbacks(s)};
 }
 
 inline std::uint64_t fallbacks_of(const node_counts &c, plexus::io::fallback_reason reason)
@@ -148,7 +159,7 @@ inline std::string summary(const node_counts &c, bool over_shm)
 {
     return "received=" + std::to_string(c.received) + " distinct=" + std::to_string(c.distinct) + " duplicates=" + std::to_string(c.duplicates) +
             " out_of_order=" + std::to_string(c.out_of_order) + " warm_seen=" + std::to_string(c.warm_seen) + " connected=" + std::to_string(c.connected) +
-            " shm_region=" + (over_shm ? "1" : "0") + " fallbacks=" + fallback_summary(c);
+            " shm_region=" + (over_shm ? "1" : "0") + " p99_send_us=" + std::to_string(c.p99_send_us) + " fallbacks=" + fallback_summary(c);
 }
 
 }

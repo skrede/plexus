@@ -273,6 +273,18 @@ if(NOT WIN32 AND NOT APPLE)
         Catch2::Catch2WithMain)
 
     catch_discover_tests(linux_test_shm_region_broker TEST_PREFIX "shm.")
+
+    # The slot locks on a region's /dev/shm descriptor within one process: two handles are two holders, a closed holder
+    # frees its slot, and every descriptor is closed on exec.
+    add_executable(linux_test_shm_slot_lock linux_test_shm_slot_lock.cpp)
+
+    target_link_libraries(linux_test_shm_slot_lock PRIVATE
+        plexus::shm
+        plexus::native
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(linux_test_shm_slot_lock TEST_PREFIX "shm.")
 endif()
 
 # The cross-process futex notifier: the wake crosses address spaces (the
@@ -491,6 +503,23 @@ target_link_libraries(test_shm_registry_roles PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_shm_registry_roles TEST_PREFIX "shm.")
+
+# A congested reliable send reclaims the cursor of a consumer whose slot lock died with it, over the platform broker;
+# a live consumer and the producer's own cursor keep theirs.
+add_executable(test_shm_cursor_reclaim test_shm_cursor_reclaim.cpp)
+
+target_include_directories(test_shm_cursor_reclaim PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_cursor_reclaim PRIVATE
+    plexus::plexus
+    plexus::shm
+    plexus::native
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_cursor_reclaim TEST_PREFIX "shm.")
 
 # A co-host acquire past a ring's consumer capacity, over an in-memory broker two registries share.
 add_executable(test_shm_registry_capacity test_shm_registry_capacity.cpp)
@@ -854,6 +883,9 @@ endif()
 # deterministic; the TU includes only core headers (the real cross-process data path is the
 # dual_delivery xproc proof).
 add_executable(test_shm_mux test_shm_mux.cpp)
+
+target_include_directories(test_shm_mux PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_mux PRIVATE
     plexus::shm

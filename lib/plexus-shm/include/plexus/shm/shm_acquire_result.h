@@ -37,7 +37,8 @@ enum class ring_role : std::uint8_t
 
 // transient_join: a co-host creator has not finished minting the ring (its slab is missing or its header unstamped), so
 // a later join can succeed; incompatible: the header carries a foreign or older layout; consumer_capacity: every reader
-// slot of the ring is taken, so this acquirer could never receive; not_found: no ring exists under the name.
+// slot of the ring is taken, so this acquirer could never receive; not_found: no ring exists under the name; liveness:
+// the host gives this reader no kernel proof of its life, so a producer could not tell its cursor from a dead one.
 enum class acquire_bound : std::uint8_t
 {
     none,
@@ -48,6 +49,7 @@ enum class acquire_bound : std::uint8_t
     incompatible,
     consumer_capacity,
     not_found,
+    liveness,
 };
 
 // limit_bytes is set for the slab_ceiling bound only, broker for os_allocator and a missing-slab transient_join only, arm

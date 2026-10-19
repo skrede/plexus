@@ -12,6 +12,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "support/always_live_slots.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -23,19 +25,17 @@
 #include <string>
 #include <vector>
 
-// The demand-driven topic registry (header-only, asio/strand/std::function-free): a
-// stub broker over heap-backed regions + a recording stub notifier prove the
-// acquire/release refcount lifecycle (created -> attached -> teardown+unlink), the
-// max_payload ring sizing with a subscriber-only default fallback, and the
-// teardown ordering (disarm BEFORE the subscriber the drain touches is destroyed).
+// The demand-driven topic registry (header-only, asio/strand/std::function-free): a stub broker over heap-backed
+// regions + a recording stub notifier prove the acquire/release refcount lifecycle (created -> attached ->
+// teardown+unlink), the max_payload ring sizing with a subscriber-only default fallback, and the teardown ordering
+// (disarm BEFORE the subscriber the drain touches is destroyed).
 
 using namespace plexus::shm;
 
 namespace {
 
-// A shared region store: named, page-region-shaped heap buffers that survive a
-// handle's teardown (so an attach after a create maps the SAME bytes, and an
-// unlink removes the name). A stand-in for /dev/shm in a single-process unit test.
+// A shared region store: named, page-region-shaped heap buffers that survive a handle's teardown (so an attach after a
+// create maps the SAME bytes, and an unlink removes the name). A stand-in for /dev/shm in a single-process unit test.
 struct region_store
 {
     struct region
@@ -65,7 +65,7 @@ struct region_store
 
 // The handle the stub broker hands back: it pins the shared region alive and, for a
 // creator, unlinks the name on release.
-class stub_handle
+class stub_handle : public plexus::testing::always_live_slots
 {
 public:
     stub_handle() = default;

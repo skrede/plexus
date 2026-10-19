@@ -27,6 +27,11 @@ public:
     // the back-to-back path over pure-park at a sub-1us spin window, never busy-spins idle.
     static constexpr std::uint32_t default_spin_budget = 256;
 
+    struct adopt_cursor_t
+    {
+    };
+    static constexpr adopt_cursor_t adopt_cursor{};
+
     explicit slot_subscriber(broadcast_ring &ring, std::uint32_t spin_budget = default_spin_budget) noexcept
             : m_ring(ring)
             , m_spin_budget(spin_budget)
@@ -40,6 +45,17 @@ public:
             m_cursor     = m_ring.tail_position();
             m_ring.publish_cursor(m_cursor_index, m_cursor);
         }
+    }
+
+    // Takes over a cursor index the caller has already claimed on the ring.
+    slot_subscriber(broadcast_ring &ring, adopt_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget) noexcept
+            : m_ring(ring)
+            , m_spin_budget(spin_budget)
+            , m_cursor_index(cursor_index)
+            , m_cursor(ring.tail_position())
+            , m_registered(true)
+    {
+        m_ring.publish_cursor(m_cursor_index, m_cursor);
     }
 
     ~slot_subscriber()

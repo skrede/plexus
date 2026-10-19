@@ -31,7 +31,7 @@ TEST_CASE("lane_probe a subscriber survives a clean restart of the ring's creato
     require_exactly(subs[1], 20);
 }
 
-TEST_CASE("lane_probe a subscriber restarted after a crash receives every message", "[shm][lane_probe][!shouldfail]")
+TEST_CASE("lane_probe a subscriber restarted after a crash receives every message", "[shm][lane_probe]")
 {
     topology topo{probe_fqn("crash_restart"), 2};
     REQUIRE(topo.created());
@@ -45,11 +45,16 @@ TEST_CASE("lane_probe a subscriber restarted after a crash receives every messag
     const std::uint32_t regions_before = topo.regions().entries();
     topo.kill(1);
     REQUIRE(topo.spawn_registry(1, node_role::sub));
+    REQUIRE(topo.command(0, node_command::reset));
     topo.publish_round({0}, 100, {1}, 60s);
-    const node_counts sub = report(topo, "crash_restart after", {1})[0];
-    std::cout << "crash_restart slowest_send_us=" << topo.counts(0).slowest_send_us << " regions_before=" << regions_before << " regions_after=" << topo.regions().entries()
-              << std::endl;
+    const node_counts sub       = report(topo, "crash_restart after", {1})[0];
+    const node_counts publisher = topo.counts(0);
     leave_all(topo, {1, 0});
+    const std::uint32_t regions_after = topo.regions().entries();
+    std::cout << "crash_restart p99_send_us=" << publisher.p99_send_us << " slowest_send_us=" << publisher.slowest_send_us << " regions_before=" << regions_before
+              << " regions_after=" << regions_after << std::endl;
 
     require_exactly(sub, 100);
+    REQUIRE(publisher.p99_send_us <= 1000);
+    REQUIRE(regions_after == 0);
 }

@@ -20,6 +20,7 @@
 #include "plexus/detail/compat.h"
 
 #include "support/noop_notifier.h"
+#include "support/always_live_slots.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -33,13 +34,12 @@
 #include <string_view>
 #include <vector>
 
-// The shared-memory member joins the multiplexer as the SECOND same-host (local-tier)
-// member alongside a stream member, so the local tier resolves to >1 candidate and the
-// preference hook becomes load-bearing. This oracle proves: (1) the member satisfies the
-// mux_member + byte_channel concepts; (2) over a live core composition the preference hook
-// routes a same-host SHM-eligible dial to the SHM member when the ring acquires; and (3)
-// when a forced broker failure makes the acquire fail, the SAME dial falls back to the
-// stream member. Looped N>=100 in-body; the binary is re-run >=3 process runs.
+// The shared-memory member joins the multiplexer as the SECOND same-host (local-tier) member alongside a stream member,
+// so the local tier resolves to >1 candidate and the preference hook becomes load-bearing. This oracle proves: (1) the
+// member satisfies the mux_member + byte_channel concepts; (2) over a live core composition the preference hook routes
+// a same-host SHM-eligible dial to the SHM member when the ring acquires; and (3) when a forced broker failure makes
+// the acquire fail, the SAME dial falls back to the stream member. Looped N>=100 in-body; the binary is re-run >=3
+// process runs.
 
 using namespace plexus::shm;
 namespace pio = plexus::io;
@@ -76,7 +76,7 @@ struct region_store
     }
 };
 
-class stub_handle
+class stub_handle : public plexus::testing::always_live_slots
 {
 public:
     stub_handle() = default;

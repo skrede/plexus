@@ -4,6 +4,7 @@
 #include "plexus/shm/shm_channel.h"
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/region_naming.h"
+#include "plexus/shm/slot_liveness.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_acquire_result.h"
@@ -108,8 +109,7 @@ struct shm_topic_entry
     {
         if(notify)
             notify->disarm();
-        if(channel)
-            channel->release_subscriber();
+        drop_cursor();
     }
 
     // Non-negotiable ordering: disarm the notifier BEFORE the channel (and the subscriber its drain touches) is
@@ -118,7 +118,20 @@ struct shm_topic_entry
     {
         if(notify)
             notify->disarm();
+        drop_cursor();
         channel.reset();
+    }
+
+    // The cursor goes inactive before its liveness slot is released, so a producer never sees it active and unheld
+    // while this holder lives.
+    void drop_cursor() noexcept
+    {
+        if(!channel)
+            return;
+        const std::optional<std::uint32_t> cursor = channel->waiter_slot();
+        channel->release_subscriber();
+        if(cursor)
+            control.release_slot(cursor_slot(*cursor));
     }
 
     // The ONE place the cursor is taken, so the armed wake and the attach-time catch-up

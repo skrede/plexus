@@ -33,16 +33,18 @@ template<typename Notifier>
 class shm_channel
 {
 public:
-    using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using deliver_fn      = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using cursor_alive_fn = plexus::detail::move_only_function<bool(std::uint32_t)>;
 
     // spin_budget is the consumer-sovereign adaptive spin-then-park knob (required-WITH-default, the swept knee): an
     // engaged subscriber spins up to the budget on an empty take before a drain returns and the notifier parks.
     shm_channel(broadcast_ring &ring, Notifier &notify, io::reliability rel, io::congestion cong, std::uint32_t spin_budget = slot_subscriber::default_spin_budget) noexcept
-            : m_ring(ring)
+            : m_notifier(notify)
+            , m_ring(ring)
             , m_publisher(ring, rel, cong)
-            , m_subscriber()
-            , m_notifier(notify)
             , m_spin_budget(spin_budget)
+            , m_subscriber()
+            , m_cursor_alive_cb()
     {
     }
 
@@ -91,6 +93,11 @@ public:
         return m_subscriber->cursor_index();
     }
 
+    void engage_subscriber(std::uint32_t claimed_cursor) noexcept
+    {
+        m_subscriber.emplace(m_ring, slot_subscriber::adopt_cursor, claimed_cursor, m_spin_budget);
+    }
+
     void release_subscriber() noexcept
     {
         m_subscriber.reset();
@@ -103,6 +110,12 @@ public:
         return m_subscriber->cursor_index();
     }
 
+    // Unbound, a congested reliable send reclaims no cursor.
+    void bind_cursor_liveness(cursor_alive_fn alive) noexcept
+    {
+        m_cursor_alive_cb = std::move(alive);
+    }
+
 private:
     // The cap on CONSECUTIVE no-progress yield turns before a still-congested reliable+block
     // loan surfaces congested. Gated on consumer PROGRESS, not a fixed turn count: every time
@@ -111,12 +124,30 @@ private:
     // motion (a wedged/dead peer), surfacing congested observably rather than hanging.
     static constexpr int k_no_progress_budget = 1 << 16;
 
+    Notifier &m_notifier;
+    broadcast_ring &m_ring;
+    slot_publisher m_publisher;
+    std::uint32_t m_spin_budget;
+    std::optional<slot_subscriber> m_subscriber;
+    cursor_alive_fn m_cursor_alive_cb;
+
+    // Cursor liveness is probed only once a reliable blocking loan is congested: right away, then after each whole
+    // no-progress window, until a pass reclaims nothing.
     loan_status loan_blocking(std::size_t size, loaned_buffer &out) noexcept
     {
         loan_status st = m_publisher.loan(size, out);
-        if(m_publisher.delivery() != io::reliability::reliable || m_publisher.overflow() != io::congestion::block)
+        if(st != loan_status::congested || m_publisher.delivery() != io::reliability::reliable || m_publisher.overflow() != io::congestion::block)
             return st;
+        reclaim_dead_cursors();
+        do
+            st = loan_until_stalled(size, out);
+        while(st == loan_status::congested && reclaim_dead_cursors());
+        return st;
+    }
 
+    loan_status loan_until_stalled(std::size_t size, loaned_buffer &out) noexcept
+    {
+        loan_status st          = m_publisher.loan(size, out);
         std::uint64_t last_seen = m_publisher.slowest_consumer_position();
         for(int stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget; ++stalled)
         {
@@ -133,11 +164,18 @@ private:
         return st;
     }
 
-    broadcast_ring &m_ring;
-    slot_publisher m_publisher;
-    std::optional<slot_subscriber> m_subscriber;
-    Notifier &m_notifier;
-    std::uint32_t m_spin_budget;
+    // The channel's own cursor is skipped: its slot is held through this process's own region handle.
+    bool reclaim_dead_cursors() noexcept
+    {
+        if(!m_cursor_alive_cb)
+            return false;
+        const std::optional<std::uint32_t> own = waiter_slot();
+        bool reclaimed                         = false;
+        for(std::uint32_t i = 0; i < m_ring.registered_high_water(); ++i)
+            if(own != i && m_ring.reclaim_cursor(i, m_cursor_alive_cb))
+                reclaimed = true;
+        return reclaimed;
+    }
 };
 
 }

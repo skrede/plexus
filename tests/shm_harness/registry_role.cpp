@@ -54,9 +54,11 @@ publish_fn registry_publisher(channel_type &channel, node_slot &slot)
     {
         const auto start = std::chrono::steady_clock::now();
         channel.send(bytes);
-        const auto took = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
-        if(static_cast<std::uint32_t>(took.count()) > slot.slowest_send_us.load(std::memory_order_relaxed))
-            slot.slowest_send_us.store(static_cast<std::uint32_t>(took.count()), std::memory_order_release);
+        const auto took        = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
+        const std::uint32_t us = static_cast<std::uint32_t>(took.count());
+        record_send(slot.sends, us);
+        if(us > slot.slowest_send_us.load(std::memory_order_relaxed))
+            slot.slowest_send_us.store(us, std::memory_order_release);
     };
 }
 

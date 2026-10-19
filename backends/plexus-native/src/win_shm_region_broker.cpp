@@ -101,7 +101,7 @@ plexus::shm::region_status to_status(shm_error e)
 
 }
 
-plexus::shm::region_status win_shm_region_broker::finish_create_map(void *mapping, std::size_t length, region_handle &out)
+plexus::shm::region_status win_shm_region_broker::finish_create_map(void *mapping, std::size_t length, std::string canonical, region_handle &out)
 {
     HANDLE h   = static_cast<HANDLE>(mapping);
     void *base = ::MapViewOfFile(h, FILE_MAP_ALL_ACCESS, 0, 0, 0);
@@ -111,12 +111,12 @@ plexus::shm::region_status win_shm_region_broker::finish_create_map(void *mappin
         ::CloseHandle(h);
         return to_status(map_last_error(e));
     }
-    out = region_handle{mapping, base, length};
+    out = region_handle{mapping, base, length, std::move(canonical)};
     return plexus::shm::region_status::ok;
 }
 
 // No fstat analog: VirtualQuery recovers the view length, which equals the creator's granularity-rounded section size.
-plexus::shm::region_status win_shm_region_broker::finish_attach_map(void *mapping, region_handle &out)
+plexus::shm::region_status win_shm_region_broker::finish_attach_map(void *mapping, std::string canonical, region_handle &out)
 {
     HANDLE h   = static_cast<HANDLE>(mapping);
     void *base = ::MapViewOfFile(h, FILE_MAP_ALL_ACCESS, 0, 0, 0);
@@ -134,7 +134,7 @@ plexus::shm::region_status win_shm_region_broker::finish_attach_map(void *mappin
         ::CloseHandle(h);
         return to_status(map_last_error(e));
     }
-    out = region_handle{mapping, base, static_cast<std::size_t>(mbi.RegionSize)};
+    out = region_handle{mapping, base, static_cast<std::size_t>(mbi.RegionSize), std::move(canonical)};
     return plexus::shm::region_status::ok;
 }
 
@@ -166,7 +166,7 @@ plexus::shm::region_status win_shm_region_broker::create(std::string_view name, 
         ::CloseHandle(h);
         return plexus::shm::region_status::already_exists;
     }
-    return finish_create_map(h, length, out);
+    return finish_create_map(h, length, std::move(canonical), out);
 }
 
 plexus::shm::region_status win_shm_region_broker::attach(std::string_view name, region_handle &out)
@@ -184,7 +184,7 @@ plexus::shm::region_status win_shm_region_broker::attach(std::string_view name, 
     HANDLE h                 = ::OpenFileMappingW(FILE_MAP_ALL_ACCESS, FALSE, wname.c_str());
     if(h == nullptr)
         return to_status(map_last_error(::GetLastError()));
-    return finish_attach_map(h, out);
+    return finish_attach_map(h, std::move(canonical), out);
 }
 
 plexus::shm::region_status win_shm_region_broker::unlink(std::string_view)

@@ -19,10 +19,24 @@ using namespace plexus::shm;
 
 namespace {
 
-// A minimal in-memory broker stub satisfying region_broker: it carries an
-// associated region_handle and presents the create/attach/set_attach_policy surface.
+// A minimal in-memory broker stub satisfying region_broker: it carries an associated region_handle with the slot
+// liveness surface and presents the create/attach/set_attach_policy surface.
 struct stub_region_handle
 {
+    slot_hold hold_slot(std::uint32_t)
+    {
+        return slot_hold::held;
+    }
+
+    void release_slot(std::uint32_t)
+    {
+    }
+
+    bool slot_held_elsewhere(std::uint32_t) const
+    {
+        return true;
+    }
+
     bool mapped = false;
 };
 
