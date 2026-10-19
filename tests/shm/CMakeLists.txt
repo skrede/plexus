@@ -845,6 +845,24 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_same_host_transports TEST_PREFIX "shm.")
 
+    # Two same-host nodes in one process, each on its own io_context, stepped by hand across the switch of a subscriber
+    # from the wire to the publisher's ring.
+    add_executable(test_shm_switch_marker test_shm_switch_marker.cpp)
+
+    target_include_directories(test_shm_switch_marker PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_switch_marker PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_switch_marker TEST_PREFIX "shm.")
+
     # The node-level same-host fingerprint fix: make_node default-fills the node's local
     # fingerprint from the real machine read when the caller left it null, and respects a
     # caller-supplied value. Reads the effective fingerprint off the minted node's engine.
