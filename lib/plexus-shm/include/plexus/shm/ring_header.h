@@ -159,6 +159,7 @@ static_assert(sizeof(control_header_t::park) == k_cache_line && alignof(control_
 static_assert(offsetof(control_header_t, park) == k_cache_line * 4 + k_max_consumers * sizeof(cursor_t), "the park line must follow the notify_generation line");
 static_assert(offsetof(control_header_t, publisher) + sizeof(node_id) <= offsetof(control_header_t, cursors), "the config block must end before the cursor array");
 static_assert(k_max_consumers <= 32, "a 32-bit parked-slot mask must cover every cursor");
+static_assert(k_cursor_idle == UINT64_MAX, "an idle (registered-but-not-gating) cursor must read as the max sentinel");
 
 }
 

@@ -14,19 +14,6 @@
 
 namespace plexus::shm::detail {
 
-// READER side of the overwrite-vs-pin Dekker handshake. Pins the cell at `cursor` (seq_cst fetch_add on
-// take_refcount) then RE-LOADS its sequence seq_cst: if it still reads cursor+1 the pin landed before any best-effort
-// overwrite could win the slot (the matching seq_cst announce/recheck pair rules out store-buffering), so the pin holds
-// -- returns true. Otherwise the pin is dropped and false returned so the caller skips a torn read.
-inline bool pin_if_current(cell_t &c, std::uint64_t cursor) noexcept
-{
-    c.take_refcount.fetch_add(1, std::memory_order_seq_cst); // announce the pin
-    if(c.sequence.load(std::memory_order_seq_cst) == cursor + 1)
-        return true;                                         // the slot is still our committed message: the pin holds
-    c.take_refcount.fetch_sub(1, std::memory_order_seq_cst); // overwritten: unpin
-    return false;
-}
-
 // PRODUCER half of the overwrite-vs-pin Dekker announce on a slot already won. Stores the claiming marker on `sequence`
 // (seq_cst) then seq_cst-loads take_refcount; the consumer's seq_cst pin + seq_cst recheck pair rules out
 // store-buffering. Returns true when no live take pins the slot.
@@ -109,19 +96,34 @@ loan_status claim_reliable(Ring &r, std::uint64_t &pos, typename Ring::claim_res
     }
 }
 
-// Recycles only a slot whose prior occupant is committed (an in-flight peer owns it otherwise; a stale `pos`
-// reloads on the next CAS failure). A won but pinned position is donated past with a recognizable tombstone and
-// the next one tried; a full lap of pinned cells is the bounded congested fallback (at most k_max_consumers pins).
+// Follows enqueue progress until the slot serving `pos` holds a committed occupant (or is fresh); false once
+// k_pin_clear_spin_budget relax turns pass with neither, since a claim in flight one lap behind may be one this producer
+// still holds or a dead producer left, and those never commit.
+template<typename Ring>
+bool await_committed_occupant(Ring &r, std::uint64_t &pos) noexcept
+{
+    for(std::uint32_t stalled = 0; !occupant_committed(r.cell_at(pos), pos, r.m_cell_count);)
+    {
+        const std::uint64_t now = r.m_header->enqueue_pos.load(std::memory_order_relaxed);
+        stalled                 = now == pos ? stalled + 1 : 0;
+        if(stalled >= Ring::k_pin_clear_spin_budget)
+            return false;
+        pos = now;
+        cpu_relax();
+    }
+    return true;
+}
+
+// Recycles only a slot whose prior occupant is committed, giving up congested on one that stays in flight. A won but
+// pinned position is donated past with a recognizable tombstone and the next one tried; a full lap of pinned cells is
+// the bounded congested fallback (at most k_max_consumers pins).
 template<typename Ring>
 loan_status claim_best_effort(Ring &r, std::uint64_t &pos, typename Ring::claim_result &out) noexcept
 {
     for(std::uint64_t skipped = 0;;)
     {
-        if(!occupant_committed(r.cell_at(pos), pos, r.m_cell_count))
-        {
-            pos = r.m_header->enqueue_pos.load(std::memory_order_relaxed);
-            continue;
-        }
+        if(!await_committed_occupant(r, pos))
+            return loan_status::congested;
         if(!r.m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
             continue;
         if(announce_and_check_pin(r.cell_at(pos), pos))
@@ -165,34 +167,12 @@ loan_status ring_commit(Ring &r, std::uint64_t position, std::size_t filled_len)
     return loan_status::ok;
 }
 
-// sequence==cursor+1 -> ok with a read-only slab span; nothing newer -> empty; lapped by at least a full ring ->
-// lagged, carrying the producer tail so the caller jumps there in one step; the producer mid-commit less than a lap
-// ahead, or a skip tombstone -> congested (the caller steps its cursor forward by one without delivering).
+// Turns a won position that will never be committed into the skip tombstone every consumer steps past and the next lap
+// recycles, so a dropped claim cannot stop the ring at its cell.
 template<typename Ring>
-loan_status ring_consume(Ring &r, std::uint64_t cursor, typename Ring::consume_result &out) noexcept
+void ring_abandon(Ring &r, std::uint64_t position) noexcept
 {
-    cell_t &c               = r.cell_at(cursor);
-    const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-    const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
-    if(dif < 0)
-        return loan_status::empty;
-    if(dif > 0)
-    {
-        if(dif >= static_cast<std::int64_t>(r.m_cell_count))
-        {
-            out.position = r.tail_position();
-            return loan_status::lagged;
-        }
-        return loan_status::congested;
-    }
-
-    const std::uint32_t len = c.payload_len.load(std::memory_order_relaxed);
-    if(len == k_skip_len)
-        return loan_status::congested;
-
-    out.position = cursor;
-    out.slab     = r.const_slot_span(cursor).subspan(0, static_cast<std::size_t>(len > r.m_slot_capacity ? r.m_slot_capacity : len));
-    return loan_status::ok;
+    stamp_skip(r.cell_at(position), position);
 }
 
 }

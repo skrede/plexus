@@ -40,15 +40,19 @@ public:
         if(st != loan_status::ok)
             return st;
 
-        out = loaned_buffer(claim.slab.data(), claim.slab.size(), claim.position);
+        out = loaned_buffer(m_ring, claim.slab, claim.position);
         return st;
     }
 
-    // The ring's commit handles the memory-ordering edge. Consumes the handle by move.
+    // The ring's commit handles the memory-ordering edge. A commit the ring rejects leaves the handle engaged, so its
+    // destruction abandons the position rather than leaving the cell unadvanced.
     loan_status publish(loaned_buffer &&buffer) noexcept
     {
-        loaned_buffer spent = std::move(buffer);
-        return m_ring.commit(spent.m_position, spent.m_filled);
+        loaned_buffer spent         = std::move(buffer);
+        const loan_status committed = m_ring.commit(spent.m_position, spent.m_filled);
+        if(committed == loan_status::ok)
+            spent.disengage();
+        return committed;
     }
 
     io::reliability delivery() const noexcept

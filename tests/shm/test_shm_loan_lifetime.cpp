@@ -1,11 +1,15 @@
+#include "test_shm_ring_core_common.h"
+
 #include "support/handle_test_access.h"
 
 #include "plexus/shm/loaned_buffer.h"
-#include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/taken_message.h"
+#include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/slot_publisher.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <span>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -15,28 +19,28 @@
 // inert (no double-commit, no double-unpin). The handles are already plexus
 // single-owner discipline; this proves the steal+null + idempotent-reclaim shape.
 
-using namespace plexus::shm;
+using namespace shm_ring_core_fixture;
 
 TEST_CASE("loan_lifetime: a moved-from loaned_buffer is inert", "[shm][loan_lifetime]")
 {
-    alignas(8) std::byte slot[32]{};
+    backing_region control{control_region_bytes(4)};
+    backing_region slab{slab_region_bytes(4, 32)};
+    broadcast_ring ring;
+    REQUIRE(broadcast_ring::create(control.span(), slab.span(), 4, 32, plexus::node_id{}, ring) == loan_status::ok);
+    slot_publisher pub{ring, plexus::io::reliability::reliable, plexus::io::congestion::block};
 
-    loaned_buffer a = test::handle_test_access::make_loaned(slot, sizeof(slot), 0);
-    REQUIRE(a.capacity() == sizeof(slot));
-    REQUIRE(a.bytes().data() == slot);
-
+    loaned_buffer a;
+    REQUIRE(pub.loan(32, a) == loan_status::ok);
+    const std::span<std::byte> window = a.bytes();
     a.set_filled(16);
     REQUIRE(a.filled() == 16);
 
-    // Move steals the window and nulls the source.
     loaned_buffer b = std::move(a);
-    REQUIRE(b.capacity() == sizeof(slot));
+    REQUIRE(b.bytes().data() == window.data());
+    REQUIRE(b.capacity() == window.size());
     REQUIRE(b.filled() == 16);
-    REQUIRE(a.capacity() == 0); // the moved-from source is inert
+    REQUIRE(a.capacity() == 0);
     REQUIRE(a.filled() == 0);
-
-    // Destroying both (b then a) must not double-anything — reclaim is idempotent.
-    // (No observable side effect at this layer beyond not crashing / not asserting.)
 }
 
 TEST_CASE("loan_lifetime: a moved-from taken_message unpins exactly once", "[shm][loan_lifetime]")

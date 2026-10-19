@@ -5,6 +5,7 @@
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_attach.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_consume.h"
 #include "plexus/shm/ring_cursors.h"
 
 #include "plexus/io/congestion.h"
@@ -17,25 +18,23 @@
 
 namespace plexus::shm {
 
-// Lock-free, cross-process, offset-based MPMC broadcast ring: the Vyukov bounded MPMC queue
-// adapted to DESCRIPTOR cells (each carries a slab byte offset + length + the per-cell sequence;
-// the variable-size payload lives in a separate fixed-stride slab keyed 1:1 to the cells). The
-// broadcast overlay (the Disruptor gating idea over Vyukov) gives every subscriber its own read
-// cursor in the header's fixed-bound array; the producer reclamation gate is "the slowest
-// registered consumer has passed this slot" (a k_cursor_idle sentinel does not gate). reliable
-// blocks a cell until take_refcount==0 AND the slowest non-sentinel cursor is past it (a bounded
-// spin, no kernel object); best-effort overwrites latest but SKIPS pinned cells.
-//
-// CRASH STANCE (crash-SAFE, NOT crash-LIVE): no cross-process lock is held, so a dying process
-// never corrupts the ring; but a producer that dies after the enqueue CAS before the sequence
-// release leaves a never-advancing cell, and a consumer that dies holding a take() leaves
-// take_refcount>0.
+// Lock-free, cross-process, offset-based MPMC broadcast ring: the Vyukov bounded MPMC queue adapted to DESCRIPTOR cells
+// (each carries a slab byte offset + length + the per-cell sequence; the variable-size payload lives in a separate
+// fixed-stride slab keyed 1:1 to the cells). The broadcast overlay (the Disruptor gating idea over Vyukov) gives every
+// subscriber its own read cursor in the header's fixed-bound array; the producer reclamation gate is "the slowest
+// registered consumer has passed this slot" (a k_cursor_idle sentinel does not gate). reliable blocks a cell until
+// take_refcount==0 AND the slowest non-sentinel cursor is past it (a bounded spin, no kernel object); best-effort
+// overwrites latest but SKIPS pinned cells.
+// CRASH STANCE (crash-SAFE, NOT crash-LIVE): no cross-process lock is held, so a dying process never corrupts the ring;
+// but a producer that dies after the enqueue CAS before the sequence release leaves a never-advancing cell, and a
+// consumer that dies holding a take() leaves take_refcount>0.
 class broadcast_ring
 {
 public:
     static constexpr std::uint64_t k_cursor_idle = shm::k_cursor_idle;
 
-    // No-progress bound on the reliable pin-clear spin, in consecutive relax turns without slowest-cursor motion.
+    // No-progress bound, in consecutive relax turns, on a claim's spin: the reliable pin-clear without slowest-cursor motion
+    // and the best-effort wait on an uncommitted occupant without enqueue motion.
     static constexpr std::uint32_t k_pin_clear_spin_budget = 256;
 
     struct claim_result
@@ -87,6 +86,11 @@ public:
     loan_status commit(std::uint64_t position, std::size_t filled_len) noexcept
     {
         return detail::ring_commit(*this, position, filled_len);
+    }
+
+    void abandon(std::uint64_t position) noexcept
+    {
+        detail::ring_abandon(*this, position);
     }
 
     loan_status consume(std::uint64_t cursor, consume_result &out) noexcept
@@ -169,9 +173,13 @@ private:
     template<typename R>
     friend loan_status detail::clear_pin_or_skip(R &, std::uint64_t, typename R::claim_result &) noexcept;
     template<typename R>
+    friend bool detail::await_committed_occupant(R &, std::uint64_t &) noexcept;
+    template<typename R>
     friend loan_status detail::claim_best_effort(R &, std::uint64_t &, typename R::claim_result &) noexcept;
     template<typename R>
     friend loan_status detail::ring_commit(R &, std::uint64_t, std::size_t) noexcept;
+    template<typename R>
+    friend void detail::ring_abandon(R &, std::uint64_t) noexcept;
     template<typename R>
     friend loan_status detail::ring_consume(R &, std::uint64_t, typename R::consume_result &) noexcept;
 
@@ -185,15 +193,7 @@ private:
         const std::size_t offset = static_cast<std::size_t>(position & m_mask) * m_stride;
         return m_slab.subspan(offset, m_stride);
     }
-
-    std::span<const std::byte> const_slot_span(std::uint64_t position) const noexcept
-    {
-        const std::size_t offset = static_cast<std::size_t>(position & m_mask) * m_stride;
-        return std::span<const std::byte>(m_slab).subspan(offset, m_stride);
-    }
 };
-
-static_assert(broadcast_ring::k_cursor_idle == UINT64_MAX, "an idle (registered-but-not-gating) cursor must read as the max sentinel");
 
 }
 
