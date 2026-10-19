@@ -2,7 +2,8 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_UPGRADE_LANES_H
 
 #include "plexus/io/detail/upgrade_retry.h"
-#include "plexus/io/detail/upgrade_rings.h"
+#include "plexus/io/detail/upgrade_send_lanes.h"
+#include "plexus/io/detail/upgrade_receive_lanes.h"
 
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/companion_event.h"
@@ -15,14 +16,14 @@
 
 namespace plexus::io::detail {
 
-// The coordinator's lane bodies, befriended as one. A publisher mints its send lane on a subscriber's demand, before its
-// response offers it; a subscriber attaches its receive lane only on that offer.
+// The coordinator's lane bodies, befriended as one. A publisher offers its send lane on a subscriber's demand, minting it
+// if absent, before its response offers it; a subscriber attaches its receive lane only on that offer.
 struct upgrade_lanes
 {
     template<typename Coordinator>
     static bool awaits_offer(Coordinator &c, std::string_view node_name, std::string_view fqn)
     {
-        const auto *lane = find_ring(c.m_held, node_name, fqn, demand_role::subscriber);
+        const receive_lane *lane = find_receive_lane(c.m_receive, node_name, fqn);
         return lane != nullptr && !lane->receive.engaged();
     }
 
@@ -42,25 +43,11 @@ struct upgrade_lanes
         upgrade_receive received = c.m_receive_mint(node_name, fqn);
         if(!received.engaged())
             return received.reason;
-        auto *lane = find_ring(c.m_held, node_name, fqn, demand_role::subscriber);
+        receive_lane *lane = find_receive_lane(c.m_receive, node_name, fqn);
         if(lane == nullptr)
             return fallback_reason::none;
         lane->receive = std::move(received);
         send(c, node_name, fqn, companion_event::ready);
-        return fallback_reason::none;
-    }
-
-    // A declined gate keeps the wire send path: nothing is retained.
-    template<typename Coordinator>
-    static fallback_reason mint(Coordinator &c, std::string_view node_name, std::string_view fqn)
-    {
-        if(!c.m_mint || find_ring(c.m_held, node_name, fqn, demand_role::publisher) != nullptr)
-            return fallback_reason::none;
-        auto minted = c.m_mint(fqn);
-        if(!minted.channel)
-            return minted.reason;
-        c.m_held[std::string{node_name}].push_back(
-                {.fqn = std::string{fqn}, .role = demand_role::publisher, .ready = false, .channel = std::move(minted.channel), .fits = std::move(minted.fits), .receive = {}});
         return fallback_reason::none;
     }
 
@@ -70,7 +57,7 @@ struct upgrade_lanes
     {
         if(!c.run_policy(c.m_registry.same_host_for(node_name), c.hint_for(fqn)))
             return fallback_reason::none;
-        return role == demand_role::subscriber ? attach(c, node_name, fqn) : mint(c, node_name, fqn);
+        return role == demand_role::subscriber ? attach(c, node_name, fqn) : upgrade_send_lanes::join(c, node_name, fqn);
     }
 
     template<typename Coordinator>
@@ -97,8 +84,8 @@ struct upgrade_lanes
     {
         if(role == demand_role::publisher)
             return attempt(c, node_name, fqn, role);
-        if(find_ring(c.m_held, node_name, fqn, role) == nullptr)
-            c.m_held[std::string{node_name}].push_back({.fqn = std::string{fqn}, .role = role, .ready = false, .channel = nullptr, .fits = {}, .receive = {}});
+        if(find_receive_lane(c.m_receive, node_name, fqn) == nullptr)
+            c.m_receive[std::string{node_name}].push_back({.fqn = std::string{fqn}, .receive = {}});
     }
 
     // Each attempt counts its own decline; a pair that runs out of attempts also counts retries_exhausted, once.
@@ -127,8 +114,11 @@ struct upgrade_lanes
     static void down(Coordinator &c, std::string_view node_name, std::string_view fqn, demand_role role)
     {
         c.m_retry.erase_pair(node_name, fqn, role);
-        erase_ring(c.m_held, node_name, fqn, role);
-        if(!any_holder(c.m_held, fqn))
+        if(role == demand_role::publisher)
+            upgrade_send_lanes::leave(c, node_name, fqn);
+        else
+            erase_receive_lane(c.m_receive, node_name, fqn);
+        if(!any_receive_lane(c.m_receive, fqn) && find_send_lane(c.m_send, fqn) == nullptr)
             c.m_hints.erase(std::string{fqn});
     }
 
@@ -147,20 +137,21 @@ struct upgrade_lanes
     template<typename Coordinator>
     static void answer(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event)
     {
-        auto *lane = find_ring(c.m_held, node_name, fqn, demand_role::publisher);
-        if(lane == nullptr)
+        auto *lane          = find_send_lane(c.m_send, fqn);
+        lane_holder *holder = lane == nullptr ? nullptr : find_holder(lane->holders, node_name);
+        if(holder == nullptr)
             return;
         if(event == companion_event::ready)
         {
-            lane->ready = true;
+            holder->ready = true;
             return;
         }
-        erase_ring(c.m_held, node_name, fqn, demand_role::publisher);
+        upgrade_send_lanes::leave(c, node_name, fqn);
         c.count_fallback(fallback_reason::withdrawn);
     }
 
-    template<typename Coordinator, typename Lane>
-    static void withdraw(Coordinator &c, std::string_view node_name, Lane &lane)
+    template<typename Coordinator>
+    static void withdraw(Coordinator &c, std::string_view node_name, receive_lane &lane)
     {
         lane.receive = upgrade_receive{};
         c.count_fallback(fallback_reason::withdrawn);
@@ -173,8 +164,8 @@ struct upgrade_lanes
     static void lost(Coordinator &c, std::string_view fqn)
     {
         c.m_retry.erase_fqn(fqn);
-        erase_fqn(c.m_held, fqn, demand_role::publisher);
-        for(auto &[node_name, lanes] : c.m_held)
+        upgrade_send_lanes::release(c, fqn);
+        for(auto &[node_name, lanes] : c.m_receive)
             for(auto &lane : lanes)
                 if(lane.fqn == fqn && lane.receive.engaged())
                     withdraw(c, node_name, lane);

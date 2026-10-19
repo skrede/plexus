@@ -53,12 +53,15 @@ void install_upgrade_retry(Coordinator &coordinator, Timer &timer)
 }
 
 // A peer's word about a lane reaches the coordinator, and the coordinator's answers leave through that peer's session,
-// which carries them only once complete.
+// which carries them only once complete. A lane's channel leaves the forwarder before the coordinator destroys it.
 template<typename Forwarder, typename Coordinator, typename Registry>
 void install_companion_sinks(Forwarder &messages, Coordinator &coordinator, Registry &registry)
 {
+    using channel_type = typename Coordinator::channel_type;
     messages.on_companion({.event_cb      = [&coordinator](std::string_view node_name, std::string_view fqn, companion_event event) { coordinator.on_companion(node_name, fqn, event); },
-                           .holds_lane_cb = [&coordinator](std::string_view node_name, std::string_view fqn) { return coordinator.offers(node_name, fqn); }});
+                           .holds_lane_cb = [&coordinator](std::string_view node_name, std::string_view fqn) { return coordinator.offers(node_name, fqn); },
+                           .lane_cb       = [&coordinator](std::string_view fqn) { return coordinator.lane_for(fqn); }});
+    coordinator.on_lane_released([&messages](channel_type &channel) { messages.forget_channel(channel); });
     coordinator.on_companion_send(
             [&messages, &registry](std::string_view node_name, std::string_view fqn, companion_event event)
             {

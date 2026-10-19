@@ -18,10 +18,13 @@ namespace plexus::detail {
 template<typename M>
 constexpr bool member_has_shm_ring = requires(M &m) { m.set_topic_geometry(std::string{}, std::size_t{}, m.default_geometry()); };
 
+template<typename... Transports>
+constexpr std::size_t shm_member_count = (static_cast<std::size_t>(member_has_shm_ring<Transports>) + ... + 0);
+
 // True when the pack carries a member with the shm-ring surface — the fallback self-carrier (a
 // node-local shm self-ring) is available when no intra-node transport is present to serve self.
 template<typename... Transports>
-constexpr bool pack_has_shm_member = (member_has_shm_ring<Transports> || ...);
+constexpr bool pack_has_shm_member = shm_member_count<Transports...> != 0;
 
 // The if-constexpr capability check makes a composition with no shm member a compile-time no-op.
 template<typename Node, typename F>

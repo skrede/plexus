@@ -52,7 +52,6 @@
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_self_route.h"
 #include "plexus/detail/call_origination.h"
-#include "plexus/detail/node_self_carrier.h"
 #include "plexus/detail/node_subscriptions.h"
 #include "plexus/detail/node_discovery_glue.h"
 #include "plexus/detail/node_upgrade_wiring.h"
@@ -60,6 +59,7 @@
 
 #include <span>
 #include <tuple>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -215,6 +215,7 @@ public:
     // lane). Mutually exclusive with the intra-node self-route — at most one carrier per node.
     static constexpr bool k_has_shm_self_carrier = !k_has_self_loopback && detail::pack_has_shm_member<Transports...>;
     static_assert(!(k_has_self_loopback && k_has_shm_self_carrier), "a node installs at most one self-route carrier (intra-node OR shm self-ring), never both");
+    static_assert(detail::shm_member_count<Transports...> <= 1, "a node composes at most one shared-memory member");
 
     // The node_id is taken verbatim: plexus compares the identity, never mints or interprets it.
     basic_node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
@@ -818,10 +819,9 @@ private:
     // same-node publisher and subscriber coexist (so a node that only talks remote mints no region).
     std::unordered_map<std::string, std::size_t> m_local_publishers;
 
-    // The per-fqn node-local shm self-ring carriers (the fallback self-route when no intra-node
-    // transport serves self). Each holds the write half recorded in the registry + the read half's
-    // RAII handle. Declared BEFORE m_engine so the registry's references outlive the engine teardown.
-    std::unordered_map<std::string, detail::self_carrier_handle<engine_channel>> m_self_carriers;
+    // The read half of each topic's shm self-carrier (the fallback self-route when no intra-node transport serves self);
+    // its write half is the coordinator's lane for the topic.
+    std::unordered_map<std::string, std::shared_ptr<void>> m_self_carriers;
 
     engine_type m_engine;
 
@@ -856,9 +856,7 @@ private:
     template<typename N>
     friend void detail::teardown_shm_self_carrier(N &, const std::string &);
     template<typename N>
-    friend void detail::self_carrier_bytes(N &, std::span<const std::byte>);
-    template<typename N>
-    friend typename N::engine_channel &detail::any_self_carrier_channel(N &) noexcept;
+    friend void detail::self_carrier_bytes(N &, std::string_view, std::span<const std::byte>);
 };
 
 // Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this

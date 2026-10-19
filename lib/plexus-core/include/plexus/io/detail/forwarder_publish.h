@@ -8,10 +8,8 @@
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/observation_events.h"
 
-#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/history_ring.h"
-#include "plexus/io/detail/priority_band_queue.h"
-#include "plexus/io/detail/subscriber_dispatch.h"
+#include "plexus/io/detail/forwarder_fan.h"
 
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"
@@ -77,16 +75,17 @@ void retain_if_latched(Forwarder &f, std::uint64_t hash, const topic_qos &qos, c
     ring.push(static_cast<std::span<const std::byte>>(framed));
 }
 
-template<typename Peer>
-void replay_window(const Peer &p, const detail::history_ring &ring, std::size_t limit)
+template<typename Send>
+void replay_window(Send &send, const detail::history_ring &ring, std::size_t limit)
 {
     const std::size_t count = ring.count();
     for(std::size_t i = count - limit; i < count; ++i)
-        p.channel.send(ring.oldest_to_newest(i));
+        send(ring.oldest_to_newest(i));
 }
 
-template<typename Forwarder, typename Peer>
-void replay_if_latched(Forwarder &f, const Peer &p, std::uint64_t hash)
+// The replay the subscriber registered on channel asked for, handed to send.
+template<typename Forwarder, typename Channel, typename Send>
+void replay_latched(Forwarder &f, std::uint64_t hash, const Channel &channel, Send &&send)
 {
     if(!f.m_endpoint.registry().qos_for(hash).latch)
         return;
@@ -95,54 +94,27 @@ void replay_if_latched(Forwarder &f, const Peer &p, std::uint64_t hash)
     if(it == f.m_retained.end() || it->second.empty())
         return;
 
-    const subscriber_qos sub = f.m_endpoint.registry().qos_for_subscriber(hash, p.channel);
+    const subscriber_qos sub = f.m_endpoint.registry().qos_for_subscriber(hash, channel);
     switch(sub.durability_mode)
     {
         case durability::none:
             return;
         case durability::latest:
-            p.channel.send(it->second.newest());
+            send(it->second.newest());
             return;
         case durability::all:
             {
                 auto count = it->second.count();
                 auto limit = sub.replay_depth ? std::min<std::size_t>(count, sub.replay_depth) : count;
-                replay_window(p, it->second, limit);
+                replay_window(send, it->second, limit);
             }
     }
 }
 
-// A late companion takes over only once nothing is queued toward the wire channel, so a ring frame never overtakes a wire
-// frame still waiting in the bands; the switch then holds until the companion route goes away.
-template<typename Channel, typename Route, typename Egress>
-Channel *subscriber_route(Route &route_cb, const Egress &egress, const registry_subscriber<Channel> &sub, std::string_view fqn, std::size_t bytes)
+template<typename Forwarder, typename Peer>
+void replay_if_latched(Forwarder &f, const Peer &p, std::uint64_t hash)
 {
-    Channel *companion = route_cb(sub.node_name, fqn, bytes);
-    if(companion == nullptr)
-        sub.on_companion = false;
-    else if(!sub.on_companion)
-        sub.on_companion = egress.idle(sub.channel.get());
-    return sub.on_companion ? companion : &sub.channel.get();
-}
-
-template<typename Forwarder, typename Subscribers>
-void fan_published(Forwarder &f, const Subscribers &subs, std::uint64_t hash, std::string_view fqn, const topic_qos &qos, const wire_bytes<> &framed, const message_view &bare,
-                   const message_info &pub_info)
-{
-    const std::size_t band = detail::band_of(qos.priority);
-    for(const auto &sub : subs)
-    {
-        if(!any_set(qos.reach, sub.tier))
-            continue;
-
-        // Gate on the FRAMED size, not the bare payload: the ring slot carries framed bytes, so a bare-size gate would route a frame-overflowing message to SHM only and drop it.
-        typename Forwarder::channel_type *route = f.m_companion_route_cb ? subscriber_route(f.m_companion_route_cb, f.m_egress, sub, fqn, framed.size()) : &sub.channel.get();
-
-        const detail::drop_cause cause = f.m_egress.enqueue(*route, band, qos.congestion, framed);
-        if(cause != detail::drop_cause::none)
-            f.shed(hash, band, cause, sub.tier);
-        f.emit_delivered(hash, fqn, pub_info, bare);
-    }
+    replay_latched(f, hash, p.channel, [&p](std::span<const std::byte> frame) { p.channel.send(frame); });
 }
 
 template<typename Forwarder>

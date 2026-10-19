@@ -119,6 +119,17 @@ public:
         std::erase_if(m_entries, [&](const auto &entry) { return entry.first.fqn == fqn; });
     }
 
+    // The peers whose pending re-attempt for the fqn and role leaves the table, served by a lane another attempt minted.
+    std::vector<std::string> take_waiting(std::string_view fqn, demand_role role)
+    {
+        std::vector<std::string> waiting;
+        for(const auto &[key, entry] : m_entries)
+            if(key.fqn == fqn && key.role == role)
+                waiting.push_back(key.node_name);
+        std::erase_if(m_entries, [&](const auto &entry) { return entry.first.fqn == fqn && entry.first.role == role; });
+        return waiting;
+    }
+
     void erase_pair(std::string_view node_name, std::string_view fqn, demand_role role)
     {
         std::erase_if(m_entries, [&](const auto &entry) { return entry.first.node_name == node_name && entry.first.fqn == fqn && entry.first.role == role; });

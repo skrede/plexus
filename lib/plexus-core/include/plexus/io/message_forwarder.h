@@ -28,6 +28,7 @@
 #include "plexus/io/detail/forward_gate.h"
 #include "plexus/io/detail/history_ring.h"
 #include "plexus/io/detail/forward_splice.h"
+#include "plexus/io/detail/forwarder_fan.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/detail/forwarder_demand.h"
 #include "plexus/io/detail/forwarder_fanout.h"
@@ -106,12 +107,19 @@ public:
     void attach_local(std::string_view fqn, channel_type &channel, std::string_view self_name, const subscriber_qos &qos = subscriber_qos{},
                       std::optional<std::uint64_t> type_id = std::nullopt)
     {
+        attach_local(fqn, channel, self_name, qos, type_id, [&channel](std::span<const std::byte> frame) { channel.send(frame); });
+    }
+
+    // A self-route over a channel other readers share takes its latched replay through replay, never the channel.
+    template<typename Replay>
+    void attach_local(std::string_view fqn, channel_type &channel, std::string_view self_name, const subscriber_qos &qos, std::optional<std::uint64_t> type_id, Replay &&replay)
+    {
         const auto hash = wire::fqn_topic_hash(fqn);
         m_endpoint.registry().add_subscriber(hash, fqn, channel, self_name, qos, type_id);
         // Record the self-route by its channel POINTER (a proven registration, not the spoofable
         // self_name tag) so the origination gate never wraps a 0x0F onto a same-node self-channel.
         ++m_self_route_channels[static_cast<const void *>(&channel)];
-        detail::replay_if_latched(*this, peer{channel, std::string{self_name}}, hash);
+        detail::replay_latched(*this, hash, channel, std::forward<Replay>(replay));
     }
 
     void detach_local(std::string_view fqn, channel_type &channel)
@@ -286,33 +294,6 @@ public:
         detail::forwarder_publish(*this, fqn, payload, session_id);
     }
 
-    template<typename EncodeOnce>
-    void fan_object(const std::vector<typename subscriber_registry<channel_type>::subscriber> &subs, std::uint64_t hash, std::string_view fqn, const topic_qos &qos,
-                    const object_carrier &carrier, const wire_bytes<> &framed, const message_view &bare, const message_info &obj_info, EncodeOnce &encode_once)
-    {
-        const std::size_t band = detail::band_of(qos.priority);
-        for(const auto &sub : subs)
-        {
-            if(!any_set(qos.reach, sub.tier))
-                continue;
-
-            if constexpr(requires(channel_type &c) { c.send_object(carrier); })
-                if(eligible_for_object(sub, carrier))
-                {
-                    sub.channel.get().send_object(carrier);
-                    emit_delivered(hash, fqn, obj_info, bare);
-                    continue;
-                }
-
-            encode_once();
-            const detail::drop_cause cause = m_egress.enqueue(sub.channel.get(), band, qos.congestion, framed);
-            if(cause != detail::drop_cause::none)
-                shed(hash, band, cause, sub.tier);
-
-            emit_delivered(hash, fqn, obj_info, bare);
-        }
-    }
-
     template<typename EncodeFn>
     // NOLINTNEXTLINE(readability-function-size)
     void publish_object(std::string_view fqn, object_carrier carrier, EncodeFn &&encode, std::uint64_t session_id = 0)
@@ -348,7 +329,7 @@ public:
         emit_published(hash, fqn, bare);
 
         if(subs != nullptr)
-            fan_object(*subs, hash, fqn, qos, carrier, framed, bare, obj_info, encode_once);
+            detail::fan_object(*this, *subs, hash, fqn, qos, carrier, framed, bare, obj_info, encode_once);
 
         if(latched)
         {
@@ -367,6 +348,11 @@ public:
     void detach_all(const peer &p)
     {
         detail::forwarder_detach_all(*this, p);
+    }
+
+    void forget_channel(channel_type &channel)
+    {
+        detail::forwarder_forget_channel(*this, channel);
     }
 
     const std::vector<remembered_demand> &remembered_topics(const std::string &node_name) const
@@ -421,7 +407,7 @@ public:
         m_companion_route_cb = std::move(hook);
     }
 
-    void on_companion(detail::companion_hooks hooks)
+    void on_companion(detail::companion_hooks<channel_type> hooks)
     {
         m_companion_hooks = std::move(hooks);
     }
@@ -532,7 +518,8 @@ public:
             return;
 
         const auto limit = std::min<std::size_t>({static_cast<std::size_t>(max_samples), it->second.count(), k_fetch_cap});
-        detail::replay_window(p, it->second, limit);
+        auto send        = [&p](std::span<const std::byte> frame) { p.channel.send(frame); };
+        detail::replay_window(send, it->second, limit);
     }
 
     std::string_view fqn_for(std::uint64_t topic_hash) const
@@ -572,10 +559,13 @@ private:
     friend wire_bytes<> detail::frame_publish(F &, std::uint64_t, std::span<const std::byte>, std::optional<std::uint64_t>, std::uint64_t, message_info &);
     template<typename F>
     friend void detail::retain_if_latched(F &, std::uint64_t, const topic_qos &, const wire_bytes<> &);
-    template<typename F, typename P>
-    friend void detail::replay_if_latched(F &, const P &, std::uint64_t);
+    template<typename F, typename C, typename S>
+    friend void detail::replay_latched(F &, std::uint64_t, const C &, S &&);
     template<typename F, typename S>
     friend void detail::fan_published(F &, const S &, std::uint64_t, std::string_view, const topic_qos &, const wire_bytes<> &, const message_view &, const message_info &);
+    template<typename F, typename S, typename E>
+    friend void detail::fan_object(F &, const S &, std::uint64_t, std::string_view, const topic_qos &, const object_carrier &, const wire_bytes<> &, const message_view &,
+                                   const message_info &, E &);
     template<typename F>
     friend void detail::forwarder_publish(F &, std::string_view, std::span<const std::byte>, std::uint64_t);
     template<typename F>
@@ -592,6 +582,8 @@ private:
     friend void detail::forwarder_detach_all(F &, const P &);
     template<typename F, typename C>
     friend void detail::forwarder_detach_local(F &, std::string_view, C &);
+    template<typename F, typename C>
+    friend void detail::forwarder_forget_channel(F &, C &);
 
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
@@ -603,14 +595,6 @@ private:
         const std::size_t prefix              = wire::header_size + wire::unidirectional_header_size + (counter ? wire::varint_size(*counter) : 0);
         const std::span<const std::byte> view = static_cast<std::span<const std::byte>>(framed);
         return message_view{view.subspan(prefix), framed.owner()};
-    }
-
-    static bool eligible_for_object(const typename subscriber_registry<channel_type>::subscriber &sub, const object_carrier &carrier)
-    {
-        if constexpr(requires(channel_type &c) { c.send_object(carrier); })
-            return sub.tier == locality::process && sub.type_id && *sub.type_id == carrier.type_tag;
-        else
-            return false;
     }
 
     bool type_id_mismatch(std::uint64_t hash, std::optional<std::uint64_t> subscriber_type_id) const
@@ -684,7 +668,7 @@ private:
     // Self-route channel pointers recorded at attach_local, refcounted per fqn: the origination gate
     // excludes them from non-local demand so a same-node self-route never receives a forwarded envelope.
     std::unordered_map<const void *, std::size_t> m_self_route_channels;
-    detail::companion_hooks m_companion_hooks;
+    detail::companion_hooks<channel_type> m_companion_hooks;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
     plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> m_on_forward_refan_cb;
     plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> m_on_originate_cb;

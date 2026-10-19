@@ -49,7 +49,7 @@ TEST_CASE("harness a subscriber past a ring's consumer capacity receives every m
     REQUIRE(fallbacks_of(subs[0], plexus::io::fallback_reason::consumer_capacity) + fallbacks_of(subs[1], plexus::io::fallback_reason::consumer_capacity) >= 1);
 }
 
-TEST_CASE("harness a node subscribing to its own topic does not duplicate delivery to a co-host subscriber", "[shm][harness]")
+TEST_CASE("harness an unhinted node subscribing to its own topic serves a co-host subscriber once over the wire", "[shm][harness]")
 {
     topology topo{probe_fqn("self_remote"), 2};
     REQUIRE(topo.created());
@@ -64,4 +64,5 @@ TEST_CASE("harness a node subscribing to its own topic does not duplicate delive
 
     require_exactly(subs[0], 20);
     require_exactly(subs[1], 20);
+    REQUIRE(fallbacks_of(subs[1], plexus::io::fallback_reason::not_offered) >= 1);
 }

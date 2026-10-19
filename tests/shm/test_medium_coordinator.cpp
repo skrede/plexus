@@ -420,10 +420,10 @@ TEST_CASE("shm.coordinator the node's own hints accumulate: a subscriber-side hi
 
 TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the topic's hint", "[shm][coordinator]")
 {
-    // WR-05: dynamic topic churn must not grow the hint map without bound. The hint is
-    // pruned when the last demand for an fqn drops, mirroring the held-channel teardown; a
-    // re-subscribe re-records it from the declare path. A SECOND co-host peer still holding
-    // the topic keeps the hint alive (the prune key is the last holder, not the edge).
+    // Dynamic topic churn must not grow the hint map without bound. The hint is pruned when
+    // the last demand for an fqn drops, mirroring the lane teardown; a re-subscribe re-records
+    // it from the declare path. A SECOND co-host peer still holding the topic keeps the hint
+    // alive (the prune key is the last holder, not the edge).
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     reg.verdicts["node-b"] = true;
@@ -434,20 +434,20 @@ TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the top
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     c.on_edge("node-b", "alpha", demand_transition::up, demand_role::publisher);
-    REQUIRE(gate.mints() == 2);
+    REQUIRE(gate.mints() == 1); // one lane per topic serves both peers
 
-    // node-a drops; node-b still holds alpha, so the hint must survive (a re-mint for a new
-    // node-a 0->1 still upgrades).
+    // node-a drops; node-b still holds alpha, so the hint must survive (a new node-a 0->1 is
+    // still offered the lane).
     c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher);
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
-    REQUIRE(gate.mints() == 3); // the surviving hint re-upgraded the re-subscribe
+    REQUIRE(c.offers("node-a", "alpha")); // the surviving hint re-upgraded the re-subscribe
 
     // Both drop: the last holder gone prunes the hint, so a later bare 0->1 (with no
     // re-record) does NOT upgrade — proving the prune fired.
     c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher);
     c.on_edge("node-b", "alpha", demand_transition::down, demand_role::publisher);
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
-    REQUIRE(gate.mints() == 3); // the pruned hint resolves to none: no upgrade
+    REQUIRE_FALSE(c.offers("node-a", "alpha")); // the pruned hint resolves to none: no upgrade
 }
 
 TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once per boundary; "

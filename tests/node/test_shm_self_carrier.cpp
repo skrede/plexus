@@ -79,3 +79,29 @@ TEST_CASE("shm_self_carrier: exactly one callback per publish - no double-delive
     f.drive_until([&] { return count >= 2; });
     REQUIRE(count == 2);
 }
+
+TEST_CASE("shm_self_carrier: a local subscriber that leaves and returns gets each publish exactly once again", "[node][shm][loopback]")
+{
+    shm_fixture f;
+    plexus::publisher<> p{f.node, "topic"};
+    const std::array<std::byte, 1> payload{std::byte{0x01}};
+
+    std::size_t first = 0;
+    {
+        plexus::subscriber<> s{f.node, "topic", [&](std::span<const std::byte>) { ++first; }};
+        f.drive_until([] { return false; }, std::chrono::milliseconds{50});
+        p.publish(payload);
+        f.drive_until([&] { return first >= 1; });
+    }
+
+    std::size_t second = 0;
+    plexus::subscriber<> s{f.node, "topic", [&](std::span<const std::byte>) { ++second; }};
+    f.drive_until([] { return false; }, std::chrono::milliseconds{50});
+    p.publish(payload);
+    p.publish(payload);
+    f.drive_until([&] { return second >= 2; });
+    f.drive_until([] { return false; }, std::chrono::milliseconds{100});
+
+    REQUIRE(first == 1);
+    REQUIRE(second == 2);
+}

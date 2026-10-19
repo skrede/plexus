@@ -899,6 +899,29 @@ target_link_libraries(test_shm_switch_order PRIVATE
 
 catch_discover_tests(test_shm_switch_order TEST_PREFIX "shm.")
 
+# A publisher holds one lane per topic for every co-host peer it offered it to and for its own subscriber, destroying it
+# only through a release its forwarder hears first.
+add_executable(test_medium_coordinator_lanes test_medium_coordinator_lanes.cpp)
+
+target_link_libraries(test_medium_coordinator_lanes PRIVATE
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_medium_coordinator_lanes TEST_PREFIX "shm.")
+
+# Each publish is written to the topic's lane at most once, whichever readers route to it, the node itself included.
+add_executable(test_shm_write_once test_shm_write_once.cpp)
+
+target_include_directories(test_shm_write_once PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_write_once PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_write_once TEST_PREFIX "shm.")
+
 # The bilateral, consumer-sovereign upgrade via demand-driven convergence (xproc):
 # two real processes each decide INDEPENDENTLY whether to attempt the shared-memory
 # acquire from their OWN dispatch hint (no hint on the wire), converge on the same

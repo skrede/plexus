@@ -1,9 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_COORDINATOR_LANES_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_COORDINATOR_LANES_H
 
+#include "plexus/io/dispatch_hint.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/companion_event.h"
 #include "plexus/io/demand_transition.h"
+#include "plexus/io/upgrade_coordinator.h"
 
+#include <chrono>
+#include <memory>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -37,6 +43,60 @@ public:
 
 private:
     std::int32_t &m_live;
+};
+
+// A coordinator over counted lanes whose send gate declines its first declines mints as transient and whose policy
+// follows allow; the release hook records how many lanes were still alive when it ran.
+struct lane_end
+{
+    explicit lane_end(std::uint32_t declines = 0)
+            : live(0)
+            , mints(0)
+            , released(0)
+            , live_at_release(-1)
+            , receives(0)
+            , declines(declines)
+            , allow(true)
+            , c(registry)
+    {
+        c.on_gate([this](std::string_view) { return mint(); });
+        c.on_receive_gate([this](std::string_view, std::string_view) { return io::upgrade_receive{[lane = std::make_unique<counted_lane>(receives)] { (void)lane; }}; });
+        c.on_lane_released(
+                [this](counted_lane &)
+                {
+                    ++released;
+                    live_at_release = live;
+                });
+        c.on_policy([this](bool same_host, io::dispatch_hint) { return same_host && allow; });
+        c.set_retry_scheduler([](std::chrono::milliseconds) {});
+        c.set_topic_hint("alpha", io::dispatch_hint::frequent);
+    }
+
+    io::upgrade_mint<counted_lane> mint()
+    {
+        ++mints;
+        if(declines > 0)
+        {
+            --declines;
+            return io::upgrade_mint<counted_lane>{io::fallback_reason::transient};
+        }
+        return io::upgrade_mint<counted_lane>{std::make_unique<counted_lane>(live), [](std::size_t) { return true; }};
+    }
+
+    void offer(std::string_view peer)
+    {
+        c.on_edge(peer, "alpha", io::demand_transition::up, io::demand_role::publisher);
+    }
+
+    std::int32_t live;
+    std::int32_t mints;
+    std::int32_t released;
+    std::int32_t live_at_release;
+    std::int32_t receives;
+    std::uint32_t declines;
+    bool allow;
+    co_host_registry registry;
+    io::upgrade_coordinator<co_host_registry, counted_lane> c;
 };
 
 // Drives a lane as far as the co-host peer would: a subscriber's demand meets its publisher's offer, a publisher's lane

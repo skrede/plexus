@@ -83,14 +83,23 @@ void forwarder_detach_all(Forwarder &f, const Peer &p)
     f.m_egress.remove(p.channel);
 }
 
+// The channel may still carry other topics or other readers, so its queued frames stay.
 template<typename Forwarder, typename Channel>
 void forwarder_detach_local(Forwarder &f, std::string_view fqn, Channel &channel)
 {
     f.m_endpoint.registry().remove_subscriber(wire::fqn_topic_hash(fqn), channel);
-    f.m_egress.remove(channel);
     auto it = f.m_self_route_channels.find(static_cast<const void *>(&channel));
     if(it != f.m_self_route_channels.end() && --it->second == 0)
         f.m_self_route_channels.erase(it);
+}
+
+// A channel about to be destroyed leaves every record of it, its queued frames included.
+template<typename Forwarder, typename Channel>
+void forwarder_forget_channel(Forwarder &f, Channel &channel)
+{
+    f.m_endpoint.registry().remove_peer(channel);
+    f.m_self_route_channels.erase(static_cast<const void *>(&channel));
+    f.m_egress.remove(channel);
 }
 
 }
