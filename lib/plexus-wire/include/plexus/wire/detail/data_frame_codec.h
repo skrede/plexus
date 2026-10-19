@@ -113,6 +113,17 @@ inline std::optional<bidirectional_decode_result> decode_bidirectional(std::span
     return bidirectional_decode_result{.header = hdr, .data = r.rest()};
 }
 
+// The publication sequence a framed data frame carries; nullopt for any other frame.
+inline std::optional<std::uint64_t> framed_sequence(std::span<const std::byte> framed)
+{
+    const std::optional<frame_header> hdr = decode_header(framed);
+    if(!hdr || (hdr->type != msg_type::unidirectional && hdr->type != msg_type::bidirectional) || framed.size() < header_size + unidirectional_header_size)
+        return std::nullopt;
+    reader r{framed.subspan(header_size)};
+    r.u8();
+    return r.u64();
+}
+
 }
 
 #endif

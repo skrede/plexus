@@ -40,7 +40,8 @@ enum class msg_type : uint8_t
     peer_report         = 0x0E,
     forwarded           = 0x0F,
     companion_ready     = 0x10,
-    companion_withdrawn = 0x11
+    companion_withdrawn = 0x11,
+    companion_switch    = 0x12
 };
 
 enum class endpoint_source_type : uint8_t

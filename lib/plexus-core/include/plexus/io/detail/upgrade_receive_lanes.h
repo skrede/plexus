@@ -5,6 +5,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <utility>
 #include <algorithm>
 #include <string_view>
@@ -42,6 +43,13 @@ inline bool any_receive_lane(const receive_lanes &held, std::string_view fqn)
         if(std::ranges::find(lanes, fqn, &receive_lane::fqn) != lanes.end())
             return true;
     return false;
+}
+
+// A marker for a lane that is not engaged is ignored.
+inline void resume_receive_lane(receive_lanes &held, std::string_view node_name, std::string_view fqn, std::uint64_t first_sequence)
+{
+    if(receive_lane *lane = find_receive_lane(held, node_name, fqn); lane != nullptr && lane->receive.engaged())
+        lane->receive.resume_cb(first_sequence);
 }
 
 // A publisher left with no lane leaves the table.

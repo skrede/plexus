@@ -18,6 +18,7 @@
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/forward_options.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/remembered_demand.h"
 #include "plexus/io/observation_events.h"
@@ -402,7 +403,7 @@ public:
         m_capture_wants_payload_cb = std::move(hook);
     }
 
-    void on_companion_route(plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)> hook)
+    void on_companion_route(plexus::detail::move_only_function<lane_route<channel_type>(std::string_view, std::string_view, std::size_t)> hook)
     {
         m_companion_route_cb = std::move(hook);
     }
@@ -412,15 +413,21 @@ public:
         m_companion_hooks = std::move(hooks);
     }
 
-    void note_companion(const peer &p, std::uint64_t topic_hash, companion_event event)
+    void note_companion(const peer &p, std::uint64_t topic_hash, companion_event event, std::uint32_t reader = k_no_reader)
     {
         if(m_companion_hooks.event_cb)
-            m_companion_hooks.event_cb(p.node_name, fqn_for(topic_hash), event);
+            m_companion_hooks.event_cb(p.node_name, fqn_for(topic_hash), event, reader);
     }
 
-    void send_companion(const peer &p, std::string_view fqn, companion_event event)
+    void note_switch(const peer &p, std::uint64_t topic_hash, std::uint64_t first_sequence)
     {
-        detail::send_companion(m_endpoint, p.channel, fqn, event);
+        if(m_companion_hooks.switch_cb)
+            m_companion_hooks.switch_cb(p.node_name, fqn_for(topic_hash), first_sequence);
+    }
+
+    void send_companion(const peer &p, std::string_view fqn, companion_event event, std::uint32_t reader)
+    {
+        detail::send_companion(m_endpoint, p.channel, fqn, event, reader);
     }
 
     void on_demand_transition(plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition, demand_role)> hook)
@@ -566,6 +573,11 @@ private:
     template<typename F, typename S, typename E>
     friend void detail::fan_object(F &, const S &, std::uint64_t, std::string_view, const topic_qos &, const object_carrier &, const wire_bytes<> &, const message_view &,
                                    const message_info &, E &);
+    template<typename F, typename C>
+    friend C *detail::subscriber_route(F &, const detail::registry_subscriber<C> &, std::string_view, std::size_t, std::uint64_t);
+    template<typename F, typename C>
+    friend detail::drop_cause detail::enqueue_routed(F &, detail::lane_write<C> &, const detail::registry_subscriber<C> &, std::string_view, std::size_t, io::congestion,
+                                                     const wire_bytes<> &);
     template<typename F>
     friend void detail::forwarder_publish(F &, std::string_view, std::span<const std::byte>, std::uint64_t);
     template<typename F>
@@ -680,7 +692,7 @@ private:
     plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change_cb;
     plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp_cb;
     plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)> m_on_published_cb;
-    plexus::detail::move_only_function<channel_type *(std::string_view, std::string_view, std::size_t)> m_companion_route_cb;
+    plexus::detail::move_only_function<lane_route<channel_type>(std::string_view, std::string_view, std::size_t)> m_companion_route_cb;
     plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition, demand_role)> m_on_demand_transition_cb;
     plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_info &, const message_view &)> m_on_delivered_cb;
 };

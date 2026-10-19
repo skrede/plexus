@@ -5,6 +5,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/observation_events.h"
 
 #include "plexus/io/detail/drop_event.h"
@@ -21,17 +22,22 @@
 
 namespace plexus::io::detail {
 
-// A late companion takes over only once nothing is queued toward the wire channel, so a ring frame never overtakes a wire
-// frame still waiting in the bands; the switch then holds until the companion route goes away.
-template<typename Channel, typename Route, typename Egress>
-Channel *subscriber_route(Route &route_cb, const Egress &egress, const registry_subscriber<Channel> &sub, std::string_view fqn, std::size_t bytes)
+// A subscriber switches to its lane on the first message that fits once nothing is queued toward its wire channel, so no
+// ring frame overtakes a wire frame still in the bands, and the marker it is sent on the wire first names that message.
+// The switch is one-way: moving the subscriber back for an over-cap message would put its next messages on the wire while
+// other readers' copies of them land in the ring it reads, so it rides the lane until the route offers no lane.
+template<typename Forwarder, typename Channel>
+Channel *subscriber_route(Forwarder &f, const registry_subscriber<Channel> &sub, std::string_view fqn, std::size_t bytes, std::uint64_t sequence)
 {
-    Channel *companion = route_cb(sub.node_name, fqn, bytes);
-    if(companion == nullptr)
+    const lane_route<Channel> route = f.m_companion_route_cb(sub.node_name, fqn, bytes);
+    if(route.lane == nullptr)
         sub.on_companion = false;
-    else if(!sub.on_companion)
-        sub.on_companion = egress.idle(sub.channel.get());
-    return sub.on_companion ? companion : &sub.channel.get();
+    else if(!sub.on_companion && route.fits && f.m_egress.idle(sub.channel.get()) && place_reader(f.m_companion_hooks, fqn, route.reader))
+    {
+        sub.on_companion = true;
+        send_switch(f.m_endpoint, sub.channel.get(), fqn, sequence);
+    }
+    return sub.on_companion && route.fits ? route.lane : &sub.channel.get();
 }
 
 // Every subscriber routed to a topic's lane reads the one ring behind it, so a publish writes the lane at most once and
@@ -40,22 +46,23 @@ template<typename Channel>
 struct lane_write
 {
     Channel *lane;
+    std::uint64_t sequence;
     bool written;
     drop_cause cause;
 };
 
 // Gate on the FRAMED size, not the bare payload: the ring slot carries framed bytes, so a bare-size gate would route a
 // frame-overflowing message to shared memory only and drop it.
-template<typename Route, typename Egress, typename Channel>
-drop_cause enqueue_routed(Route &route_cb, Egress &egress, lane_write<Channel> &once, const registry_subscriber<Channel> &sub, std::string_view fqn, std::size_t band,
-                          io::congestion congestion, const wire_bytes<> &framed)
+template<typename Forwarder, typename Channel>
+drop_cause enqueue_routed(Forwarder &f, lane_write<Channel> &once, const registry_subscriber<Channel> &sub, std::string_view fqn, std::size_t band, io::congestion congestion,
+                          const wire_bytes<> &framed)
 {
-    Channel *route = route_cb ? subscriber_route(route_cb, egress, sub, fqn, framed.size()) : &sub.channel.get();
+    Channel *route = f.m_companion_route_cb ? subscriber_route(f, sub, fqn, framed.size(), once.sequence) : &sub.channel.get();
     if(route != once.lane)
-        return egress.enqueue(*route, band, congestion, framed);
+        return f.m_egress.enqueue(*route, band, congestion, framed);
     if(!once.written)
     {
-        once.cause   = egress.enqueue(*route, band, congestion, framed);
+        once.cause   = f.m_egress.enqueue(*route, band, congestion, framed);
         once.written = true;
     }
     return once.cause;
@@ -81,12 +88,12 @@ void fan_published(Forwarder &f, const Subscribers &subs, std::uint64_t hash, st
                    const message_info &pub_info)
 {
     const std::size_t band = detail::band_of(qos.priority);
-    lane_write<typename Forwarder::channel_type> once{lane_channel(f.m_companion_hooks, fqn), false, drop_cause::none};
+    lane_write<typename Forwarder::channel_type> once{lane_channel(f.m_companion_hooks, fqn), pub_info.publication_sequence, false, drop_cause::none};
     for(const auto &sub : subs)
     {
         if(!any_set(qos.reach, sub.tier))
             continue;
-        const drop_cause cause = enqueue_routed(f.m_companion_route_cb, f.m_egress, once, sub, fqn, band, qos.congestion, framed);
+        const drop_cause cause = enqueue_routed(f, once, sub, fqn, band, qos.congestion, framed);
         if(cause != drop_cause::none)
             f.shed(hash, band, cause, sub.tier);
         f.emit_delivered(hash, fqn, pub_info, bare);
@@ -99,7 +106,7 @@ void fan_object(Forwarder &f, const Subscribers &subs, std::uint64_t hash, std::
                 const message_view &bare, const message_info &obj_info, EncodeOnce &encode_once)
 {
     const std::size_t band = detail::band_of(qos.priority);
-    lane_write<typename Forwarder::channel_type> once{lane_channel(f.m_companion_hooks, fqn), false, drop_cause::none};
+    lane_write<typename Forwarder::channel_type> once{lane_channel(f.m_companion_hooks, fqn), carrier.sequence, false, drop_cause::none};
     for(const auto &sub : subs)
     {
         if(!any_set(qos.reach, sub.tier))
@@ -107,7 +114,7 @@ void fan_object(Forwarder &f, const Subscribers &subs, std::uint64_t hash, std::
         if(!sent_as_object(sub, carrier))
         {
             encode_once();
-            const drop_cause cause = enqueue_routed(f.m_companion_route_cb, f.m_egress, once, sub, fqn, band, qos.congestion, framed);
+            const drop_cause cause = enqueue_routed(f, once, sub, fqn, band, qos.congestion, framed);
             if(cause != drop_cause::none)
                 f.shed(hash, band, cause, sub.tier);
         }

@@ -156,7 +156,8 @@ TEST_CASE("cursor_reclaim a live consumer that has not drained keeps its cursor 
     REQUIRE(producer.acquire(ring_role::producer) == acquire_result::created);
     REQUIRE(consumer.acquire(ring_role::consumer) == acquire_result::attached);
     ring_view view{broker, producer.fqn};
-
+    // A consumer gates the ring once its producer places it, as a switch does.
+    REQUIRE(producer.reg.channel_for(producer.fqn, ring_direction::request, plexus::node_id{})->place_reader(0));
     REQUIRE(sends_ok(producer, view.ring.cell_count()));
     CHECK(producer.send() == loan_status::congested);
     CHECK(view.active(0) == 1);

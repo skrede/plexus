@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <vector>
+#include <cstdint>
 
 using namespace shm_harness;
 
@@ -64,4 +65,37 @@ TEST_CASE("harness a hinted pair that dials each other delivers each message exa
     require_exactly(sub, 20);
     REQUIRE(sub.out_of_order == 0);
     REQUIRE(over_shm);
+}
+
+// The joiner is never warmed up, so its switch to the ring lands mid-stream while the publisher's own subscriber and the
+// engaged one keep the ring written.
+TEST_CASE("harness a subscriber that joins while another is engaged receives no message twice", "[shm][harness]")
+{
+    topology topo{probe_fqn("joiner"), 3};
+    REQUIRE(topo.created());
+    REQUIRE(topo.spawn_node(0, node_role::pubsub, true, false));
+    REQUIRE(topo.spawn_node(1, node_role::sub, true, false));
+    REQUIRE(wait_until([&] { return topo.counts(1).connected == 1; }, 10s));
+    CHECK(topo.warm_up({0}, {0, 1}, 10s));
+
+    REQUIRE(topo.spawn_node(2, node_role::sub, true, false));
+    REQUIRE(topo.wait_connected(10s));
+    std::vector<node_counts> engaged;
+    for(std::uint32_t round = 0; round < 10; ++round)
+    {
+        topo.publish_round({0}, 20, {0, 1}, 10s);
+        for(const node_counts &counts : report(topo, "joiner", {0, 1}))
+            engaged.push_back(counts);
+    }
+    const node_counts joiner = report(topo, "joiner", {2})[0];
+    leave_all(topo, {2, 1, 0});
+
+    for(const node_counts &counts : engaged)
+    {
+        require_exactly(counts, 20);
+        REQUIRE(counts.out_of_order == 0);
+    }
+    REQUIRE(joiner.duplicates == 0);
+    REQUIRE(joiner.out_of_order == 0);
+    REQUIRE(joiner.received == joiner.distinct);
 }

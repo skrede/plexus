@@ -5,6 +5,7 @@
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/loaned_buffer.h"
 #include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/ring_cursors.h"
 #include "plexus/shm/slot_publisher.h"
 #include "plexus/shm/slot_subscriber.h"
 #include "plexus/shm/taken_message.h"
@@ -93,9 +94,25 @@ public:
         return m_subscriber->cursor_index();
     }
 
-    void engage_subscriber(std::uint32_t claimed_cursor) noexcept
+    // mode is slot_subscriber::adopt_cursor or slot_subscriber::hold_cursor.
+    template<typename Mode>
+    void engage_subscriber(Mode mode, std::uint32_t claimed_cursor) noexcept
     {
-        m_subscriber.emplace(m_ring, slot_subscriber::adopt_cursor, claimed_cursor, m_spin_budget);
+        m_subscriber.emplace(m_ring, mode, claimed_cursor, m_spin_budget);
+    }
+
+    void resume_subscriber() noexcept
+    {
+        if(m_subscriber)
+            m_subscriber->resume();
+    }
+
+    // The reader in slot cursor starts at the newest message this producer wrote, which the current publish may already
+    // be; the switch marker skips the ones before it.
+    bool place_reader(std::uint32_t cursor) noexcept
+    {
+        const std::uint64_t tail = m_ring.tail_position();
+        return detail::place_cursor(m_ring.header(), m_ring.header().consumer_capacity, cursor, tail == 0 ? 0 : tail - 1);
     }
 
     void release_subscriber() noexcept

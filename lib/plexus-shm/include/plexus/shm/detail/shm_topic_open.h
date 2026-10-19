@@ -100,9 +100,9 @@ shm::arm_status topic_arm(Entry &e, std::uint32_t slot, Report &report)
 }
 
 // A cursor's liveness slot is held before the cursor is claimed, so an active cursor whose slot no holder has belongs
-// to a dead process.
+// to a dead process. A held cursor gates nothing until its reader is placed or resumed.
 template<typename Entry>
-shm::acquire_failure topic_claim_cursor(Entry &e)
+shm::acquire_failure topic_claim_cursor(Entry &e, bool held)
 {
     const std::uint64_t capacity = std::min<std::uint64_t>(e.ring.header().consumer_capacity, shm::k_max_consumers);
     for(std::uint32_t i = 0; i < capacity; ++i)
@@ -114,7 +114,10 @@ shm::acquire_failure topic_claim_cursor(Entry &e)
             continue;
         if(e.ring.claim_cursor(i))
         {
-            e.channel->engage_subscriber(i);
+            if(held)
+                e.channel->engage_subscriber(shm::slot_subscriber::hold_cursor, i);
+            else
+                e.channel->engage_subscriber(shm::slot_subscriber::adopt_cursor, i);
             return shm::acquire_failure{};
         }
         e.control.release_slot(shm::cursor_slot(i));
@@ -125,9 +128,9 @@ shm::acquire_failure topic_claim_cursor(Entry &e)
 // A subscriber the ring refused a cursor would never receive, so the engagement fails rather than attach it; the caller
 // undoes a failed engagement.
 template<typename Entry, typename Report>
-shm::acquire_failure topic_engage_consumer(Entry &e, Report &report)
+shm::acquire_failure topic_engage_consumer(Entry &e, Report &report, bool held)
 {
-    if(const shm::acquire_failure claimed = topic_claim_cursor(e); claimed.bound != shm::acquire_bound::none)
+    if(const shm::acquire_failure claimed = topic_claim_cursor(e, held); claimed.bound != shm::acquire_bound::none)
         return claimed;
     if(const shm::arm_status armed = topic_arm(e, *e.channel->waiter_slot(), report); armed != shm::arm_status::armed)
         return shm::acquire_failure{shm::acquire_bound::notifier, 0, 0, shm::region_status::ok, armed};
@@ -146,7 +149,7 @@ shm::acquire_failure topic_bind(Registry &r, Entry &e, const shm_topic_key &key,
     e.hold(role);
     if(role == shm::ring_role::producer)
         return shm::acquire_failure{};
-    return topic_engage_consumer(e, r.m_fallback_cb);
+    return topic_engage_consumer(e, r.m_fallback_cb, role == shm::ring_role::consumer);
 }
 
 }

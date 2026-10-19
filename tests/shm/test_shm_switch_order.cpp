@@ -1,3 +1,4 @@
+#include "support/switch_rig.h"
 #include "support/order_forwarder.h"
 #include "support/coordinator_lanes.h"
 
@@ -16,13 +17,17 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
 
+using plexus::testing::bodies;
 using plexus::testing::as_bytes;
+using plexus::testing::switch_rig;
 using plexus::testing::arrival_log;
 using plexus::testing::order_channel;
+using plexus::testing::scripted_route;
 using plexus::testing::order_forwarder;
 
 TEST_CASE("switch_order a late companion route never overtakes frames queued on the wire", "[shm][switch_order]")
@@ -41,7 +46,8 @@ TEST_CASE("switch_order a late companion route never overtakes frames queued on 
     REQUIRE(fwd.attach_for_fanout(order_forwarder::peer{wire, "node-a"}, "t"));
 
     std::uint32_t n = 0;
-    fwd.on_companion_route([&](std::string_view, std::string_view, std::size_t) { return n >= k_switch_at ? &ring : nullptr; });
+    fwd.on_companion_route([&](std::string_view, std::string_view, std::size_t)
+                           { return plexus::io::lane_route<order_channel>{n >= k_switch_at ? &ring : nullptr, true, plexus::io::k_no_reader}; });
     arrival_log expected;
     for(n = 1; n <= k_publishes; ++n)
     {
@@ -115,4 +121,36 @@ TEST_CASE("attach_order the subscriber records its demand before its subscribe l
 
     REQUIRE(fwd.attach(order_forwarder::peer{wire, "node-a"}, "t"));
     REQUIRE(log == arrival_log{"up", "subscribe"});
+}
+
+TEST_CASE("switch_order the switch sends one marker naming the first lane-routed sequence", "[shm][switch_order]")
+{
+    switch_rig rig{[](std::uint32_t n) { return scripted_route{.lane = n >= 4, .fits = true}; }};
+    rig.publish(12);
+
+    REQUIRE(rig.wire.switches().size() == 1);
+    CHECK(rig.ring.frames().front().body == "4");
+    CHECK(rig.wire.switches().front() == rig.ring.frames().front().sequence);
+}
+
+// Moving the subscriber back for an over-cap message would put its next messages on the wire while other readers' copies
+// of them land in the ring it reads.
+TEST_CASE("switch_order an over-cap message after the switch keeps the subscriber on the lane", "[shm][switch_order]")
+{
+    switch_rig rig{[](std::uint32_t n) { return scripted_route{.lane = n >= 4, .fits = n != 6}; }};
+    rig.publish(12);
+
+    CHECK(bodies(rig.wire) == std::vector<std::string>{"1", "2", "3", "6"});
+    CHECK(bodies(rig.ring) == std::vector<std::string>{"4", "5", "7", "8", "9", "10", "11", "12"});
+    CHECK(rig.wire.switches().size() == 1);
+}
+
+TEST_CASE("switch_order a withdrawn lane returns the subscriber to the wire and a new engagement sends a new marker", "[shm][switch_order]")
+{
+    switch_rig rig{[](std::uint32_t n) { return scripted_route{.lane = n >= 4 && (n < 7 || n > 8), .fits = true}; }};
+    rig.publish(12);
+
+    CHECK(bodies(rig.wire) == std::vector<std::string>{"1", "2", "3", "7", "8"});
+    CHECK(bodies(rig.ring) == std::vector<std::string>{"4", "5", "6", "9", "10", "11", "12"});
+    CHECK(rig.wire.switches() == std::vector<std::uint64_t>{rig.sequence_of("4"), rig.sequence_of("9")});
 }

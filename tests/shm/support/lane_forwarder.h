@@ -37,7 +37,7 @@ struct lane_forwarder
         lanes.set_topic_hint("t", io::dispatch_hint::frequent);
         fwd.on_demand_transition([this](std::string_view node, std::string_view fqn, io::demand_transition dir, io::demand_role role) { lanes.on_edge(node, fqn, dir, role); });
         fwd.on_companion_route([this](std::string_view node, std::string_view fqn, std::size_t bytes) { return lanes.companion_for(node, fqn, bytes); });
-        fwd.on_companion({.event_cb = {}, .holds_lane_cb = {}, .lane_cb = [this](std::string_view fqn) { return lanes.lane_for(fqn); }});
+        fwd.on_companion({.event_cb = {}, .switch_cb = {}, .place_cb = {}, .holds_lane_cb = {}, .lane_cb = [this](std::string_view fqn) { return lanes.lane_for(fqn); }});
         fwd.declare("t", qos);
     }
 

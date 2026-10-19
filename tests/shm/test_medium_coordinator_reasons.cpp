@@ -65,7 +65,7 @@ void install(coordinator &c, gate &g)
             {
                 if(++g.calls <= g.declines)
                     return upgrade_receive{g.reason};
-                return upgrade_receive{[held = std::make_unique<lane>()] { (void)held; }};
+                return upgrade_receive{[held = std::make_unique<lane>()](std::uint64_t) { (void)held; }};
             });
     c.set_topic_hint("alpha", plexus::io::dispatch_hint::frequent);
 }
@@ -100,7 +100,7 @@ TEST_CASE("medium_coordinator_reasons a declined lane counts exactly its reason 
 
     engage_demand(c, "peer", "alpha", role);
     REQUIRE(c.fallbacks() == counted(reason, 1));
-    REQUIRE(c.companion_for("peer", "alpha", 1) == nullptr);
+    REQUIRE(!c.companion_for("peer", "alpha", 1).fits);
 }
 
 TEST_CASE("medium_coordinator_reasons a transient decline that later engages counts each transient attempt and no permanent reason", "[shm][medium_coordinator_reasons]")
@@ -115,7 +115,7 @@ TEST_CASE("medium_coordinator_reasons a transient decline that later engages cou
     c.on_companion("peer", "alpha", companion_event::ready);
     REQUIRE(g.calls == 4);
     REQUIRE(c.fallbacks() == counted(fallback_reason::transient, 3));
-    REQUIRE(c.companion_for("peer", "alpha", 1) != nullptr);
+    REQUIRE(c.companion_for("peer", "alpha", 1).fits);
 }
 
 TEST_CASE("medium_coordinator_reasons a pair that stays transient counts every attempt and retries_exhausted once", "[shm][medium_coordinator_reasons]")
@@ -146,5 +146,5 @@ TEST_CASE("medium_coordinator_reasons a demotion of an engaged lane is counted w
     c.count_fallback(fallback_reason::notifier_demoted_denied);
     c.count_fallback(fallback_reason::none);
     REQUIRE(c.fallbacks() == counted(fallback_reason::notifier_demoted_denied, 1));
-    REQUIRE(c.companion_for("peer", "alpha", 1) != nullptr);
+    REQUIRE(c.companion_for("peer", "alpha", 1).fits);
 }

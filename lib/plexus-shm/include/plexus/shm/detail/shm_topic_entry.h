@@ -84,7 +84,7 @@ struct shm_topic_entry
     std::uint32_t producers;
     std::uint32_t consumers;
     bool creator;
-    // Unset, the wake drain discards what it takes.
+    // Unset, the consumer is held: a wake takes nothing until a sink is installed.
     deliver_fn sink;
     std::shared_ptr<waiter_loss> loss;
 
@@ -138,15 +138,8 @@ struct shm_topic_entry
     // share it without racing a second drainer.
     void deliver_pending()
     {
-        if(!channel)
-            return;
-        if(sink)
+        if(channel && sink)
             channel->drain(sink);
-        else
-        {
-            deliver_fn discard = [](::plexus::wire_bytes<shm_slot_owner>) {};
-            channel->drain(discard);
-        }
     }
 };
 

@@ -3,6 +3,7 @@
 
 #include "plexus/io/frame_router.h"
 #include "plexus/io/companion_event.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/subscribe_qos_wire.h"
 
 #include "plexus/io/detail/peer_session_forward.h"
@@ -11,6 +12,7 @@
 
 #include "plexus/graph/topic_record.h"
 
+#include "plexus/wire/frame.h"
 #include "plexus/wire/companion.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/fetch_latched.h"
@@ -103,12 +105,24 @@ void on_fetch_latched_received(Session &s, Forwarder &messages, std::span<const 
 
 // Only a complete session speaks for the peer it proved, so a lane is never moved by a peer that has not.
 template<typename Session, typename Forwarder>
-void on_companion_received(Session &s, Forwarder &messages, std::span<const std::byte> inner, companion_event event)
+void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type, std::span<const std::byte> inner)
 {
     if(!s.is_complete())
         return;
+    if(type == wire::msg_type::companion_switch)
+    {
+        if(auto marker = wire::decode_companion_switch(inner))
+            messages.note_switch(s.msg_peer(), marker->topic_hash, marker->first_sequence);
+        return;
+    }
+    if(type == wire::msg_type::companion_ready)
+    {
+        if(auto ready = wire::decode_companion_ready(inner))
+            messages.note_companion(s.msg_peer(), ready->topic_hash, companion_event::ready, ready->reader);
+        return;
+    }
     if(auto signal = wire::decode_companion(inner))
-        messages.note_companion(s.msg_peer(), signal->topic_hash, event);
+        messages.note_companion(s.msg_peer(), signal->topic_hash, companion_event::withdrawn, k_no_reader);
 }
 
 template<typename Session, typename Forwarder>
@@ -123,8 +137,7 @@ void on_unsubscribe_received(Session &s, Forwarder &messages, std::span<const st
 template<typename Session, typename Forwarder>
 void register_companion_consumers(Session &s, frame_router &router, Forwarder &messages)
 {
-    router.on_companion_ready([&s, &messages](std::span<const std::byte> inner) { on_companion_received(s, messages, inner, companion_event::ready); });
-    router.on_companion_withdrawn([&s, &messages](std::span<const std::byte> inner) { on_companion_received(s, messages, inner, companion_event::withdrawn); });
+    router.on_companion([&s, &messages](wire::msg_type type, std::span<const std::byte> inner) { on_companion_received(s, messages, type, inner); });
     router.on_unsubscribe([&s, &messages](std::span<const std::byte> inner) { on_unsubscribe_received(s, messages, inner); });
 }
 

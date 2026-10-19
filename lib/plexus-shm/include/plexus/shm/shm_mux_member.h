@@ -28,7 +28,6 @@
 
 #include "plexus/detail/compat.h"
 
-#include <span>
 #include <array>
 #include <memory>
 #include <string>
@@ -137,10 +136,15 @@ public:
     // on_frame as the entry's consumer sink. Returns an RAII handle whose destruction clears the sink and releases its hold
     // (the last release unmaps); nullptr when no ring exists yet or on a broker failure. The framed bytes are header-on, so
     // the caller feeds them into the SAME receive entry the wire session feeds. lost runs if the ring's waiter is lost.
-    std::unique_ptr<consumer_type> mint_receive_companion(const std::string &fqn, const node_id &publisher,
-                                                          plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame, waiter_loss::lost_fn lost)
+    std::unique_ptr<consumer_type> mint_receive_companion(const std::string &fqn, const node_id &publisher, waiter_loss::lost_fn lost)
     {
-        return detail::companion_receive(*this, fqn, publisher, std::move(on_frame), std::move(lost));
+        return detail::companion_receive(*this, fqn, publisher, std::move(lost));
+    }
+
+    // Places a reader of the fqn's send ring at the newest message this node wrote; false when it cannot.
+    plexus::detail::move_only_function<bool(std::uint32_t)> companion_place(const std::string &fqn)
+    {
+        return [this, fqn](std::uint32_t reader) { return detail::companion_place(*this, fqn, reader); };
     }
 
     // The node binds its own id and universe before any ring is minted: its send rings carry its id, and every ring name

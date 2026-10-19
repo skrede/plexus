@@ -6,6 +6,7 @@
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 
+#include "plexus/io/detail/upgrade_hints.h"
 #include "plexus/io/detail/upgrade_lanes.h"
 #include "plexus/io/detail/upgrade_send_lanes.h"
 #include "plexus/io/detail/upgrade_receive_lanes.h"
@@ -15,9 +16,9 @@
 #include <chrono>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <string_view>
-#include <unordered_map>
 
 namespace plexus::io {
 
@@ -61,12 +62,9 @@ public:
         m_policy = std::move(policy);
     }
 
-    // The node's own publisher and subscriber hints accumulate per fqn; no hint rides the wire.
     void set_topic_hint(std::string_view fqn, dispatch_hint hint)
     {
-        auto [it, inserted] = m_hints.try_emplace(std::string{fqn}, hint);
-        if(!inserted)
-            it->second = it->second | hint;
+        detail::upgrade_hints::note(*this, fqn, hint);
     }
 
     // A publisher's up-edge offers the peer its send lane; a subscriber's records the demand its publisher's offer may
@@ -79,16 +77,26 @@ public:
             detail::upgrade_lanes::down(*this, node_name, fqn, role);
     }
 
-    void on_companion(std::string_view node_name, std::string_view fqn, companion_event event)
+    void on_companion(std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader = k_no_reader)
     {
-        if(event == companion_event::offered || event == companion_event::not_offered)
-            detail::upgrade_lanes::offer(*this, node_name, fqn, event == companion_event::offered);
-        else
-            detail::upgrade_lanes::answer(*this, node_name, fqn, event);
+        detail::upgrade_lanes::hear(*this, node_name, fqn, event, reader);
     }
 
-    // The subscriber's ready and withdrawn answers leave through this; unset, nothing is answered.
-    void on_companion_send(plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event)> send)
+    // A medium with no placement verb switches its holders without placing them.
+    bool place(std::string_view fqn, std::uint32_t reader)
+    {
+        detail::send_lane<Channel> *lane = detail::find_send_lane(m_send, fqn);
+        return lane != nullptr && (!lane->place || (reader != k_no_reader && lane->place(reader)));
+    }
+
+    // A publisher's marker resumes the receive lane it names from the first sequence it routes over it.
+    void on_switch(std::string_view node_name, std::string_view fqn, std::uint64_t first_sequence)
+    {
+        detail::resume_receive_lane(m_receive, node_name, fqn, first_sequence);
+    }
+
+    // The subscriber's ready, naming its reader slot, and withdrawn answers leave through this; unset, nothing is answered.
+    void on_companion_send(plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, std::uint32_t)> send)
     {
         m_companion_send_cb = std::move(send);
     }
@@ -104,8 +112,8 @@ public:
         return detail::offered(m_send, node_name, fqn);
     }
 
-    // The lane's channel when the peer answered ready and this message fits, else nullptr so it keeps the wire.
-    Channel *companion_for(std::string_view node_name, std::string_view fqn, std::size_t bytes)
+    // The lane once the peer answered ready, and whether this message fits it; no lane keeps the pair on the wire.
+    lane_route<Channel> companion_for(std::string_view node_name, std::string_view fqn, std::size_t bytes)
     {
         return detail::route_send_lane(m_send, node_name, fqn, bytes);
     }
@@ -171,27 +179,17 @@ private:
     detail::upgrade_retry m_retry;
     detail::receive_lanes m_receive;
     detail::send_lanes<Channel> m_send;
-    std::unordered_map<std::string, dispatch_hint> m_hints;
+    detail::upgrade_hint_table m_hints;
     plexus::detail::move_only_function<upgrade_mint<Channel>(std::string_view)> m_mint;
     plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> m_receive_mint;
     plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
     plexus::detail::move_only_function<void(std::chrono::milliseconds)> m_schedule_retry_cb;
     plexus::detail::move_only_function<void(Channel &)> m_lane_released_cb;
-    plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event)> m_companion_send_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, std::uint32_t)> m_companion_send_cb;
 
+    friend struct detail::upgrade_hints;
     friend struct detail::upgrade_lanes;
     friend struct detail::upgrade_send_lanes;
-
-    bool run_policy(bool same_host, dispatch_hint own_hint)
-    {
-        return m_policy ? m_policy(same_host, own_hint) : (same_host && any_set(own_hint));
-    }
-
-    dispatch_hint hint_for(std::string_view fqn) const
-    {
-        auto it = m_hints.find(std::string{fqn});
-        return it == m_hints.end() ? dispatch_hint::none : it->second;
-    }
 };
 
 }

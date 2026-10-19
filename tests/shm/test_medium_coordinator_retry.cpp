@@ -61,7 +61,7 @@ void install(coordinator &c, flaky_gate &gate, std::vector<milliseconds> &wakes)
             {
                 if(++gate.calls <= gate.declines)
                     return upgrade_receive{gate.reason};
-                return upgrade_receive{[lane = std::make_unique<counted_lane>(gate.live)] { (void)lane; }};
+                return upgrade_receive{[lane = std::make_unique<counted_lane>(gate.live)](std::uint64_t) { (void)lane; }};
             });
     c.set_retry_scheduler([&wakes](milliseconds delay) { wakes.push_back(delay); });
     c.set_topic_hint("alpha", plexus::io::dispatch_hint::frequent);
@@ -115,7 +115,7 @@ TEST_CASE("medium_coordinator_retry a gate that stays transient stops at the att
         c.on_retry_due();
     REQUIRE(wakes == backoff(plexus::io::detail::k_retry_attempts));
     REQUIRE(gate.calls == plexus::io::detail::k_retry_attempts + 1);
-    REQUIRE(c.companion_for("peer", "alpha", 1) == nullptr);
+    REQUIRE(!c.companion_for("peer", "alpha", 1).fits);
 }
 
 TEST_CASE("medium_coordinator_retry a permanent decline is never re-attempted", "[shm][medium_coordinator_retry]")

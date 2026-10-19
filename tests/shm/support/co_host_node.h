@@ -4,6 +4,7 @@
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
+#include "plexus/asio/stream_socket_options.h"
 
 #include "plexus/asio/shm/shm_member.h"
 
@@ -18,6 +19,7 @@
 #include "plexus/io/reliability.h"
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/egress_capacity.h"
 
 #include "plexus/node.h"
 #include "plexus/node_id.h"
@@ -68,13 +70,13 @@ inline plexus::node_id co_host_id(std::uint8_t seed)
 // One same-host node on its own io_context, so a case can run one node while another is left unread.
 struct co_host_node
 {
-    co_host_node(const std::string &name, std::uint8_t seed, const std::string &region_ns)
+    co_host_node(const std::string &name, std::uint8_t seed, const std::string &region_ns, plexus::asio::stream_socket_options sockets = {})
             : io()
             , broker()
             , disc(std::vector<plexus::discovery::service_info>{})
             , shm(plexus::asio::shm::make_shm_member(io, broker, plexus::io::reliability::reliable, plexus::io::congestion::block, region_ns))
             , local(io)
-            , remote(io)
+            , remote(io, {}, true, plexus::io::congestion::block, plexus::io::egress_capacity::bounded_default(), sockets)
             , node(io, disc, co_host_id(seed), shm, local, remote, co_host_options(name))
     {
     }

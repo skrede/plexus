@@ -60,7 +60,7 @@ struct lane_end
             , c(registry)
     {
         c.on_gate([this](std::string_view) { return mint(); });
-        c.on_receive_gate([this](std::string_view, std::string_view) { return io::upgrade_receive{[lane = std::make_unique<counted_lane>(receives)] { (void)lane; }}; });
+        c.on_receive_gate([this](std::string_view, std::string_view) { return io::upgrade_receive{[lane = std::make_unique<counted_lane>(receives)](std::uint64_t) { (void)lane; }}; });
         c.on_lane_released(
                 [this](counted_lane &)
                 {

@@ -7,11 +7,15 @@
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 
+#include "plexus/wire/detail/data_frame_codec.h"
+
 #include <span>
 #include <string>
 #include <memory>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
+#include <optional>
 #include <type_traits>
 #include <string_view>
 
@@ -81,14 +85,26 @@ io::upgrade_mint<typename Engine::channel_type> mint_send_lane(Engine &engine, M
     if(!ch)
         return io::upgrade_mint<typename Engine::channel_type>{member.last_fallback_reason()};
     auto fits = member.companion_route(key);
-    return {wrap_companion<typename Engine::channel_type>(std::move(ch)), std::move(fits)};
+    return {wrap_companion<typename Engine::channel_type>(std::move(ch)), std::move(fits), member.companion_place(key)};
+}
+
+// Each frame from the marker's sequence on is injected into the matching peer session, resolved by node_name, on an
+// executor turn with no drain thread; the frames below it reached the subscriber over the wire.
+template<typename Engine>
+plexus::detail::move_only_function<void(std::span<const std::byte>)> deliver_from(Engine &engine, std::string peer, std::uint64_t first_sequence)
+{
+    return [&engine, peer = std::move(peer), first_sequence](std::span<const std::byte> frame)
+    {
+        const std::optional<std::uint64_t> sequence = wire::framed_sequence(frame);
+        if(sequence && *sequence >= first_sequence)
+            engine.inject_upgrade_receive(peer, frame);
+    };
 }
 
 // The publisher's ring is named by the identity its session proved, never by the slot key, which on an accepted session
-// is provisional; a session not yet complete declines as transient. Each drained frame is injected into the matching peer
-// session, resolved by node_name, on an executor turn with no drain thread. The returned owner is never called: dropping
-// it on peer-dead runs the RAII handle's dtor (clear sink, release ring). A null handle declines with the member's reason
-// and the subscriber keeps the wire.
+// is provisional; a session not yet complete declines as transient. The handle takes nothing and gates nothing until the
+// publisher places its reader slot and its marker resumes it. Dropping the owner on peer-dead runs the RAII handle's dtor
+// (clear sink, release ring). A null handle declines with the member's reason and the subscriber keeps the wire.
 template<typename Engine, typename Member>
 io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::string_view node_name, std::string_view fqn)
 {
@@ -96,11 +112,12 @@ io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::strin
     if(session == nullptr || !session->is_complete())
         return io::upgrade_receive{io::fallback_reason::transient};
     const std::string key{fqn};
-    auto deliver = [&engine, peer = std::string{node_name}](std::span<const std::byte> frame) { engine.inject_upgrade_receive(peer, frame); };
-    auto handle  = member.mint_receive_companion(key, session->peer_identity(), std::move(deliver), drop_lanes_on_loss(engine, key));
+    auto handle = member.mint_receive_companion(key, session->peer_identity(), drop_lanes_on_loss(engine, key));
     if(!handle)
         return io::upgrade_receive{member.last_fallback_reason()};
-    return io::upgrade_receive{[h = std::move(handle)]() mutable { (void)h; }};
+    const std::uint32_t reader = handle->reader_slot();
+    return io::upgrade_receive{[&engine, peer = std::string{node_name}, h = std::move(handle)](std::uint64_t first_sequence) mutable
+                               { h->resume(deliver_from(engine, peer, first_sequence)); }, reader};
 }
 
 // The member's registry reports each lost waiter and each notifier demotion, which the coordinator counts beside the

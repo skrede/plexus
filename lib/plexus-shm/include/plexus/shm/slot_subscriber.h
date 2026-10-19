@@ -32,6 +32,11 @@ public:
     };
     static constexpr adopt_cursor_t adopt_cursor{};
 
+    struct hold_cursor_t
+    {
+    };
+    static constexpr hold_cursor_t hold_cursor{};
+
     explicit slot_subscriber(broadcast_ring &ring, std::uint32_t spin_budget = default_spin_budget) noexcept
             : m_ring(ring)
             , m_spin_budget(spin_budget)
@@ -47,14 +52,29 @@ public:
         }
     }
 
-    // Takes over a cursor index the caller has already claimed on the ring.
+    // Takes over a cursor index the caller has already claimed on the ring, gating from the producer's tail.
     slot_subscriber(broadcast_ring &ring, adopt_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget) noexcept
+            : slot_subscriber(ring, hold_cursor, cursor_index, spin_budget)
+    {
+        m_ring.publish_cursor(m_cursor_index, m_cursor);
+    }
+
+    // Takes over a claimed cursor index that gates nothing until the producer places it or resume starts it.
+    slot_subscriber(broadcast_ring &ring, hold_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget) noexcept
             : m_ring(ring)
             , m_spin_budget(spin_budget)
             , m_cursor_index(cursor_index)
             , m_cursor(ring.tail_position())
             , m_registered(true)
     {
+    }
+
+    // Reads from where the producer placed the cursor, else from where it attached; a take that finds that position
+    // overwritten jumps to the producer's tail.
+    void resume() noexcept
+    {
+        if(const std::uint64_t placed = m_ring.header().cursors[m_cursor_index].position.load(std::memory_order_acquire); placed != k_cursor_idle)
+            m_cursor = placed;
         m_ring.publish_cursor(m_cursor_index, m_cursor);
     }
 

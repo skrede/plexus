@@ -150,7 +150,7 @@ struct receive_recorder
         if(!accept)
             return {};
         attached.emplace_back(std::string{node_name}, std::string{fqn});
-        return {[h = handle{&live}]() mutable { (void)h; }};
+        return {[h = handle{&live}](std::uint64_t) mutable { (void)h; }};
     }
 
     std::size_t attaches() const
@@ -225,7 +225,7 @@ TEST_CASE("shm.coordinator a gate decline (broker failure) falls back to the wir
     // The policy returned true, but the mint declined — the coordinator holds nothing and
     // the pair falls back to the wire. The companion route returns nullptr for it.
     REQUIRE(gate.mints() == 0);
-    REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
+    REQUIRE(!c.companion_for("node-a", "alpha", 1).fits);
 }
 
 TEST_CASE("shm.coordinator the per-message companion route: a fitting message rides the ring, "
@@ -247,12 +247,12 @@ TEST_CASE("shm.coordinator the per-message companion route: a fitting message ri
 
     // A message at or under the cap routes to the companion ring; an over-cap message keeps
     // the wire (nullptr). The dual-delivery per-message decision is route_message_medium.
-    REQUIRE(c.companion_for("node-a", "alpha", 1024) != nullptr);
-    REQUIRE(c.companion_for("node-a", "alpha", 4096) != nullptr);
-    REQUIRE(c.companion_for("node-a", "alpha", 4097) == nullptr);
+    REQUIRE(c.companion_for("node-a", "alpha", 1024).fits);
+    REQUIRE(c.companion_for("node-a", "alpha", 4096).fits);
+    REQUIRE(!c.companion_for("node-a", "alpha", 4097).fits);
     // An un-minted (peer, topic) is always the wire.
-    REQUIRE(c.companion_for("node-a", "beta", 1) == nullptr);
-    REQUIRE(c.companion_for("node-z", "alpha", 1) == nullptr);
+    REQUIRE(!c.companion_for("node-a", "beta", 1).fits);
+    REQUIRE(!c.companion_for("node-z", "alpha", 1).fits);
 }
 
 TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting message (no cap "
@@ -268,8 +268,8 @@ TEST_CASE("shm.coordinator a reliable_preserving companion carries every fitting
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     c.on_companion("node-a", "alpha", companion_event::ready);
-    REQUIRE(c.companion_for("node-a", "alpha", 1) != nullptr);
-    REQUIRE(c.companion_for("node-a", "alpha", 1u << 20) != nullptr);
+    REQUIRE(c.companion_for("node-a", "alpha", 1).fits);
+    REQUIRE(c.companion_for("node-a", "alpha", 1u << 20).fits);
 }
 
 TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges no-op", "[shm][coordinator]")
@@ -290,7 +290,7 @@ TEST_CASE("shm.coordinator the 1->0 edge drops the companion; intermediate edges
     c.on_edge("node-a", "alpha", demand_transition::down,
               demand_role::publisher); // 1->0: drop (the forwarder gates the count)
     REQUIRE(gate.live == 0);           // the companion ring released
-    REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
+    REQUIRE(!c.companion_for("node-a", "alpha", 1).fits);
 }
 
 TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that peer", "[shm][coordinator]")
@@ -309,7 +309,7 @@ TEST_CASE("shm.coordinator a peer-dead event drops every companion held for that
 
     c.on_peer_dead("node-a");
     REQUIRE(gate.live == 0); // both companion rings dropped on peer-dead
-    REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
+    REQUIRE(!c.companion_for("node-a", "alpha", 1).fits);
 }
 
 TEST_CASE("shm.coordinator a co-host SUBSCRIBER attaches the offered receive companion, not a send mint", "[shm][coordinator]")
@@ -333,7 +333,7 @@ TEST_CASE("shm.coordinator a co-host SUBSCRIBER attaches the offered receive com
     REQUIRE(gate.mints() == 0);                   // NO send companion on the subscriber side
     REQUIRE(rgate.attached[0].first == "node-a"); // keyed by the peer node_name
     REQUIRE(rgate.attached[0].second == "alpha");
-    REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr); // no send channel for a receive ring
+    REQUIRE(!c.companion_for("node-a", "alpha", 1).fits); // no send channel for a receive ring
 }
 
 TEST_CASE("shm.coordinator the subscriber receive companion detaches on 1->0 and on peer-dead", "[shm][coordinator]")
@@ -375,7 +375,7 @@ TEST_CASE("shm.coordinator a subscriber edge with no receive gate keeps only the
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::subscriber);
     c.on_companion("node-a", "alpha", companion_event::offered);
     c.on_edge("node-a", "alpha", demand_transition::down, demand_role::subscriber);
-    REQUIRE(c.companion_for("node-a", "alpha", 1) == nullptr);
+    REQUIRE(!c.companion_for("node-a", "alpha", 1).fits);
 }
 
 TEST_CASE("shm.coordinator the default policy auto-engages; an override can disable the upgrade", "[shm][coordinator]")

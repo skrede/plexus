@@ -11,8 +11,8 @@
 
 namespace plexus::shm::detail {
 
-// The entry's wake-drain hands each pending message here instead of discarding; any
-// already-queued message is delivered NOW so a late-attaching consumer misses nothing.
+// The entry's wake-drain hands each pending message here. Installing it resumes the reader where the producer placed it,
+// else where it attached, and delivers what the ring already holds from there.
 template<typename Entry>
 void topic_set_sink(shm_topic_map<Entry> &entries, const shm_topic_key &key, typename Entry::deliver_fn sink)
 {
@@ -20,6 +20,8 @@ void topic_set_sink(shm_topic_map<Entry> &entries, const shm_topic_key &key, typ
     if(it == entries.end())
         return;
     it->second->sink = std::move(sink);
+    if(it->second->channel)
+        it->second->channel->resume_subscriber();
     it->second->deliver_pending();
 }
 

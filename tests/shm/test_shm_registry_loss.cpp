@@ -107,7 +107,7 @@ TEST_CASE("registry_loss each holder watching a lost waiter is told once and the
         receive.reset();
     };
     send    = shm.mint_companion(fqn, drop_send);
-    receive = shm.mint_receive_companion(fqn, shm.self_id(), [](std::span<const std::byte>) {}, drop_receive);
+    receive = shm.mint_receive_companion(fqn, shm.self_id(), drop_receive);
     REQUIRE(send);
     REQUIRE(receive);
     io.run();
@@ -136,7 +136,7 @@ TEST_CASE("registry_loss a holder an earlier told holder released is not told", 
         receive.reset();
     };
     send    = shm.mint_companion(fqn, drop_both);
-    receive = shm.mint_receive_companion(fqn, shm.self_id(), [](std::span<const std::byte>) {}, [&receive_told] { ++receive_told; });
+    receive = shm.mint_receive_companion(fqn, shm.self_id(), [&receive_told] { ++receive_told; });
     io.run();
 
     CHECK(send_told == 1);

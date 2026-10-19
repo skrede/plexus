@@ -117,7 +117,8 @@ public:
 
     void send(std::span<const std::byte> data)
     {
-        m_carried.push_back(m_kind);
+        if(plexus::wire::decode_header(data)->type == plexus::wire::msg_type::unidirectional)
+            m_carried.push_back(m_kind);
         m_last_len  = data.size();
         m_last_hash = fnv1a(data);
         if(m_kind == medium::shm && m_ring != nullptr)
@@ -165,8 +166,7 @@ public:
         return m_last_hash;
     }
 
-    // Forget pre-publish control traffic (the subscribe_response the attach emits over
-    // the wire channel) so the carried tally counts only data publishes.
+    // Forget what was carried before a round; a control frame, a switch marker included, is never tallied.
     void reset()
     {
         m_carried.clear();
@@ -324,10 +324,10 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     // is the recommended reversible default from the plan: the wire stays the recorded
     // channel, the ring is an additive consult.
     fwd.on_companion_route(
-            [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *
+            [&](std::string_view, std::string_view route_fqn, std::size_t bytes)
             {
                 const auto g = member.resolved_geometry_for(std::string{route_fqn});
-                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm ? &shm_tap : nullptr;
+                return plexus::io::lane_route<tap_channel>{&shm_tap, pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm, plexus::io::k_no_reader};
             });
 
     forwarder::peer p{wire_tap, "peer-node"};
@@ -403,7 +403,7 @@ TEST_CASE("shm.wire_fallback a ring-less subscriber receives BOTH messages over 
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     // The companion is ABSENT: the hook always declines (nullptr), so the forwarder keeps
     // every message on the recorded wire sub.channel — never a dropped large message.
-    fwd.on_companion_route([](std::string_view, std::string_view, std::size_t) -> tap_channel * { return nullptr; });
+    fwd.on_companion_route([](std::string_view, std::string_view, std::size_t) { return plexus::io::lane_route<tap_channel>{nullptr, false, plexus::io::k_no_reader}; });
 
     forwarder::peer p{wire_tap, "peer-node"};
     fwd.attach_for_fanout(p, fqn);
@@ -442,10 +442,10 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     forwarder fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
     fwd.on_companion_route(
-            [&](std::string_view, std::string_view route_fqn, std::size_t bytes) -> tap_channel *
+            [&](std::string_view, std::string_view route_fqn, std::size_t bytes)
             {
                 const auto g = member.resolved_geometry_for(std::string{route_fqn});
-                return pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm ? &shm_tap : nullptr;
+                return plexus::io::lane_route<tap_channel>{&shm_tap, pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm, plexus::io::k_no_reader};
             });
 
     forwarder::peer p{wire_tap, "peer-node"};

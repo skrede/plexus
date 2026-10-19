@@ -61,7 +61,8 @@ void teardown_shm_self_carrier(Node &n, const std::string &fqn)
 }
 
 // The read half: a consumer registration on the node's own publisher ring, type-erased so the node holds one map value
-// type; dropping it clears the sink and releases the ring.
+// type; dropping it clears the sink and releases the ring. It is resumed at its attach, since the node's own subscriber
+// receives no wire copy.
 template<typename Node>
 std::shared_ptr<void> mint_self_reader(Node &n, const std::string &fqn)
 {
@@ -69,8 +70,10 @@ std::shared_ptr<void> mint_self_reader(Node &n, const std::string &fqn)
     for_each_shm_member(n,
                         [&](auto &m)
                         {
-                            auto deliver = [&n, fqn](std::span<const std::byte> framed) { self_carrier_bytes(n, fqn, framed); };
-                            reader       = std::shared_ptr<void>{m.mint_receive_companion(fqn, m.self_id(), std::move(deliver), [&n, fqn] { teardown_shm_self_carrier(n, fqn); })};
+                            auto held = m.mint_receive_companion(fqn, m.self_id(), [&n, fqn] { teardown_shm_self_carrier(n, fqn); });
+                            if(held)
+                                held->resume([&n, fqn](std::span<const std::byte> framed) { self_carrier_bytes(n, fqn, framed); });
+                            reader = std::shared_ptr<void>{std::move(held)};
                         });
     return reader;
 }

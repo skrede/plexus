@@ -27,7 +27,7 @@ shm::acquire_result topic_reacquire(Entry &e, shm::ring_role role, Report &repor
     }
     if(role != shm::ring_role::producer && e.consumers == 0)
     {
-        if(const shm::acquire_failure bound = topic_engage_consumer(e, report); bound.bound != shm::acquire_bound::none)
+        if(const shm::acquire_failure bound = topic_engage_consumer(e, report, role == shm::ring_role::consumer); bound.bound != shm::acquire_bound::none)
         {
             e.disengage_consumer();
             failure = bound;

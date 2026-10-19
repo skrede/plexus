@@ -23,6 +23,7 @@ namespace plexus::io::detail {
 struct lane_holder
 {
     std::string node_name;
+    std::uint32_t reader;
     bool ready;
 };
 
@@ -37,6 +38,7 @@ struct send_lane
     std::vector<lane_holder> holders;
     std::unique_ptr<Channel> channel;
     plexus::detail::move_only_function<bool(std::size_t)> fits;
+    plexus::detail::move_only_function<bool(std::uint32_t)> place;
 };
 
 template<typename Channel>
@@ -76,16 +78,16 @@ Channel *send_lane_channel(const send_lanes<Channel> &lanes, std::string_view fq
     return lane == nullptr || (self_only && lane->self_holds == 0) ? nullptr : lane->channel.get();
 }
 
-// The lane's channel for a holder that answered ready when the message fits, else nullptr so the pair keeps the wire.
-// Taken mutably: fits is a move_only_function with a non-const call operator.
+// The lane's channel for a holder that answered ready, and whether this message fits it; with no lane the pair keeps the
+// wire. Taken mutably: fits is a move_only_function with a non-const call operator.
 template<typename Channel>
-Channel *route_send_lane(send_lanes<Channel> &lanes, std::string_view node_name, std::string_view fqn, std::size_t bytes)
+lane_route<Channel> route_send_lane(send_lanes<Channel> &lanes, std::string_view node_name, std::string_view fqn, std::size_t bytes)
 {
     send_lane<Channel> *lane  = find_send_lane(lanes, fqn);
     const lane_holder *holder = lane == nullptr ? nullptr : find_holder(lane->holders, node_name);
     if(holder == nullptr || !holder->ready)
-        return nullptr;
-    return (lane->fits && lane->fits(bytes)) ? lane->channel.get() : nullptr;
+        return {.lane = nullptr, .fits = false, .reader = k_no_reader};
+    return {.lane = lane->channel.get(), .fits = lane->fits && lane->fits(bytes), .reader = holder->reader};
 }
 
 // The coordinator's send-lane bodies, befriended as one. Every path that destroys a lane goes through release.
@@ -101,7 +103,8 @@ struct upgrade_send_lanes
         auto minted = c.m_mint(fqn);
         if(!minted.channel)
             return minted.reason;
-        c.m_send.push_back({.fqn = std::string{fqn}, .self_holds = 0, .holders = {}, .channel = std::move(minted.channel), .fits = std::move(minted.fits)});
+        c.m_send.push_back(
+                {.fqn = std::string{fqn}, .self_holds = 0, .holders = {}, .channel = std::move(minted.channel), .fits = std::move(minted.fits), .place = std::move(minted.place)});
         for(const std::string &node_name : c.m_retry.take_waiting(fqn, demand_role::publisher))
             join(c, node_name, fqn);
         return fallback_reason::none;
@@ -116,7 +119,7 @@ struct upgrade_send_lanes
         if(lane == nullptr)
             return reason;
         if(find_holder(lane->holders, node_name) == nullptr)
-            lane->holders.push_back({.node_name = std::string{node_name}, .ready = false});
+            lane->holders.push_back({.node_name = std::string{node_name}, .reader = k_no_reader, .ready = false});
         return fallback_reason::none;
     }
 

@@ -78,6 +78,17 @@ bool reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::u
     return true;
 }
 
+// Places a claimed reader that has not read yet at position; one already placed or reading keeps its position. False
+// when the cursor is not claimed.
+inline bool place_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, std::uint64_t position) noexcept
+{
+    if(index >= consumer_capacity || h.cursors[index].active.load(std::memory_order_acquire) != 1)
+        return false;
+    std::uint64_t idle = k_cursor_idle;
+    h.cursors[index].position.compare_exchange_strong(idle, position, std::memory_order_acq_rel);
+    return true;
+}
+
 // Released so the producer's reclamation gate observes it.
 inline void publish_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, std::uint64_t position) noexcept
 {

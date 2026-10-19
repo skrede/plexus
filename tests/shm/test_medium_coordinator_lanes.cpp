@@ -46,11 +46,11 @@ TEST_CASE("medium_coordinator_lanes an offered peer routes over the lane only on
     lane_end p;
     p.offer("a");
     p.offer("b");
-    REQUIRE(p.c.companion_for("a", "alpha", 1) == nullptr);
+    REQUIRE(!p.c.companion_for("a", "alpha", 1).fits);
 
     p.c.on_companion("a", "alpha", companion_event::ready);
-    REQUIRE(p.c.companion_for("a", "alpha", 1) == p.c.lane_for("alpha"));
-    REQUIRE(p.c.companion_for("b", "alpha", 1) == nullptr);
+    REQUIRE(p.c.companion_for("a", "alpha", 1).lane == p.c.lane_for("alpha"));
+    REQUIRE(!p.c.companion_for("b", "alpha", 1).fits);
 }
 
 TEST_CASE("medium_coordinator_lanes the lane outlives one holder's withdrawal while another holder remains", "[shm][medium_coordinator_lanes]")
@@ -65,7 +65,7 @@ TEST_CASE("medium_coordinator_lanes the lane outlives one holder's withdrawal wh
     REQUIRE(p.live == 1);
     REQUIRE(p.released == 0);
     REQUIRE_FALSE(p.c.offers("b", "alpha"));
-    REQUIRE(p.c.companion_for("a", "alpha", 1) != nullptr);
+    REQUIRE(p.c.companion_for("a", "alpha", 1).fits);
     REQUIRE(p.c.fallbacks()[static_cast<std::size_t>(fallback_reason::withdrawn)] == 1);
 }
 
@@ -140,7 +140,7 @@ TEST_CASE("medium_coordinator_lanes the lane survives the node's own release whi
     REQUIRE(p.live == 1);
     REQUIRE(p.released == 0);
     REQUIRE((p.c.self_channel("alpha") == nullptr) == self_first);
-    REQUIRE((p.c.companion_for("a", "alpha", 1) == nullptr) != self_first);
+    REQUIRE((!p.c.companion_for("a", "alpha", 1).fits) != self_first);
 }
 
 TEST_CASE("medium_coordinator_lanes a lane minted on a re-attempt serves every peer still waiting", "[shm][medium_coordinator_lanes]")

@@ -58,16 +58,20 @@ template<typename Forwarder, typename Coordinator, typename Registry>
 void install_companion_sinks(Forwarder &messages, Coordinator &coordinator, Registry &registry)
 {
     using channel_type = typename Coordinator::channel_type;
-    messages.on_companion({.event_cb      = [&coordinator](std::string_view node_name, std::string_view fqn, companion_event event) { coordinator.on_companion(node_name, fqn, event); },
+    messages.on_companion({.event_cb = [&coordinator](std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
+                           { coordinator.on_companion(node_name, fqn, event, reader); },
+                           .switch_cb     = [&coordinator](std::string_view node_name, std::string_view fqn, std::uint64_t first) { coordinator.on_switch(node_name, fqn, first); },
+                           .place_cb      = [&coordinator](std::string_view fqn, std::uint32_t reader) { return coordinator.place(fqn, reader); },
                            .holds_lane_cb = [&coordinator](std::string_view node_name, std::string_view fqn) { return coordinator.offers(node_name, fqn); },
                            .lane_cb       = [&coordinator](std::string_view fqn) { return coordinator.lane_for(fqn); }});
+    messages.on_companion_route([&coordinator](std::string_view node_name, std::string_view fqn, std::size_t bytes) { return coordinator.companion_for(node_name, fqn, bytes); });
     coordinator.on_lane_released([&messages](channel_type &channel) { messages.forget_channel(channel); });
     coordinator.on_companion_send(
-            [&messages, &registry](std::string_view node_name, std::string_view fqn, companion_event event)
+            [&messages, &registry](std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
             {
                 const auto *session = registry.session_for_name(node_name);
                 if(session != nullptr && session->is_complete())
-                    messages.send_companion(session->msg_peer(), fqn, event);
+                    messages.send_companion(session->msg_peer(), fqn, event, reader);
             });
 }
 
@@ -91,8 +95,6 @@ void install_routing_sinks(Engine &e)
     e.m_messages.on_qos_change(make_qos_change_sink(e));
     e.m_messages.on_demand_transition([&e](std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
                                       { e.m_coordinator.on_edge(node_name, fqn, dir, role); });
-    e.m_messages.on_companion_route([&e](std::string_view node_name, std::string_view fqn, std::size_t bytes) -> channel_type *
-                                    { return e.m_coordinator.companion_for(node_name, fqn, bytes); });
     install_companion_sinks(e.m_messages, e.m_coordinator, e.m_registry);
     e.m_messages.set_capture_wants_payload([&e](std::uint64_t hash) { return e.m_capture.wants_payload(hash, wire::now_timestamp_ns()); });
     // The table copies the borrowed names in and reject-and-counts on overflow, so a peer flooding

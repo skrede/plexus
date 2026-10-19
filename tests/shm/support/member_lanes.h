@@ -51,7 +51,7 @@ struct member_lanes
 
     bool engaged()
     {
-        return lanes.companion_for("peer", topic, 1) != nullptr;
+        return lanes.companion_for("peer", topic, 1).fits;
     }
 
     member_type member;

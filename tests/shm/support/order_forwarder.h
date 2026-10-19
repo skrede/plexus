@@ -6,9 +6,12 @@
 #include "plexus/io/message_forwarder.h"
 
 #include "plexus/wire/frame.h"
+#include "plexus/wire/companion.h"
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/frame_codec.h"
+
+#include "plexus/wire/detail/data_frame_codec.h"
 
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
@@ -20,6 +23,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <functional>
 #include <system_error>
 
@@ -39,6 +43,22 @@ inline std::string arrival_of(std::span<const std::byte> frame)
     return data ? std::string{reinterpret_cast<const char *>(data->data.data()), data->data.size()} : std::string{};
 }
 
+// The first sequence a switch marker names; nullopt for any other frame.
+inline std::optional<std::uint64_t> switch_of(std::span<const std::byte> frame)
+{
+    const auto header = plexus::wire::decode_header(frame);
+    if(!header || header->type != plexus::wire::msg_type::companion_switch)
+        return std::nullopt;
+    const auto marker = plexus::wire::decode_companion_switch(frame.subspan(plexus::wire::header_size));
+    return marker ? std::optional<std::uint64_t>{marker->first_sequence} : std::nullopt;
+}
+
+struct carried_frame
+{
+    std::string body;
+    std::uint64_t sequence;
+};
+
 // A banded channel whose backpressure the test controls; it appends every frame it is handed to a log both channels
 // share, so the log reads in the order the subscriber would see the frames.
 struct order_channel
@@ -48,14 +68,19 @@ struct order_channel
             , m_carried(0)
             , m_log(log)
             , m_occupancy(occupancy)
+            , m_frames()
+            , m_switches()
     {
     }
 
     void send(std::span<const std::byte> frame)
     {
+        if(const std::optional<std::uint64_t> first = switch_of(frame))
+            m_switches.push_back(*first);
         if(std::string arrival = arrival_of(frame); !arrival.empty())
         {
-            m_log.get().push_back(std::move(arrival));
+            m_log.get().push_back(arrival);
+            m_frames.push_back({std::move(arrival), plexus::wire::framed_sequence(frame).value_or(0)});
             ++m_carried;
         }
     }
@@ -63,6 +88,17 @@ struct order_channel
     std::size_t carried() const noexcept
     {
         return m_carried;
+    }
+
+    // What this channel carried, in order, and the first sequence of each switch marker sent on it.
+    const std::vector<carried_frame> &frames() const noexcept
+    {
+        return m_frames;
+    }
+
+    const std::vector<std::uint64_t> &switches() const noexcept
+    {
+        return m_switches;
     }
 
     void close()
@@ -105,6 +141,8 @@ private:
     std::size_t m_carried;
     std::reference_wrapper<arrival_log> m_log;
     std::reference_wrapper<std::size_t> m_occupancy;
+    std::vector<carried_frame> m_frames;
+    std::vector<std::uint64_t> m_switches;
 };
 
 struct order_executor

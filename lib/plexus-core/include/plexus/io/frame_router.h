@@ -20,8 +20,9 @@ namespace plexus::io {
 class frame_router
 {
 public:
-    using consumer      = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
-    using data_consumer = plexus::detail::move_only_function<void(const wire::frame_header &, std::span<const std::byte>)>;
+    using consumer           = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
+    using data_consumer      = plexus::detail::move_only_function<void(const wire::frame_header &, std::span<const std::byte>)>;
+    using companion_consumer = plexus::detail::move_only_function<void(wire::msg_type, std::span<const std::byte>)>;
 
     explicit frame_router(log::logger &logger) noexcept
             : m_logger(logger)
@@ -80,13 +81,10 @@ public:
     {
         m_forwarded = std::move(c);
     }
-    void on_companion_ready(consumer c)
+    // Every companion verb reaches one consumer, which tells them apart by type.
+    void on_companion(companion_consumer c)
     {
-        m_companion_ready = std::move(c);
-    }
-    void on_companion_withdrawn(consumer c)
-    {
-        m_companion_withdrawn = std::move(c);
+        m_companion = std::move(c);
     }
 
     // Decode the header, switch on its type, hand the inner payload to the registered consumer.
@@ -143,9 +141,9 @@ private:
             case wire::msg_type::forwarded:
                 return fire(m_forwarded, inner);
             case wire::msg_type::companion_ready:
-                return fire(m_companion_ready, inner);
             case wire::msg_type::companion_withdrawn:
-                return fire(m_companion_withdrawn, inner);
+            case wire::msg_type::companion_switch:
+                return fire_companion(type, inner);
             default:
                 return drop("plexus: router unknown_frame_type");
         }
@@ -163,6 +161,13 @@ private:
         if(!m_unidirectional)
             return drop("plexus: router no_consumer_for_type");
         m_unidirectional(hdr, inner);
+    }
+
+    void fire_companion(wire::msg_type type, std::span<const std::byte> inner)
+    {
+        if(!m_companion)
+            return drop("plexus: router no_consumer_for_type");
+        m_companion(type, inner);
     }
 
     void drop(std::string_view message)
@@ -184,8 +189,7 @@ private:
     consumer m_declare;
     consumer m_peer_report;
     consumer m_forwarded;
-    consumer m_companion_ready;
-    consumer m_companion_withdrawn;
+    companion_consumer m_companion;
 };
 
 }

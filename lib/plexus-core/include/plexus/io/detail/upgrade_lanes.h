@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UPGRADE_LANES_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_UPGRADE_LANES_H
 
+#include "plexus/io/detail/upgrade_hints.h"
 #include "plexus/io/detail/upgrade_retry.h"
 #include "plexus/io/detail/upgrade_send_lanes.h"
 #include "plexus/io/detail/upgrade_receive_lanes.h"
@@ -28,10 +29,10 @@ struct upgrade_lanes
     }
 
     template<typename Coordinator>
-    static void send(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event)
+    static void send(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
     {
         if(c.m_companion_send_cb)
-            c.m_companion_send_cb(node_name, fqn, event);
+            c.m_companion_send_cb(node_name, fqn, event, reader);
     }
 
     // A declined gate keeps the wire receive path: nothing is retained and nothing is answered.
@@ -47,7 +48,7 @@ struct upgrade_lanes
         if(lane == nullptr)
             return fallback_reason::none;
         lane->receive = std::move(received);
-        send(c, node_name, fqn, companion_event::ready);
+        send(c, node_name, fqn, companion_event::ready, lane->receive.reader);
         return fallback_reason::none;
     }
 
@@ -55,7 +56,7 @@ struct upgrade_lanes
     template<typename Coordinator>
     static fallback_reason engage(Coordinator &c, std::string_view node_name, std::string_view fqn, demand_role role)
     {
-        if(!c.run_policy(c.m_registry.same_host_for(node_name), c.hint_for(fqn)))
+        if(!upgrade_hints::wants_lane(c, node_name, fqn))
             return fallback_reason::none;
         return role == demand_role::subscriber ? attach(c, node_name, fqn) : upgrade_send_lanes::join(c, node_name, fqn);
     }
@@ -119,7 +120,7 @@ struct upgrade_lanes
         else
             erase_receive_lane(c.m_receive, node_name, fqn);
         if(!any_receive_lane(c.m_receive, fqn) && find_send_lane(c.m_send, fqn) == nullptr)
-            c.m_hints.erase(std::string{fqn});
+            upgrade_hints::forget(c, fqn);
     }
 
     // A withheld offer is counted only when the subscriber's own policy wanted the ring.
@@ -130,12 +131,12 @@ struct upgrade_lanes
             return;
         if(offered)
             return attempt(c, node_name, fqn, demand_role::subscriber);
-        if(c.run_policy(c.m_registry.same_host_for(node_name), c.hint_for(fqn)))
+        if(upgrade_hints::wants_lane(c, node_name, fqn))
             c.count_fallback(fallback_reason::not_offered);
     }
 
     template<typename Coordinator>
-    static void answer(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event)
+    static void answer(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
     {
         auto *lane          = find_send_lane(c.m_send, fqn);
         lane_holder *holder = lane == nullptr ? nullptr : find_holder(lane->holders, node_name);
@@ -143,7 +144,8 @@ struct upgrade_lanes
             return;
         if(event == companion_event::ready)
         {
-            holder->ready = true;
+            holder->ready  = true;
+            holder->reader = reader;
             return;
         }
         upgrade_send_lanes::leave(c, node_name, fqn);
@@ -151,11 +153,20 @@ struct upgrade_lanes
     }
 
     template<typename Coordinator>
+    static void hear(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
+    {
+        if(event == companion_event::offered || event == companion_event::not_offered)
+            offer(c, node_name, fqn, event == companion_event::offered);
+        else
+            answer(c, node_name, fqn, event, reader);
+    }
+
+    template<typename Coordinator>
     static void withdraw(Coordinator &c, std::string_view node_name, receive_lane &lane)
     {
         lane.receive = upgrade_receive{};
         c.count_fallback(fallback_reason::withdrawn);
-        send(c, node_name, lane.fqn, companion_event::withdrawn);
+        send(c, node_name, lane.fqn, companion_event::withdrawn, k_no_reader);
     }
 
     // Frames the publisher writes between the subscriber's last drain and its receipt of the withdrawal are not

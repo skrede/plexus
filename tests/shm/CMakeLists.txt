@@ -863,6 +863,25 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_shm_switch_marker TEST_PREFIX "shm.")
 
+    # A reader engaged on a publisher's reliable ring beside a newcomer whose wire is backed up, and its control. The
+    # cases time a loaded producer and reader, so they run alone.
+    add_executable(test_shm_switch_hold test_shm_switch_hold.cpp)
+
+    target_include_directories(test_shm_switch_hold PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_switch_hold PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_switch_hold TEST_PREFIX "shm."
+        PROPERTIES RUN_SERIAL TRUE)
+
     # The node-level same-host fingerprint fix: make_node default-fills the node's local
     # fingerprint from the real machine read when the caller left it null, and respects a
     # caller-supplied value. Reads the effective fingerprint off the minted node's engine.
@@ -984,6 +1003,9 @@ catch_discover_tests(test_medium_coordinator_member_reasons TEST_PREFIX "shm.")
 
 # The forwarder's delivery order across a late wire-to-companion switch and across a subscriber attach.
 add_executable(test_shm_switch_order test_shm_switch_order.cpp)
+
+target_include_directories(test_shm_switch_order PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_switch_order PRIVATE
     plexus::core
