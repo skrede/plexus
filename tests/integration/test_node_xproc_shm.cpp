@@ -259,16 +259,19 @@ struct medium_result
 
 // A fitting payload may ride the wire until the lane engages, so it counts only after the child's 'E' marker (its raw
 // observer saw a ring frame). Under TSan, whose slowdown makes that observer unreliable, any arrival counts: it proves
-// delivery, not the medium.
-void take_tags(int fd, medium_result &result, bool &engaged)
+// delivery, not the medium. Returns how many over-cap payloads arrived.
+std::uint32_t take_tags(int fd, medium_result &result, bool &engaged)
 {
-    char tag = 0;
+    char tag               = 0;
+    std::uint32_t over_cap = 0;
     while(::read(fd, &tag, 1) == 1)
     {
         engaged                  = engaged || tag == 'E' || k_under_tsan;
         result.small_at_callback = result.small_at_callback || (tag == 'S' && engaged);
         result.large_at_callback = result.large_at_callback || tag == 'L';
+        over_cap += tag == 'L' ? 1u : 0u;
     }
+    return over_cap;
 }
 
 // Fork two facade nodes over static_discovery and prove the per-message MEDIUM. The child
@@ -378,9 +381,10 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
         plexus::publisher<> companion_pub{node, fqn, companion_qos(),
                                           /*emit_source_identity=*/false, geometry};
 
-        bool consumer_done  = false;
-        bool ring_signaled  = false;
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+        std::uint32_t over_cap_in_flight = 0;
+        bool consumer_done               = false;
+        bool ring_signaled               = false;
+        const auto deadline              = std::chrono::steady_clock::now() + std::chrono::seconds(20);
         while(!consumer_done && std::chrono::steady_clock::now() < deadline)
         {
             io.poll();
@@ -393,11 +397,16 @@ medium_result one_run(const std::string &fqn, const std::string &small, const st
                     ring_signaled = true;
                 }
             }
-            // Publish the SMALL (fitting -> SHM companion) then the LARGE (over-cap -> wire).
-            // The republish each turn closes the demand-arrival race deterministically.
-            companion_pub.publish(as_bytes(small));
-            companion_pub.publish(as_bytes(large));
-            take_tags(pipe_fd[0], result, engaged);
+            // Unpaced, the over-cap messages back the wire up for good once the subscriber falls behind: every fitting
+            // message then queues behind them and the subscriber's poll never returns, its socket always readable. So a
+            // pair goes out only once the subscribe is admitted and the last over-cap message has arrived.
+            over_cap_in_flight -= take_tags(pipe_fd[0], result, engaged);
+            if(node.count_subscribers(fqn) != 0 && over_cap_in_flight == 0)
+            {
+                companion_pub.publish(as_bytes(small));
+                companion_pub.publish(as_bytes(large));
+                ++over_cap_in_flight;
+            }
             consumer_done = c->consumer_done.load(std::memory_order_acquire) != 0;
         }
         if(!result.region_observed)
