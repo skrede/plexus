@@ -21,7 +21,7 @@
 
 namespace {
 
-using plexus::shm::acquire_mode;
+using plexus::shm::ring_role;
 using plexus::shm::acquire_bound;
 using plexus::shm::region_status;
 using plexus::shm::acquire_result;
@@ -59,7 +59,7 @@ struct peer_ring
 
 acquire_result join(registry &reg, const std::string &fqn)
 {
-    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, k_slot, plexus::io::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
+    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::consumer, k_slot);
 }
 
 }

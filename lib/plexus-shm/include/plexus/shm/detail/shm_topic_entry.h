@@ -16,6 +16,7 @@
 #include <memory>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <functional>
 #include <unordered_map>
@@ -65,7 +66,8 @@ struct shm_topic_entry
             , notify()
             , channel()
             , verdict(acquire_result::failed)
-            , refcount(0)
+            , producers(0)
+            , consumers(0)
             , creator(false)
             , sink()
             , loss(std::make_shared<waiter_loss>())
@@ -78,11 +80,37 @@ struct shm_topic_entry
     std::optional<Notifier> notify;
     std::optional<shm_channel<Notifier>> channel;
     acquire_result verdict;
-    int refcount;
+    std::uint32_t producers;
+    std::uint32_t consumers;
     bool creator;
-    // Unset = the wake-drain discards (the send-only default).
+    // Unset, the wake drain discards what it takes.
     deliver_fn sink;
     std::shared_ptr<waiter_loss> loss;
+
+    void hold(ring_role role) noexcept
+    {
+        if(role != ring_role::consumer)
+            ++producers;
+        if(role != ring_role::producer)
+            ++consumers;
+    }
+
+    void drop(ring_role role) noexcept
+    {
+        if(role != ring_role::consumer && producers > 0)
+            --producers;
+        if(role != ring_role::producer && consumers > 0)
+            --consumers;
+    }
+
+    // The same disarm-first ordering as teardown, for the subscriber alone while the producer keeps sending.
+    void disengage_consumer() noexcept
+    {
+        if(notify)
+            notify->disarm();
+        if(channel)
+            channel->release_subscriber();
+    }
 
     // Non-negotiable ordering: disarm the notifier BEFORE the channel (and the subscriber its drain touches) is
     // destroyed, so a wake racing teardown can never post a drain onto a destroyed subscriber.

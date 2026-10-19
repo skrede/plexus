@@ -62,13 +62,13 @@ typename registry_for<Notifier>::notifier_binder binder_on(::asio::io_context &i
 }
 
 template<typename Notifier>
-bool serve_consumer(const std::string &fqn, wake_block &block, wake_consumer_slot &slot)
+bool serve_consumer(const std::string &fqn, wake_block &block, wake_consumer_slot &slot, plexus::shm::ring_role role)
 {
     ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
     registry_for<Notifier> registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, binder_on<Notifier>(io)};
     const plexus::shm::acquire_result acquired =
-            registry.acquire(fqn, k_request, plexus::testing::test_publisher(), 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
+            registry.acquire(fqn, k_request, plexus::testing::test_publisher(), role, 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
     if(acquired == plexus::shm::acquire_result::failed)
         return false;
 
@@ -80,7 +80,7 @@ bool serve_consumer(const std::string &fqn, wake_block &block, wake_consumer_slo
         io.restart();
         io.run_for(1ms);
     }
-    registry.release(fqn, k_request, plexus::testing::test_publisher());
+    registry.release(fqn, k_request, plexus::testing::test_publisher(), role);
     return true;
 }
 
@@ -93,9 +93,12 @@ bool wake_consumer(const std::vector<std::string> &argv)
         return false;
 
     wake_consumer_slot &slot = block->get().consumers[*index];
+    // The first consumer also holds the producer role, so the ring exists before the second consumer joins and before
+    // the producer attaches.
+    const plexus::shm::ring_role role = *index == 0 ? plexus::shm::ring_role::both : plexus::shm::ring_role::consumer;
     if(argv[3] == k_threaded_leg)
-        return serve_consumer<threaded_notifier>(argv[2], block->get(), slot);
-    return serve_consumer<production_notifier>(argv[2], block->get(), slot);
+        return serve_consumer<threaded_notifier>(argv[2], block->get(), slot, role);
+    return serve_consumer<production_notifier>(argv[2], block->get(), slot, role);
 }
 
 bool attach_ring(plexus::native::posix_shm_region_broker &broker, const std::string &name, attached_ring &out)

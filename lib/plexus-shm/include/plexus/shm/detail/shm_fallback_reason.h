@@ -42,13 +42,10 @@ inline io::fallback_reason demoted_fallback(shm::arm_status primary) noexcept
     return io::fallback_reason::none;
 }
 
-// not_found here is a control region that vanished between the existence probe and the join.
 inline io::fallback_reason allocator_fallback(shm::region_status status) noexcept
 {
     if(status == shm::region_status::no_space)
         return io::fallback_reason::no_space;
-    if(status == shm::region_status::not_found)
-        return io::fallback_reason::not_found;
     return io::fallback_reason::os_allocator;
 }
 
@@ -63,6 +60,8 @@ inline io::fallback_reason fallback_of(const shm::acquire_failure &failure) noex
             return io::fallback_reason::incompatible_layout;
         case shm::acquire_bound::consumer_capacity:
             return io::fallback_reason::consumer_capacity;
+        case shm::acquire_bound::not_found:
+            return io::fallback_reason::not_found;
         case shm::acquire_bound::slab_ceiling:
             return io::fallback_reason::slab_ceiling;
         case shm::acquire_bound::os_allocator:

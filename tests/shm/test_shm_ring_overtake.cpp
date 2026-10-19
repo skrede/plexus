@@ -74,14 +74,14 @@ void lap_held_claim(slot_publisher &holder, slot_publisher &lapper)
 
 }
 
-TEST_CASE("ring_overtake a reliable claim never overwrites its own producer's claim in flight", "[shm][ring_overtake][!shouldfail]")
+TEST_CASE("ring_overtake a reliable claim never overwrites its own producer's claim in flight", "[shm][ring_overtake]")
 {
     cursorless_ring r;
     slot_publisher pub = reliable_on(r.ring);
     lap_held_claim(pub, pub);
 }
 
-TEST_CASE("ring_overtake a reliable claim never overwrites another producer's claim in flight", "[shm][ring_overtake][!shouldfail]")
+TEST_CASE("ring_overtake a reliable claim never overwrites another producer's claim in flight", "[shm][ring_overtake]")
 {
     cursorless_ring r;
     slot_publisher predecessor = reliable_on(r.ring);

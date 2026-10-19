@@ -48,26 +48,25 @@ shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn, shm::
     return {shm::upgrade_ring_max_payload(direction, p.max_payload), p.mode, p.consumer_capacity};
 }
 
-// Mint a channel over the member's own ring for ep, acquiring it first unless a prior can_acquire probe
-// already holds it (channel_for non-null — reuse that held reference so the refcount stays at
-// one held by the minted channel). nullptr on a broker failure. ep.address is the fqn. lost runs
-// if the ring's waiter is lost; with none the channel closes.
+// Mint a channel over the member's own ring for ep in role. A both-role open reuses the hold a prior can_acquire probe
+// left (channel_for non-null), so the minted channel owns that one hold; any other role acquires its own. nullptr on a
+// broker failure. ep.address is the fqn. lost runs if the ring's waiter is lost; with none the channel closes.
 template<typename Member>
-auto mux_open(Member &m, const io::endpoint &ep, shm::acquire_mode amode = shm::acquire_mode::reclaim_stale, shm::waiter_loss::lost_fn lost = nullptr)
+auto mux_open(Member &m, const io::endpoint &ep, shm::ring_role role, shm::acquire_mode amode = shm::acquire_mode::reclaim_stale, shm::waiter_loss::lost_fn lost = nullptr)
         -> std::unique_ptr<typename Member::channel_type>
 {
     const node_id &self = m.m_self;
-    auto *ch            = m.m_registry.channel_for(ep.address, shm::ring_direction::request, self);
-    if(ch == nullptr) // no probe held it: acquire fresh
+    auto *ch            = role == shm::ring_role::both ? m.m_registry.channel_for(ep.address, shm::ring_direction::request, self) : nullptr;
+    if(ch == nullptr)
     {
         const shm_resolved_geometry g = mux_resolve(m, ep.address, shm::ring_direction::request);
-        if(m.m_registry.acquire(ep.address, shm::ring_direction::request, self, g.max_payload, g.mode, g.consumer_capacity, amode) == shm::acquire_result::failed)
+        if(m.m_registry.acquire(ep.address, shm::ring_direction::request, self, role, g.max_payload, g.mode, g.consumer_capacity, amode) == shm::acquire_result::failed)
             return nullptr;
         ch = m.m_registry.channel_for(ep.address, shm::ring_direction::request, self);
     }
     if(ch == nullptr)
         return nullptr;
-    return std::make_unique<typename Member::channel_type>(m.m_registry, *ch, ep.address, self, ep, std::move(lost));
+    return std::make_unique<typename Member::channel_type>(m.m_registry, *ch, ep.address, self, ep, role, std::move(lost));
 }
 
 }

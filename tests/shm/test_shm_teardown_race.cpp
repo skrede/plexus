@@ -161,7 +161,7 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state", 
             plexus::asio::shm::ring_notifier<test_policy> bridge(io, ring.header(), "");
             pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
-            bridge.arm(*channel.waiter_slot(),
+            bridge.arm(*channel.engage_subscriber(),
                     [&]
                     {
                         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};

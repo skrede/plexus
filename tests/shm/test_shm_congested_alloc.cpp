@@ -11,6 +11,7 @@ TEST_CASE("shm.backpressure the reliable blocking spin allocates nothing", "[shm
     ring_fixture<k_cells, 64> f;
 
     shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
+    REQUIRE(channel.engage_subscriber());
 
     // The deliver callback counts drained messages into an atomic (NO heap in its
     // body). It is constructed BEFORE the snapshot, so the one-time

@@ -183,7 +183,7 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // The arm()'d drain runs on a posted reactor turn: drain the channel and
         // capture the delivered value. This is the registry's drain-this-channel
         // callback shape (drain over the live subscriber).
-        bridge.arm(*channel.waiter_slot(),
+        bridge.arm(*channel.engage_subscriber(),
                 [&]
                 {
                     pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
@@ -257,7 +257,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t got = 0;
-        bridge.arm(*channel.waiter_slot(),
+        bridge.arm(*channel.engage_subscriber(),
                 [&]
                 {
                     pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)

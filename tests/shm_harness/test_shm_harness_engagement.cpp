@@ -46,7 +46,7 @@ TEST_CASE("harness a subscriber past a ring's consumer capacity receives every m
     require_exactly(subs[1], 20);
     REQUIRE(subs[0].out_of_order == 0);
     REQUIRE(subs[1].out_of_order == 0);
-    REQUIRE(fallbacks_of(subs[0], plexus::io::fallback_reason::consumer_capacity) + fallbacks_of(subs[1], plexus::io::fallback_reason::consumer_capacity) >= 1);
+    REQUIRE(fallbacks_of(subs[0], plexus::io::fallback_reason::consumer_capacity) + fallbacks_of(subs[1], plexus::io::fallback_reason::consumer_capacity) == 1);
 }
 
 TEST_CASE("harness an unhinted node subscribing to its own topic serves a co-host subscriber once over the wire", "[shm][harness]")

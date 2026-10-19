@@ -232,26 +232,26 @@ TEST_CASE("shm.registry demand-drives the ring lifecycle by refcount", "[shm][re
     const std::string fqn = "topic.demo";
 
     // First acquire mints the ring (the creator owns both regions: control + slab).
-    REQUIRE(registry.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::created);
+    REQUIRE(registry.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer, 0) == acquire_result::created);
     REQUIRE(registry.live_count() == 1);
     REQUIRE(store.unlinks == 0);
 
     // A second acquire of the SAME key bumps the refcount (still created, one entry).
-    REQUIRE(registry.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::created);
+    REQUIRE(registry.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer, 0) == acquire_result::created);
     REQUIRE(registry.live_count() == 1);
 
     // release 2 -> 1 keeps the ring (no unlink yet).
-    registry.release(fqn, ring_direction::request, plexus::node_id{});
+    registry.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer);
     REQUIRE(registry.live_count() == 1);
     REQUIRE(store.unlinks == 0);
 
     // release 1 -> 0 tears it down AND unlinks both regions (the creator owns them).
-    registry.release(fqn, ring_direction::request, plexus::node_id{});
+    registry.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer);
     REQUIRE(registry.live_count() == 0);
     REQUIRE(store.unlinks == 2); // control + slab
 }
 
-TEST_CASE("shm.registry a peer collision attaches and a subscriber-only acquire defaults geometry", "[shm][registry]")
+TEST_CASE("shm.registry a peer collision attaches and a consumer reads the creator's geometry", "[shm][registry]")
 {
     region_store store;
     stub_broker broker_a{store};
@@ -262,13 +262,13 @@ TEST_CASE("shm.registry a peer collision attaches and a subscriber-only acquire 
     const std::string fqn = "topic.shared";
 
     // The creator mints with an explicit max_payload (it sizes the ring).
-    REQUIRE(creator.acquire(fqn, ring_direction::request, plexus::node_id{}, /*max_payload=*/256) == acquire_result::created);
+    REQUIRE(creator.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer, /*max_payload=*/256) == acquire_result::created);
 
-    // A second registry over the same store collides on create and ATTACHES to the
-    // peer's live regions -- the subscriber-only acquire (max_payload == 0) falls
-    // back to the default geometry, but it re-reads the creator's geometry off the
-    // control header, so the two ends agree.
-    REQUIRE(attacher.acquire(fqn, ring_direction::request, plexus::node_id{}, /*max_payload=*/0) == acquire_result::attached);
+    // A second registry over the same store ATTACHES to the peer's live regions as a
+    // consumer, which never sizes a ring: it re-reads the creator's geometry off the
+    // control header (the max_payload it passes is ignored), so the two ends agree
+    // whatever the consumer would have asked for.
+    REQUIRE(attacher.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::consumer, /*max_payload=*/0) == acquire_result::attached);
 
     // A send over the creator's channel drains back over the attacher's channel: the
     // two registries share ONE ring through the deterministic name (round-trip proof
@@ -296,9 +296,9 @@ TEST_CASE("shm.registry a peer collision attaches and a subscriber-only acquire 
 
     // Tear down: the attacher releases first (no unlink -- it never owned the name),
     // then the creator (unlinks both).
-    attacher.release(fqn, ring_direction::request, plexus::node_id{});
+    attacher.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::consumer);
     REQUIRE(store.unlinks == 0);
-    creator.release(fqn, ring_direction::request, plexus::node_id{});
+    creator.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer);
     REQUIRE(store.unlinks == 2);
 }
 
@@ -309,14 +309,14 @@ TEST_CASE("shm.registry disarms the notifier before the subscriber teardown", "[
     g_order.clear();
 
     test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
-    REQUIRE(registry.acquire("topic.order", ring_direction::request, plexus::node_id{}, 0) == acquire_result::created);
+    REQUIRE(registry.acquire("topic.order", ring_direction::request, plexus::node_id{}, ring_role::both, 0) == acquire_result::created);
 
     // The release tears the entry down: disarm() fires (logging "disarm") BEFORE the
     // entry is erased, and the entry destructs the channel (its subscriber) before
     // the notifier (which logs "notify_dtor" on the way out). So "disarm" preceding
     // "notify_dtor" proves the notifier was stopped before the subscriber the drain
     // touches was destroyed -- the non-negotiable teardown ordering.
-    registry.release("topic.order", ring_direction::request, plexus::node_id{});
+    registry.release("topic.order", ring_direction::request, plexus::node_id{}, ring_role::both);
     REQUIRE(registry.live_count() == 0);
 
     REQUIRE(g_order.size() == 2);

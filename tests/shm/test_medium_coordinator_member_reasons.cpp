@@ -101,6 +101,13 @@ fallback_counts counted(fallback_reason reason)
     return out;
 }
 
+// A send lane arms no wake, so the publisher's own reader, the way the self-carrier attaches it, is what arms one.
+template<typename Lanes>
+bool read_own_ring(Lanes &m)
+{
+    return m.member.registry().acquire(k_fqn, plexus::shm::ring_direction::request, plexus::node_id{}, plexus::shm::ring_role::consumer, 0) != plexus::shm::acquire_result::failed;
+}
+
 plexus::detail::move_only_function<void(std::optional<layered> &, plexus::shm::control_header_t &, std::string_view)> bind_legs(legs &l)
 {
     return [&l](std::optional<layered> &slot, plexus::shm::control_header_t &, std::string_view) { slot.emplace(l); };
@@ -132,20 +139,20 @@ TEST_CASE("medium_coordinator_member a host with no memory to back the ring is c
     REQUIRE_FALSE(m.engaged());
 }
 
-TEST_CASE("medium_coordinator_member a control region that vanishes before the join, or a ring with no reader slot left, is counted by its reason", "[shm][medium_coordinator_member]")
+TEST_CASE("medium_coordinator_member a control region that vanishes before the join is counted as not_found, and a ring with no reader slot left still takes the send lane",
+          "[shm][medium_coordinator_member]")
 {
     delaying_broker broker;
     noop_registry peer(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
-    REQUIRE(peer.acquire(k_fqn, plexus::shm::ring_direction::request, plexus::node_id{}, 0, plexus::io::ring_geometry_mode::reliable_preserving, 1,
+    REQUIRE(peer.acquire(k_fqn, plexus::shm::ring_direction::request, plexus::node_id{}, plexus::shm::ring_role::both, 0, plexus::io::ring_geometry_mode::reliable_preserving, 1,
                          plexus::shm::acquire_mode::join_live) == plexus::shm::acquire_result::created);
-    const bool vanished       = GENERATE(true, false);
-    const fallback_reason why = vanished ? fallback_reason::not_found : fallback_reason::consumer_capacity;
+    const bool vanished = GENERATE(true, false);
     if(vanished)
         broker.withhold_until(plexus::testing::region_name(k_fqn, plexus::node_id{}), delaying_broker::clock::time_point::max());
 
     member_lanes<delaying_broker, plexus::testing::noop_notifier> m{broker, k_fqn};
-    REQUIRE(m.lanes.fallbacks() == counted(why));
-    REQUIRE_FALSE(m.engaged());
+    REQUIRE(m.lanes.fallbacks() == (vanished ? counted(fallback_reason::not_found) : fallback_counts{}));
+    REQUIRE(m.engaged() == !vanished);
 }
 
 TEST_CASE("medium_coordinator_member a wake that falls to its secondary at arm is counted once and the lane engages", "[shm][medium_coordinator_member]")
@@ -153,6 +160,7 @@ TEST_CASE("medium_coordinator_member a wake that falls to its secondary at arm i
     delaying_broker broker;
     legs wake{arm_status::denied, arm_status::armed};
     member_lanes<delaying_broker, layered> m{broker, k_fqn, bind_legs(wake)};
+    REQUIRE(read_own_ring(m));
     REQUIRE(m.lanes.fallbacks() == counted(fallback_reason::notifier_demoted_denied));
     REQUIRE(m.engaged());
 }
@@ -163,6 +171,7 @@ TEST_CASE("medium_coordinator_member a runtime demotion is counted while the lan
     const bool secondary_arms = GENERATE(true, false);
     legs wake{arm_status::armed, secondary_arms ? arm_status::armed : arm_status::denied};
     member_lanes<delaying_broker, layered> m{broker, k_fqn, bind_legs(wake)};
+    REQUIRE(read_own_ring(m));
     REQUIRE(m.lanes.fallbacks() == fallback_counts{});
     REQUIRE(m.engaged());
 

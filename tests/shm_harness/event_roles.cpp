@@ -60,11 +60,10 @@ bool event_cycler(const std::vector<std::string> &argv)
     event_registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, event_binder(io)};
     for(std::uint32_t cycle = 0; cycle < k_arm_cycles; ++cycle)
     {
-        if(registry.acquire(argv[0], k_request, plexus::testing::test_publisher(), 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
-           plexus::shm::acquire_result::failed)
+        if(registry.acquire(argv[0], k_request, plexus::testing::test_publisher(), plexus::shm::ring_role::consumer, 0) == plexus::shm::acquire_result::failed)
             return false;
         settle(io, cycle == 0 ? 200ms : 1ms);
-        registry.release(argv[0], k_request, plexus::testing::test_publisher());
+        registry.release(argv[0], k_request, plexus::testing::test_publisher(), plexus::shm::ring_role::consumer);
     }
     return true;
 }

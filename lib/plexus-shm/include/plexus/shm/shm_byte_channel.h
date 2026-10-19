@@ -5,6 +5,7 @@
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/shm_topic_registry.h"
 #include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/shm_companion_consumer.h"
@@ -29,8 +30,8 @@
 namespace plexus::shm {
 
 // The per-topic byte_channel the shm mux member hands up, wrapping ONE live ring behind the
-// byte_channel verbs the multiplexer erases. close() releases the ring (refcount tears it
-// down + unlinks at 1->0). on_protocol_close never fires (no byte-stream framing on a ring).
+// byte_channel verbs the multiplexer erases. close() releases the role it acquired (the last
+// release tears the ring down). on_protocol_close never fires (no byte-stream framing on a ring).
 // The registry outlives every channel it mints. When the ring's waiter is lost, lost runs, or
 // with none the channel closes as any byte_channel whose medium died.
 template<typename Broker, typename Notifier>
@@ -40,12 +41,14 @@ class shm_byte_channel
 public:
     using registry_type = shm_topic_registry<Broker, Notifier>;
 
-    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn, const node_id &publisher, io::endpoint remote, waiter_loss::lost_fn lost = nullptr)
+    shm_byte_channel(registry_type &registry, shm_channel<Notifier> &channel, std::string fqn, const node_id &publisher, io::endpoint remote, ring_role role,
+                     waiter_loss::lost_fn lost = nullptr)
             : m_registry(registry)
             , m_channel(channel)
             , m_publisher(publisher)
             , m_fqn(std::move(fqn))
             , m_remote(std::move(remote))
+            , m_role(role)
             , m_loss(registry.watch_loss(m_fqn, ring_direction::request, m_publisher, lost ? std::move(lost) : waiter_loss::lost_fn{[this] { close(); }}))
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_released(false)
@@ -58,7 +61,7 @@ public:
     ~shm_byte_channel()
     {
         if(!m_released)
-            m_registry.release(m_fqn, ring_direction::request, m_publisher);
+            m_registry.release(m_fqn, ring_direction::request, m_publisher, m_role);
     }
 
     // An oversize payload surfaces message_too_large, a stalled reliable path would_block; the
@@ -86,7 +89,7 @@ public:
         if(m_released)
             return;
         m_released = true;
-        m_registry.release(m_fqn, ring_direction::request, m_publisher);
+        m_registry.release(m_fqn, ring_direction::request, m_publisher, m_role);
         if(m_on_closed)
             m_on_closed();
     }
@@ -155,6 +158,7 @@ private:
     node_id m_publisher;
     std::string m_fqn;
     io::endpoint m_remote;
+    ring_role m_role;
     loss_watch m_loss;
     std::uint64_t m_scheduler_key;
     bool m_released;

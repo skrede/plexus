@@ -231,7 +231,7 @@ TEST_CASE("shm.geometry_defaults an over-ceiling registration fails closed namin
     test_registry registry(broker, plexus::io::reliability::reliable, plexus::io::congestion::block, test_registry::default_notifier_binder(), tiny_ceiling);
 
     const std::uint32_t payload = static_cast<std::uint32_t>(k_mib); // 1 MiB ring slab >> 64 KiB
-    REQUIRE(registry.acquire("topic.over_ceiling", ring_direction::request, plexus::node_id{}, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
+    REQUIRE(registry.acquire("topic.over_ceiling", ring_direction::request, {}, ring_role::producer, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
 
     // The diagnostic names the CEILING bound with the exact ask vs the ceiling, and the
     // ring was never minted (no live entry, no silent downgrade).
@@ -258,7 +258,7 @@ TEST_CASE("shm.geometry_defaults an OS-allocation-failed registration fails clos
     const ring_geometry g          = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 1u);
     const std::size_t expected_ask = slab_region_bytes(g.cell_count, g.slot_capacity);
 
-    REQUIRE(registry.acquire("topic.os_fail", ring_direction::request, plexus::node_id{}, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
+    REQUIRE(registry.acquire("topic.os_fail", ring_direction::request, {}, ring_role::producer, payload, ring_geometry_mode::reliable_preserving, 1u) == acquire_result::failed);
 
     // The diagnostic names the OS-ALLOCATOR bound, carries the exact slab ask and the
     // broker's verdict, and the ring was not minted (no silent best-effort path).

@@ -100,6 +100,7 @@ TEST_CASE("shm.channel send->drain round-trips a payload, signaling once per sen
     // subscriber registers a cursor at the tail, so a send it commits is drained
     // back through the same channel.
     shm_channel<recording_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
+    REQUIRE(channel.engage_subscriber());
 
     constexpr int k_iterations = 200;
     for(int i = 0; i < k_iterations; ++i)
@@ -132,6 +133,7 @@ TEST_CASE("shm.oversize a payload over the slot capacity returns rejected withou
 {
     fixture f;
     shm_channel<recording_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
+    REQUIRE(channel.engage_subscriber());
 
     // A payload one byte over the slot capacity: send() must reject it, with NO
     // publish landing and NO notifier signal -- the oversize fallback, not a silent

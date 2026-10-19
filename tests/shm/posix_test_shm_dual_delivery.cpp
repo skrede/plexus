@@ -167,7 +167,7 @@ TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic c
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t shm_got = 0;
-        bridge.arm(*channel.waiter_slot(),
+        bridge.arm(*channel.engage_subscriber(),
                 [&]
                 {
                     pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)

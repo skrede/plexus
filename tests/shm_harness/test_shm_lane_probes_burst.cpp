@@ -19,7 +19,7 @@
 
 using namespace shm_harness;
 
-TEST_CASE("lane_probe a send-only companion with no consumer never refuses a burst", "[shm][lane_probe][!shouldfail]")
+TEST_CASE("lane_probe a send-only companion with no consumer never refuses a burst", "[shm][lane_probe]")
 {
     constexpr std::uint32_t burst = 600;
     const std::string fqn         = probe_fqn("burst");

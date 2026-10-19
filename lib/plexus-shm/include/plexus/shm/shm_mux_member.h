@@ -89,7 +89,7 @@ public:
 
     void listen(const io::endpoint &ep)
     {
-        auto ch = detail::mux_open(*this, ep);
+        auto ch = detail::mux_open(*this, ep, ring_role::both);
         if(ch && m_on_accepted)
             m_on_accepted(std::move(ch));
     }
@@ -97,7 +97,7 @@ public:
     // Carries the dialed io::endpoint back so the engine correlates the completion to its slot.
     void dial(const io::endpoint &ep)
     {
-        auto ch = detail::mux_open(*this, ep);
+        auto ch = detail::mux_open(*this, ep, ring_role::both);
         if(!ch)
             return report_dial_fail(ep, io::io_error::connection_refused);
         if(m_on_dialed)
@@ -116,27 +116,27 @@ public:
         const auto g = detail::mux_resolve(*this, ep.address, ring_direction::request);
         if(g.mode == io::ring_geometry_mode::wire_fallback)
             return false;
-        return m_registry.acquire(ep.address, ring_direction::request, m_self, g.max_payload, g.mode, g.consumer_capacity) != acquire_result::failed;
+        return m_registry.acquire(ep.address, ring_direction::request, m_self, ring_role::both, g.max_payload, g.mode, g.consumer_capacity) != acquire_result::failed;
     }
 
     // Drop a held probe bump the dial did not consume, keeping the refcount honest.
     void abandon(const io::endpoint &ep)
     {
-        m_registry.release(ep.address, ring_direction::request, m_self);
+        m_registry.release(ep.address, ring_direction::request, m_self, ring_role::both);
     }
 
     // The additive fast path a co-host (peer, topic) pair runs ALONGSIDE its wire session. Unlike can_acquire it mints for
-    // ANY provisioned mode (the wire stays the recorded fail-safe). The returned channel holds the refcount and releases it
-    // on destruction; lost runs if the ring's waiter is lost.
+    // ANY provisioned mode (the wire stays the recorded fail-safe). The returned channel holds the ring as its producer only,
+    // registering no cursor, and releases it on destruction; lost runs if the ring's waiter is lost.
     std::unique_ptr<channel_type> mint_companion(const std::string &fqn, waiter_loss::lost_fn lost)
     {
         return detail::companion_send(*this, fqn, std::move(lost));
     }
 
-    // The receive half of the companion model: attach the publisher's request-direction ring as a CONSUMER and install on_frame
-    // as the entry's consumer sink. Returns an RAII handle whose destruction clears the sink and releases the ring (1->0
-    // unmaps); nullptr on a broker failure. The framed bytes are header-on, so the caller feeds them into the SAME receive
-    // entry the wire session feeds. lost runs if the ring's waiter is lost.
+    // The receive half of the companion model: attach the publisher's request-direction ring as a CONSUMER and install
+    // on_frame as the entry's consumer sink. Returns an RAII handle whose destruction clears the sink and releases its hold
+    // (the last release unmaps); nullptr when no ring exists yet or on a broker failure. The framed bytes are header-on, so
+    // the caller feeds them into the SAME receive entry the wire session feeds. lost runs if the ring's waiter is lost.
     std::unique_ptr<consumer_type> mint_receive_companion(const std::string &fqn, const node_id &publisher,
                                                           plexus::detail::move_only_function<void(std::span<const std::byte>)> on_frame, waiter_loss::lost_fn lost)
     {
@@ -220,7 +220,7 @@ public:
 
 private:
     template<typename M>
-    friend auto detail::mux_open(M &, const io::endpoint &, shm::acquire_mode, shm::waiter_loss::lost_fn) -> std::unique_ptr<typename M::channel_type>;
+    friend auto detail::mux_open(M &, const io::endpoint &, shm::ring_role, shm::acquire_mode, shm::waiter_loss::lost_fn) -> std::unique_ptr<typename M::channel_type>;
     template<typename M>
     friend detail::shm_resolved_geometry detail::mux_resolve(const M &, const std::string &, shm::ring_direction);
 

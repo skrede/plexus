@@ -4,6 +4,7 @@
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/region_naming.h"
 #include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/shm_topic_registry.h"
 #include "plexus/shm/region_broker_concept.h"
 
@@ -16,8 +17,8 @@ namespace plexus::shm {
 
 // The RAII receive lane over a co-host companion ring, drained by the registry's armed
 // notifier (posted on the node executor, NO drain thread). Destruction clears the sink BEFORE
-// dropping the refcount (disarm-before-destroy), so a wake in flight never delivers onto a
-// torn-down sink and a release at 1->0 unmaps the ring. lost runs if the ring's waiter is lost.
+// releasing its consumer hold (disarm-before-destroy), so a wake in flight never delivers onto a
+// torn-down sink and the last release unmaps the ring. lost runs if the ring's waiter is lost.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_companion_consumer
@@ -39,7 +40,7 @@ public:
     ~shm_companion_consumer()
     {
         m_registry.clear_consumer_sink(m_fqn, ring_direction::request, m_publisher);
-        m_registry.release(m_fqn, ring_direction::request, m_publisher);
+        m_registry.release(m_fqn, ring_direction::request, m_publisher, ring_role::consumer);
     }
 
 private:

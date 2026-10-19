@@ -48,30 +48,30 @@ using channel_type  = plexus::shm::shm_channel<plexus::asio::shm::ring_notifier<
 
 constexpr plexus::shm::ring_direction k_request = plexus::shm::ring_direction::request;
 
-// Each send is followed by a non-blocking turn of the reactor, so this process's own consumer cursor keeps draining
-// through a burst and only a peer's cursor gates the ring.
-publish_fn registry_publisher(::asio::io_context &io, channel_type &channel, node_slot &slot)
+publish_fn registry_publisher(channel_type &channel, node_slot &slot)
 {
-    return [&io, &channel, &slot](std::span<const std::byte> bytes)
+    return [&channel, &slot](std::span<const std::byte> bytes)
     {
         const auto start = std::chrono::steady_clock::now();
         channel.send(bytes);
         const auto took = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start);
         if(static_cast<std::uint32_t>(took.count()) > slot.slowest_send_us.load(std::memory_order_relaxed))
             slot.slowest_send_us.store(static_cast<std::uint32_t>(took.count()), std::memory_order_release);
-        io.restart();
-        io.poll();
     };
 }
 
+plexus::shm::ring_role role_of(bool publishes)
+{
+    return publishes ? plexus::shm::ring_role::producer : plexus::shm::ring_role::consumer;
+}
+
 // A publisher sizes the ring for the default message size, the geometry a default node publisher provisions; a
-// subscriber passes 0 and adopts the geometry of the ring it joins. Every role names the ring of node 0, the publisher.
+// subscriber joins the ring as the publisher made it. Every role names the ring of node 0, the publisher.
 channel_type *join_ring(registry_type &registry, const std::string &fqn, bool publishes)
 {
-    const std::size_t message_bytes = publishes ? plexus::io::global_default_max_message_bytes : 0;
-    const std::uint32_t max_payload = plexus::shm::upgrade_ring_max_payload(k_request, static_cast<std::uint32_t>(message_bytes));
-    const plexus::shm::acquire_result acquired =
-            registry.acquire(fqn, k_request, harness_id(0), max_payload, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
+    const std::uint32_t max_payload            = plexus::shm::upgrade_ring_max_payload(k_request, static_cast<std::uint32_t>(plexus::io::global_default_max_message_bytes));
+    const plexus::shm::acquire_result acquired = registry.acquire(fqn, k_request, harness_id(0), role_of(publishes), max_payload, plexus::io::ring_geometry_mode::reliable_preserving, 0,
+                                                                  plexus::shm::acquire_mode::join_live);
     return acquired == plexus::shm::acquire_result::failed ? nullptr : registry.channel_for(fqn, k_request, harness_id(0));
 }
 
@@ -85,7 +85,7 @@ bool run_registry(const registry_args &args, node_slot &slot)
     if(channel == nullptr)
         return false;
 
-    node_driver driver{slot, args.index, publishes ? registry_publisher(io, *channel, slot) : publish_fn{}};
+    node_driver driver{slot, args.index, publishes ? registry_publisher(*channel, slot) : publish_fn{}};
     if(!publishes)
         registry.set_consumer_sink(args.fqn, k_request, harness_id(0), [&driver](plexus::wire_bytes<plexus::shm::shm_slot_owner> wb) { driver.receive({wb.data(), wb.size()}); });
 
@@ -95,7 +95,7 @@ bool run_registry(const registry_args &args, node_slot &slot)
         io.restart();
         io.run_for(1ms);
     }
-    registry.release(args.fqn, k_request, harness_id(0));
+    registry.release(args.fqn, k_request, harness_id(0), role_of(publishes));
     return true;
 }
 

@@ -14,12 +14,10 @@
 
 namespace plexus::shm::detail {
 
-// READER side of the overwrite-vs-pin Dekker handshake. Pins the cell at
-// `cursor` (seq_cst fetch_add on take_refcount) then RE-LOADS its sequence
-// seq_cst: if it still reads cursor+1 the pin landed before any best-effort
-// overwrite could win the slot (the matching seq_cst announce/recheck pair
-// rules out store-buffering), so the pin holds -- returns true. Otherwise the
-// pin is dropped and false returned so the caller skips a torn read.
+// READER side of the overwrite-vs-pin Dekker handshake. Pins the cell at `cursor` (seq_cst fetch_add on
+// take_refcount) then RE-LOADS its sequence seq_cst: if it still reads cursor+1 the pin landed before any best-effort
+// overwrite could win the slot (the matching seq_cst announce/recheck pair rules out store-buffering), so the pin holds
+// -- returns true. Otherwise the pin is dropped and false returned so the caller skips a torn read.
 inline bool pin_if_current(cell_t &c, std::uint64_t cursor) noexcept
 {
     c.take_refcount.fetch_add(1, std::memory_order_seq_cst); // announce the pin
@@ -29,9 +27,8 @@ inline bool pin_if_current(cell_t &c, std::uint64_t cursor) noexcept
     return false;
 }
 
-// PRODUCER half of the overwrite-vs-pin Dekker announce on a slot already won.
-// Stores the claiming marker on `sequence` (seq_cst) then seq_cst-loads
-// take_refcount; the consumer's seq_cst pin + seq_cst recheck pair rules out
+// PRODUCER half of the overwrite-vs-pin Dekker announce on a slot already won. Stores the claiming marker on `sequence`
+// (seq_cst) then seq_cst-loads take_refcount; the consumer's seq_cst pin + seq_cst recheck pair rules out
 // store-buffering. Returns true when no live take pins the slot.
 inline bool announce_and_check_pin(cell_t &c, std::uint64_t position) noexcept
 {
@@ -39,19 +36,17 @@ inline bool announce_and_check_pin(cell_t &c, std::uint64_t position) noexcept
     return c.take_refcount.load(std::memory_order_seq_cst) == 0;
 }
 
-// Stamp the SKIPPED tombstone on the cell a best-effort producer donates past:
-// advance its sequence to (pos + 1) so a future claim recognizes it via the
-// Vyukov dif, but mark payload_len so consume() treats it as non-deliverable.
+// Stamp the SKIPPED tombstone on the cell a best-effort producer donates past: advance its sequence to (pos + 1) so a
+// future claim recognizes it via the Vyukov dif, but mark payload_len so consume() treats it as non-deliverable.
 inline void stamp_skip(cell_t &c, std::uint64_t position) noexcept
 {
     c.payload_len.store(k_skip_len, std::memory_order_relaxed);
     c.sequence.store(position + 1, std::memory_order_release);
 }
 
-// True when the slot serving `position` holds a COMMITTED prior occupant (or
-// is fresh), so a best-effort overwrite may recycle it without stealing an
-// in-flight peer's claim. dif==0 is fresh first-lap; dif==1-cell_count is
-// filled-and-lapped (stale bytes); dif==-cell_count is an in-flight peer.
+// True when the slot serving `position` holds a COMMITTED prior occupant (or is fresh), so a claim may recycle it
+// without stealing a claim in flight. dif==0 is fresh first-lap; dif==1-cell_count is filled-and-lapped (stale bytes);
+// dif==-cell_count is a claim in flight.
 inline bool occupant_committed(const cell_t &c, std::uint64_t position, std::uint64_t cell_count) noexcept
 {
     const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
@@ -88,10 +83,11 @@ loan_status clear_pin_or_skip(Ring &r, std::uint64_t pos, typename Ring::claim_r
     return loan_status::ok;
 }
 
-// Gates BEFORE winning the position so reliable never burns a slot it cannot fill: the slowest cursor must have
-// drained the prior occupant. A consumer may still pin the won position's aliased read, so the claim is announced
-// and the pin waited out (Disruptor gate: reliable keeps FIFO contiguity, the pin is transient); a won position
-// resolves to ok or to a recognized skip-tombstone, never abandoned, so no consumer wedges on it.
+// Gates BEFORE winning the position so reliable never burns a slot it cannot fill: the slowest cursor must have drained
+// the prior occupant, and that occupant must be committed, since with no cursor nothing else keeps a lap off a claim in
+// flight (a stale `pos` reloads instead). A consumer may still pin the won position's aliased read, so the claim is
+// announced and the pin waited out (Disruptor gate: reliable keeps FIFO contiguity, the pin is transient); a won
+// position resolves to ok or to a recognized skip-tombstone, never abandoned, so no consumer wedges on it.
 template<typename Ring>
 loan_status claim_reliable(Ring &r, std::uint64_t &pos, typename Ring::claim_result &out) noexcept
 {
@@ -99,6 +95,14 @@ loan_status claim_reliable(Ring &r, std::uint64_t &pos, typename Ring::claim_res
     {
         if(!consumers_passed(*r.m_header, r.m_cell_count, pos))
             return loan_status::congested;
+        if(!occupant_committed(r.cell_at(pos), pos, r.m_cell_count))
+        {
+            const std::uint64_t now = r.m_header->enqueue_pos.load(std::memory_order_relaxed);
+            if(now == pos)
+                return loan_status::congested;
+            pos = now;
+            continue;
+        }
         if(!r.m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
             continue;
         return clear_pin_or_skip(r, pos, out);

@@ -54,12 +54,14 @@ shm::acquire_result topic_attach_or_mint(Broker &broker, shm::acquire_failure &f
     return shm::acquire_result::failed;
 }
 
-// Mints or attaches the two regions of the key's publisher ring and binds the entry's ring.
+// Mints or attaches the two regions of the key's publisher ring and binds the entry's ring; a consumer only attaches.
 template<typename Registry, typename Entry>
-shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &key, std::uint32_t max_payload, io::ring_geometry_mode mode, std::uint32_t consumer_capacity,
-                                    shm::acquire_mode amode)
+shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &key, shm::ring_role role, std::uint32_t max_payload, io::ring_geometry_mode mode,
+                                    std::uint32_t consumer_capacity, shm::acquire_mode amode)
 {
-    const std::string ctrl_name             = shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns);
+    const std::string ctrl_name = shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns);
+    if(role == shm::ring_role::consumer)
+        return topic_join(r.m_broker, r.m_last_failure, e, ctrl_name, ctrl_name + ".s", key.publisher);
     const std::optional<std::uint32_t> want = max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
     const std::uint64_t capacity            = consumer_capacity == 0 ? shm::k_max_consumers : consumer_capacity;
     const shm::ring_geometry geom           = shm::ring_geometry_for(want, mode, consumer_capacity);
@@ -95,35 +97,31 @@ shm::arm_status topic_arm(Entry &e, std::uint32_t slot, Report &report)
         return e.notify->arm(slot, drain);
 }
 
-// The channel must be built AFTER the ring is bound (its subscriber registers a cursor over the live ring). The armed
-// drain is the ONE drain authority for the ring's single consumer cursor: a second drainer would steal messages. A
-// subscriber the ring refused a cursor would never receive, so the bind fails rather than attach it.
-template<typename Registry, typename Entry>
-shm::acquire_failure topic_bind(Registry &r, Entry &e, const shm_topic_key &key, shm::acquire_result verdict)
+// A subscriber the ring refused a cursor would never receive, so the engagement fails rather than attach it; the caller
+// undoes a failed engagement.
+template<typename Entry, typename Report>
+shm::acquire_failure topic_engage_consumer(Entry &e, Report &report)
 {
-    r.m_bind_notifier(e.notify, e.ring.header(), shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns));
-    e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
-    e.verdict                               = verdict;
-    e.refcount                              = 1;
-    const std::optional<std::uint32_t> slot = e.channel->waiter_slot();
+    const std::optional<std::uint32_t> slot = e.channel->engage_subscriber();
     if(!slot)
         return shm::acquire_failure{shm::acquire_bound::consumer_capacity};
-    if(const shm::arm_status armed = topic_arm(e, *slot, r.m_fallback_cb); armed != shm::arm_status::armed)
+    if(const shm::arm_status armed = topic_arm(e, *slot, report); armed != shm::arm_status::armed)
         return shm::acquire_failure{shm::acquire_bound::notifier, 0, 0, shm::region_status::ok, armed};
     return shm::acquire_failure{};
 }
 
-// A key whose waiter was lost fails every acquire until its last holder releases it, so the next demand arms afresh.
-template<typename Entry>
-shm::acquire_result topic_reacquire(Entry &e, shm::acquire_failure &failure)
+// The channel must be built AFTER the ring is bound. Only a consuming role registers the cursor and arms; the armed drain
+// is the one drainer of that cursor, since a second would steal its messages.
+template<typename Registry, typename Entry>
+shm::acquire_failure topic_bind(Registry &r, Entry &e, const shm_topic_key &key, shm::ring_role role, shm::acquire_result verdict)
 {
-    if(const shm::arm_status lost = e.loss->status(); lost != shm::arm_status::armed)
-    {
-        failure = shm::acquire_failure{shm::acquire_bound::notifier, 0, 0, shm::region_status::ok, lost};
-        return shm::acquire_result::failed;
-    }
-    ++e.refcount;
-    return e.verdict;
+    r.m_bind_notifier(e.notify, e.ring.header(), shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns));
+    e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
+    e.verdict = verdict;
+    e.hold(role);
+    if(role == shm::ring_role::producer)
+        return shm::acquire_failure{};
+    return topic_engage_consumer(e, r.m_fallback_cb);
 }
 
 }

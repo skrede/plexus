@@ -25,11 +25,9 @@
 
 namespace plexus::shm {
 
-// The send/drain facade composing a slot_publisher + slot_subscriber over ONE ring with
-// the notifier seam: send memcpys once into the slab then wakes the cross-process consumer
-// (signaled ONLY on a successful commit, never on a reject or a congested send); drain hands
-// each pending message up zero-copy, the taken_message reclaiming each turn so the pin is
-// released between deliveries.
+// The send/drain facade over ONE ring and the notifier seam. Its publisher half memcpys each send once into the slab and
+// signals only on a successful commit; its subscriber half, engaged only for a holder that reads, takes a reader cursor
+// and hands each pending message up zero-copy, reclaiming the pin between deliveries.
 template<typename Notifier>
     requires notifier<Notifier>
 class shm_channel
@@ -37,13 +35,14 @@ class shm_channel
 public:
     using deliver_fn = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
-    // spin_budget is the consumer-sovereign adaptive spin-then-park knob threaded to the
-    // slot_subscriber (required-WITH-default — the swept knee): the subscriber spins up to
-    // the budget on an empty take before this drain returns and the notifier parks.
+    // spin_budget is the consumer-sovereign adaptive spin-then-park knob (required-WITH-default, the swept knee): an
+    // engaged subscriber spins up to the budget on an empty take before a drain returns and the notifier parks.
     shm_channel(broadcast_ring &ring, Notifier &notify, io::reliability rel, io::congestion cong, std::uint32_t spin_budget = slot_subscriber::default_spin_budget) noexcept
-            : m_publisher(ring, rel, cong)
-            , m_subscriber(ring, spin_budget)
+            : m_ring(ring)
+            , m_publisher(ring, rel, cong)
+            , m_subscriber()
             , m_notifier(notify)
+            , m_spin_budget(spin_budget)
     {
     }
 
@@ -73,18 +72,35 @@ public:
 
     void drain(deliver_fn &deliver)
     {
+        if(!m_subscriber)
+            return;
         for(;;)
         {
             taken_message msg;
-            if(m_subscriber.take(msg) != loan_status::ok)
+            if(m_subscriber->take(msg) != loan_status::ok)
                 return;
             deliver(msg.as_wire_bytes());
         }
     }
 
+    // Registers the reader cursor at the producer's tail; nullopt when the ring has no free reader slot.
+    std::optional<std::uint32_t> engage_subscriber() noexcept
+    {
+        if(!m_subscriber)
+            m_subscriber.emplace(m_ring, m_spin_budget);
+        return m_subscriber->cursor_index();
+    }
+
+    void release_subscriber() noexcept
+    {
+        m_subscriber.reset();
+    }
+
     std::optional<std::uint32_t> waiter_slot() const noexcept
     {
-        return m_subscriber.cursor_index();
+        if(!m_subscriber)
+            return std::nullopt;
+        return m_subscriber->cursor_index();
     }
 
 private:
@@ -117,9 +133,11 @@ private:
         return st;
     }
 
+    broadcast_ring &m_ring;
     slot_publisher m_publisher;
-    slot_subscriber m_subscriber;
+    std::optional<slot_subscriber> m_subscriber;
     Notifier &m_notifier;
+    std::uint32_t m_spin_budget;
 };
 
 }

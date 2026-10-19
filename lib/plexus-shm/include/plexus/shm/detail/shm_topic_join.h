@@ -43,7 +43,8 @@ shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, En
 
 // The attacher path: maps the peer's regions and re-reads the geometry from the control header (never unlinks). A slab
 // missing beside a live control region, or a header not stamped yet, is a creator still minting: a transient join. A
-// header another publisher owns is incompatible.
+// header another publisher owns is incompatible. A missing control region is an absent ring, also when it vanished
+// between an existence probe and this join.
 template<typename Broker, typename Entry>
 shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &ctrl_name, const std::string &slab_name, const node_id &publisher)
 {
@@ -53,7 +54,7 @@ shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, En
         return shm::acquire_result::failed;
     };
     if(const shm::region_status cs = broker.attach(ctrl_name, e.control); cs != shm::region_status::ok)
-        return fail(shm::acquire_bound::os_allocator, cs);
+        return fail(cs == shm::region_status::not_found ? shm::acquire_bound::not_found : shm::acquire_bound::os_allocator, cs);
     if(const shm::region_status ss = broker.attach(slab_name, e.slab); ss != shm::region_status::ok)
         return fail(ss == shm::region_status::not_found ? shm::acquire_bound::transient_join : shm::acquire_bound::os_allocator, ss);
     switch(shm::broadcast_ring::attach(e.control.bytes(), e.slab.bytes(), publisher, e.ring))

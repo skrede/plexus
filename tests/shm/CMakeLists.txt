@@ -462,6 +462,22 @@ target_link_libraries(test_shm_registry_join PRIVATE
 
 catch_discover_tests(test_shm_registry_join TEST_PREFIX "shm.")
 
+# Which halves of a ring each holder's role engages: producer-only entries register no cursor and arm nothing, each
+# consumer adds one cursor, and a consumer never creates the ring.
+add_executable(test_shm_registry_roles test_shm_registry_roles.cpp)
+
+target_include_directories(test_shm_registry_roles PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_registry_roles PRIVATE
+    plexus::plexus
+    plexus::shm
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_registry_roles TEST_PREFIX "shm.")
+
 # A co-host acquire past a ring's consumer capacity, over an in-memory broker two registries share.
 add_executable(test_shm_registry_capacity test_shm_registry_capacity.cpp)
 

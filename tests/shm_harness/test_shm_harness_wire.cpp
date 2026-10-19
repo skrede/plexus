@@ -29,12 +29,13 @@ TEST_CASE("harness both ends denied every notifier deliver every message over th
     CHECK(topo.leave(1));
     CHECK(topo.leave(0));
 
-    REQUIRE_FALSE(over_shm);
+    // A send-only publisher arms no wake, so its ring stands and only the subscriber's denied wake keeps the pair on
+    // the wire.
     REQUIRE(sub.received == 20);
     REQUIRE(sub.distinct == 20);
     REQUIRE(sub.duplicates == 0);
-    REQUIRE(fallbacks_of(pub, plexus::io::fallback_reason::notifier_denied) >= 1);
-    REQUIRE(fallbacks_of(sub, plexus::io::fallback_reason::not_offered) >= 1);
+    REQUIRE(fallbacks_of(pub, plexus::io::fallback_reason::notifier_denied) == 0);
+    REQUIRE(fallbacks_of(sub, plexus::io::fallback_reason::notifier_denied) >= 1);
 }
 
 TEST_CASE("harness both ends that lose every notifier at runtime deliver every message over the wire", "[shm][harness]")

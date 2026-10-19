@@ -12,9 +12,9 @@
 #include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/region_broker_concept.h"
 
-#include "plexus/shm/detail/shm_topic_open.h"
 #include "plexus/shm/detail/shm_topic_sink.h"
 #include "plexus/shm/detail/shm_topic_entry.h"
+#include "plexus/shm/detail/shm_topic_acquire.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -39,7 +39,7 @@
 namespace plexus::shm {
 
 // The demand-driven lifecycle owner of every live (topic, direction, publisher) ring: a first acquire MINTS the ring (or
-// ATTACHES to a peer's), each further acquire bumps a refcount, and the matching releases tear it down at 1 -> 0 (the
+// ATTACHES to a peer's), each acquire counts one holder of its role, and the entry tears down once no role holds it (the
 // creator also unlinks). A waiter lost after its acquire tells each holder watching it and fails further acquires of
 // its key. Templated on the broker and notifier seams so core pulls no POSIX or asio header.
 template<typename Broker, typename Notifier>
@@ -83,39 +83,19 @@ public:
             e->teardown();
     }
 
-    // A repeat acquire of a live key bumps the refcount and returns its prior verdict; a first acquire mints (or attaches
-    // to a peer's) ring (max_payload 0 -> default). Each publisher of a topic owns its own ring.
-    acquire_result acquire(const std::string &fqn, ring_direction direction, const node_id &publisher, std::uint32_t max_payload,
+    // role is the holder's use of the ring: only a consuming role takes a cursor and arms, and it never creates the ring
+    // (none under the name is not_found; the geometry arguments size only a ring a producer mints, max_payload 0 ->
+    // default). A repeat acquire of a live key returns its first verdict. Each publisher of a topic owns its own ring.
+    acquire_result acquire(const std::string &fqn, ring_direction direction, const node_id &publisher, ring_role role, std::uint32_t max_payload,
                            io::ring_geometry_mode mode = io::ring_geometry_mode::reliable_preserving, std::uint32_t consumer_capacity = 0,
                            acquire_mode amode = acquire_mode::reclaim_stale)
     {
-        const key k{fqn, direction, publisher};
-        if(auto it = m_entries.find(k); it != m_entries.end())
-            return detail::topic_reacquire(*it->second, m_last_failure);
-
-        auto e                       = std::make_unique<entry>();
-        m_last_failure               = acquire_failure{};
-        const acquire_result verdict = detail::topic_open_ring(*this, *e, k, max_payload, mode, consumer_capacity, amode);
-        if(verdict == acquire_result::failed)
-            return acquire_result::failed;
-        // A reader with no cursor or an unarmable notifier never receives, so the caller keeps its other transports.
-        if(const acquire_failure bound = detail::topic_bind(*this, *e, k, verdict); bound.bound != acquire_bound::none)
-        {
-            e->teardown();
-            m_last_failure = bound;
-            return acquire_result::failed;
-        }
-        m_entries.emplace(k, std::move(e));
-        return verdict;
+        return detail::topic_acquire(*this, key{fqn, direction, publisher}, role, max_payload, mode, consumer_capacity, amode);
     }
 
-    void release(const std::string &fqn, ring_direction direction, const node_id &publisher)
+    void release(const std::string &fqn, ring_direction direction, const node_id &publisher, ring_role role)
     {
-        auto it = m_entries.find(key{fqn, direction, publisher});
-        if(it == m_entries.end() || --it->second->refcount > 0)
-            return;
-        it->second->teardown();
-        m_entries.erase(it);
+        detail::topic_release(*this, key{fqn, direction, publisher}, role);
     }
 
     // Told once per lost waiter and once per notifier demotion of any live entry, on the executor.
@@ -188,11 +168,16 @@ private:
     acquire_failure m_last_failure;
     detail::shm_topic_map<entry> m_entries;
 
+    template<typename R>
+    friend ::plexus::shm::acquire_result detail::topic_acquire(R &, const detail::shm_topic_key &, ::plexus::shm::ring_role, std::uint32_t, ::plexus::io::ring_geometry_mode,
+                                                               std::uint32_t, ::plexus::shm::acquire_mode);
+    template<typename R>
+    friend void detail::topic_release(R &, const detail::shm_topic_key &, ::plexus::shm::ring_role);
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, std::uint32_t, ::plexus::io::ring_geometry_mode, std::uint32_t,
-                                                                 ::plexus::shm::acquire_mode);
+    friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, ::plexus::shm::ring_role, std::uint32_t, ::plexus::io::ring_geometry_mode,
+                                                                 std::uint32_t, ::plexus::shm::acquire_mode);
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::acquire_result);
+    friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::ring_role, ::plexus::shm::acquire_result);
 };
 
 }

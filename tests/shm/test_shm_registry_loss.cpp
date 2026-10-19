@@ -36,6 +36,7 @@
 namespace {
 
 using plexus::shm::arm_status;
+using plexus::shm::ring_role;
 using plexus::shm::acquire_result;
 using plexus::shm::ring_direction;
 using lost_notifier = plexus::shm::fallback_notifier<plexus::testing::demoting_primary<plexus::asio::asio_policy>, plexus::testing::denied_floor>;
@@ -69,20 +70,20 @@ TEST_CASE("registry_loss a waiter lost at runtime fails every acquire of its key
     registry reg{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
     const std::string fqn = fresh_fqn("latch");
 
-    REQUIRE(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::created);
+    REQUIRE(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::both, 0) == acquire_result::created);
     io.run();
 
-    CHECK(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::failed);
+    CHECK(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::both, 0) == acquire_result::failed);
     CHECK(reg.last_acquire_failure().bound == plexus::shm::acquire_bound::notifier);
     CHECK(reg.last_acquire_failure().arm == arm_status::denied);
     CHECK(reg.channel_for(fqn, ring_direction::request, plexus::node_id{}) == nullptr);
 
-    reg.release(fqn, ring_direction::request, plexus::node_id{});
+    reg.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::both);
     CHECK(reg.live_count() == 0);
     CHECK_FALSE(region_exists(fqn));
 
-    REQUIRE(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, 0) == acquire_result::created);
-    reg.release(fqn, ring_direction::request, plexus::node_id{});
+    REQUIRE(reg.acquire(fqn, ring_direction::request, plexus::node_id{}, ring_role::both, 0) == acquire_result::created);
+    reg.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::both);
 }
 
 TEST_CASE("registry_loss each holder watching a lost waiter is told once and the last release unlinks the ring", "[shm][registry_loss]")

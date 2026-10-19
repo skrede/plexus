@@ -50,6 +50,7 @@ TEST_CASE("shm.backpressure a reliable producer blocks losslessly on a lagging c
     // loopback) -- the reader thread drains it, advancing that cursor so the
     // back-pressured producer resumes.
     shm_channel<null_notifier> channel(f.ring, f.notify, plexus::io::reliability::reliable, plexus::io::congestion::block);
+    REQUIRE(channel.engage_subscriber());
 
     std::atomic<bool> producer_done{false};
 
