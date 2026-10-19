@@ -109,6 +109,19 @@ target_link_libraries(test_shm_ring_dekker PRIVATE
 
 catch_discover_tests(test_shm_ring_dekker TEST_PREFIX "shm.")
 
+# A reliable claim lapping a claim still in flight on a ring with no cursor, by its own producer and by a second one.
+add_executable(test_shm_ring_overtake test_shm_ring_overtake.cpp)
+
+target_include_directories(test_shm_ring_overtake PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_ring_overtake PRIVATE
+    plexus::shm
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_ring_overtake TEST_PREFIX "shm.")
+
 # The loan reshape: the move-only intrusive shm_slot_owner, the zero-copy
 # take() returning wire_bytes<shm_slot_owner> (no shared_ptr), and the move-only
 # loaned_buffer / taken_message lifetime (inert moved-from, unpin exactly once).
