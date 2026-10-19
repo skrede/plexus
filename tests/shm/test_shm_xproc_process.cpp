@@ -2,6 +2,10 @@
 #include "support/xproc_process.h"
 #include "support/xproc_child_main.h"
 
+#include "plexus/native/shm_region_broker.h"
+
+#include "plexus/testing/platform.h"
+
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -128,6 +132,29 @@ TEST_CASE("xproc_control a counter written by a child is read by the parent", "[
     REQUIRE(child->wait_for(5s) == std::optional<std::int32_t>(0));
     REQUIRE(shared->get().value.load(std::memory_order_acquire) == k_stored_value);
 }
+
+#if !defined(_WIN32)
+// A live handle stands in for a crashed run's leftover: a POSIX name stays linked until something unlinks it, while a
+// Windows object dies with its last handle.
+TEST_CASE("xproc_control a scoped name removes the broker's object left by an earlier run", "[shm][xproc][!shouldfail]")
+{
+    const std::string prefix = "xproc.leftover.";
+    const std::string bare   = prefix + std::to_string(plexus::testing::process_id());
+    plexus::native::shm_region_broker broker;
+    plexus::native::shm_region_handle leftover;
+    plexus::native::shm_region_handle inside;
+    REQUIRE(broker.create(bare, 64, {}, leftover) == plexus::shm::region_status::ok);
+    {
+        const scoped_shm_name name(prefix);
+        plexus::native::shm_region_handle probe;
+        REQUIRE(broker.attach(name.str(), probe) != plexus::shm::region_status::ok);
+        REQUIRE(broker.create(name.str(), 64, {}, inside) == plexus::shm::region_status::ok);
+    }
+
+    plexus::native::shm_region_handle probe;
+    REQUIRE(broker.attach(bare, probe) != plexus::shm::region_status::ok);
+}
+#endif
 
 int main(int argc, char **argv)
 {
