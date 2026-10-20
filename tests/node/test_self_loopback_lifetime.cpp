@@ -86,7 +86,7 @@ TEST_CASE("self_loopback_lifetime: drain-before-destroy holds with no per-callba
     REQUIRE(fired == 1);
 }
 
-TEST_CASE("self_loopback_lifetime: closing the loopback channel posts on_closed once, after its queued delivery", "[node][loopback][lifetime][!shouldfail]")
+TEST_CASE("self_loopback_lifetime: closing the loopback channel posts on_closed once, after its queued delivery", "[node][loopback][lifetime]")
 {
     plexus_test::inproc_bus<> bus;
     plexus_test::inproc_executor<> ex{bus};
@@ -106,7 +106,7 @@ TEST_CASE("self_loopback_lifetime: closing the loopback channel posts on_closed 
     REQUIRE(log == std::vector<std::string>{"closed"});
 }
 
-TEST_CASE("self_loopback_lifetime: a handler installed after the loopback channel went quiet is still notified", "[node][loopback][lifetime][!shouldfail]")
+TEST_CASE("self_loopback_lifetime: a handler installed after the loopback channel went quiet is still notified", "[node][loopback][lifetime]")
 {
     plexus_test::inproc_bus<> bus;
     plexus_test::inproc_executor<> ex{bus};

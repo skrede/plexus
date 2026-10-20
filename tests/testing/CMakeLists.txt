@@ -18,5 +18,6 @@ endif()
 catch_discover_tests(test_pump TEST_PREFIX "testing.")
 
 add_executable(test_mock_retire_quiescence test_mock_retire_quiescence.cpp)
+target_include_directories(test_mock_retire_quiescence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(test_mock_retire_quiescence PRIVATE plexus::core plexus::testing Catch2::Catch2WithMain)
 catch_discover_tests(test_mock_retire_quiescence TEST_PREFIX "testing.")

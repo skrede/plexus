@@ -28,6 +28,7 @@ set(PLEXUS_IO_TESTS
     test_liveness_storage
     test_peer_liveliness_types
     test_pending_ops
+    test_close_notification
     test_channel_graveyard)
 
 # The peer-liveliness arbiter oracle: its fusion-matrix and precedence/hysteresis scenario

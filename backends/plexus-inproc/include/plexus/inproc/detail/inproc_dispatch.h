@@ -12,7 +12,7 @@
 namespace plexus::detail {
 
 // An object whose target vanished still releases (no leak); an unmatched data packet reports
-// unroutable on a still-registered sender (already off the synchronous send path).
+// unroutable to its sender if that is still registered (already off the synchronous send path).
 template<typename Bus, typename Packet>
 void dispatch_packet(Bus &bus, Packet &pkt)
 {
@@ -33,11 +33,11 @@ void dispatch_packet(Bus &bus, Packet &pkt)
 
     if(pkt.kind == packet_kind::object && !delivered)
         io::release(pkt.carrier);
-    if(pkt.kind == packet_kind::data && !delivered && pkt.from && bus.sender_live(pkt.from))
-        pkt.from->report_unroutable();
-    // drop the dangling slot pointer so a re-read never re-releases
-    pkt.carrier = {};
-    pkt.from    = nullptr;
+    if(pkt.kind == packet_kind::data && !delivered && pkt.from_key != 0)
+        bus.report_unroutable(pkt.from_key);
+    // drop the slot's carrier so a re-read never re-releases
+    pkt.carrier  = {};
+    pkt.from_key = 0;
 }
 
 }

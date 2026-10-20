@@ -6,9 +6,11 @@
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_executor.h"
 
-#include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/byte_channel.h"
+#include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/close_notification.h"
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
 
@@ -20,21 +22,22 @@
 
 namespace plexus::testing {
 
-// A pure recording byte_channel for deterministic tests. Unlike inproc_channel it
-// has no bus and no partner: send() records the bytes VERBATIM into m_sent rather
-// than routing them, and inbound/error/close events are driven directly through the
-// channel's OWN inject_* members — never via an accessor bolted onto a production
-// channel. The injection mirrors the posted-delivery contract (byte_channel): a
-// handler fires only once the step-executor delivers the posted work, so a test
-// observes the same never-synchronous edge a real channel guarantees. Satisfies
-// plexus::io::byte_channel.
+// A pure recording byte_channel for deterministic tests. Unlike inproc_channel it has no bus and no partner: send()
+// records the bytes verbatim into m_sent, and inbound, error and close events are driven through the channel's own
+// inject_* members, never via an accessor bolted onto a production channel. Each injection is posted and counted, so
+// a test observes the same never-synchronous edges, and the same close contract, a real channel guarantees.
 template<typename Clock = test_clock>
 class mock_channel
 {
 public:
     explicit mock_channel(plexus::inproc::inproc_executor<Clock> &ex)
-            : m_exec(&ex)
+            : m_remote{"mock", "peer"}
+            , m_exec(ex)
+            , m_ops()
+            , m_sent()
+            , m_close_notification()
     {
+        m_ops.on_settled([this] { notify_closed(); });
     }
 
     mock_channel(plexus::inproc::inproc_executor<Clock> &ex, std::error_code &)
@@ -54,7 +57,8 @@ public:
 
     void close()
     {
-        m_closed = true;
+        if(!m_ops.closing())
+            enter_closed();
     }
 
     [[nodiscard]] io::endpoint remote_endpoint() const
@@ -64,55 +68,43 @@ public:
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
     {
-        m_on_data = std::move(cb);
+        m_on_data_cb = std::move(cb);
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed = std::move(cb);
+        m_close_notification.install(std::move(cb));
+        notify_closed();
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
-        m_on_error = std::move(cb);
+        m_on_error_cb = std::move(cb);
     }
 
-    // Stored to satisfy the uniform channel seam and NEVER fired: a protocol-close
-    // is meaningless on a non-stream channel (no partial frame is expressible).
+    // Stored for the uniform channel seam and never fired: no partial frame is expressible on a non-stream channel.
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
-        m_on_protocol_close = std::move(cb);
+        m_on_protocol_close_cb = std::move(cb);
     }
 
-    // Drive an inbound frame: the on_data handler fires only after the executor
-    // delivers this posted work, never synchronously from inject_inbound itself.
     void inject_inbound(std::span<const std::byte> data)
     {
-        std::vector<std::byte> owned(data.begin(), data.end());
-        m_exec->post(
-                [this, bytes = std::move(owned)]() mutable
+        inject(
+                [this, bytes = std::vector<std::byte>(data.begin(), data.end())]
                 {
-                    if(m_on_data)
-                        m_on_data(std::span<const std::byte>(bytes));
+                    if(m_on_data_cb)
+                        m_on_data_cb(std::span<const std::byte>(bytes));
                 });
     }
 
+    // An injected error is the channel's fail: the handler fires, then the channel is closed.
     void inject_error(io::io_error err)
     {
-        m_exec->post(
-                [this, err]()
-                {
-                    if(m_on_error)
-                        m_on_error(err);
-                });
+        inject([this, err] { fail(err); });
     }
 
     void inject_close()
     {
-        m_exec->post(
-                [this]()
-                {
-                    if(m_on_closed)
-                        m_on_closed();
-                });
+        inject([this] { close(); });
     }
 
     void set_remote_endpoint(io::endpoint ep)
@@ -130,18 +122,57 @@ public:
     }
     [[nodiscard]] bool closed() const noexcept
     {
-        return m_closed;
+        return m_ops.closing();
     }
 
 private:
-    plexus::inproc::inproc_executor<Clock> *m_exec;
-    io::endpoint m_remote{"mock", "peer"};
+    io::endpoint m_remote;
+    plexus::inproc::inproc_executor<Clock> &m_exec;
+    io::detail::pending_ops m_ops;
     std::vector<std::vector<std::byte>> m_sent;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()> m_on_closed;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
-    bool m_closed{false};
+    io::detail::close_notification m_close_notification;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+
+    // A closed channel receives nothing, so it issues no new counted work.
+    template<typename Event>
+    void inject(Event event)
+    {
+        if(m_ops.closing())
+            return;
+        m_ops.begin();
+        m_exec.post(
+                [this, event = std::move(event)]() mutable
+                {
+                    m_ops.end();
+                    event();
+                });
+    }
+
+    void fail(io::io_error err)
+    {
+        if(m_ops.closing())
+            return;
+        auto on_error = std::exchange(m_on_error_cb, nullptr);
+        enter_closed();
+        if(on_error)
+            on_error(err);
+    }
+
+    void enter_closed()
+    {
+        m_on_error_cb          = nullptr;
+        m_on_protocol_close_cb = nullptr;
+        m_on_data_cb           = nullptr;
+        m_ops.close();
+    }
+
+    void notify_closed()
+    {
+        if(m_ops.settled())
+            m_close_notification.notify([this](auto notify) { m_exec.post(std::move(notify)); });
+    }
 };
 
 // The deterministic test Policy: reuses the inproc step-executor and virtual-clock

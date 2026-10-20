@@ -84,12 +84,12 @@ public:
         std::erase_if(m_listeners, [&ep](const listener_entry &e) { return e.ep == ep; });
     }
 
-    void enqueue(std::uint64_t to_key, std::span<const std::byte> data, inproc_channel<Clock> *from)
+    void enqueue(std::uint64_t to_key, std::span<const std::byte> data, std::uint64_t from_key)
     {
         queued_packet &slot = push_slot();
         slot.to_key         = to_key;
         slot.kind           = packet_kind::data;
-        slot.from           = from;
+        slot.from_key       = from_key;
         // reuse the slot's grown capacity
         slot.data.assign(data.begin(), data.end());
         slot.carrier = {};
@@ -100,7 +100,7 @@ public:
         queued_packet &slot = push_slot();
         slot.to_key         = to_key;
         slot.kind           = packet_kind::close;
-        slot.from           = nullptr;
+        slot.from_key       = 0;
         slot.data.clear();
         slot.carrier = {};
     }
@@ -113,7 +113,7 @@ public:
         queued_packet &slot = push_slot();
         slot.to_key         = to_key;
         slot.kind           = packet_kind::object;
-        slot.from           = nullptr;
+        slot.from_key       = 0;
         slot.data.clear();
         slot.carrier = carrier;
     }
@@ -138,14 +138,12 @@ private:
     template<typename B, typename P>
     friend void detail::dispatch_packet(B &, P &);
 
-    // A sender that deregistered between send and delivery is skipped (its report_unroutable target
-    // is gone).
-    bool sender_live(inproc_channel<Clock> *from) const noexcept
+    // The sender is addressed by its key like any target: one that deregistered since it sent is a miss.
+    void report_unroutable(std::uint64_t from_key)
     {
-        for(const auto &entry : m_channels)
-            if(entry.chan == from)
-                return true;
-        return false;
+        auto it = std::ranges::find(m_channels, from_key, &channel_entry::key);
+        if(it != m_channels.end())
+            it->chan->report_unroutable();
     }
 
     enum class packet_kind : uint8_t
@@ -161,7 +159,7 @@ private:
     {
         std::uint64_t to_key{0};
         packet_kind kind{packet_kind::data};
-        inproc_channel<Clock> *from{nullptr};
+        std::uint64_t from_key{0};
         std::vector<std::byte> data;
         io::object_carrier carrier{};
     };

@@ -3,6 +3,9 @@
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
 
+#include "support/retire_drain.h"
+
+#include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 
 #include "plexus/io/detail/drop_event.h"
@@ -11,13 +14,16 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <system_error>
 
 using plexus::inproc::inproc_bus;
+using plexus::inproc::inproc_timer;
 using plexus::inproc::inproc_channel;
 using plexus::inproc::inproc_executor;
 using event_log = std::vector<std::string>;
@@ -46,7 +52,7 @@ struct inproc_pair
 
 }
 
-TEST_CASE("inproc_retire_quiescence closing a channel posts its on_closed exactly once", "[inproc][retire_quiescence][!shouldfail]")
+TEST_CASE("inproc_retire_quiescence closing a channel posts its on_closed exactly once", "[inproc][retire_quiescence]")
 {
     inproc_pair p;
     std::int32_t closes = 0;
@@ -60,7 +66,7 @@ TEST_CASE("inproc_retire_quiescence closing a channel posts its on_closed exactl
     REQUIRE(closes == 1);
 }
 
-TEST_CASE("inproc_retire_quiescence a delivery queued before close is not handed to the consumer", "[inproc][retire_quiescence][!shouldfail]")
+TEST_CASE("inproc_retire_quiescence a delivery queued before close is not handed to the consumer", "[inproc][retire_quiescence]")
 {
     inproc_pair p;
     event_log log;
@@ -75,7 +81,7 @@ TEST_CASE("inproc_retire_quiescence a delivery queued before close is not handed
     REQUIRE(log.empty());
 }
 
-TEST_CASE("inproc_retire_quiescence a handler installed after the channel closed and went quiet is still notified", "[inproc][retire_quiescence][!shouldfail]")
+TEST_CASE("inproc_retire_quiescence a handler installed after the channel closed and went quiet is still notified", "[inproc][retire_quiescence]")
 {
     inproc_pair p;
     p.victim->close();
@@ -88,7 +94,7 @@ TEST_CASE("inproc_retire_quiescence a handler installed after the channel closed
     REQUIRE(closes == 1);
 }
 
-TEST_CASE("inproc_retire_quiescence a peer's close reaches on_error before the channel's on_closed", "[inproc][retire_quiescence][!shouldfail]")
+TEST_CASE("inproc_retire_quiescence a peer's close reaches on_error before the channel's on_closed", "[inproc][retire_quiescence]")
 {
     inproc_pair p;
     event_log log;
@@ -98,4 +104,27 @@ TEST_CASE("inproc_retire_quiescence a peer's close reaches on_error before the c
     p.peer->close();
     p.exec.drain();
     REQUIRE(log == event_log{"broken_pipe", "closed"});
+}
+
+TEST_CASE("inproc_retire_quiescence a retired channel's posts and timers all complete before its on_closed", "[inproc][retire_quiescence]")
+{
+    inproc_pair p;
+    event_log log;
+    inproc_timer<> timer{p.exec};
+    const plexus::io::endpoint victim_ep = p.victim->local_endpoint();
+    auto record                          = [&log, &p, &victim_ep](const std::string &event) { log.push_back(event + (p.bus.key_for(victim_ep) != 0 ? " live" : " erased")); };
+    p.victim->on_data([&log](std::span<const std::byte>) { log.push_back("data"); });
+    p.peer->send(k_payload);
+    timer.expires_after(std::chrono::hours{1});
+    timer.async_wait([&record](std::error_code ec) { record(ec ? "timer canceled" : "timer expired"); });
+    p.exec.post([&record] { record("posted"); });
+
+    // The owner cancels its wait as it retires the channel, as a session's teardown does.
+    timer.cancel();
+    const auto outcome = plexus::testing::retire_and_drain(p.victim, [&p] { p.exec.drain(); });
+    REQUIRE(log == event_log{"timer canceled live", "posted live"});
+    REQUIRE(outcome.erased == 1);
+    REQUIRE(outcome.empty);
+    REQUIRE(p.bus.key_for(victim_ep) == 0);
+    REQUIRE_FALSE(p.exec.step());
 }
