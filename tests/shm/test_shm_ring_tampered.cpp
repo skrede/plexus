@@ -83,6 +83,19 @@ TEST_CASE("ring_tampered a reader index past the cursor array is not placed thou
     REQUIRE(t.ring.header().park[0].load() == UINT32_MAX);
 }
 
+TEST_CASE("ring_tampered a reader index past the ring's own capacity is not placed though a peer raised the capacity", "[shm][ring_tampered]")
+{
+    tampered_ring t;
+    REQUIRE(t.claim() == loan_status::ok);
+    t.ring.header().consumer_capacity = k_max_consumers;
+    t.ring.header().cursors[2].active.store(1);
+
+    plexus::testing::noop_notifier notifier;
+    shm_channel<plexus::testing::noop_notifier> channel{t.ring, notifier, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    CHECK_FALSE(channel.place_reader(2));
+    REQUIRE(t.ring.header().cursors[2].position.load() == k_cursor_idle);
+}
+
 TEST_CASE("ring_tampered a sequence a lap ahead with no tail past the cursor is not a lag", "[shm][ring_tampered]")
 {
     tampered_ring t;
