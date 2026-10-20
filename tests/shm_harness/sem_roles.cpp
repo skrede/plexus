@@ -70,8 +70,15 @@ bool sem_cycler(const std::vector<std::string> &argv)
     return true;
 }
 
+#if defined(__APPLE__)
+// macOS declares sem_getvalue deprecated and does not implement it, so a fixed settle stands in for the count poll.
+void wait_until_waiter_settles(const std::string &)
+{
+    std::this_thread::sleep_for(1s);
+}
+#else
 // The waiter stops consuming its semaphore's count only once it blocks, so a count unchanged across a settle means the
-// waiter is either blocked or idle. macOS does not implement sem_getvalue, so there a fixed settle stands in.
+// waiter is either blocked or idle.
 void wait_until_waiter_settles(const std::string &sem_name)
 {
     sem_t *sem   = ::sem_open(sem_name.c_str(), 0);
@@ -93,6 +100,7 @@ void wait_until_waiter_settles(const std::string &sem_name)
     ::sem_close(sem);
     std::cout << "sem_flood settled count=" << current << std::endl;
 }
+#endif
 
 // The reactor is never polled, so every wake the waiter relays stays pending in its wake pipe.
 bool sem_flood(const std::vector<std::string> &argv)

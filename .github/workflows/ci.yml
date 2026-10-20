@@ -193,6 +193,8 @@ jobs:
           sudo apt-get update && sudo apt-get install -y liburing-dev gcc-14 g++-14
           pip install gcovr
 
+      # Threaded tests race gcov's plain counters into negative hit counts, which gcovr refuses
+      # (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68080); atomic profile updates keep them exact.
       - name: configure
         env:
           CC: gcc-14
@@ -200,7 +202,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_FLAGS="--coverage" \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
             -DPLEXUS_ENABLE_CRYPTO_BACKEND=ON \
