@@ -131,14 +131,14 @@ for a real reason.
 
 ## Construction
 
-- Initialize a class's members in the **constructor's init list, never in-declaration** — one place,
-  one source of truth, so two defaults can never drift apart. A class with a constructor carries no
-  in-declaration member initializers.
-- A member wanting a default value is exactly what a constructor is for: **give the type a constructor**
-  and put the default in its init list. Do not leave the default in-declaration. The only type without a
-  constructor is a pure aggregate that carries *no* defaults at all — brace-initialized at every use, no
-  in-declaration initializers; it has nothing to move. The moment one member wants a default, the type
-  takes a constructor.
+- A class with a constructor initializes its members in the **constructor's init list, never
+  in-declaration** — one place, one source of truth, so two defaults can never drift apart. A member
+  that wants a default on such a class gets it in the init list.
+- A **pure aggregate** — a struct with no user-declared constructor, typically an options struct —
+  may carry its defaults **in-declaration**. That keeps it an aggregate, so a caller designated-
+  initializes only the fields it overrides (`node_options{.liveliness = {...}}`) and every other
+  field keeps its default. Adding a constructor to carry defaults would forfeit designated
+  initialization; do not.
 - **The constructor's init list is written in member-declaration order.** Members initialize in
   declaration order regardless of the init-list order, so the two must agree (no `-Wreorder`). This
   has a consequence for the member triangle below: a member consumed by another member's constructor
