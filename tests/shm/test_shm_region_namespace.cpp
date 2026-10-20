@@ -135,6 +135,7 @@ TEST_CASE("shm.region_namespace same namespace converges and a different one is 
 
         posix_shm_region_broker broker;
         region_handle ctrl, slab;
+        const plexus::testing::unlink_on_exit names{ctrl, slab};
         REQUIRE(broker.create(control_name(fqn, producer_ns), pio::control_region_bytes(geom.cell_count), pio::create_options{.unlink_stale_on_create = true}, ctrl) ==
                 pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn, producer_ns), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{.unlink_stale_on_create = true}, slab) ==

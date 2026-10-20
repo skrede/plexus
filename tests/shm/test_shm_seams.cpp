@@ -37,6 +37,19 @@ struct stub_region_handle
         return true;
     }
 
+    slot_hold hold_all_slots()
+    {
+        return slot_hold::busy;
+    }
+
+    void release_all_slots()
+    {
+    }
+
+    void unlink_name()
+    {
+    }
+
     bool mapped = false;
 };
 

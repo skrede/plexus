@@ -18,6 +18,14 @@ void release_slot_lock(int region_fd, int sidecar_fd, std::uint32_t slot) noexce
 // True as well when the host offers no proof, so a caller never declares a holder dead without one.
 bool slot_locked_elsewhere(int region_fd, int &sidecar_fd, const std::string &canonical, std::uint32_t slot) noexcept;
 
+// Every slot in one lock over their byte range, so it is held only when no other description holds any of them.
+plexus::shm::slot_hold hold_all_slot_locks(int region_fd, int &sidecar_fd, const std::string &canonical) noexcept;
+
+void release_all_slot_locks(int region_fd, int sidecar_fd) noexcept;
+
+// Removes the region's sidecar lock file where the host uses one.
+void unlink_sidecar(const std::string &canonical) noexcept;
+
 }
 
 #endif

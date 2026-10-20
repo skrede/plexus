@@ -52,15 +52,14 @@ shm_resolved_geometry mux_resolve(const Member &m, const std::string &fqn, shm::
 // left (channel_for non-null), so the minted channel owns that one hold; any other role acquires its own. nullptr on a
 // broker failure. ep.address is the fqn. lost runs if the ring's waiter is lost; with none the channel closes.
 template<typename Member>
-auto mux_open(Member &m, const io::endpoint &ep, shm::ring_role role, shm::acquire_mode amode = shm::acquire_mode::reclaim_stale, shm::waiter_loss::lost_fn lost = nullptr)
-        -> std::unique_ptr<typename Member::channel_type>
+auto mux_open(Member &m, const io::endpoint &ep, shm::ring_role role, shm::waiter_loss::lost_fn lost = nullptr) -> std::unique_ptr<typename Member::channel_type>
 {
     const node_id &self = m.m_self;
     auto *ch            = role == shm::ring_role::both ? m.m_registry.channel_for(ep.address, shm::ring_direction::request, self) : nullptr;
     if(ch == nullptr)
     {
         const shm_resolved_geometry g = mux_resolve(m, ep.address, shm::ring_direction::request);
-        if(m.m_registry.acquire(ep.address, shm::ring_direction::request, self, role, g.max_payload, g.mode, g.consumer_capacity, amode) == shm::acquire_result::failed)
+        if(m.m_registry.acquire(ep.address, shm::ring_direction::request, self, role, g.max_payload, g.mode, g.consumer_capacity) == shm::acquire_result::failed)
             return nullptr;
         ch = m.m_registry.channel_for(ep.address, shm::ring_direction::request, self);
     }

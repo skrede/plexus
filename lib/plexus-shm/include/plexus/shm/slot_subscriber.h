@@ -6,7 +6,10 @@
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/taken_message.h"
 
+#include "plexus/shm/detail/shm_ring_mapping.h"
+
 #include <cstdint>
+#include <utility>
 #include <optional>
 
 namespace plexus::shm {
@@ -18,7 +21,8 @@ namespace plexus::shm {
 // lap, a best_effort skip-tombstone, and a full-ring lap-behind (jumping to the producer
 // tail in one O(1) step) internally, so the caller only ever sees ok/empty. The pin is
 // Dekker-safe: take() pins via the ring's pin_if_current and hands that ALREADY-HELD pin
-// to the taken_message via its adopt_pin ctor (it does NOT pin a second time).
+// to the taken_message via its adopt_pin ctor (it does NOT pin a second time), beside a
+// copy of the ring's mapping pin.
 class slot_subscriber
 {
 public:
@@ -43,6 +47,7 @@ public:
             , m_cursor_index(0)
             , m_cursor(0)
             , m_registered(false)
+            , m_mapping()
     {
         if(m_ring.register_cursor(m_cursor_index) == loan_status::ok)
         {
@@ -53,19 +58,20 @@ public:
     }
 
     // Takes over a cursor index the caller has already claimed on the ring, gating from the producer's tail.
-    slot_subscriber(broadcast_ring &ring, adopt_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget) noexcept
-            : slot_subscriber(ring, hold_cursor, cursor_index, spin_budget)
+    slot_subscriber(broadcast_ring &ring, adopt_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget, detail::mapping_pin mapping = {}) noexcept
+            : slot_subscriber(ring, hold_cursor, cursor_index, spin_budget, std::move(mapping))
     {
         m_ring.publish_cursor(m_cursor_index, m_cursor);
     }
 
     // Takes over a claimed cursor index that gates nothing until the producer places it or resume starts it.
-    slot_subscriber(broadcast_ring &ring, hold_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget) noexcept
+    slot_subscriber(broadcast_ring &ring, hold_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget, detail::mapping_pin mapping = {}) noexcept
             : m_ring(ring)
             , m_spin_budget(spin_budget)
             , m_cursor_index(cursor_index)
             , m_cursor(ring.tail_position())
             , m_registered(true)
+            , m_mapping(std::move(mapping))
     {
     }
 
@@ -154,7 +160,7 @@ private:
             advance();
             return false;
         }
-        out = taken_message(taken_message::adopt_pin, consumed.slab.data(), consumed.slab.size(), &m_ring.refcount_at(m_cursor));
+        out = taken_message(taken_message::adopt_pin, consumed.slab.data(), consumed.slab.size(), &m_ring.refcount_at(m_cursor), m_mapping);
         advance();
         settled = loan_status::ok;
         return true;
@@ -171,6 +177,7 @@ private:
     std::uint32_t m_cursor_index;
     std::uint64_t m_cursor;
     bool m_registered;
+    detail::mapping_pin m_mapping;
 };
 
 }

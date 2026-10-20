@@ -160,11 +160,11 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
             ::_exit(ok ? 0 : 1);
         }
 
-        // CONSUMER parent: create the regions, build the channel (its subscriber
-        // registers a cursor at the tail), arm the bridge on a user-owned
-        // io_context bound to the ring's notify word, then drive ONLY that reactor.
+        // CONSUMER parent: arm the bridge on a user-owned io_context bound to the
+        // ring's notify word, then drive ONLY that reactor.
         posix_shm_region_broker broker;
         region_handle ctrl, slab;
+        const plexus::testing::unlink_on_exit names{ctrl, slab};
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 
@@ -180,9 +180,8 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::reliable, plexus::io::congestion::block);
 
         std::uint32_t got = 0;
-        // The arm()'d drain runs on a posted reactor turn: drain the channel and
-        // capture the delivered value. This is the registry's drain-this-channel
-        // callback shape (drain over the live subscriber).
+        // The arm()'d drain runs on a posted reactor turn, the registry's
+        // drain-this-channel callback shape.
         bridge.arm(*channel.engage_subscriber(),
                 [&]
                 {
@@ -245,6 +244,7 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
 
         posix_shm_region_broker broker;
         region_handle ctrl, slab;
+        const plexus::testing::unlink_on_exit names{ctrl, slab};
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 

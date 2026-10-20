@@ -1,6 +1,6 @@
 // The shm fallback-carrier test: a node with NO intra_node transport but WITH an shm member still
 // self-delivers a same-node publish→subscribe — over a node-local shm self-ring. The carrier mints
-// both halves of one join_live ring on one node; the read half re-enters the node's own dispatch
+// both halves of one ring on one node; the read half re-enters the node's own dispatch
 // (no peer session). Two witnessed properties: the framed-bytes delivery lands once with the correct
 // payload, and exactly one callback fires per publish (no double-delivery).
 

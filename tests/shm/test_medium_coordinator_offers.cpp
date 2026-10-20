@@ -8,6 +8,7 @@
 #include "plexus/wire/subscribe.h"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <string>
 #include <vector>
@@ -61,7 +62,8 @@ void await_offer(lane_end &subscriber, std::string_view publisher)
 
 TEST_CASE("medium_coordinator_offers a lane a re-attempt mints after the subscribe response is offered to the waiting subscriber", "[shm][medium_coordinator_offers]")
 {
-    lane_end publisher{1};
+    const fallback_reason reason = GENERATE(fallback_reason::transient, fallback_reason::creator_alive);
+    lane_end publisher{1, true, reason};
     std::vector<sent_event> sent;
     record_sends(publisher, sent);
     publisher.offer("peer");

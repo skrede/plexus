@@ -18,7 +18,6 @@
 
 namespace {
 
-using plexus::shm::acquire_mode;
 using plexus::shm::ring_role;
 using plexus::shm::acquire_bound;
 using plexus::shm::acquire_result;
@@ -36,7 +35,7 @@ std::string fresh_fqn(const char *tag)
 
 acquire_result acquire(registry &reg, const std::string &fqn, ring_role role)
 {
-    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, role, k_slot, plexus::io::ring_geometry_mode::reliable_preserving, k_capacity, acquire_mode::join_live);
+    return reg.acquire(fqn, ring_direction::request, plexus::node_id{}, role, k_slot, plexus::io::ring_geometry_mode::reliable_preserving, k_capacity);
 }
 
 }

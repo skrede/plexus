@@ -92,7 +92,7 @@ TEST_CASE("medium_coordinator_reasons a declined lane counts exactly its reason 
 {
     const fallback_reason reason = GENERATE(fallback_reason::transient, fallback_reason::incompatible_layout, fallback_reason::slab_ceiling, fallback_reason::os_allocator,
                                             fallback_reason::notifier_denied, fallback_reason::notifier_unsupported, fallback_reason::notifier_exhausted,
-                                            fallback_reason::consumer_capacity, fallback_reason::not_found, fallback_reason::no_space);
+                                            fallback_reason::consumer_capacity, fallback_reason::not_found, fallback_reason::no_space, fallback_reason::creator_alive);
     const demand_role role       = GENERATE(demand_role::publisher, demand_role::subscriber);
     co_host_registry reg;
     coordinator c{reg};
@@ -104,35 +104,38 @@ TEST_CASE("medium_coordinator_reasons a declined lane counts exactly its reason 
     REQUIRE(!c.companion_for("peer", "alpha", 1).fits);
 }
 
-TEST_CASE("medium_coordinator_reasons a transient decline that later engages counts each transient attempt and no permanent reason", "[shm][medium_coordinator_reasons]")
+TEST_CASE("medium_coordinator_reasons a re-attempted decline that later engages counts each attempt and no permanent reason", "[shm][medium_coordinator_reasons]")
 {
+    const fallback_reason reason = GENERATE(fallback_reason::transient, fallback_reason::creator_alive);
     co_host_registry reg;
     coordinator c{reg};
-    gate g{3, fallback_reason::transient};
+    gate g{3, reason};
     install(c, g);
     std::vector<milliseconds> wakes;
 
     drive_retries(c, wakes);
     c.on_companion("peer", "alpha", companion_event::ready);
     REQUIRE(g.calls == 4);
-    REQUIRE(c.fallbacks() == counted(fallback_reason::transient, 3));
+    REQUIRE(c.fallbacks() == counted(reason, 3));
     REQUIRE(c.companion_for("peer", "alpha", 1).fits);
 }
 
-TEST_CASE("medium_coordinator_reasons a pair that stays transient counts every attempt and retries_exhausted once", "[shm][medium_coordinator_reasons]")
+TEST_CASE("medium_coordinator_reasons a pair re-attempted to the cap counts every attempt and retries_exhausted once", "[shm][medium_coordinator_reasons]")
 {
+    const fallback_reason reason = GENERATE(fallback_reason::transient, fallback_reason::creator_alive);
     co_host_registry reg;
     coordinator c{reg};
-    gate g{UINT32_MAX, fallback_reason::transient};
+    gate g{UINT32_MAX, reason};
     install(c, g);
     std::vector<milliseconds> wakes;
 
     drive_retries(c, wakes);
-    fallback_counts expected                                               = counted(fallback_reason::transient, plexus::io::detail::k_retry_attempts + 1);
+    fallback_counts expected                                               = counted(reason, plexus::io::detail::k_retry_attempts + 1);
     expected[static_cast<std::size_t>(fallback_reason::retries_exhausted)] = 1;
     REQUIRE(c.fallbacks() == expected);
     c.on_retry_due();
     REQUIRE(c.fallbacks() == expected);
+    REQUIRE(wakes.size() == plexus::io::detail::k_retry_attempts);
 }
 
 TEST_CASE("medium_coordinator_reasons a demotion of an engaged lane is counted while the lane stays engaged", "[shm][medium_coordinator_reasons]")

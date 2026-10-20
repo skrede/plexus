@@ -34,16 +34,21 @@ if(LINUX)
         test_shm_harness_write_once.cpp)
 endif()
 
-# The cases in this executable pin same-host delivery defects; those still failing carry [!shouldfail], and the label
-# keeps the set listable with ctest -L shm-red. The ring's creator unlinking a live region is a POSIX behavior (Windows
-# mappings are reference counted), so the set is Linux-only. A stalled burst spins for tens of seconds.
+# Same-host delivery across a burst and across restarts of a ring's creator and of a reader. The probes count a topic's
+# regions under /dev/shm and their registry-level roles use Linux-only process control, so the set is Linux-only. A
+# stalled burst spins for tens of seconds.
 if(LINUX)
     plexus_add_shm_harness_test(test_shm_lane_probes
         registry_role.cpp
-        test_shm_lane_probes_fan.cpp
         test_shm_lane_probes_burst.cpp
         test_shm_lane_probes_restart.cpp
-        PROPERTIES LABELS "shm-red" TIMEOUT 300)
+        PROPERTIES TIMEOUT 300)
+endif()
+
+# The same-host delivery defects still open, each tagged [!shouldfail]; the label keeps the set listable with
+# ctest -L shm-red.
+if(LINUX)
+    plexus_add_shm_harness_test(test_shm_lane_probes_red test_shm_lane_probes_red.cpp PROPERTIES LABELS "shm-red" TIMEOUT 300)
 endif()
 
 # The subscriber denies itself io_uring with a seccomp filter before it builds its node.
@@ -82,6 +87,10 @@ plexus_add_shm_xproc_test(test_shm_three_process three_process_roles.cpp test_sh
 # A slot a child process holds on a region reads held from the parent until the child is killed; it runs on every
 # platform.
 plexus_add_shm_xproc_test(test_shm_slot_liveness liveness_roles.cpp test_shm_slot_liveness.cpp)
+
+# A restarted creator process adopts the ring its reader still holds, after a clean exit or a kill with a claim in
+# flight, and a second live creator is refused; it runs on every platform.
+plexus_add_shm_xproc_test(test_shm_ring_adoption liveness_roles.cpp test_shm_ring_adoption.cpp)
 
 # The POSIX-semaphore notifier, macOS's own and a second notifier on Linux: a disarm while another process's waiter is
 # parked on the ring, a burst of wakes while the reactor is stalled, a semaphore name already taken, and a notifier

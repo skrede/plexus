@@ -94,11 +94,11 @@ public:
         return m_subscriber->cursor_index();
     }
 
-    // mode is slot_subscriber::adopt_cursor or slot_subscriber::hold_cursor.
+    // mode is slot_subscriber::adopt_cursor or slot_subscriber::hold_cursor; each message taken holds the mapping pin.
     template<typename Mode>
-    void engage_subscriber(Mode mode, std::uint32_t claimed_cursor) noexcept
+    void engage_subscriber(Mode mode, std::uint32_t claimed_cursor, detail::mapping_pin mapping = {}) noexcept
     {
-        m_subscriber.emplace(m_ring, mode, claimed_cursor, m_spin_budget);
+        m_subscriber.emplace(m_ring, mode, claimed_cursor, m_spin_budget, std::move(mapping));
     }
 
     void resume_subscriber() noexcept

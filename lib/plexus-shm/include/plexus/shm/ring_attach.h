@@ -125,6 +125,8 @@ loan_status ring_attach(std::span<std::byte> control, std::span<std::byte> slab,
     const std::uint64_t magic = header->magic.load(std::memory_order_acquire);
     if(magic == 0)
         return loan_status::unstamped;
+    if(magic == k_ring_retired)
+        return loan_status::retired;
     if(magic != k_ring_magic)
         return loan_status::rejected;
     if(const loan_status admitted = header_admits(*header, control.size(), slab.size(), publisher); admitted != loan_status::ok)

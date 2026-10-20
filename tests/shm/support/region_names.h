@@ -9,6 +9,7 @@
 
 #include "plexus/node_id.h"
 
+#include <tuple>
 #include <string>
 #include <cstdint>
 #include <string_view>
@@ -38,6 +39,29 @@ void bind_test_publisher(Member &member, std::uint32_t universe = discovery::k_d
 {
     member.bind_node(test_publisher(), universe);
 }
+
+// Removes the names of the regions a test created when it leaves scope, however the scope ends; a region handle never
+// removes its own name.
+template<typename... Handles>
+class unlink_on_exit
+{
+public:
+    explicit unlink_on_exit(Handles &...handles) noexcept
+            : m_handles(handles...)
+    {
+    }
+
+    ~unlink_on_exit()
+    {
+        std::apply([](Handles &...handles) { (handles.unlink_name(), ...); }, m_handles);
+    }
+
+    unlink_on_exit(const unlink_on_exit &)            = delete;
+    unlink_on_exit &operator=(const unlink_on_exit &) = delete;
+
+private:
+    std::tuple<Handles &...> m_handles;
+};
 
 }
 

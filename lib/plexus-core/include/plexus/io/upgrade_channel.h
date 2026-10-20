@@ -11,10 +11,11 @@
 
 namespace plexus::io {
 
-// Why a same-host lane is declined, demoted or lost; an engaged lane carries none. Only transient is worth a later
-// attempt. A demoted lane stays engaged on its secondary wake. not_offered: the publisher's response withheld its ring;
-// withdrawn: a subscriber lost the receive lane it had answered ready; liveness_unavailable: the host offers no proof
-// that a reader is alive. Values are append-only: they index the counters.
+// Why a same-host lane is declined, demoted or lost; an engaged lane carries none. Only transient and creator_alive are
+// worth a later attempt. A demoted lane stays engaged on its secondary wake. not_offered: the publisher's response
+// withheld its ring; withdrawn: a subscriber lost the receive lane it had answered ready; liveness_unavailable: the host
+// offers no proof that a reader is alive; creator_alive: another holder has the ring's creator slot, a second live
+// producer or a last holder retiring the ring. Values are append-only: they index the counters.
 enum class fallback_reason : std::uint8_t
 {
     none,
@@ -36,9 +37,10 @@ enum class fallback_reason : std::uint8_t
     not_offered,
     withdrawn,
     liveness_unavailable,
+    creator_alive,
 };
 
-inline constexpr std::size_t k_fallback_reason_count = static_cast<std::size_t>(fallback_reason::liveness_unavailable) + 1;
+inline constexpr std::size_t k_fallback_reason_count = static_cast<std::size_t>(fallback_reason::creator_alive) + 1;
 
 // How often each reason struck, indexed by the reason.
 using fallback_counts = std::array<std::uint64_t, k_fallback_reason_count>;

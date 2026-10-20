@@ -38,10 +38,11 @@
 
 namespace plexus::shm {
 
-// The demand-driven lifecycle owner of every live (topic, direction, publisher) ring: a first acquire MINTS the ring (or
-// ATTACHES to a peer's), each acquire counts one holder of its role, and the entry tears down once no role holds it (the
-// creator also unlinks). A waiter lost after its acquire tells each holder watching it and fails further acquires of
-// its key. Templated on the broker and notifier seams so core pulls no POSIX or asio header.
+// The demand-driven lifecycle owner of every live (topic, direction, publisher) ring: a first acquire MINTS the ring,
+// ADOPTS this publisher's ring a dead creator left, or ATTACHES to a peer's; each acquire counts one holder of its role,
+// and the entry tears down once no role holds it (removing the ring's names when no holder is left anywhere). A waiter
+// lost after its acquire tells each holder watching it and fails further acquires of its key. Templated on the broker
+// and notifier seams so core pulls no POSIX or asio header.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_topic_registry
@@ -80,17 +81,17 @@ public:
     ~shm_topic_registry()
     {
         for(auto &[k, e] : m_entries)
-            e->teardown();
+            detail::ring_lifetime::close(*e);
     }
 
     // role is the holder's use of the ring: only a consuming role takes a cursor and arms, and it never creates the ring
     // (none under the name is not_found; the geometry arguments size only a ring a producer mints, max_payload 0 ->
-    // default). A repeat acquire of a live key returns its first verdict. Each publisher of a topic owns its own ring.
+    // default). A repeat acquire of a live key returns its first verdict. Each publisher of a topic owns its own ring,
+    // and a second live producer of it is refused as creator_alive.
     acquire_result acquire(const std::string &fqn, ring_direction direction, const node_id &publisher, ring_role role, std::uint32_t max_payload,
-                           io::ring_geometry_mode mode = io::ring_geometry_mode::reliable_preserving, std::uint32_t consumer_capacity = 0,
-                           acquire_mode amode = acquire_mode::reclaim_stale)
+                           io::ring_geometry_mode mode = io::ring_geometry_mode::reliable_preserving, std::uint32_t consumer_capacity = 0)
     {
-        return detail::topic_acquire(*this, key{fqn, direction, publisher}, role, max_payload, mode, consumer_capacity, amode);
+        return detail::topic_acquire(*this, key{fqn, direction, publisher}, role, max_payload, mode, consumer_capacity);
     }
 
     void release(const std::string &fqn, ring_direction direction, const node_id &publisher, ring_role role)
@@ -168,14 +169,15 @@ private:
     acquire_failure m_last_failure;
     detail::shm_topic_map<entry> m_entries;
 
+    friend struct detail::ring_adoption;
     template<typename R>
     friend ::plexus::shm::acquire_result detail::topic_acquire(R &, const detail::shm_topic_key &, ::plexus::shm::ring_role, std::uint32_t, ::plexus::io::ring_geometry_mode,
-                                                               std::uint32_t, ::plexus::shm::acquire_mode);
+                                                               std::uint32_t);
     template<typename R>
     friend void detail::topic_release(R &, const detail::shm_topic_key &, ::plexus::shm::ring_role);
     template<typename R, typename E>
     friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, ::plexus::shm::ring_role, std::uint32_t, ::plexus::io::ring_geometry_mode,
-                                                                 std::uint32_t, ::plexus::shm::acquire_mode);
+                                                                 std::uint32_t);
     template<typename R, typename E>
     friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::ring_role, ::plexus::shm::acquire_result);
 };

@@ -139,20 +139,16 @@ TEST_CASE("medium_coordinator_member a host with no memory to back the ring is c
     REQUIRE_FALSE(m.engaged());
 }
 
-TEST_CASE("medium_coordinator_member a control region that vanishes before the join is counted as not_found, and a ring with no reader slot left still takes the send lane",
-          "[shm][medium_coordinator_member]")
+TEST_CASE("medium_coordinator_member a control region that vanishes before a producer's join is a transient decline", "[shm][medium_coordinator_member]")
 {
     delaying_broker broker;
     noop_registry peer(broker, plexus::io::reliability::reliable, plexus::io::congestion::block);
-    REQUIRE(peer.acquire(k_fqn, plexus::shm::ring_direction::request, plexus::node_id{}, plexus::shm::ring_role::both, 0, plexus::io::ring_geometry_mode::reliable_preserving, 1,
-                         plexus::shm::acquire_mode::join_live) == plexus::shm::acquire_result::created);
-    const bool vanished = GENERATE(true, false);
-    if(vanished)
-        broker.withhold_until(plexus::testing::region_name(k_fqn, plexus::node_id{}), delaying_broker::clock::time_point::max());
+    REQUIRE(peer.acquire(k_fqn, plexus::shm::ring_direction::request, plexus::node_id{}, plexus::shm::ring_role::both, 0) == plexus::shm::acquire_result::created);
+    broker.withhold_until(plexus::testing::region_name(k_fqn, plexus::node_id{}), delaying_broker::clock::time_point::max());
 
     member_lanes<delaying_broker, plexus::testing::noop_notifier> m{broker, k_fqn};
-    REQUIRE(m.lanes.fallbacks() == (vanished ? counted(fallback_reason::not_found) : fallback_counts{}));
-    REQUIRE(m.engaged() == !vanished);
+    REQUIRE(m.lanes.fallbacks() == counted(fallback_reason::transient));
+    REQUIRE_FALSE(m.engaged());
 }
 
 TEST_CASE("medium_coordinator_member a wake that falls to its secondary at arm is counted once and the lane engages", "[shm][medium_coordinator_member]")

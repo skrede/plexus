@@ -224,7 +224,7 @@ public:
 
 private:
     template<typename M>
-    friend auto detail::mux_open(M &, const io::endpoint &, shm::ring_role, shm::acquire_mode, shm::waiter_loss::lost_fn) -> std::unique_ptr<typename M::channel_type>;
+    friend auto detail::mux_open(M &, const io::endpoint &, shm::ring_role, shm::waiter_loss::lost_fn) -> std::unique_ptr<typename M::channel_type>;
     template<typename M>
     friend detail::shm_resolved_geometry detail::mux_resolve(const M &, const std::string &, shm::ring_direction);
 

@@ -26,9 +26,9 @@
 #include <vector>
 
 // The demand-driven topic registry (header-only, asio/strand/std::function-free): a stub broker over heap-backed
-// regions + a recording stub notifier prove the acquire/release refcount lifecycle (created -> attached ->
-// teardown+unlink), the max_payload ring sizing with a subscriber-only default fallback, and the teardown ordering
-// (disarm BEFORE the subscriber the drain touches is destroyed).
+// regions + a recording stub notifier prove the acquire/release refcount lifecycle (created -> attached -> teardown,
+// no release removing a name), the max_payload ring sizing with a subscriber-only default fallback, and the teardown
+// ordering (disarm BEFORE the subscriber the drain touches is destroyed).
 
 using namespace plexus::shm;
 
@@ -63,18 +63,16 @@ struct region_store
     }
 };
 
-// The handle the stub broker hands back: it pins the shared region alive and, for a
-// creator, unlinks the name on release.
+// The handle the stub broker hands back: it pins the shared region alive, and only unlink_name removes the name.
 class stub_handle : public plexus::testing::always_live_slots
 {
 public:
     stub_handle() = default;
 
-    stub_handle(region_store *store, std::string name, std::shared_ptr<region_store::region> region, bool owns_name) noexcept
+    stub_handle(region_store *store, std::string name, std::shared_ptr<region_store::region> region) noexcept
             : m_store(store)
             , m_name(std::move(name))
             , m_region(std::move(region))
-            , m_owns(owns_name)
     {
     }
 
@@ -90,10 +88,8 @@ public:
             : m_store(o.m_store)
             , m_name(std::move(o.m_name))
             , m_region(std::move(o.m_region))
-            , m_owns(o.m_owns)
     {
         o.m_store = nullptr;
-        o.m_owns  = false;
     }
 
     stub_handle &operator=(stub_handle &&o) noexcept
@@ -104,9 +100,7 @@ public:
             m_store   = o.m_store;
             m_name    = std::move(o.m_name);
             m_region  = std::move(o.m_region);
-            m_owns    = o.m_owns;
             o.m_store = nullptr;
-            o.m_owns  = false;
         }
         return *this;
     }
@@ -116,25 +110,23 @@ public:
         return {m_region->base, m_region->size};
     }
 
+    void unlink_name() noexcept
+    {
+        if(m_store == nullptr || m_store->regions.erase(m_name) == 0)
+            return;
+        ++m_store->unlinks;
+    }
+
 private:
     void reclaim() noexcept
     {
-        if(m_owns && m_store != nullptr)
-        {
-            if(auto it = m_store->regions.find(m_name); it != m_store->regions.end())
-                it->second->live = false;
-            m_store->regions.erase(m_name);
-            ++m_store->unlinks;
-        }
         m_store = nullptr;
-        m_owns  = false;
         m_region.reset();
     }
 
     region_store *m_store = nullptr;
     std::string m_name;
     std::shared_ptr<region_store::region> m_region;
-    bool m_owns = false;
 };
 
 // The stub broker satisfying the core region_broker concept over the store. create
@@ -154,7 +146,7 @@ public:
         const std::string key{name};
         if(auto it = m_store.regions.find(key); it != m_store.regions.end() && it->second->live)
             return region_status::already_exists;
-        out = stub_handle(&m_store, key, m_store.make(key, bytes), /*owns=*/true);
+        out = stub_handle(&m_store, key, m_store.make(key, bytes));
         return region_status::ok;
     }
 
@@ -164,7 +156,7 @@ public:
         auto it = m_store.regions.find(key);
         if(it == m_store.regions.end() || !it->second->live)
             return region_status::not_found;
-        out = stub_handle(&m_store, key, it->second, /*owns=*/false);
+        out = stub_handle(&m_store, key, it->second);
         return region_status::ok;
     }
 
@@ -245,10 +237,10 @@ TEST_CASE("shm.registry demand-drives the ring lifecycle by refcount", "[shm][re
     REQUIRE(registry.live_count() == 1);
     REQUIRE(store.unlinks == 0);
 
-    // release 1 -> 0 tears it down AND unlinks both regions (the creator owns them).
+    // release 1 -> 0 tears it down; the stub's slots always read held elsewhere, so no last holder removes a name.
     registry.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer);
     REQUIRE(registry.live_count() == 0);
-    REQUIRE(store.unlinks == 2); // control + slab
+    REQUIRE(store.unlinks == 0);
 }
 
 TEST_CASE("shm.registry a peer collision attaches and a consumer reads the creator's geometry", "[shm][registry]")
@@ -294,12 +286,11 @@ TEST_CASE("shm.registry a peer collision attaches and a consumer reads the creat
     REQUIRE(count == 1);
     REQUIRE(got == value);
 
-    // Tear down: the attacher releases first (no unlink -- it never owned the name),
-    // then the creator (unlinks both).
+    // Tear down in either order: no release removes a name.
     attacher.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::consumer);
     REQUIRE(store.unlinks == 0);
     creator.release(fqn, ring_direction::request, plexus::node_id{}, ring_role::producer);
-    REQUIRE(store.unlinks == 2);
+    REQUIRE(store.unlinks == 0);
 }
 
 TEST_CASE("shm.registry disarms the notifier before the subscriber teardown", "[shm][registry]")

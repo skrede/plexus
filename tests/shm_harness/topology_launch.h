@@ -111,6 +111,12 @@ public:
         return snapshot(slot(index));
     }
 
+    // A later warm_up then waits for publishers this node has already seen, such as a restarted one.
+    void forget_warm(std::uint32_t index)
+    {
+        slot(index).warm_seen.store(0, std::memory_order_release);
+    }
+
     const topic_regions &regions() const
     {
         return m_regions;

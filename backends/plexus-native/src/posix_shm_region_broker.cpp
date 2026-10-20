@@ -1,6 +1,7 @@
 #include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/shm_error.h"
 
+#include "plexus/native/detail/posix_slot_lock.h"
 #include "plexus/native/detail/posix_shm_status.h"
 
 #include <utility>
@@ -16,8 +17,8 @@ namespace plexus::native {
 
 namespace {
 
-// Open the region O_CREAT|O_EXCL, reclaiming a stale name once when the caller opted in (the
-// single-owner ring reclaims a crashed creator's orphan). Returns the fd, or -1 with errno set.
+// Open the region O_CREAT|O_EXCL, removing a name left behind once when the caller opted in. Returns the fd, or -1 with
+// errno set.
 int open_create_excl(const char *canonical, mode_t perms, bool unlink_stale)
 {
     int fd = ::shm_open(canonical, O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, perms);
@@ -70,7 +71,7 @@ plexus::shm::region_status posix_shm_region_broker::finish_create(int fd, std::s
         ::shm_unlink(canonical.c_str());
         return detail::to_status(shm_error::map_failed);
     }
-    out = region_handle{fd, base, length, std::move(canonical), true};
+    out = region_handle{fd, base, length, std::move(canonical)};
     return plexus::shm::region_status::ok;
 }
 
@@ -90,7 +91,7 @@ plexus::shm::region_status posix_shm_region_broker::finish_attach(int fd, std::s
         ::close(fd);
         return detail::to_status(shm_error::map_failed);
     }
-    out = region_handle{fd, base, length, std::move(canonical), false};
+    out = region_handle{fd, base, length, std::move(canonical)};
     return plexus::shm::region_status::ok;
 }
 
@@ -138,6 +139,7 @@ plexus::shm::region_status posix_shm_region_broker::unlink(std::string_view name
     std::string canonical;
     if(const auto status = detail::sanitize_region_name(name, canonical); status != shm_error::ok)
         return detail::to_status(status);
+    detail::unlink_sidecar(canonical);
     if(::shm_unlink(canonical.c_str()) != 0)
         return detail::to_status(detail::map_errno(errno));
     return plexus::shm::region_status::ok;

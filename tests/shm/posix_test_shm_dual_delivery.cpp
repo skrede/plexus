@@ -152,10 +152,9 @@ TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic c
             ::_exit(ok ? 0 : 1);
         }
 
-        // The SHM leg (consumer parent): create the regions, build the channel, arm the
-        // bridge on a user-owned io_context bound to the ring's header.
         posix_shm_region_broker broker;
         region_handle ctrl, slab;
+        const plexus::testing::unlink_on_exit names{ctrl, slab};
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 

@@ -16,7 +16,8 @@
 namespace plexus::testing {
 
 // A named block of atomics the parent creates and re-exec'd children attach by name, so it works where no
-// anonymous mapping is inherited (Windows). The block is never destroyed in place; unmapping releases it.
+// anonymous mapping is inherited (Windows). The block is never destroyed in place; unmapping releases it, and the
+// creator removes its name as it goes.
 template<typename Block>
 class xproc_shared
 {
@@ -26,6 +27,22 @@ class xproc_shared
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free && std::atomic<std::uint32_t>::is_always_lock_free);
 
 public:
+    xproc_shared(xproc_shared &&other) noexcept
+            : m_created(std::exchange(other.m_created, false))
+            , m_region(std::move(other.m_region))
+    {
+    }
+
+    xproc_shared(const xproc_shared &)            = delete;
+    xproc_shared &operator=(const xproc_shared &) = delete;
+    xproc_shared &operator=(xproc_shared &&)      = delete;
+
+    ~xproc_shared()
+    {
+        if(m_created)
+            m_region.unlink_name();
+    }
+
     static std::optional<xproc_shared> create(std::string_view name)
     {
         plexus::native::shm_region_broker broker;
@@ -34,7 +51,7 @@ public:
         if(broker.create(name, sizeof(Block), options, region) != plexus::shm::region_status::ok)
             return std::nullopt;
         ::new(static_cast<void *>(region.bytes().data())) Block{};
-        return xproc_shared(std::move(region));
+        return xproc_shared(std::move(region), true);
     }
 
     static std::optional<xproc_shared> attach(std::string_view name)
@@ -43,7 +60,7 @@ public:
         plexus::native::shm_region_handle region;
         if(broker.attach(name, region) != plexus::shm::region_status::ok || region.bytes().size() < sizeof(Block))
             return std::nullopt;
-        return xproc_shared(std::move(region));
+        return xproc_shared(std::move(region), false);
     }
 
     Block &get()
@@ -52,11 +69,13 @@ public:
     }
 
 private:
-    explicit xproc_shared(plexus::native::shm_region_handle region)
-            : m_region(std::move(region))
+    xproc_shared(plexus::native::shm_region_handle region, bool created)
+            : m_created(created)
+            , m_region(std::move(region))
     {
     }
 
+    bool m_created;
     plexus::native::shm_region_handle m_region;
 };
 

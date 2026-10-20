@@ -22,8 +22,8 @@
 #include <sys/stat.h>
 
 // The Linux-only region-broker behaviors that verify the broker THROUGH the /dev/shm tmpfs
-// view of POSIX shm: the 0600 owner-only mode of a minted region, the create-owns-unlink
-// contract (the creator's last release removes the name), and unlink_stale_on_create
+// view of POSIX shm: the 0600 owner-only mode of a minted region, the name contract (no
+// release removes the name; unlink_name does, under a live mapping), and unlink_stale_on_create
 // reclaiming a pre-existing orphan. These stat()/access() the object at /dev/shm/plexus.<name>,
 // which exists only on Linux -- macOS shm_open objects are not path-visible, so the same
 // broker guarantees are proven there by the cross-process shm proofs instead. The portable
@@ -82,7 +82,7 @@ descriptor_scan scan_descriptors(const std::string &bare)
 
 }
 
-TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and unlinks on release", "[shm][region_broker]")
+TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and keeps the name until unlink_name removes it", "[shm][region_broker]")
 {
     posix_shm_region_broker broker;
     const std::string name = unique_name("create");
@@ -111,11 +111,14 @@ TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and unlinks on 
         // Write through the attacher, read through the creator: same backing page.
         attacher.bytes()[0] = std::byte{0xAB};
         REQUIRE(creator.bytes()[0] == std::byte{0xAB});
-        // The attacher munmaps but NEVER unlinks: the name survives its release.
     }
 
-    // The creator's release unlinked the name (create-owns-unlink).
+    REQUIRE(exists(name));
+    region_handle survivor;
+    REQUIRE(broker.attach(name, survivor) == pio::region_status::ok);
+    survivor.unlink_name();
     REQUIRE_FALSE(exists(name));
+    REQUIRE(survivor.bytes()[0] == std::byte{0xAB});
 }
 
 TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orphan", "[shm][region_broker]")
@@ -146,8 +149,8 @@ TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orph
         REQUIRE(h.valid());
     }
 
-    REQUIRE_FALSE(exists(name));     // the fresh creator unlinked on release
-    ::shm_unlink(canonical.c_str()); // belt-and-braces
+    REQUIRE(exists(name));
+    REQUIRE(broker.unlink(name) == pio::region_status::ok);
 }
 
 TEST_CASE("shm.region_broker opens created and attached regions close-on-exec", "[shm][region_broker]")
@@ -162,6 +165,7 @@ TEST_CASE("shm.region_broker opens created and attached regions close-on-exec", 
     REQUIRE(broker.attach(name, attacher) == pio::region_status::ok);
 
     const descriptor_scan scan = scan_descriptors(name);
+    REQUIRE(broker.unlink(name) == pio::region_status::ok);
     REQUIRE(scan.count == 2);
     REQUIRE(scan.all_cloexec);
 }

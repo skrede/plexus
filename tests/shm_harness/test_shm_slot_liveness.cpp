@@ -1,5 +1,6 @@
 #include "launch_helpers.h"
 
+#include "support/region_names.h"
 #include "support/xproc_process.h"
 
 #include "plexus/native/shm_region_broker.h"
@@ -43,6 +44,7 @@ TEST_CASE("slot_liveness a slot another process holds reads held until that proc
     const std::string name = fresh_name("k");
     plexus::native::shm_region_broker broker;
     plexus::native::shm_region_handle region;
+    const plexus::testing::unlink_on_exit names{region};
     REQUIRE(broker.create(name, 4096, plexus::shm::create_options{}, region) == plexus::shm::region_status::ok);
     const std::uint32_t slot = plexus::shm::cursor_slot(3);
     REQUIRE_FALSE(region.slot_held_elsewhere(slot));

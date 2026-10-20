@@ -35,6 +35,9 @@ inline constexpr std::size_t k_max_consumers = 16;
 // mismatch means the region is foreign or a layout-incompatible build.
 inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
 
+// The retired stamp: the ring's names are being removed, so a joiner must not adopt it.
+inline constexpr std::uint64_t k_ring_retired = 0x50'4c'58'52'45'54'49'52ull; // "PLXRETIR"
+
 // The cursor position of a slot registered but not yet gating: a fresh cursor does not hold back
 // reclamation until it reads its first slot.
 inline constexpr std::uint64_t k_cursor_idle = UINT64_MAX;

@@ -46,6 +46,14 @@ public:
 
     bool slot_held_elsewhere(std::uint32_t slot) const;
 
+    // The slots' objects are created one at a time; one already taken makes this busy and closes what this call created.
+    plexus::shm::slot_hold hold_all_slots();
+
+    void release_all_slots() noexcept;
+
+    // A named mapping dies with its last handle, so there is no name to remove.
+    void unlink_name() noexcept;
+
 private:
     friend class win_shm_region_broker;
 

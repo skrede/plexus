@@ -71,9 +71,9 @@ plexus::shm::ring_role role_of(bool publishes)
 // subscriber joins the ring as the publisher made it. Every role names the ring of node 0, the publisher.
 channel_type *join_ring(registry_type &registry, const std::string &fqn, bool publishes)
 {
-    const std::uint32_t max_payload            = plexus::shm::upgrade_ring_max_payload(k_request, static_cast<std::uint32_t>(plexus::io::global_default_max_message_bytes));
-    const plexus::shm::acquire_result acquired = registry.acquire(fqn, k_request, harness_id(0), role_of(publishes), max_payload, plexus::io::ring_geometry_mode::reliable_preserving, 0,
-                                                                  plexus::shm::acquire_mode::join_live);
+    const std::uint32_t max_payload = plexus::shm::upgrade_ring_max_payload(k_request, static_cast<std::uint32_t>(plexus::io::global_default_max_message_bytes));
+    const plexus::shm::acquire_result acquired =
+            registry.acquire(fqn, k_request, harness_id(0), role_of(publishes), max_payload, plexus::io::ring_geometry_mode::reliable_preserving, 0);
     return acquired == plexus::shm::acquire_result::failed ? nullptr : registry.channel_for(fqn, k_request, harness_id(0));
 }
 

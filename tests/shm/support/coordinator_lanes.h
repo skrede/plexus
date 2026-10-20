@@ -45,17 +45,18 @@ private:
     std::int32_t &m_live;
 };
 
-// A coordinator over counted lanes whose send gate declines its first declines mints as transient and whose policy
+// A coordinator over counted lanes whose send gate declines its first declines mints with decline and whose policy
 // follows allow; the release hook records how many lanes were still alive when it ran.
 struct lane_end
 {
-    explicit lane_end(std::uint32_t declines = 0, bool published = true)
+    explicit lane_end(std::uint32_t declines = 0, bool published = true, io::fallback_reason decline = io::fallback_reason::transient)
             : live(0)
             , mints(0)
             , released(0)
             , live_at_release(-1)
             , receives(0)
             , declines(declines)
+            , decline(decline)
             , allow(true)
             , c(registry)
     {
@@ -80,7 +81,7 @@ struct lane_end
         if(declines > 0)
         {
             --declines;
-            return io::upgrade_mint<counted_lane>{io::fallback_reason::transient};
+            return io::upgrade_mint<counted_lane>{decline};
         }
         return io::upgrade_mint<counted_lane>{std::make_unique<counted_lane>(live), [](std::size_t) { return true; }};
     }
@@ -96,6 +97,7 @@ struct lane_end
     std::int32_t live_at_release;
     std::int32_t receives;
     std::uint32_t declines;
+    io::fallback_reason decline;
     bool allow;
     co_host_registry registry;
     io::upgrade_coordinator<co_host_registry, counted_lane> c;

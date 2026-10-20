@@ -15,16 +15,9 @@
 
 namespace plexus::shm::detail {
 
-// A successful read-only attach proves the region is live (the handle is discarded).
-template<typename Broker>
-bool topic_region_exists(Broker &broker, const std::string &ctrl_name)
-{
-    typename Broker::region_handle probe;
-    return broker.attach(ctrl_name, probe) == shm::region_status::ok;
-}
-
-// The creator path: owns both regions, stamps a fresh ring, unlinks on teardown. The
-// OS-allocator leg of the fail-closed gate names the OS bound on a slab-create failure.
+// The creator path, under the creator slot of a control region it just created: a slab left behind under the name is
+// replaced and a fresh ring stamped. The OS-allocator leg of the fail-closed gate names the OS bound on a slab-create
+// failure.
 template<typename Broker, typename Entry>
 shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &slab_name, const shm::ring_geometry &geom, const node_id &publisher,
                                std::uint64_t consumer_capacity)
@@ -37,14 +30,13 @@ shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, En
     }
     if(shm::broadcast_ring::create(e.control.bytes(), e.slab.bytes(), geom.cell_count, geom.slot_capacity, publisher, e.ring, consumer_capacity) != shm::loan_status::ok)
         return shm::acquire_result::failed;
-    e.creator = true;
     return shm::acquire_result::created;
 }
 
-// The attacher path: maps the peer's regions and re-reads the geometry from the control header (never unlinks). A slab
-// missing beside a live control region, or a header not stamped yet, is a creator still minting: a transient join. A
-// header another publisher owns is incompatible. A missing control region is an absent ring, also when it vanished
-// between an existence probe and this join.
+// The consumer path: maps the publisher's regions and re-reads the geometry from the control header. A slab missing
+// beside a live control region, or a header not stamped yet, is a creator still minting, and a retired header a ring
+// whose names are going: both a transient join. A header another publisher owns is incompatible. A missing control
+// region is an absent ring.
 template<typename Broker, typename Entry>
 shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &ctrl_name, const std::string &slab_name, const node_id &publisher)
 {
@@ -62,6 +54,7 @@ shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, En
         case shm::loan_status::ok:
             return shm::acquire_result::attached;
         case shm::loan_status::unstamped:
+        case shm::loan_status::retired:
             return fail(shm::acquire_bound::transient_join);
         default:
             return fail(shm::acquire_bound::incompatible);

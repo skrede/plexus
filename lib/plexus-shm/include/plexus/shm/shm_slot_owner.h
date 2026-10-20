@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SHM_SLOT_OWNER_H
 #define HPP_GUARD_PLEXUS_SHM_SHM_SLOT_OWNER_H
 
+#include "plexus/shm/detail/shm_ring_mapping.h"
+
 #include <atomic>
 #include <cstdint>
 #include <utility>
@@ -12,13 +14,19 @@ namespace plexus::shm {
 // unpins EXACTLY ONCE on destruction (fetch_sub), so the slot the view aliases is
 // never recycled by a best-effort overwrite while the view is alive. Move steals
 // the back-pointer and nulls the source so a moved-from owner's destructor no-ops.
+// The mapping pin keeps the ring mapped until the unpin has written into it.
 class shm_slot_owner
 {
 public:
-    shm_slot_owner() = default;
+    shm_slot_owner() noexcept
+            : m_rc(nullptr)
+            , m_mapping()
+    {
+    }
 
-    explicit shm_slot_owner(std::atomic<std::uint32_t> *refcount) noexcept
+    explicit shm_slot_owner(std::atomic<std::uint32_t> *refcount, detail::mapping_pin mapping = {}) noexcept
             : m_rc(refcount)
+            , m_mapping(std::move(mapping))
     {
         if(m_rc != nullptr)
             m_rc->fetch_add(1, std::memory_order_acq_rel); // pin
@@ -34,6 +42,7 @@ public:
 
     shm_slot_owner(shm_slot_owner &&other) noexcept
             : m_rc(std::exchange(other.m_rc, nullptr))
+            , m_mapping(std::move(other.m_mapping))
     {
     }
 
@@ -42,20 +51,23 @@ public:
         if(this != &other)
         {
             release();
-            m_rc = std::exchange(other.m_rc, nullptr);
+            m_rc      = std::exchange(other.m_rc, nullptr);
+            m_mapping = std::move(other.m_mapping);
         }
         return *this;
     }
 
 private:
+    std::atomic<std::uint32_t> *m_rc;
+    detail::mapping_pin m_mapping;
+
     void release() noexcept
     {
         if(m_rc != nullptr)
             m_rc->fetch_sub(1, std::memory_order_acq_rel); // unpin once
         m_rc = nullptr;
+        m_mapping.reset();
     }
-
-    std::atomic<std::uint32_t> *m_rc{nullptr};
 };
 
 }

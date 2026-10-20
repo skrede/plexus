@@ -3,6 +3,8 @@
 
 #include "plexus/shm/detail/shm_topic_join.h"
 #include "plexus/shm/detail/shm_topic_entry.h"
+#include "plexus/shm/detail/shm_ring_adoption.h"
+#include "plexus/shm/detail/shm_ring_lifetime.h"
 #include "plexus/shm/detail/shm_fallback_reason.h"
 
 #include "plexus/shm/arm_status.h"
@@ -16,6 +18,7 @@
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/same_host_geometry.h"
 
+#include <atomic>
 #include <string>
 #include <cstdint>
 #include <optional>
@@ -34,32 +37,11 @@ inline bool topic_within_ceiling(const shm::ring_geometry &geom, std::uint64_t m
     return false;
 }
 
-// amode is the collision policy: reclaim_stale unlinks an existing name on create; join_live NEVER
-// unlinks (it attaches first when the region exists, mints only when none does, so two co-host
-// peers converge on the one ring).
-template<typename Broker, typename Entry>
-shm::acquire_result topic_attach_or_mint(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &ctrl_name, const shm::ring_geometry &geom, const node_id &publisher,
-                                         std::uint64_t capacity, shm::acquire_mode amode)
-{
-    const std::string slab_name = ctrl_name + ".s";
-    if(amode == shm::acquire_mode::join_live && topic_region_exists(broker, ctrl_name))
-        return topic_join(broker, failure, e, ctrl_name, slab_name, publisher);
-
-    shm::create_options opts;
-    opts.unlink_stale_on_create = amode == shm::acquire_mode::reclaim_stale;
-    const shm::region_status cs = broker.create(ctrl_name, shm::control_region_bytes(geom.cell_count), opts, e.control);
-    if(cs == shm::region_status::ok)
-        return topic_mint(broker, failure, e, slab_name, geom, publisher, capacity);
-    if(cs == shm::region_status::already_exists)
-        return topic_join(broker, failure, e, ctrl_name, slab_name, publisher);
-    failure = shm::acquire_failure{shm::acquire_bound::os_allocator, shm::control_region_bytes(geom.cell_count), 0, cs};
-    return shm::acquire_result::failed;
-}
-
-// Mints or attaches the two regions of the key's publisher ring and binds the entry's ring; a consumer only attaches.
+// Mints, adopts or attaches the two regions of the key's publisher ring and binds the entry's ring; a consumer only
+// attaches.
 template<typename Registry, typename Entry>
 shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &key, shm::ring_role role, std::uint32_t max_payload, io::ring_geometry_mode mode,
-                                    std::uint32_t consumer_capacity, shm::acquire_mode amode)
+                                    std::uint32_t consumer_capacity)
 {
     const std::string ctrl_name = shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns);
     if(role == shm::ring_role::consumer)
@@ -69,7 +51,7 @@ shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &
     const shm::ring_geometry geom           = shm::ring_geometry_for(want, mode, consumer_capacity);
     if(!topic_within_ceiling(geom, r.m_max_ring_slab_bytes, r.m_last_failure))
         return shm::acquire_result::failed;
-    return topic_attach_or_mint(r.m_broker, r.m_last_failure, e, ctrl_name, geom, key.publisher, capacity, amode);
+    return ring_adoption::open_producer(r, e, ctrl_name, geom, key.publisher, capacity);
 }
 
 template<typename Report>
@@ -85,7 +67,7 @@ template<typename Entry, typename Report>
 shm::arm_status topic_arm(Entry &e, std::uint32_t slot, Report &report)
 {
     using notifier_type = typename Entry::notifier_type;
-    auto drain          = [&e] { e.deliver_pending(); };
+    auto drain          = [&e, &report] { ring_lifetime::drain(e, report); };
     auto lost           = [loss = e.loss, &report](shm::arm_status status)
     {
         topic_report(report, io::fallback_reason::waiter_lost);
@@ -99,30 +81,71 @@ shm::arm_status topic_arm(Entry &e, std::uint32_t slot, Report &report)
         return e.notify->arm(slot, drain);
 }
 
-// A cursor's liveness slot is held before the cursor is claimed, so an active cursor whose slot no holder has belongs
-// to a dead process. A held cursor gates nothing until its reader is placed or resumed.
+enum class cursor_claim : std::uint8_t
+{
+    claimed,
+    passing,
+    taken,
+    unprovable,
+    retired,
+};
+
+// An active cursor whose slot no other holder has belongs to a dead owner, since an owner holds the slot from before its
+// claim until after its release; that cursor is reclaimed for this reader.
+template<typename Entry>
+bool topic_claim_or_reclaim(Entry &e, std::uint32_t i)
+{
+    auto owner_alive = [&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); };
+    return e.ring.claim_cursor(i) || (e.ring.reclaim_cursor(i, owner_alive) && e.ring.claim_cursor(i));
+}
+
+// A slot held elsewhere over an inactive cursor is a holder passing through, such as a last holder taking every slot for
+// a moment.
+template<typename Entry>
+cursor_claim topic_try_cursor(Entry &e, std::uint32_t i, bool held)
+{
+    const shm::slot_hold hold = e.control.hold_slot(shm::cursor_slot(i));
+    if(hold == shm::slot_hold::unsupported || hold == shm::slot_hold::failed)
+        return cursor_claim::unprovable;
+    if(hold == shm::slot_hold::busy)
+        return e.ring.header().cursors[i].active.load(std::memory_order_acquire) == 0 ? cursor_claim::passing : cursor_claim::taken;
+    const bool retired = ring_lifetime::retired(e.ring);
+    if(retired || !topic_claim_or_reclaim(e, i))
+    {
+        e.control.release_slot(shm::cursor_slot(i));
+        return retired ? cursor_claim::retired : cursor_claim::taken;
+    }
+    if(held)
+        e.channel->engage_subscriber(shm::slot_subscriber::hold_cursor, i, e.mapping);
+    else
+        e.channel->engage_subscriber(shm::slot_subscriber::adopt_cursor, i, e.mapping);
+    return cursor_claim::claimed;
+}
+
+// A held cursor gates nothing until its reader is placed or resumed. Only a full cursor table is consumer_capacity.
 template<typename Entry>
 shm::acquire_failure topic_claim_cursor(Entry &e, bool held)
 {
     const std::uint64_t capacity = std::min<std::uint64_t>(e.ring.header().consumer_capacity, shm::k_max_consumers);
+    bool passing                 = false;
     for(std::uint32_t i = 0; i < capacity; ++i)
     {
-        const shm::slot_hold hold = e.control.hold_slot(shm::cursor_slot(i));
-        if(hold == shm::slot_hold::unsupported || hold == shm::slot_hold::failed)
-            return shm::acquire_failure{shm::acquire_bound::liveness};
-        if(hold == shm::slot_hold::busy)
-            continue;
-        if(e.ring.claim_cursor(i))
+        switch(topic_try_cursor(e, i, held))
         {
-            if(held)
-                e.channel->engage_subscriber(shm::slot_subscriber::hold_cursor, i);
-            else
-                e.channel->engage_subscriber(shm::slot_subscriber::adopt_cursor, i);
-            return shm::acquire_failure{};
+            case cursor_claim::claimed:
+                return shm::acquire_failure{};
+            case cursor_claim::unprovable:
+                return shm::acquire_failure{shm::acquire_bound::liveness};
+            case cursor_claim::retired:
+                return shm::acquire_failure{shm::acquire_bound::transient_join};
+            case cursor_claim::passing:
+                passing = true;
+                break;
+            case cursor_claim::taken:
+                break;
         }
-        e.control.release_slot(shm::cursor_slot(i));
     }
-    return shm::acquire_failure{shm::acquire_bound::consumer_capacity};
+    return shm::acquire_failure{passing ? shm::acquire_bound::transient_join : shm::acquire_bound::consumer_capacity};
 }
 
 // A subscriber the ring refused a cursor would never receive, so the engagement fails rather than attach it; the caller

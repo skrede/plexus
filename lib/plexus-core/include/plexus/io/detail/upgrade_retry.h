@@ -21,10 +21,11 @@ inline constexpr std::chrono::milliseconds k_retry_floor{1};
 inline constexpr std::uint32_t k_retry_factor   = 2;
 inline constexpr std::uint32_t k_retry_attempts = 10;
 
-// The declines a later attempt can cure; every other reason is final.
+// The declines a later attempt can cure; every other reason is final. A busy creator slot is usually a last holder
+// that holds every slot only for a moment.
 constexpr bool retryable(fallback_reason reason) noexcept
 {
-    return reason == fallback_reason::transient;
+    return reason == fallback_reason::transient || reason == fallback_reason::creator_alive;
 }
 
 struct retry_key

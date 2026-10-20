@@ -20,11 +20,11 @@
 
 namespace plexus::shm::detail {
 
-// join_live never unlinks a live ring under the co-host readers still attached to it.
+// A restarted publisher adopts the ring its co-host readers are still attached to.
 template<typename Member>
 std::unique_ptr<typename Member::channel_type> companion_send(Member &m, const std::string &fqn, shm::waiter_loss::lost_fn lost)
 {
-    return mux_open(m, io::endpoint{"shm", fqn}, shm::ring_role::producer, shm::acquire_mode::join_live, std::move(lost));
+    return mux_open(m, io::endpoint{"shm", fqn}, shm::ring_role::producer, std::move(lost));
 }
 
 // The reader in slot reader gates the node's send ring for fqn from its newest message on; false when that ring is gone or

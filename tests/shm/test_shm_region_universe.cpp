@@ -27,7 +27,6 @@
 
 namespace {
 
-using plexus::shm::acquire_mode;
 using plexus::shm::ring_role;
 using plexus::shm::acquire_result;
 using plexus::shm::ring_direction;
@@ -40,7 +39,7 @@ const std::string k_fqn              = "topic.universe";
 
 acquire_result join(registry &r, const plexus::node_id &publisher, ring_role role)
 {
-    return r.acquire(k_fqn, ring_direction::request, publisher, role, 64, plexus::io::ring_geometry_mode::reliable_preserving, 0, acquire_mode::join_live);
+    return r.acquire(k_fqn, ring_direction::request, publisher, role, 64, plexus::io::ring_geometry_mode::reliable_preserving, 0);
 }
 
 void send_n(registry &r, const plexus::node_id &publisher, std::uint32_t n)

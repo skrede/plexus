@@ -257,7 +257,7 @@ if(NOT WIN32)
 endif()
 
 # The POSIX region broker, Linux-only /dev/shm-view behaviors: the 0600 owner-only mode, the
-# create-owns-unlink contract, and unlink_stale_on_create reclaiming an orphan -- each verified
+# name contract (only unlink_name removes it), and unlink_stale_on_create reclaiming an orphan -- each verified
 # by stat()/access()-ing the object under /dev/shm, the tmpfs view of POSIX shm that exists only
 # on Linux. macOS shm_open objects are not path-visible, so those broker guarantees are proven
 # there by the cross-process shm proofs instead; the target is excluded on macOS and Windows.
@@ -488,7 +488,26 @@ target_link_libraries(test_shm_registry_join PRIVATE
 
 catch_discover_tests(test_shm_registry_join TEST_PREFIX "shm.")
 
-# A taken message or a wire view made from it, held past its ring entry's teardown, keeps that ring's mapping.
+# A ring outlives its creator and goes with its last holder, over the platform broker: last-out removal, adoption by a
+# restarted publisher, a second live publisher refused, a recreate on another geometry, a dead creator's claim in flight
+# and a foreign layout.
+add_executable(test_shm_ring_lifetime test_shm_ring_lifetime.cpp test_shm_ring_recreate.cpp)
+
+target_include_directories(test_shm_ring_lifetime PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_ring_lifetime PRIVATE
+    plexus::plexus
+    plexus::shm
+    plexus::native
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_ring_lifetime TEST_PREFIX "shm.")
+
+# A taken message or a wire view made from it, held past its ring entry's teardown, keeps that ring's mapping, over a
+# counting in-memory broker and over the platform broker.
 add_executable(test_shm_take_pin_mapping test_shm_take_pin_mapping.cpp)
 
 target_include_directories(test_shm_take_pin_mapping PRIVATE
@@ -497,6 +516,7 @@ target_include_directories(test_shm_take_pin_mapping PRIVATE
 target_link_libraries(test_shm_take_pin_mapping PRIVATE
     plexus::plexus
     plexus::shm
+    plexus::native
     plexus::core
     plexus::testing
     Catch2::Catch2WithMain)
@@ -1130,12 +1150,11 @@ if(NOT WIN32 AND NOT APPLE)
     catch_discover_tests(test_shm_large_message TEST_PREFIX "shm.")
 endif()
 
-# The crashed-creator orphan-reclaim proof (xproc): a child creates a region,
-# stamps a sentinel, and _exits WITHOUT unlinking (the create-owns-unlink dtor
-# skipped), leaving an orphan in /dev/shm; the parent's create with
-# unlink_stale_on_create reclaims the orphan and mints a FRESH (zero-filled)
-# region, proving the orphan's stale bytes do not leak through. The bounded
-# crash-orphan mitigation; looped N>=100, the binary re-run >=3 times. Links
+# The crashed-creator orphan-reclaim proof (xproc): a child creates a region that
+# is not a ring, stamps a sentinel, and _exits WITHOUT unlinking, leaving an orphan
+# in /dev/shm; the parent's create with unlink_stale_on_create reclaims the orphan
+# and mints a FRESH (zero-filled) region, proving the orphan's stale bytes do not
+# leak through. Looped N>=100. Links
 # plexus::native for the compiled broker (shm_open/ftruncate/shm_unlink).
 # A custom main() runs the re-exec child dispatcher BEFORE the Catch2 session, so
 # it links the main-less Catch2 target and pulls plexus::testing for the portable

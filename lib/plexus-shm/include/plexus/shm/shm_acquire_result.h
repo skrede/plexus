@@ -15,17 +15,6 @@ enum class acquire_result : std::uint8_t
     failed,
 };
 
-// How an acquire resolves a name collision with an existing region. reclaim_stale
-// reclaims via unlink-then-create (the single-owner dial ring has one creator).
-// join_live NEVER unlinks (clobbering a live co-host peer's region would split the
-// pair onto two physical rings): it attaches first when the region exists, mints
-// only when none does, so whichever peer arrives second JOINs.
-enum class acquire_mode : std::uint8_t
-{
-    reclaim_stale,
-    join_live,
-};
-
 // Only a holder that consumes takes a reader cursor, which gates the producer, and arms a waiter; a consumer never
 // creates the ring, so the publisher alone decides its geometry.
 enum class ring_role : std::uint8_t
@@ -35,10 +24,11 @@ enum class ring_role : std::uint8_t
     both,
 };
 
-// transient_join: a co-host creator has not finished minting the ring (its slab is missing or its header unstamped), so
-// a later join can succeed; incompatible: the header carries a foreign or older layout; consumer_capacity: every reader
+// transient_join: a later join can succeed, because the ring's creator has not finished minting it (its slab is missing
+// or its header unstamped), the ring is being retired, or every free reader slot is held for a moment; incompatible: the header carries a foreign or older layout; consumer_capacity: every reader
 // slot of the ring is taken, so this acquirer could never receive; not_found: no ring exists under the name; liveness:
-// the host gives this reader no kernel proof of its life, so a producer could not tell its cursor from a dead one.
+// the host gives this reader no kernel proof of its life, so a producer could not tell its cursor from a dead one;
+// creator_alive: another holder has the ring's creator slot.
 enum class acquire_bound : std::uint8_t
 {
     none,
@@ -50,6 +40,7 @@ enum class acquire_bound : std::uint8_t
     consumer_capacity,
     not_found,
     liveness,
+    creator_alive,
 };
 
 // limit_bytes is set for the slab_ceiling bound only, broker for os_allocator and a missing-slab transient_join only, arm

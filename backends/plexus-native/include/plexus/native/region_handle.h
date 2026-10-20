@@ -13,8 +13,8 @@ namespace plexus::native {
 class posix_shm_region_broker;
 
 // Move-only RAII owner of a single mapped shared-memory region. Every handle
-// always munmaps; a create handle owns the name and unlinks it on release, an
-// attach handle never unlinks. A moved-from handle nulls its fields so its
+// munmaps on release and never removes the name; unlink_name does, leaving the
+// mapping valid. A moved-from handle nulls its fields so its
 // destructor no-ops. The base is page-aligned (mmap guarantees it), hence
 // >=8-aligned for the ring sub-allocator mapped over it. Slot holds are open-file-description locks on the handle's
 // own descriptor, so two handles are two holders even in one process.
@@ -45,10 +45,17 @@ public:
 
     bool slot_held_elsewhere(std::uint32_t slot) const noexcept;
 
+    plexus::shm::slot_hold hold_all_slots() noexcept;
+
+    void release_all_slots() noexcept;
+
+    // The sidecar lock file goes before the name, so a newcomer that creates the name afresh never loses its own.
+    void unlink_name() noexcept;
+
 private:
     friend class posix_shm_region_broker;
 
-    region_handle(int fd, void *base, std::size_t length, std::string name, bool owns_name) noexcept;
+    region_handle(int fd, void *base, std::size_t length, std::string name) noexcept;
 
     // noexcept + idempotent: nulls the members so a second invocation (the
     // move-assign path) does nothing.
@@ -56,7 +63,6 @@ private:
 
     int m_fd;
     void *m_base;
-    bool m_owns_name;
     std::string m_name;
     std::size_t m_length;
     // Opened on the first slot call on a host whose shared-memory descriptors take no record lock.

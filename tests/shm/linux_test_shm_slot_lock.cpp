@@ -43,6 +43,11 @@ struct region_pair
         REQUIRE(broker.attach(name, joiner) == plexus::shm::region_status::ok);
     }
 
+    ~region_pair()
+    {
+        creator.unlink_name();
+    }
+
     posix_shm_region_broker broker;
     region_handle creator;
     region_handle joiner;
@@ -101,4 +106,17 @@ TEST_CASE("slot_lock every descriptor a region handle keeps open is closed on ex
     const std::optional<bool> cloexec = all_close_on_exec("/dev/shm/plexus." + unique_name("cloexec"));
     REQUIRE(cloexec.has_value());
     CHECK(*cloexec);
+}
+
+TEST_CASE("slot_lock every slot is held in one step only while no other handle holds any of them", "[shm][slot_lock]")
+{
+    region_pair region{"all"};
+    REQUIRE(region.creator.hold_slot(cursor_slot(1)) == slot_hold::held);
+    REQUIRE(region.creator.hold_all_slots() == slot_hold::held);
+    CHECK(region.joiner.hold_slot(plexus::shm::k_creator_slot) == slot_hold::busy);
+
+    region.creator.release_all_slots();
+    REQUIRE(region.joiner.hold_slot(cursor_slot(4)) == slot_hold::held);
+    CHECK(region.creator.hold_all_slots() == slot_hold::busy);
+    CHECK_FALSE(region.creator.slot_held_elsewhere(plexus::shm::k_creator_slot));
 }

@@ -3,13 +3,16 @@
 
 #include "plexus/shm/shm_slot_owner.h"
 
+#include "plexus/shm/detail/shm_ring_mapping.h"
+
 #include "plexus/wire_bytes.h"
 
+#include <span>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <span>
+#include <utility>
 
 namespace plexus::shm {
 
@@ -25,11 +28,18 @@ struct handle_test_access;
 // back-pointer, so a moved-from handle's destructor and a move-assign target both no-op.
 // as_wire_bytes() takes a FRESH pin on the SAME take_refcount, so the returned view stays
 // pinned independently of this handle; an 8-aligned slot base plus that owner is the alias
-// precondition a codec's deserialize takes instead of the copy-to-align fallback.
+// precondition a codec's deserialize takes instead of the copy-to-align fallback. The
+// mapping pin, empty for a ring with no region, keeps the ring mapped past its entry.
 class taken_message
 {
 public:
-    taken_message() = default;
+    taken_message() noexcept
+            : m_payload(nullptr)
+            , m_length(0)
+            , m_refcount(nullptr)
+            , m_mapping()
+    {
+    }
 
     ~taken_message()
     {
@@ -40,13 +50,11 @@ public:
     taken_message &operator=(const taken_message &) = delete;
 
     taken_message(taken_message &&other) noexcept
-            : m_payload(other.m_payload)
-            , m_length(other.m_length)
-            , m_refcount(other.m_refcount)
+            : m_payload(std::exchange(other.m_payload, nullptr))
+            , m_length(std::exchange(other.m_length, std::size_t{0}))
+            , m_refcount(std::exchange(other.m_refcount, nullptr))
+            , m_mapping(std::move(other.m_mapping))
     {
-        other.m_payload  = nullptr;
-        other.m_length   = 0;
-        other.m_refcount = nullptr;
     }
 
     taken_message &operator=(taken_message &&other) noexcept
@@ -56,13 +64,10 @@ public:
 
         reclaim();
 
-        m_payload  = other.m_payload;
-        m_length   = other.m_length;
-        m_refcount = other.m_refcount;
-
-        other.m_payload  = nullptr;
-        other.m_length   = 0;
-        other.m_refcount = nullptr;
+        m_payload  = std::exchange(other.m_payload, nullptr);
+        m_length   = std::exchange(other.m_length, std::size_t{0});
+        m_refcount = std::exchange(other.m_refcount, nullptr);
+        m_mapping  = std::move(other.m_mapping);
         return *this;
     }
 
@@ -76,7 +81,7 @@ public:
     ::plexus::wire_bytes<shm_slot_owner> as_wire_bytes() const
     {
         assert(m_payload != nullptr && "taken_message::as_wire_bytes() on an empty or moved-from handle");
-        return ::plexus::wire_bytes<shm_slot_owner>(std::span<const std::byte>(m_payload, m_length), shm_slot_owner(m_refcount));
+        return ::plexus::wire_bytes<shm_slot_owner>(std::span<const std::byte>(m_payload, m_length), shm_slot_owner(m_refcount, m_mapping));
     }
 
     // The slot_subscriber has ALREADY pinned the slot via the ring's Dekker-safe
@@ -95,6 +100,7 @@ private:
             : m_payload(payload)
             , m_length(length)
             , m_refcount(refcount)
+            , m_mapping()
     {
         if(m_refcount != nullptr)
             m_refcount->fetch_add(1, std::memory_order_acq_rel); // pin at take()
@@ -102,10 +108,11 @@ private:
 
     // Adopts a pin the caller already holds (no fetch_add); reclaim() still releases it
     // exactly once.
-    taken_message(adopt_pin_t, const std::byte *payload, std::size_t length, std::atomic<std::uint32_t> *refcount) noexcept
+    taken_message(adopt_pin_t, const std::byte *payload, std::size_t length, std::atomic<std::uint32_t> *refcount, detail::mapping_pin mapping) noexcept
             : m_payload(payload)
             , m_length(length)
             , m_refcount(refcount)
+            , m_mapping(std::move(mapping))
     {
     }
 
@@ -117,11 +124,13 @@ private:
         m_payload  = nullptr;
         m_length   = 0;
         m_refcount = nullptr;
+        m_mapping.reset();
     }
 
-    const std::byte *m_payload{nullptr};
-    std::size_t m_length{0};
-    std::atomic<std::uint32_t> *m_refcount{nullptr};
+    const std::byte *m_payload;
+    std::size_t m_length;
+    std::atomic<std::uint32_t> *m_refcount;
+    detail::mapping_pin m_mapping;
 };
 
 }

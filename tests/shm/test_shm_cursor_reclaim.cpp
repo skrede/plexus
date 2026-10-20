@@ -133,7 +133,7 @@ TEST_CASE("cursor_reclaim a congested reliable send reclaims a dead consumer's c
     CHECK(view.active(0) == 0);
 }
 
-TEST_CASE("cursor_reclaim a consumer joining after a death passes over the dead consumer's cursor", "[shm][cursor_reclaim]")
+TEST_CASE("cursor_reclaim a consumer joining after a death takes over the dead consumer's cursor", "[shm][cursor_reclaim]")
 {
     broker_type broker;
     participant producer{broker, fresh_fqn("join")};
@@ -144,8 +144,8 @@ TEST_CASE("cursor_reclaim a consumer joining after a death passes over the dead 
     participant consumer{broker, producer.fqn};
     REQUIRE(consumer.acquire(ring_role::consumer) == acquire_result::attached);
     CHECK(view.active(0) == 1);
-    CHECK(view.active(1) == 1);
-    CHECK(view.control.slot_held_elsewhere(cursor_slot(1)));
+    CHECK(view.active(1) == 0);
+    CHECK(view.control.slot_held_elsewhere(cursor_slot(0)));
 }
 
 TEST_CASE("cursor_reclaim a live consumer that has not drained keeps its cursor and the send stays congested", "[shm][cursor_reclaim]")

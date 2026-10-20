@@ -17,7 +17,7 @@
 // not_found, and a sliced/empty name is rejected. These assertions read only the broker's
 // return status and handle validity -- no /dev/shm path inspection -- so they hold on every
 // POSIX host (Linux and macOS alike; macOS shm_open objects are not path-visible). The
-// /dev/shm-view assertions (0600 mode, create-owns-unlink) live in the Linux-only companion.
+// /dev/shm-view assertions (0600 mode, the name contract) live in the Linux-only companion.
 
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;

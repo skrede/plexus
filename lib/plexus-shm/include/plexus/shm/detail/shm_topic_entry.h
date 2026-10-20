@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_ENTRY_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_ENTRY_H
 
+#include "plexus/shm/detail/shm_ring_mapping.h"
+
 #include "plexus/shm/shm_channel.h"
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/region_naming.h"
@@ -53,16 +55,19 @@ using shm_topic_map = std::unordered_map<shm_topic_key, std::unique_ptr<Entry>, 
 // One live ring's owned state, pinned by the registry's unique_ptr so the non-movable
 // ring/channel/notifier hold stable addresses. The channel must destruct BEFORE the notifier
 // so a disarm-then-teardown keeps the wake off a destroyed subscriber. The waiter loss is shared
-// with a report in flight, which may outlive the entry.
+// with a report in flight, which may outlive the entry. The region handles live in the mapping
+// block every message taken from the ring shares, so the last of them unmaps the ring.
 template<typename Broker, typename Notifier>
 struct shm_topic_entry
 {
     using notifier_type = Notifier;
+    using handle_type   = typename Broker::region_handle;
     using deliver_fn    = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
 
     shm_topic_entry()
-            : control()
-            , slab()
+            : mapping(std::make_shared<ring_mapping_of<handle_type>>())
+            , control(mapping->control)
+            , slab(mapping->slab)
             , ring()
             , notify()
             , channel()
@@ -75,14 +80,16 @@ struct shm_topic_entry
     {
     }
 
-    typename Broker::region_handle control;
-    typename Broker::region_handle slab;
+    std::shared_ptr<ring_mapping_of<handle_type>> mapping;
+    handle_type &control;
+    handle_type &slab;
     broadcast_ring ring;
     std::optional<Notifier> notify;
     std::optional<shm_channel<Notifier>> channel;
     acquire_result verdict;
     std::uint32_t producers;
     std::uint32_t consumers;
+    // This entry holds the ring's creator slot.
     bool creator;
     // Unset, the consumer is held: a wake takes nothing until a sink is installed.
     deliver_fn sink;

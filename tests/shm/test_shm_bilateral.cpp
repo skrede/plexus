@@ -138,6 +138,7 @@ bool run_shm_roundtrip(const std::string &fqn, std::uint32_t publisher_max_paylo
     // default geometry). Both ends derive the names from the fqn and publisher alone.
     posix_shm_region_broker broker;
     region_handle ctrl, slab;
+    const plexus::testing::unlink_on_exit names{ctrl, slab};
     const std::optional<std::uint32_t> want = publisher_max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{publisher_max_payload};
     const pio::ring_geometry geom           = pio::ring_geometry_for(want);
     REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);

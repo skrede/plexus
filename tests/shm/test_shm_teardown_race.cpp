@@ -146,6 +146,7 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state", 
 
         posix_shm_region_broker broker;
         region_handle ctrl, slab;
+        const plexus::testing::unlink_on_exit names{ctrl, slab};
         REQUIRE(broker.create(control_name(fqn), pio::control_region_bytes(geom.cell_count), pio::create_options{}, ctrl) == pio::region_status::ok);
         REQUIRE(broker.create(slab_name(fqn), pio::slab_region_bytes(geom.cell_count, geom.slot_capacity), pio::create_options{}, slab) == pio::region_status::ok);
 

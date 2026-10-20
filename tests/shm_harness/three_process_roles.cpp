@@ -119,8 +119,7 @@ bool run_role(const std::string &fqn, three_role_slot &slot, bool publisher)
     typename Leg::registry::broker_type broker;
     typename Leg::registry registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, Leg::binder(io)};
     const plexus::shm::ring_role role = publisher ? plexus::shm::ring_role::producer : plexus::shm::ring_role::consumer;
-    if(registry.acquire(fqn, k_request, plexus::testing::test_publisher(), role, 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live) ==
-       plexus::shm::acquire_result::failed)
+    if(registry.acquire(fqn, k_request, plexus::testing::test_publisher(), role, 0, plexus::io::ring_geometry_mode::reliable_preserving, 0) == plexus::shm::acquire_result::failed)
         return report_failure(registry.last_acquire_failure());
 
     if(!publisher)

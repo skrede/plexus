@@ -11,17 +11,15 @@ namespace plexus::native {
 region_handle::region_handle() noexcept
         : m_fd(-1)
         , m_base(nullptr)
-        , m_owns_name(false)
         , m_name()
         , m_length(0)
         , m_sidecar_fd(-1)
 {
 }
 
-region_handle::region_handle(int fd, void *base, std::size_t length, std::string name, bool owns_name) noexcept
+region_handle::region_handle(int fd, void *base, std::size_t length, std::string name) noexcept
         : m_fd(fd)
         , m_base(base)
-        , m_owns_name(owns_name)
         , m_name(std::move(name))
         , m_length(length)
         , m_sidecar_fd(-1)
@@ -31,7 +29,6 @@ region_handle::region_handle(int fd, void *base, std::size_t length, std::string
 region_handle::region_handle(region_handle &&other) noexcept
         : m_fd(std::exchange(other.m_fd, -1))
         , m_base(std::exchange(other.m_base, nullptr))
-        , m_owns_name(std::exchange(other.m_owns_name, false))
         , m_name(std::move(other.m_name))
         , m_length(std::exchange(other.m_length, std::size_t{0}))
         , m_sidecar_fd(std::exchange(other.m_sidecar_fd, -1))
@@ -47,7 +44,6 @@ region_handle &region_handle::operator=(region_handle &&other) noexcept
 
     m_fd         = std::exchange(other.m_fd, -1);
     m_base       = std::exchange(other.m_base, nullptr);
-    m_owns_name  = std::exchange(other.m_owns_name, false);
     m_name       = std::move(other.m_name);
     m_length     = std::exchange(other.m_length, std::size_t{0});
     m_sidecar_fd = std::exchange(other.m_sidecar_fd, -1);
@@ -67,14 +63,11 @@ void region_handle::reclaim() noexcept
         ::close(m_fd);
     if(m_sidecar_fd >= 0)
         ::close(m_sidecar_fd);
-    if(m_owns_name)
-        ::shm_unlink(m_name.c_str());
 
     m_base       = nullptr;
     m_fd         = -1;
     m_sidecar_fd = -1;
     m_length     = 0;
-    m_owns_name  = false;
 }
 
 std::span<std::byte> region_handle::bytes() const
@@ -103,6 +96,28 @@ void region_handle::release_slot(std::uint32_t slot) noexcept
 bool region_handle::slot_held_elsewhere(std::uint32_t slot) const noexcept
 {
     return m_fd < 0 || detail::slot_locked_elsewhere(m_fd, m_sidecar_fd, m_name, slot);
+}
+
+plexus::shm::slot_hold region_handle::hold_all_slots() noexcept
+{
+    if(m_fd < 0)
+        return plexus::shm::slot_hold::failed;
+    return detail::hold_all_slot_locks(m_fd, m_sidecar_fd, m_name);
+}
+
+void region_handle::release_all_slots() noexcept
+{
+    if(m_fd >= 0)
+        detail::release_all_slot_locks(m_fd, m_sidecar_fd);
+}
+
+void region_handle::unlink_name() noexcept
+{
+    if(m_name.empty())
+        return;
+    if(m_sidecar_fd >= 0)
+        detail::unlink_sidecar(m_name);
+    ::shm_unlink(m_name.c_str());
 }
 
 }

@@ -67,8 +67,7 @@ bool serve_consumer(const std::string &fqn, wake_block &block, wake_consumer_slo
     ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
     registry_for<Notifier> registry{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, binder_on<Notifier>(io)};
-    const plexus::shm::acquire_result acquired =
-            registry.acquire(fqn, k_request, plexus::testing::test_publisher(), role, 0, plexus::io::ring_geometry_mode::reliable_preserving, 0, plexus::shm::acquire_mode::join_live);
+    const plexus::shm::acquire_result acquired = registry.acquire(fqn, k_request, plexus::testing::test_publisher(), role, 0, plexus::io::ring_geometry_mode::reliable_preserving, 0);
     if(acquired == plexus::shm::acquire_result::failed)
         return false;
 

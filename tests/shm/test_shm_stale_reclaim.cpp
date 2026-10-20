@@ -14,19 +14,15 @@
 #include <cstdlib>
 #include <cstring>
 
-// The crashed-creator orphan-reclaim proof (the bounded crash-orphan mitigation):
-// a child CREATES a named region, stamps a sentinel byte pattern into it, and
-// _Exits WITHOUT releasing -- simulating a creator that crashed before its
-// create-owns-unlink destructor could run, leaving an orphan live in /dev/shm.
-// The parent then proves the orphan is real (a plain create returns
-// already_exists) and that a create with unlink_stale_on_create RECLAIMS the
-// orphan and mints a FRESH region: the new region is the parent's (ftruncate
+// The crashed-creator orphan-reclaim proof for a region that is not a ring (a ring
+// is reclaimed only through its creator slot): a child CREATES a named region,
+// stamps a sentinel byte pattern into it, and _Exits WITHOUT releasing, leaving its
+// name in /dev/shm. The parent then proves the orphan is real (a plain create
+// returns already_exists) and that a create with unlink_stale_on_create RECLAIMS
+// the orphan and mints a FRESH region: the new region is the parent's (ftruncate
 // zero-fills it, so the orphan's stale sentinel does not leak through). Looped
-// N>=100; the ctest binary is re-run >=3 times for reproducibility. The child is
-// a RE-EXEC'd process that re-opens the region BY NAME (the name arrives by argv),
-// not a fork inheriting the parent's address space. This is the bounded
-// mitigation that ships now; robust dead-peer arbitration is a locked deferral and
-// is NOT designed here.
+// N>=100. The child is a RE-EXEC'd process that re-opens the region BY NAME (the
+// name arrives by argv), not a fork inheriting the parent's address space.
 
 namespace pio = plexus::shm;
 using plexus::native::shm_region_broker;
@@ -57,9 +53,6 @@ bool all_zero(const shm_region_handle &h)
 }
 
 // The crashed-creator child routine, dispatched in the re-exec'd process by key.
-// It re-opens (creates) the named region, stamps the sentinel, then _Exits WITHOUT
-// releasing the handle -- the create-owns-unlink destructor never runs, so the
-// region is orphaned live in /dev/shm (the crashed-creator simulation).
 bool stale_reclaim_creator(const std::vector<std::string> &args)
 {
     if(args.empty())
@@ -70,11 +63,6 @@ bool stale_reclaim_creator(const std::vector<std::string> &args)
     if(broker.create(args.front(), k_region_bytes, pio::create_options{}, orphan) != pio::region_status::ok)
         return false;
     stamp_stale(orphan);
-
-    // _Exit HERE, with `orphan` still in scope, is the load-bearing crash
-    // simulation: it skips orphan's create-owns-unlink destructor, so the named
-    // region stays live in /dev/shm with the sentinel committed (letting the
-    // handle destruct at return would unlink it, defeating the orphan).
     std::_Exit(0);
 }
 
@@ -133,12 +121,9 @@ TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_s
 
                     // The fresh region is the PARENT's: ftruncate zero-fills it, so the
                     // orphan's stale sentinel did not leak through into the new mapping.
-                    if(!all_zero(fresh))
-                        return false;
-
-                    // The parent owns this region and unlinks it on `fresh`'s release
-                    // (create-owns-unlink), so no /dev/shm region leaks after the case.
-                    return true;
+                    const bool fresh_zeroed = all_zero(fresh);
+                    fresh.unlink_name();
+                    return fresh_zeroed;
 #endif
                 });
 
