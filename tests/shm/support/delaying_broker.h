@@ -135,6 +135,15 @@ public:
         m_withheld.insert_or_assign(std::move(name), visible_at);
     }
 
+    // The handles mapping a region of this broker now; an empty or moved-from handle maps none.
+    std::size_t mapped() const
+    {
+        std::size_t count = 0;
+        for(const auto &[name, region] : m_regions)
+            count += static_cast<std::size_t>(region.use_count() - 1);
+        return count;
+    }
+
 private:
     std::map<std::string, clock::time_point> m_withheld;
     std::map<std::string, std::shared_ptr<delaying_region>> m_regions;

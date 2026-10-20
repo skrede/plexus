@@ -488,6 +488,21 @@ target_link_libraries(test_shm_registry_join PRIVATE
 
 catch_discover_tests(test_shm_registry_join TEST_PREFIX "shm.")
 
+# A taken message or a wire view made from it, held past its ring entry's teardown, keeps that ring's mapping.
+add_executable(test_shm_take_pin_mapping test_shm_take_pin_mapping.cpp)
+
+target_include_directories(test_shm_take_pin_mapping PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_take_pin_mapping PRIVATE
+    plexus::plexus
+    plexus::shm
+    plexus::core
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_take_pin_mapping TEST_PREFIX "shm.")
+
 # Which halves of a ring each holder's role engages: producer-only entries register no cursor and arm nothing, each
 # consumer adds one cursor, and a consumer never creates the ring.
 add_executable(test_shm_registry_roles test_shm_registry_roles.cpp)
