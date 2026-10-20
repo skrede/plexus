@@ -2,10 +2,12 @@
 
 #include "support/noop_notifier.h"
 
+#include "plexus/shm/ring_cells.h"
 #include "plexus/shm/shm_channel.h"
 
 #include "plexus/node_id.h"
 
+#include <new>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -38,6 +40,11 @@ struct tampered_ring
         if(st == loan_status::ok)
             ring.commit(claimed.position, 1);
         return st;
+    }
+
+    cell_t &first_cell() const noexcept
+    {
+        return *std::launder(reinterpret_cast<cell_t *>(control.span().data() + sizeof(control_header_t)));
     }
 
     backing_region control;
@@ -74,4 +81,13 @@ TEST_CASE("ring_tampered a reader index past the cursor array is not placed thou
     shm_channel<plexus::testing::noop_notifier> channel{t.ring, notifier, plexus::io::reliability::reliable, plexus::io::congestion::block};
     CHECK_FALSE(channel.place_reader(k_park_alias));
     REQUIRE(t.ring.header().park[0].load() == UINT32_MAX);
+}
+
+TEST_CASE("ring_tampered a sequence a lap ahead with no tail past the cursor is not a lag", "[shm][ring_tampered]")
+{
+    tampered_ring t;
+    t.first_cell().sequence.store(1 + k_cells);
+
+    broadcast_ring::consume_result out;
+    REQUIRE(t.ring.consume(0, out) == loan_status::empty);
 }
