@@ -1,5 +1,6 @@
-# Wire attack-surface libFuzzer harnesses. Each harness drives a header-only
-# decoder over fuzzer-controlled spans; the blast radius is just plexus::wire.
+# libFuzzer harnesses over the untrusted-input surfaces: the header-only wire decoders,
+# whose blast radius is plexus::wire, and the shared-memory ring attached over a control
+# region another process wrote.
 # libFuzzer requires a Clang toolchain — skip with a warning otherwise.
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(WARNING
@@ -29,6 +30,7 @@ plexus_add_fuzz_target(fuzz_subscribe_frame)
 plexus_add_fuzz_target(fuzz_fetch_latched_frame)
 plexus_add_fuzz_target(fuzz_heartbeat_frame)
 plexus_add_fuzz_target(fuzz_topic_declaration_frame)
+plexus_add_fuzz_target(fuzz_companion_frame)
 
 # The announcement decoder's header reaches plexus/node_id.h in plexus::core, so this
 # harness links core on top of the plexus::wire blast radius the others share.
@@ -56,3 +58,9 @@ target_link_libraries(fuzz_reassembler PRIVATE plexus::core plexus::datagram ple
 # the plexus::wire blast radius the others share.
 plexus_add_fuzz_target(fuzz_key_pattern)
 target_link_libraries(fuzz_key_pattern PRIVATE plexus::core)
+
+# The ring-attach harness drives the shared-memory ring, whose header carries a node id and whose verbs take the
+# delivery enums of plexus::core; the no-op notifier comes from the shared-memory test support.
+plexus_add_fuzz_target(fuzz_ring_attach)
+target_link_libraries(fuzz_ring_attach PRIVATE plexus::shm plexus::core)
+target_include_directories(fuzz_ring_attach PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)

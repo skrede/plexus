@@ -3,17 +3,35 @@
 // first input byte.
 
 #include "fuzz_sink.h"
+
 #include "plexus/wire/data_frame.h"
 
+#include <span>
 #include <cstddef>
 #include <cstdint>
-#include <span>
+#include <cstdlib>
+
+namespace {
+
+void drive_framed_sequence(std::span<const std::byte> framed)
+{
+    const auto sequence = plexus::wire::framed_sequence(framed);
+    fuzz_consume(sequence);
+    if(!sequence)
+        return;
+    const auto inner = plexus::wire::decode_unidirectional(framed.subspan(plexus::wire::header_size));
+    if(!inner || inner->header.sequence != *sequence)
+        std::abort();
+}
+
+}
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {
     using namespace plexus::wire;
 
     auto bytes = std::span<const std::byte>{reinterpret_cast<const std::byte *>(Data), Size};
+    drive_framed_sequence(bytes);
 
     if(Size == 0 || (Data[0] & 0x01) == 0)
     {

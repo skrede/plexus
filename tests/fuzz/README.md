@@ -11,15 +11,29 @@ for fresh crashes within a fixed time budget.
 
 | Harness | Surface |
 |---------|---------|
-| `fuzz_data_frame` | `wire::decode_unidirectional` / `decode_bidirectional` |
-| `fuzz_rpc_frame` | the RPC frame decoder |
-| `fuzz_handshake_frame` | the handshake frame decoder |
+| `fuzz_data_frame` | `wire::decode_unidirectional` / `decode_bidirectional`, and `wire::framed_sequence` checked against the unidirectional decode |
+| `fuzz_rpc_frame` | `wire::decode_rpc_request` / `decode_rpc_response` |
+| `fuzz_handshake_frame` | `wire::decode_handshake_request` / `decode_handshake_response` |
+| `fuzz_subscribe_frame` | `wire::decode_subscribe_request` / `decode_subscribe_response` |
+| `fuzz_fetch_latched_frame` | `wire::decode_fetch_latched_request` |
+| `fuzz_heartbeat_frame` | `wire::decode_heartbeat` |
+| `fuzz_topic_declaration_frame` | `wire::decode_topic_declaration` |
+| `fuzz_announcement_frame` | `wire::decode_announcement` |
+| `fuzz_peer_report_frame` | `wire::decode_peer_report` |
+| `fuzz_forwarded_frame` | `wire::decode_forwarded_frame` |
+| `fuzz_companion_frame` | `wire::decode_companion` / `decode_companion_ready` / `decode_companion_switch`, each accepted payload re-encoded byte for byte |
+| `fuzz_varint` | `wire::read_varint` |
+| `fuzz_key_pattern` | `match::key_pattern::make` and the pattern set relations |
 | `fuzz_frame_reassembler` | the wire-level frame reassembler decode path |
 | `fuzz_reassembler` | `wire::decode_udp_fragment_header` + the bounded datagram `reassembler::feed` |
+| `fuzz_ring_attach` | `shm::broadcast_ring::attach` over a raw control image or a created ring with rewritten bytes (the retired stamp among them), then a bounded run of ring, channel and adoption-repair steps with the control region rewritten between them |
 
 Each harness is fail-closed by construction: every field is range-checked before
-it indexes, and a fresh decoder/reassembler instance is built per input so no
-partial-message state crosses inputs.
+it indexes, and a fresh decoder/reassembler/ring instance is built per input so no
+partial-message state crosses inputs. `fuzz_ring_attach` caps what it derives from
+the input (a 64 KiB control image, a 1 MiB slab, 64 ring steps) and allocates each
+region at exactly its size, so AddressSanitizer flags any access past a mapped
+region. Run it with `-rss_limit_mb=2048`.
 
 ## Corpus
 
@@ -54,11 +68,14 @@ combine with ThreadSanitizer (it pairs with AddressSanitizer only).
 
 ### (a) Deterministic corpus replay — the gate
 
-Replays the committed corpus with no new mutation (`-runs=0`); must exit 0 for
+Replays the local corpus with no new mutation (`-runs=0`); must exit 0 for
 every harness.
 
 ```bash
-for h in fuzz_data_frame fuzz_rpc_frame fuzz_handshake_frame fuzz_frame_reassembler fuzz_reassembler; do
+harnesses="fuzz_data_frame fuzz_rpc_frame fuzz_handshake_frame fuzz_subscribe_frame fuzz_fetch_latched_frame
+fuzz_heartbeat_frame fuzz_topic_declaration_frame fuzz_announcement_frame fuzz_peer_report_frame fuzz_forwarded_frame
+fuzz_companion_frame fuzz_varint fuzz_key_pattern fuzz_frame_reassembler fuzz_reassembler fuzz_ring_attach"
+for h in $harnesses; do
     build-fuzz/tests/fuzz/$h tests/fuzz/corpus/$h -runs=0 || echo "REPLAY FAIL $h"
 done
 ```
@@ -66,12 +83,12 @@ done
 ### (b) Bounded fresh campaign
 
 A time-bounded mutation campaign per harness; any crash, sanitizer report, or
-non-zero exit fails the gate. Sixty seconds per harness keeps the full gate under
-a few minutes.
+non-zero exit fails the gate. Sixty seconds per harness keeps the full gate near a
+quarter of an hour.
 
 ```bash
-for h in fuzz_data_frame fuzz_rpc_frame fuzz_handshake_frame fuzz_frame_reassembler fuzz_reassembler; do
-    build-fuzz/tests/fuzz/$h -max_total_time=60 -timeout=10 tests/fuzz/corpus/$h || echo "CAMPAIGN FAIL $h"
+for h in $harnesses; do
+    build-fuzz/tests/fuzz/$h -max_total_time=60 -timeout=10 -rss_limit_mb=2048 tests/fuzz/corpus/$h || echo "CAMPAIGN FAIL $h"
 done
 ```
 
