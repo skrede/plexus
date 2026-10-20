@@ -33,3 +33,13 @@ target_link_libraries(test_inproc_object_lane PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_inproc_object_lane TEST_PREFIX "inproc.")
+
+# The close contract on the in-process channel: a posted, once-only on_closed after the channel went quiet,
+# its consumer detached at close, and a retired channel drained clean through the graveyard.
+add_executable(test_inproc_retire_quiescence test_inproc_retire_quiescence.cpp)
+target_include_directories(test_inproc_retire_quiescence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_inproc_retire_quiescence PRIVATE
+    plexus::core
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_inproc_retire_quiescence TEST_PREFIX "inproc.")

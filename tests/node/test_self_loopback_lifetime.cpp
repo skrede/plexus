@@ -16,7 +16,10 @@
 #include <span>
 #include <array>
 #include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
+#include <cstdint>
 
 using plexus_test::fixture;
 using plexus_test::make_id;
@@ -81,4 +84,39 @@ TEST_CASE("self_loopback_lifetime: drain-before-destroy holds with no per-callba
     // from a SNAPSHOT (not a live engine reference), so this final pump touches no freed state.
     ex.drain();
     REQUIRE(fired == 1);
+}
+
+TEST_CASE("self_loopback_lifetime: closing the loopback channel posts on_closed once, after its queued delivery", "[node][loopback][lifetime][!shouldfail]")
+{
+    plexus_test::inproc_bus<> bus;
+    plexus_test::inproc_executor<> ex{bus};
+    loopback_policy::byte_channel_type channel{ex, "self"};
+    std::vector<std::string> log;
+    channel.on_data([&log](std::span<const std::byte>) { log.push_back("data"); });
+    channel.on_closed([&log] { log.push_back("closed"); });
+
+    const std::array<std::byte, 1> payload{std::byte{0x01}};
+    channel.send(payload);
+    channel.close();
+    channel.close();
+    REQUIRE(ex.step());
+    REQUIRE(log.empty());
+    REQUIRE(ex.step());
+    REQUIRE_FALSE(ex.step());
+    REQUIRE(log == std::vector<std::string>{"closed"});
+}
+
+TEST_CASE("self_loopback_lifetime: a handler installed after the loopback channel went quiet is still notified", "[node][loopback][lifetime][!shouldfail]")
+{
+    plexus_test::inproc_bus<> bus;
+    plexus_test::inproc_executor<> ex{bus};
+    loopback_policy::byte_channel_type channel{ex, "self"};
+    channel.close();
+    ex.drain();
+
+    std::int32_t closes = 0;
+    channel.on_closed([&closes] { ++closes; });
+    REQUIRE(closes == 0);
+    ex.drain();
+    REQUIRE(closes == 1);
 }
