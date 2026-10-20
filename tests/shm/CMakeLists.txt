@@ -1004,6 +1004,22 @@ target_link_libraries(test_shm_mux PRIVATE
 
 catch_discover_tests(test_shm_mux TEST_PREFIX "shm.")
 
+# The close contract on the shared-memory byte channel, over the platform broker: a posted, once-only on_closed, a
+# late-installed handler posted, and its consumer detached at close.
+add_executable(test_shm_byte_channel_retire test_shm_byte_channel_retire.cpp)
+
+target_include_directories(test_shm_byte_channel_retire PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_byte_channel_retire PRIVATE
+    plexus::shm
+    plexus::core
+    plexus::native
+    plexus::testing
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_byte_channel_retire TEST_PREFIX "shm.")
+
 # The medium-coordinator oracle (header-only core + inproc): the engine-owned coordinator
 # consumes the forwarder's demand transition, reads same_host, runs the upgrade policy, and
 # acquires/releases the per-topic ring THROUGH the injected gate (the can_acquire/prefer_upgradeable_hook
