@@ -170,6 +170,8 @@ TEST_CASE("ring_lifetime a joiner meets a ring its last holder is retiring as tr
 
     view.slab.unlink_name();
     view.control.unlink_name();
+    // A Windows section keeps its name until its last view closes, so the retiring holder's last-out ends with its unmap.
+    view.unmap();
     REQUIRE(newcomer.acquire(ring_role::producer) == acquire_result::created);
     newcomer.release(ring_role::producer);
     CHECK_FALSE(view.named());

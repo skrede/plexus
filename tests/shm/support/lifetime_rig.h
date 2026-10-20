@@ -146,6 +146,12 @@ struct ring_view
                 shm::broadcast_ring::attach(control.bytes(), slab.bytes(), test_publisher(), ring) == shm::loan_status::ok;
     }
 
+    void unmap()
+    {
+        slab    = native_broker::region_handle{};
+        control = native_broker::region_handle{};
+    }
+
     native_broker broker;
     std::string fqn;
     std::string name;

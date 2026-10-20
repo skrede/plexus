@@ -55,7 +55,7 @@ TEST_CASE("sem_teardown a waiter's disarm completes while another process waits 
     const std::string fqn = "shm_harness.sem_teardown." + std::to_string(plexus::testing::process_id());
     const topic_regions regions{fqn, {plexus::testing::test_publisher()}};
     const region_doorbells doorbells{plexus::testing::region_name(fqn, plexus::testing::test_publisher())};
-    const plexus::testing::scoped_shm_name name{"shm_harness.sem_teardown_block."};
+    const plexus::testing::scoped_shm_name name{"sem_teardown."};
     auto block = plexus::testing::xproc_shared<three_process_block>::create(name.str());
     REQUIRE(block);
 

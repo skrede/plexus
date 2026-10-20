@@ -87,6 +87,12 @@ bool reads_payload(const kept_view &kept)
     return reads_payload(std::span<const std::byte>(kept->data(), kept->size()));
 }
 
+bool gone(plexus::native::shm_region_broker &broker, const std::string &name)
+{
+    plexus::native::shm_region_handle probe;
+    return broker.attach(name, probe) == plexus::shm::region_status::not_found;
+}
+
 // A ring over the counting broker's regions whose mapping block holds both handles, as a registry entry's does.
 struct pinned_ring
 {
@@ -128,10 +134,13 @@ TEST_CASE("take_pin_mapping a message held past its entry's teardown reads its p
     kept_view kept = publish_and_keep(reg);
 
     release_both(reg);
-    plexus::native::shm_region_handle probe;
-    CHECK(broker.attach(name, probe) == plexus::shm::region_status::not_found);
+    // A Windows section keeps its name while the taken message maps it; a POSIX name goes with the entry's teardown.
+#if !defined(_WIN32)
+    CHECK(gone(broker, name));
+#endif
     CHECK(reads_payload(kept));
     kept.reset();
+    CHECK(gone(broker, name));
 }
 
 TEST_CASE("take_pin_mapping a moved-from view releases nothing", "[shm][take_pin_mapping]")
