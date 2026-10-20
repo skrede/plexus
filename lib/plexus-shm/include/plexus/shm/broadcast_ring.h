@@ -18,16 +18,13 @@
 
 namespace plexus::shm {
 
-// Lock-free, cross-process, offset-based MPMC broadcast ring: the Vyukov bounded MPMC queue adapted to DESCRIPTOR cells
-// (each carries a slab byte offset + length + the per-cell sequence; the variable-size payload lives in a separate
-// fixed-stride slab keyed 1:1 to the cells). The broadcast overlay (the Disruptor gating idea over Vyukov) gives every
-// subscriber its own read cursor in the header's fixed-bound array; the producer reclamation gate is "the slowest
-// registered consumer has passed this slot" (a k_cursor_idle sentinel does not gate). reliable blocks a cell until
-// take_refcount==0 AND the slowest non-sentinel cursor is past it (a bounded spin, no kernel object); best-effort
-// overwrites latest but SKIPS pinned cells.
-// CRASH STANCE (crash-SAFE, NOT crash-LIVE): no cross-process lock is held, so a dying process never corrupts the ring;
-// but a producer that dies after the enqueue CAS before the sequence release leaves a never-advancing cell, and a
-// consumer that dies holding a take() leaves take_refcount>0.
+// Lock-free, cross-process, offset-based MPMC broadcast ring: the Vyukov bounded MPMC queue over DESCRIPTOR cells (slab
+// offset, length and sequence; the payload lives in a fixed-stride slab keyed 1:1 to the cells) plus Disruptor gating:
+// every subscriber has its own read cursor in the header's fixed-bound array, and a k_cursor_idle cursor does not gate.
+// reliable blocks a cell until take_refcount==0 AND the slowest gating cursor is past it (a bounded spin, no kernel
+// object); best-effort overwrites latest but SKIPS pinned cells. CRASH STANCE (crash-SAFE, NOT crash-LIVE): no
+// cross-process lock is held, so a dying process never corrupts the ring, but a producer dying between its enqueue CAS
+// and sequence release leaves a never-advancing cell, and a consumer dying inside a take() leaves take_refcount>0.
 class broadcast_ring
 {
 public:
@@ -53,8 +50,6 @@ public:
 
     broadcast_ring(const broadcast_ring &)            = delete;
     broadcast_ring &operator=(const broadcast_ring &) = delete;
-    broadcast_ring(broadcast_ring &&)                 = delete;
-    broadcast_ring &operator=(broadcast_ring &&)      = delete;
 
     static loan_status create(std::span<std::byte> control, std::span<std::byte> slab, std::uint64_t cell_count, std::uint64_t slot_capacity, const node_id &publisher,
                               broadcast_ring &out, std::uint64_t consumer_capacity = k_max_consumers) noexcept
@@ -106,6 +101,11 @@ public:
     bool reclaim_cursor(std::uint32_t index, Alive &owner_alive) noexcept
     {
         return detail::reclaim_cursor(*m_header, m_consumer_capacity, index, owner_alive);
+    }
+
+    bool place_cursor(std::uint32_t index, std::uint64_t position) noexcept
+    {
+        return detail::place_cursor(*m_header, m_consumer_capacity, index, position);
     }
 
     void publish_cursor(std::uint32_t index, std::uint64_t position) noexcept

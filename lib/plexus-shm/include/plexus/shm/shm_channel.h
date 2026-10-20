@@ -112,7 +112,7 @@ public:
     bool place_reader(std::uint32_t cursor) noexcept
     {
         const std::uint64_t tail = m_ring.tail_position();
-        return detail::place_cursor(m_ring.header(), m_ring.header().consumer_capacity, cursor, tail == 0 ? 0 : tail - 1);
+        return m_ring.place_cursor(cursor, tail == 0 ? 0 : tail - 1);
     }
 
     void release_subscriber() noexcept
