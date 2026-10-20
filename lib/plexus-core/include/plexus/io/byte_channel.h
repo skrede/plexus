@@ -14,12 +14,15 @@
 
 namespace plexus::io {
 
-// Contract every backend honors identically: on_data is ALWAYS posted onto the
-// executor (never invoked synchronously from send()/feed()), so a handler may call
-// back into the channel without reentrancy hazard; the delivered span is a COMPLETE
-// header-on frame (a frame_header followed by its payload), NOT the stripped inner
-// payload. on_error and on_protocol_close are DISTINCT seams: on_error is a network
-// drop (re-dials); on_protocol_close is a wire-misbehaving peer (does NOT re-dial).
+// Contract every backend honors identically: on_data is ALWAYS posted onto the executor (never invoked synchronously
+// from send()/feed()), so a handler may call back into the channel without reentrancy hazard; the delivered span is a
+// COMPLETE header-on frame (a frame_header followed by its payload), NOT the stripped inner payload. on_error and
+// on_protocol_close are DISTINCT seams: on_error is a network drop (re-dials); on_protocol_close is a wire-misbehaving
+// peer (does NOT re-dial). A channel is closed once close(), a fail or a protocol close happened; close() is idempotent.
+// Closing detaches on_data, on_error and on_protocol_close (on the fail path on_error fires first, then the detach).
+// on_closed fires exactly once, posted, after the channel's last outstanding operation has completed; a handler
+// installed after that moment is posted when installed. Nothing of the channel runs after it, so the owner may destroy
+// the channel inside it.
 template<typename C>
 concept byte_channel = requires(C &c, const C &cc, std::span<const std::byte> bytes, plexus::detail::move_only_function<void(std::span<const std::byte>)> on_data_cb,
                                 plexus::detail::move_only_function<void()> on_closed_cb, plexus::detail::move_only_function<void(io_error)> on_error_cb,
