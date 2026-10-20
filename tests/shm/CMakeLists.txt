@@ -506,6 +506,25 @@ target_link_libraries(test_shm_ring_lifetime PRIVATE
 
 catch_discover_tests(test_shm_ring_lifetime TEST_PREFIX "shm.")
 
+# A newcomer that maps a ring between its retirer's sidecar lock file removal and control-name removal, over the POSIX
+# broker; only a host whose slot locks live on a sidecar can leave one behind.
+if(NOT WIN32)
+    add_executable(posix_test_shm_sidecar_leak posix_test_shm_sidecar_leak.cpp)
+
+    target_include_directories(posix_test_shm_sidecar_leak PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(posix_test_shm_sidecar_leak PRIVATE
+        plexus::plexus
+        plexus::shm
+        plexus::native
+        plexus::core
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(posix_test_shm_sidecar_leak TEST_PREFIX "shm.")
+endif()
+
 # A taken message or a wire view made from it, held past its ring entry's teardown, keeps that ring's mapping, over a
 # counting in-memory broker and over the platform broker.
 add_executable(test_shm_take_pin_mapping test_shm_take_pin_mapping.cpp)
