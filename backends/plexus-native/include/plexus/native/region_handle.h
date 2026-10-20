@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_NATIVE_REGION_HANDLE_H
 #define HPP_GUARD_PLEXUS_NATIVE_REGION_HANDLE_H
 
+#include "plexus/native/detail/posix_slot_lock.h"
+
 #include "plexus/shm/slot_liveness.h"
 
 #include <span>
@@ -65,8 +67,7 @@ private:
     void *m_base;
     std::string m_name;
     std::size_t m_length;
-    // Opened on the first slot call on a host whose shared-memory descriptors take no record lock.
-    mutable int m_sidecar_fd;
+    mutable detail::sidecar_lock_file m_sidecar;
 };
 
 }

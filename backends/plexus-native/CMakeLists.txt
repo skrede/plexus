@@ -40,6 +40,7 @@ else()
     target_sources(plexus-native PRIVATE
         src/region_handle.cpp
         src/posix_slot_lock.cpp
+        src/posix_sidecar_lock.cpp
         src/posix_shm_status.cpp
         src/posix_shm_region_broker.cpp)
     if(LINUX)
