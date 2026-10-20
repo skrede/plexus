@@ -21,6 +21,20 @@ inline void raise_high_water(control_header_t &h, std::uint32_t want) noexcept
         ;
 }
 
+// A caller may pass a capacity read from the peer-written header, so an index is also held inside the cursor array.
+inline bool cursor_in_range(std::uint64_t consumer_capacity, std::uint32_t index) noexcept
+{
+    return index < consumer_capacity && index < k_max_consumers;
+}
+
+// The registered-consumer high-water as a scan bound: the header is peer-written, so a scan never trusts it past the
+// cursor array.
+inline std::uint32_t cursor_scan_bound(const control_header_t &h) noexcept
+{
+    const std::uint32_t hw = h.high_water.load(std::memory_order_acquire);
+    return hw < k_max_consumers ? hw : static_cast<std::uint32_t>(k_max_consumers);
+}
+
 // The active word of a cursor a producer is reclaiming: it still gates, and neither a claim nor its owner's unregister
 // can move it, so the reclaimer's liveness probe and its clearing stores cannot land on a newcomer's cursor.
 inline constexpr std::uint32_t k_cursor_reclaiming = 2;
@@ -29,7 +43,7 @@ inline constexpr std::uint32_t k_cursor_reclaiming = 2;
 inline bool claim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index) noexcept
 {
     std::uint32_t expected = 0;
-    if(index >= consumer_capacity || !h.cursors[index].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
+    if(!cursor_in_range(consumer_capacity, index) || !h.cursors[index].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
         return false;
     h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
     raise_high_water(h, index + 1);
@@ -54,7 +68,7 @@ inline loan_status register_cursor(control_header_t &h, std::uint64_t consumer_c
 // once the owner's slot is free.
 inline void unregister_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index) noexcept
 {
-    if(index >= consumer_capacity)
+    if(!cursor_in_range(consumer_capacity, index))
         return;
     h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
     std::uint32_t expected = 1;
@@ -66,7 +80,7 @@ template<typename Alive>
 bool reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, Alive &owner_alive) noexcept
 {
     std::uint32_t expected = 1;
-    if(index >= consumer_capacity || !h.cursors[index].active.compare_exchange_strong(expected, k_cursor_reclaiming, std::memory_order_acq_rel))
+    if(!cursor_in_range(consumer_capacity, index) || !h.cursors[index].active.compare_exchange_strong(expected, k_cursor_reclaiming, std::memory_order_acq_rel))
         return false;
     if(owner_alive(index))
     {
@@ -82,7 +96,7 @@ bool reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::u
 // when the cursor is not claimed.
 inline bool place_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, std::uint64_t position) noexcept
 {
-    if(index >= consumer_capacity || h.cursors[index].active.load(std::memory_order_acquire) != 1)
+    if(!cursor_in_range(consumer_capacity, index) || h.cursors[index].active.load(std::memory_order_acquire) != 1)
         return false;
     std::uint64_t idle = k_cursor_idle;
     h.cursors[index].position.compare_exchange_strong(idle, position, std::memory_order_acq_rel);
@@ -92,7 +106,7 @@ inline bool place_cursor(control_header_t &h, std::uint64_t consumer_capacity, s
 // Released so the producer's reclamation gate observes it.
 inline void publish_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, std::uint64_t position) noexcept
 {
-    if(index >= consumer_capacity)
+    if(!cursor_in_range(consumer_capacity, index))
         return;
     h.cursors[index].position.store(position, std::memory_order_release);
 }
@@ -105,7 +119,7 @@ inline void publish_cursor(control_header_t &h, std::uint64_t consumer_capacity,
 inline std::uint64_t slowest_consumer_position(const control_header_t &h) noexcept
 {
     std::uint64_t slowest    = k_cursor_idle;
-    const std::uint32_t scan = h.high_water.load(std::memory_order_acquire);
+    const std::uint32_t scan = cursor_scan_bound(h);
     for(std::uint32_t i = 0; i < scan; ++i)
     {
         if(h.cursors[i].active.load(std::memory_order_acquire) == 0)
@@ -124,7 +138,7 @@ inline bool consumers_passed(const control_header_t &h, std::uint64_t cell_count
     if(position < cell_count)
         return true; // first lap: no prior occupant to free
     const std::uint64_t occupant = position - cell_count;
-    const std::uint32_t scan     = h.high_water.load(std::memory_order_acquire);
+    const std::uint32_t scan     = cursor_scan_bound(h);
     for(std::uint32_t i = 0; i < scan; ++i)
     {
         if(h.cursors[i].active.load(std::memory_order_acquire) == 0)

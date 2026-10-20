@@ -152,7 +152,7 @@ public:
     // The largest index+1 ever registered, which bounds the reliable-reclaim scan length.
     std::uint32_t registered_high_water() const noexcept
     {
-        return m_header->high_water.load(std::memory_order_acquire);
+        return detail::cursor_scan_bound(*m_header);
     }
 
 private:
