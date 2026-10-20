@@ -882,6 +882,24 @@ if(LIBURING_FOUND)
     catch_discover_tests(test_shm_switch_hold TEST_PREFIX "shm."
         PROPERTIES RUN_SERIAL TRUE)
 
+    # Two same-host nodes in one process: only a node with a local publisher for a topic offers its ring, and a publisher
+    # declared after a co-host subscriber subscribed offers it late.
+    add_executable(test_shm_offer_scope test_shm_offer_scope.cpp)
+
+    target_include_directories(test_shm_offer_scope PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_offer_scope PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_offer_scope TEST_PREFIX "shm.")
+
     # The node-level same-host fingerprint fix: make_node default-fills the node's local
     # fingerprint from the real machine read when the caller left it null, and respects a
     # caller-supplied value. Reads the effective fingerprint off the minted node's engine.
@@ -985,6 +1003,16 @@ target_link_libraries(test_medium_coordinator_engagement PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_medium_coordinator_engagement TEST_PREFIX "shm.")
+
+# A ring that appears after a subscriber was answered is offered late, and the subscribe response says whether the lane
+# was offered, withheld or has no publisher.
+add_executable(test_medium_coordinator_offers test_medium_coordinator_offers.cpp)
+
+target_link_libraries(test_medium_coordinator_offers PRIVATE
+    plexus::core
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_medium_coordinator_offers TEST_PREFIX "shm.")
 
 # A member's declines, demotions and lost waiters reach the coordinator's counters by reason, over in-memory brokers.
 add_executable(test_medium_coordinator_member_reasons test_medium_coordinator_member_reasons.cpp)

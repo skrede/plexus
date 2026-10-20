@@ -102,6 +102,26 @@ struct co_host_node
     co_host_node_type node;
 };
 
+// Each node runs one turn at a time, so a case decides which node reads what and when.
+template<typename Done>
+bool step_both(co_host_node &a, co_host_node &b, Done done, std::chrono::milliseconds budget)
+{
+    const auto deadline = std::chrono::steady_clock::now() + budget;
+    while(!done())
+    {
+        if(std::chrono::steady_clock::now() >= deadline)
+            return false;
+        a.run_for(std::chrono::milliseconds{1});
+        b.run_for(std::chrono::milliseconds{1});
+    }
+    return true;
+}
+
+inline void settle(co_host_node &a, co_host_node &b)
+{
+    step_both(a, b, [] { return false; }, std::chrono::milliseconds{300});
+}
+
 inline plexus::topic_qos hinted_topic()
 {
     plexus::topic_qos qos;

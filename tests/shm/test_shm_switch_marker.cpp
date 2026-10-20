@@ -29,7 +29,9 @@
 
 using plexus::shm::loan_status;
 using plexus::shm::k_cursor_idle;
+using plexus::testing::settle;
 using plexus::testing::index_of;
+using plexus::testing::step_both;
 using plexus::testing::index_bytes;
 using plexus::testing::co_host_node;
 using plexus::testing::hinted_topic;
@@ -43,26 +45,6 @@ using namespace std::chrono_literals;
 
 constexpr std::uint32_t k_before_ready = 8;
 constexpr std::uint32_t k_after_ready  = 8;
-
-// Each node runs one turn at a time, so a case decides which node reads what and when.
-template<typename Done>
-bool step_both(co_host_node &a, co_host_node &b, Done done, std::chrono::milliseconds budget)
-{
-    const auto deadline = std::chrono::steady_clock::now() + budget;
-    while(!done())
-    {
-        if(std::chrono::steady_clock::now() >= deadline)
-            return false;
-        a.run_for(1ms);
-        b.run_for(1ms);
-    }
-    return true;
-}
-
-void settle(co_host_node &a, co_host_node &b)
-{
-    step_both(a, b, [] { return false; }, 300ms);
-}
 
 template<typename Publisher>
 void publish_range(Publisher &pub, std::uint32_t first, std::uint32_t count)
