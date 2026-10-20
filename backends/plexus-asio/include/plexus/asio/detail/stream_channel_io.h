@@ -24,20 +24,6 @@
 
 namespace plexus::asio::detail {
 
-// Heap-held teardown-quiescence state shared by a channel and every async op it issues. asio
-// aborts only PENDING ops, so a completion already queued when the owner destroys the channel
-// still runs; a completion captures a copy of this block, so the reads it makes at entry hit
-// owner-stable storage, not the freed channel. `alive` is cleared by ~stream_channel before the
-// socket teardown that aborts the ops, so a late completion no-ops; `outstanding` counts
-// issued-but-not-completed reads/writes; `closed_fired` makes the posted on_closed fire exactly
-// once across the close() and stream_fail edges.
-struct channel_liveness
-{
-    std::size_t outstanding = 0;
-    bool alive              = true;
-    bool closed_fired       = false;
-};
-
 template<typename Ch>
 void stream_on_write_queue_full(Ch &c)
 {

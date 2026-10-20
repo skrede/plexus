@@ -17,6 +17,7 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/detail/scheduler_key.h"
+#include "plexus/io/detail/liveness_token.h"
 #include "plexus/stream/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
@@ -61,7 +62,7 @@ public:
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
-            , m_life(std::make_shared<detail::channel_liveness>())
+            , m_life(std::make_shared<io::detail::liveness_token>())
             , m_open(false)
     {
         bind_bootstrap();
@@ -83,7 +84,7 @@ public:
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
-            , m_life(std::make_shared<detail::channel_liveness>())
+            , m_life(std::make_shared<io::detail::liveness_token>())
             , m_open(false)
     {
         bind_bootstrap();
@@ -94,9 +95,8 @@ public:
 
     ~stream_channel()
     {
-        // Disarm before the socket teardown that aborts in-flight ops: a completion (or a posted
-        // on_closed) that runs after this reads the shared liveness block, sees !alive, and
-        // no-ops instead of touching this freed channel.
+        // Disarm before the socket teardown aborts in-flight ops: a late completion or posted on_closed
+        // sees !alive in the shared liveness block and no-ops instead of touching this freed channel.
         m_life->alive = false;
         m_inbound.shutdown();
         detail::stream_shutdown_socket(*this);
@@ -293,7 +293,7 @@ private:
     std::uint64_t m_scheduler_key;
     std::size_t m_dropped;
     stream::detail::send_queue m_egress;
-    std::shared_ptr<detail::channel_liveness> m_life;
+    std::shared_ptr<io::detail::liveness_token> m_life;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void()> m_on_closed_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
