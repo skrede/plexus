@@ -68,6 +68,7 @@ void install(coordinator &c, gate &g)
                 return upgrade_receive{[held = std::make_unique<lane>()](std::uint64_t) { (void)held; }};
             });
     c.set_topic_hint("alpha", plexus::io::dispatch_hint::frequent);
+    c.on_local_publisher("alpha", true);
 }
 
 void drive_retries(coordinator &c, std::vector<milliseconds> &wakes)

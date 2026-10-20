@@ -8,6 +8,7 @@
 
 #include "plexus/io/detail/upgrade_hints.h"
 #include "plexus/io/detail/upgrade_lanes.h"
+#include "plexus/io/detail/upgrade_offers.h"
 #include "plexus/io/detail/upgrade_send_lanes.h"
 #include "plexus/io/detail/upgrade_receive_lanes.h"
 
@@ -22,12 +23,10 @@
 
 namespace plexus::io {
 
-// The per-(peer, topic) medium-selection coordinator: the JOIN of peer locality (the session's same_host verdict), the
-// per-(peer, fqn) demand transition, the pair's companion events and medium provisioning. Engine-owned; it BORROWS the
-// peer-session registry and OWNS the lanes it holds. A lane is ADDITIVE: the wire attach is NEVER suppressed, so a
-// declined, off-host or unanswered pair keeps the wire. Shared memory engages only when both ends' policies allow it:
-// the publisher offers its one lane for the topic, the subscriber attaches it and answers ready, and only then does the
-// publisher route that subscriber over it. The coordinator names no transport; with no gate installed it is inert.
+// The per-(peer, topic) medium coordinator over peer locality, demand edges, companion events and provisioning.
+// Engine-owned; it BORROWS the peer-session registry and OWNS its lanes, which are ADDITIVE: the wire attach is NEVER
+// suppressed. A publisher offers its one lane for a topic it publishes; the subscriber attaches it and answers ready,
+// and only then is it routed over the lane, so both ends' policies must allow it. With no gate installed it is inert.
 template<typename Registry, typename Channel>
 class upgrade_coordinator
 {
@@ -49,8 +48,7 @@ public:
         m_mint = std::move(mint);
     }
 
-    // The SUBSCRIBER lane gate: attaches the co-host ring as a consumer and routes drained framed messages into
-    // (node_name, fqn)'s receive path, the same entry the wire feeds (empty owner = declined).
+    // Attaches a co-host ring as a consumer feeding (node_name, fqn)'s receive path (empty owner = declined).
     void on_receive_gate(plexus::detail::move_only_function<upgrade_receive(std::string_view, std::string_view)> mint)
     {
         m_receive_mint = std::move(mint);
@@ -67,14 +65,16 @@ public:
         detail::upgrade_hints::note(*this, fqn, hint);
     }
 
-    // A publisher's up-edge offers the peer its send lane; a subscriber's records the demand its publisher's offer may
-    // attach. The down-edge drops the peer's hold.
+    // An up-edge offers the peer a lane or awaits its publisher's offer, by role; the down-edge drops the peer's hold.
     void on_edge(std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
     {
-        if(dir == demand_transition::up)
-            detail::upgrade_lanes::up(*this, node_name, fqn, role);
-        else
-            detail::upgrade_lanes::down(*this, node_name, fqn, role);
+        detail::upgrade_offers::edge(*this, node_name, fqn, dir, role);
+    }
+
+    // The node's publisher count for the fqn crossed zero; a gained one offers its lane to the peers already answered.
+    void on_local_publisher(std::string_view fqn, bool present)
+    {
+        detail::upgrade_offers::publish(*this, fqn, present);
     }
 
     void on_companion(std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader = k_no_reader)
@@ -95,7 +95,7 @@ public:
         detail::resume_receive_lane(m_receive, node_name, fqn, first_sequence);
     }
 
-    // The subscriber's ready, naming its reader slot, and withdrawn answers leave through this; unset, nothing is answered.
+    // The subscriber's ready (naming its reader slot) and withdrawn answers and late offers leave here; unset, none do.
     void on_companion_send(plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, std::uint32_t)> send)
     {
         m_companion_send_cb = std::move(send);
@@ -107,9 +107,10 @@ public:
         m_lane_released_cb = std::move(released);
     }
 
-    bool offers(std::string_view node_name, std::string_view fqn) const
+    // What the subscribe response tells the peer about the lane: offered, not_offered (withheld) or no_publisher.
+    companion_event offer_for(std::string_view node_name, std::string_view fqn) const
     {
-        return detail::offered(m_send, node_name, fqn);
+        return detail::upgrade_offers::offer_for(*this, node_name, fqn);
     }
 
     // The lane once the peer answered ready, and whether this message fits it; no lane keeps the pair on the wire.
@@ -152,7 +153,7 @@ public:
 
     void on_peer_dead(std::string_view node_name)
     {
-        detail::upgrade_send_lanes::forget_peer(*this, node_name);
+        detail::upgrade_offers::forget_peer(*this, node_name);
     }
 
     // Every lane for the fqn drops back to the wire and each publisher this node read from is told; the hint stays.
@@ -177,6 +178,7 @@ private:
     Registry &m_registry;
     fallback_counts m_fallbacks;
     detail::upgrade_retry m_retry;
+    detail::offer_table m_offers;
     detail::receive_lanes m_receive;
     detail::send_lanes<Channel> m_send;
     detail::upgrade_hint_table m_hints;
@@ -189,6 +191,7 @@ private:
 
     friend struct detail::upgrade_hints;
     friend struct detail::upgrade_lanes;
+    friend struct detail::upgrade_offers;
     friend struct detail::upgrade_send_lanes;
 };
 

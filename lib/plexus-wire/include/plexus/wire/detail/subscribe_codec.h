@@ -149,7 +149,7 @@ inline std::vector<std::byte> encode_subscribe_response(const subscribe_response
     std::vector<std::byte> buf(resp.has_degraded ? subscribe_response_size + 1 : subscribe_response_size);
     wire::detail::write_u64(buf.data(), resp.topic_hash);
     wire::detail::write_u8(buf.data() + 8, static_cast<uint8_t>(resp.status));
-    wire::detail::write_u8(buf.data() + 9, resp.companion_offered ? 1 : 0);
+    wire::detail::write_u8(buf.data() + 9, static_cast<uint8_t>(resp.offer));
     if(resp.has_degraded)
         wire::detail::write_u8(buf.data() + 10, resp.degraded_flags);
     return buf;
@@ -157,11 +157,11 @@ inline std::vector<std::byte> encode_subscribe_response(const subscribe_response
 
 inline std::optional<subscribe_response> decode_subscribe_response(std::span<const std::byte> payload)
 {
-    if(payload.size() < subscribe_response_size)
+    if(payload.size() < subscribe_response_size || wire::detail::read_u8(payload.data() + 9) > static_cast<uint8_t>(offer_state::withheld))
         return std::nullopt;
-    subscribe_response resp{.topic_hash        = wire::detail::read_u64(payload.data()),
-                            .status            = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8)),
-                            .companion_offered = wire::detail::read_u8(payload.data() + 9) != 0};
+    subscribe_response resp{.topic_hash = wire::detail::read_u64(payload.data()),
+                            .status     = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8)),
+                            .offer      = static_cast<offer_state>(wire::detail::read_u8(payload.data() + 9))};
     if(payload.size() > subscribe_response_size)
     {
         resp.has_degraded   = true;

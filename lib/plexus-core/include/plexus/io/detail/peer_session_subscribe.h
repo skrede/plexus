@@ -35,7 +35,7 @@ template<typename Session, typename Forwarder>
 void note_offer(const Session &s, Forwarder &messages, const wire::subscribe_response &resp)
 {
     if(s.is_complete() && !is_refusal(resp.status))
-        messages.note_companion(s.msg_peer(), resp.topic_hash, resp.companion_offered ? companion_event::offered : companion_event::not_offered);
+        messages.note_companion(s.msg_peer(), resp.topic_hash, offer_event_of(resp.offer));
 }
 
 // The anti-wrap guard stays first: a response with no outstanding match is a

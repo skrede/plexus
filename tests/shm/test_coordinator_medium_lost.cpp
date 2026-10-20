@@ -47,6 +47,8 @@ void install_gates(coordinator &c, lanes &live)
     c.on_receive_gate([&live](std::string_view, std::string_view) { return upgrade_receive{[lane = std::make_unique<counted_lane>(live.receives)](std::uint64_t) { (void)lane; }}; });
     c.set_topic_hint("alpha", dispatch_hint::frequent);
     c.set_topic_hint("beta", dispatch_hint::frequent);
+    c.on_local_publisher("alpha", true);
+    c.on_local_publisher("beta", true);
 }
 
 }

@@ -49,7 +49,7 @@ private:
 // follows allow; the release hook records how many lanes were still alive when it ran.
 struct lane_end
 {
-    explicit lane_end(std::uint32_t declines = 0)
+    explicit lane_end(std::uint32_t declines = 0, bool published = true)
             : live(0)
             , mints(0)
             , released(0)
@@ -70,6 +70,8 @@ struct lane_end
         c.on_policy([this](bool same_host, io::dispatch_hint) { return same_host && allow; });
         c.set_retry_scheduler([](std::chrono::milliseconds) {});
         c.set_topic_hint("alpha", io::dispatch_hint::frequent);
+        if(published)
+            c.on_local_publisher("alpha", true);
     }
 
     io::upgrade_mint<counted_lane> mint()

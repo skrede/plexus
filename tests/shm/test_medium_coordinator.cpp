@@ -107,6 +107,8 @@ struct gate_recorder
 void install_gate(coordinator &c, gate_recorder &gate)
 {
     c.on_gate([&gate](std::string_view fqn) { return gate.mint(fqn); });
+    c.on_local_publisher("alpha", true);
+    c.on_local_publisher("beta", true);
 }
 
 // The injected RECEIVE gate the node would build over its shm member's
@@ -222,8 +224,6 @@ TEST_CASE("shm.coordinator a gate decline (broker failure) falls back to the wir
     c.set_topic_hint("alpha", dispatch_hint::large);
 
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
-    // The policy returned true, but the mint declined — the coordinator holds nothing and
-    // the pair falls back to the wire. The companion route returns nullptr for it.
     REQUIRE(gate.mints() == 0);
     REQUIRE(!c.companion_for("node-a", "alpha", 1).fits);
 }
@@ -418,12 +418,9 @@ TEST_CASE("shm.coordinator the node's own hints accumulate: a subscriber-side hi
     REQUIRE(gate.mints() == 1); // the accumulated hint upgrades the pair
 }
 
-TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the topic's hint", "[shm][coordinator]")
+TEST_CASE("shm.coordinator the hint map is bounded: the last demand for a topic no longer published prunes its hint", "[shm][coordinator]")
 {
-    // Dynamic topic churn must not grow the hint map without bound. The hint is pruned when
-    // the last demand for an fqn drops, mirroring the lane teardown; a re-subscribe re-records
-    // it from the declare path. A SECOND co-host peer still holding the topic keeps the hint
-    // alive (the prune key is the last holder, not the edge).
+    // Topic churn must not grow the hint map, yet a published topic keeps the hint its one-time declare recorded.
     stub_registry reg;
     reg.verdicts["node-a"] = true;
     reg.verdicts["node-b"] = true;
@@ -431,23 +428,26 @@ TEST_CASE("shm.coordinator the hint map is bounded: the last 1->0 prunes the top
     coordinator c{reg};
     install_gate(c, gate);
     c.set_topic_hint("alpha", dispatch_hint::frequent);
-
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
     c.on_edge("node-b", "alpha", demand_transition::up, demand_role::publisher);
     REQUIRE(gate.mints() == 1); // one lane per topic serves both peers
 
-    // node-a drops; node-b still holds alpha, so the hint must survive (a new node-a 0->1 is
-    // still offered the lane).
-    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher);
-    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
-    REQUIRE(c.offers("node-a", "alpha")); // the surviving hint re-upgraded the re-subscribe
-
-    // Both drop: the last holder gone prunes the hint, so a later bare 0->1 (with no
-    // re-record) does NOT upgrade — proving the prune fired.
     c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher);
     c.on_edge("node-b", "alpha", demand_transition::down, demand_role::publisher);
     c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
-    REQUIRE_FALSE(c.offers("node-a", "alpha")); // the pruned hint resolves to none: no upgrade
+    REQUIRE(c.offer_for("node-a", "alpha") == companion_event::offered);
+
+    // Retired while node-a holds the lane, the topic keeps its hint until its last demand drops.
+    c.on_local_publisher("alpha", false);
+    c.on_local_publisher("alpha", true);
+    c.on_edge("node-b", "alpha", demand_transition::up, demand_role::publisher);
+    REQUIRE(c.offer_for("node-b", "alpha") == companion_event::offered);
+    c.on_local_publisher("alpha", false);
+    c.on_edge("node-a", "alpha", demand_transition::down, demand_role::publisher);
+    c.on_edge("node-b", "alpha", demand_transition::down, demand_role::publisher);
+    c.on_local_publisher("alpha", true);
+    c.on_edge("node-a", "alpha", demand_transition::up, demand_role::publisher);
+    REQUIRE(c.offer_for("node-a", "alpha") == companion_event::not_offered);
 }
 
 TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once per boundary; "

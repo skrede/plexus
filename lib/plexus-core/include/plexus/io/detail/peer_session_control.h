@@ -103,7 +103,8 @@ void on_fetch_latched_received(Session &s, Forwarder &messages, std::span<const 
         messages.fetch_latched(s.msg_peer(), req->topic_hash, req->max_samples);
 }
 
-// Only a complete session speaks for the peer it proved, so a lane is never moved by a peer that has not.
+// Only a complete session speaks for the peer it proved, so a lane is never moved by a peer that has not. A late
+// offer is heard as an offer in the subscribe response is.
 template<typename Session, typename Forwarder>
 void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type, std::span<const std::byte> inner)
 {
@@ -121,8 +122,9 @@ void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type,
             messages.note_companion(s.msg_peer(), ready->topic_hash, companion_event::ready, ready->reader);
         return;
     }
+    const companion_event event = type == wire::msg_type::companion_offer ? companion_event::offered : companion_event::withdrawn;
     if(auto signal = wire::decode_companion(inner))
-        messages.note_companion(s.msg_peer(), signal->topic_hash, companion_event::withdrawn, k_no_reader);
+        messages.note_companion(s.msg_peer(), signal->topic_hash, event, k_no_reader);
 }
 
 template<typename Session, typename Forwarder>

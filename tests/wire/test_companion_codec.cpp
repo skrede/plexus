@@ -16,6 +16,7 @@ TEST_CASE("companion the verbs take the next free message types", "[wire][compan
     CHECK(static_cast<std::uint8_t>(msg_type::companion_ready) == 0x10);
     CHECK(static_cast<std::uint8_t>(msg_type::companion_withdrawn) == 0x11);
     CHECK(static_cast<std::uint8_t>(msg_type::companion_switch) == 0x12);
+    CHECK(static_cast<std::uint8_t>(msg_type::companion_offer) == 0x13);
 }
 
 TEST_CASE("companion a signal round-trips its topic hash through eight bytes", "[wire][companion]")

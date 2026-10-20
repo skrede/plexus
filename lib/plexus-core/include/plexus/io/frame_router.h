@@ -143,6 +143,7 @@ private:
             case wire::msg_type::companion_ready:
             case wire::msg_type::companion_withdrawn:
             case wire::msg_type::companion_switch:
+            case wire::msg_type::companion_offer:
                 return fire_companion(type, inner);
             default:
                 return drop("plexus: router unknown_frame_type");

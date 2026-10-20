@@ -94,7 +94,7 @@ lane_route<Channel> route_send_lane(send_lanes<Channel> &lanes, std::string_view
 struct upgrade_send_lanes
 {
     // A declined gate retains nothing and returns its reason. A minted lane serves every peer still waiting on a
-    // re-attempt for it.
+    // re-attempt for it; each was answered before the lane existed, so each is offered it now.
     template<typename Coordinator>
     static fallback_reason ensure(Coordinator &c, std::string_view fqn)
     {
@@ -106,7 +106,11 @@ struct upgrade_send_lanes
         c.m_send.push_back(
                 {.fqn = std::string{fqn}, .self_holds = 0, .holders = {}, .channel = std::move(minted.channel), .fits = std::move(minted.fits), .place = std::move(minted.place)});
         for(const std::string &node_name : c.m_retry.take_waiting(fqn, demand_role::publisher))
+        {
             join(c, node_name, fqn);
+            if(c.m_companion_send_cb)
+                c.m_companion_send_cb(node_name, fqn, companion_event::offered, k_no_reader);
+        }
         return fallback_reason::none;
     }
 

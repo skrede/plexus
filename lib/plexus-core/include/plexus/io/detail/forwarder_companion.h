@@ -17,8 +17,8 @@ namespace plexus::io::detail {
 
 // event_cb hears what a co-host peer said about the shared-memory lane of one of the node's topics, with the reader slot a
 // ready names; switch_cb hears the sequence a co-host publisher switched this node to its lane at; place_cb places a
-// subscriber's reader on the lane as the node switches it; holds_lane_cb answers whether the node offers a subscriber its
-// stamped lane, which the subscribe response then carries; lane_cb names the channel of a topic's lane, which every
+// subscriber's reader on the lane as the node switches it; offer_cb answers what the subscribe response says about the
+// lane: offered, withheld (not_offered) or no publisher; lane_cb names the channel of a topic's lane, which every
 // subscriber routed to it shares.
 template<typename Channel>
 struct companion_hooks
@@ -26,7 +26,7 @@ struct companion_hooks
     plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, std::uint32_t)> event_cb;
     plexus::detail::move_only_function<void(std::string_view, std::string_view, std::uint64_t)> switch_cb;
     plexus::detail::move_only_function<bool(std::string_view, std::uint32_t)> place_cb;
-    plexus::detail::move_only_function<bool(std::string_view, std::string_view)> holds_lane_cb;
+    plexus::detail::move_only_function<companion_event(std::string_view, std::string_view)> offer_cb;
     plexus::detail::move_only_function<Channel *(std::string_view)> lane_cb;
 };
 
@@ -52,10 +52,11 @@ void send_switch(Endpoint &endpoint, Channel &channel, std::string_view fqn, std
     endpoint.send_control(channel, wire::msg_type::companion_switch, wire::encode_companion_switch({wire::fqn_topic_hash(fqn), first_sequence}));
 }
 
+// A forwarder with no offer hook offers nothing.
 template<typename Channel>
-bool holds_lane(companion_hooks<Channel> &hooks, std::string_view node_name, std::string_view fqn)
+companion_event offer_of(companion_hooks<Channel> &hooks, std::string_view node_name, std::string_view fqn)
 {
-    return hooks.holds_lane_cb && hooks.holds_lane_cb(node_name, fqn);
+    return hooks.offer_cb ? hooks.offer_cb(node_name, fqn) : companion_event::not_offered;
 }
 
 template<typename Channel>

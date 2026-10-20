@@ -35,9 +35,10 @@ struct lane_forwarder
                       { return io::upgrade_mint<order_channel>{std::make_unique<order_channel>(ring_log, ring_occupancy, 99), [](std::size_t) { return true; }}; });
         lanes.on_lane_released([this](order_channel &channel) { fwd.forget_channel(channel); });
         lanes.set_topic_hint("t", io::dispatch_hint::frequent);
+        lanes.on_local_publisher("t", true);
         fwd.on_demand_transition([this](std::string_view node, std::string_view fqn, io::demand_transition dir, io::demand_role role) { lanes.on_edge(node, fqn, dir, role); });
         fwd.on_companion_route([this](std::string_view node, std::string_view fqn, std::size_t bytes) { return lanes.companion_for(node, fqn, bytes); });
-        fwd.on_companion({.event_cb = {}, .switch_cb = {}, .place_cb = {}, .holds_lane_cb = {}, .lane_cb = [this](std::string_view fqn) { return lanes.lane_for(fqn); }});
+        fwd.on_companion({.event_cb = {}, .switch_cb = {}, .place_cb = {}, .offer_cb = {}, .lane_cb = [this](std::string_view fqn) { return lanes.lane_for(fqn); }});
         fwd.declare("t", qos);
     }
 

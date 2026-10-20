@@ -4,6 +4,7 @@
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/companion_event.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/observation_events.h"
 
@@ -28,15 +29,12 @@ inline wire::subscribe_status status_of(io::rxo_verdict v)
 }
 
 // A degraded verdict admits but carries the degraded-field set, so the accept is non-silent.
-inline std::vector<std::byte> accepted_response(std::uint64_t hash, const io::rxo_result &rxo, bool companion_offered)
+inline std::vector<std::byte> accepted_response(std::uint64_t hash, const io::rxo_result &rxo, companion_event offer)
 {
     if(rxo.verdict != io::rxo_verdict::degraded)
-        return wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed, .companion_offered = companion_offered});
-    return wire::encode_subscribe_response({.topic_hash        = hash,
-                                            .status            = wire::subscribe_status::subscribed_degraded,
-                                            .companion_offered = companion_offered,
-                                            .has_degraded      = true,
-                                            .degraded_flags    = rxo.degraded_fields});
+        return wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::subscribed, .offer = offer_state_of(offer)});
+    return wire::encode_subscribe_response(
+            {.topic_hash = hash, .status = wire::subscribe_status::subscribed_degraded, .offer = offer_state_of(offer), .has_degraded = true, .degraded_flags = rxo.degraded_fields});
 }
 
 // Each refusal replies a status, registers no fan-out entry, and returns false — a per-topic
@@ -75,7 +73,7 @@ bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::o
     f.emit_qos_change(rxo.verdict == io::rxo_verdict::degraded ? qos_edge::degraded : qos_edge::accepted, hash, sub_qos, rxo.verdict, subscriber_type_id);
     // The up-edge mints and stamps the ring before the response can tell the subscriber it exists.
     f.emit_demand_transition(p.node_name, fqn, demand_transition::up, demand_role::publisher);
-    f.send_control(p.channel, wire::msg_type::subscribe_response, accepted_response(hash, rxo, holds_lane(f.m_companion_hooks, p.node_name, fqn)));
+    f.send_control(p.channel, wire::msg_type::subscribe_response, accepted_response(hash, rxo, offer_of(f.m_companion_hooks, p.node_name, fqn)));
     replay_if_latched(f, p, hash);
     return true;
 }

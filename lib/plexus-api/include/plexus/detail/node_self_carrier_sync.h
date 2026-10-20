@@ -111,8 +111,8 @@ void sync_shm_self_carrier(Node &n, std::string_view fqn)
         teardown_shm_self_carrier(n, key);
 }
 
-// The graph edge is one per (participant, topic, role), so it outlives every publisher handle
-// but the last: the count is what tells a retired second handle from a retired topic.
+// The graph edge is one per (participant, topic, role), so it outlives every publisher handle but the last: the count
+// is what tells a retired second handle from a retired topic.
 template<typename Node>
 void forget_local_publisher(Node &n, std::string_view fqn)
 {
@@ -121,6 +121,7 @@ void forget_local_publisher(Node &n, std::string_view fqn)
     {
         n.m_local_publishers.erase(it);
         n.m_engine.forget_local_topic(fqn, graph::topic_role::publisher);
+        n.m_engine.coordinator().on_local_publisher(fqn, false);
     }
     if constexpr(Node::k_has_shm_self_carrier)
         sync_shm_self_carrier(n, fqn);
@@ -129,7 +130,8 @@ void forget_local_publisher(Node &n, std::string_view fqn)
 template<typename Node>
 void note_local_publisher(Node &n, std::string_view fqn, std::string_view type_name, std::optional<std::uint64_t> type_id)
 {
-    ++n.m_local_publishers[std::string{fqn}];
+    if(++n.m_local_publishers[std::string{fqn}] == 1)
+        n.m_engine.coordinator().on_local_publisher(fqn, true);
     n.m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::publisher);
     if constexpr(Node::k_has_shm_self_carrier)
         sync_shm_self_carrier(n, fqn);

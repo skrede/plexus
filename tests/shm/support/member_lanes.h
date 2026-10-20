@@ -39,6 +39,7 @@ struct member_lanes
     {
         lanes.on_gate([this](std::string_view fqn) { return plexus::detail::mint_send_lane(*this, member, fqn); });
         lanes.set_topic_hint(topic, io::dispatch_hint::frequent);
+        lanes.on_local_publisher(topic, true);
         plexus::detail::count_member_fallbacks(*this, member);
         lanes.on_edge("peer", topic, io::demand_transition::up, io::demand_role::publisher);
         lanes.on_companion("peer", topic, io::companion_event::ready);

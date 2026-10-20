@@ -41,6 +41,15 @@ enum class unsubscribe_status : uint8_t
     not_subscribed = 0x03
 };
 
+// What the publisher says about its shared-memory lane for the subscriber: offered, withheld although it publishes the
+// topic, or no publisher for the topic on that node.
+enum class offer_state : uint8_t
+{
+    no_publisher = 0x00,
+    offered      = 0x01,
+    withheld     = 0x02
+};
+
 enum class subscribe_notification : uint8_t
 {
     producer_available = 0x01,
@@ -83,9 +92,8 @@ struct subscribe_response
 {
     uint64_t topic_hash;
     subscribe_status status;
-    // Whether the publisher holds a stamped shared-memory ring for this subscriber, which it may
-    // attach. Always encoded, so an offer the publisher withholds reads as declined, not absent.
-    bool companion_offered = false;
+    // Always encoded, so a withheld lane reads as withheld, not absent.
+    offer_state offer = offer_state::no_publisher;
     // The optional trailing degraded-field surface. has_degraded=false (the default) encodes NO
     // trailing byte; has_degraded=true (a permissive subscribed_degraded accept) appends one byte
     // carrying the unsatisfied soft-field bitmask.
@@ -94,7 +102,7 @@ struct subscribe_response
 };
 
 // Wire FLOOR of an encoded subscribe_response payload: topic_hash(8) + status(1) +
-// companion_offered(1). A permissive degraded-accept appends an OPTIONAL 11th byte.
+// offer(1). A permissive degraded-accept appends an OPTIONAL 11th byte.
 constexpr std::size_t subscribe_response_size = 10;
 
 struct unsubscribe_request

@@ -41,7 +41,8 @@ enum class msg_type : uint8_t
     forwarded           = 0x0F,
     companion_ready     = 0x10,
     companion_withdrawn = 0x11,
-    companion_switch    = 0x12
+    companion_switch    = 0x12,
+    companion_offer     = 0x13
 };
 
 enum class endpoint_source_type : uint8_t

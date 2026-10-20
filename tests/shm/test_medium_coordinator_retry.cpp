@@ -65,6 +65,7 @@ void install(coordinator &c, flaky_gate &gate, std::vector<milliseconds> &wakes)
             });
     c.set_retry_scheduler([&wakes](milliseconds delay) { wakes.push_back(delay); });
     c.set_topic_hint("alpha", plexus::io::dispatch_hint::frequent);
+    c.on_local_publisher("alpha", true);
 }
 
 std::vector<milliseconds> backoff(std::uint32_t count)

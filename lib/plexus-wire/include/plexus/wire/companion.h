@@ -11,8 +11,8 @@
 
 namespace plexus::wire {
 
-// The payload of companion_ready and companion_withdrawn: the topic whose shared-memory receive companion the
-// subscriber reports on.
+// The payload of companion_withdrawn and companion_offer: the topic whose shared-memory lane the subscriber withdrew
+// from, or the publisher offers after its subscribe response.
 struct companion_signal
 {
     std::uint64_t topic_hash;

@@ -80,6 +80,7 @@ TEST_CASE("switch_order a lane that turns ready behind a wire backlog delivers e
                 return plexus::io::upgrade_mint<order_channel>{std::move(minted), [](std::size_t) { return true; }};
             });
     lanes.set_topic_hint("t", plexus::io::dispatch_hint::frequent);
+    lanes.on_local_publisher("t", true);
     plexus::log::null_logger sink;
     order_forwarder fwd{sink};
     fwd.on_demand_transition([&](std::string_view node, std::string_view fqn, plexus::io::demand_transition dir, plexus::io::demand_role role) { lanes.on_edge(node, fqn, dir, role); });

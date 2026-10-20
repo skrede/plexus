@@ -17,8 +17,9 @@
 
 namespace plexus::io::detail {
 
-// The coordinator's lane bodies, befriended as one. A publisher offers its send lane on a subscriber's demand, minting it
-// if absent, before its response offers it; a subscriber attaches its receive lane only on that offer.
+// The coordinator's lane bodies, befriended as one. A publisher offers its send lane on a subscriber's demand, minting
+// it if absent, before its response offers it; a subscriber attaches its receive lane only on an offer, in that
+// response or later.
 struct upgrade_lanes
 {
     template<typename Coordinator>
@@ -109,8 +110,6 @@ struct upgrade_lanes
         arm(c);
     }
 
-    // The last demand for the fqn gone drops its hint, so a churn of distinct topic names cannot grow the hint table
-    // without bound (a re-subscribe re-records it from the declare path).
     template<typename Coordinator>
     static void down(Coordinator &c, std::string_view node_name, std::string_view fqn, demand_role role)
     {
@@ -119,19 +118,18 @@ struct upgrade_lanes
             upgrade_send_lanes::leave(c, node_name, fqn);
         else
             erase_receive_lane(c.m_receive, node_name, fqn);
-        if(!any_receive_lane(c.m_receive, fqn) && find_send_lane(c.m_send, fqn) == nullptr)
-            upgrade_hints::forget(c, fqn);
     }
 
-    // A withheld offer is counted only when the subscriber's own policy wanted the ring.
+    // A lane withheld by a node that publishes the topic is counted only when the subscriber's own policy wanted the
+    // ring; a node with no publisher counts nothing. Either keeps the receive lane awaiting a late offer.
     template<typename Coordinator>
-    static void offer(Coordinator &c, std::string_view node_name, std::string_view fqn, bool offered)
+    static void offer(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event)
     {
         if(!awaits_offer(c, node_name, fqn))
             return;
-        if(offered)
+        if(event == companion_event::offered)
             return attempt(c, node_name, fqn, demand_role::subscriber);
-        if(upgrade_hints::wants_lane(c, node_name, fqn))
+        if(event == companion_event::not_offered && upgrade_hints::wants_lane(c, node_name, fqn))
             c.count_fallback(fallback_reason::not_offered);
     }
 
@@ -155,10 +153,10 @@ struct upgrade_lanes
     template<typename Coordinator>
     static void hear(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
     {
-        if(event == companion_event::offered || event == companion_event::not_offered)
-            offer(c, node_name, fqn, event == companion_event::offered);
-        else
+        if(event == companion_event::ready || event == companion_event::withdrawn)
             answer(c, node_name, fqn, event, reader);
+        else
+            offer(c, node_name, fqn, event);
     }
 
     template<typename Coordinator>

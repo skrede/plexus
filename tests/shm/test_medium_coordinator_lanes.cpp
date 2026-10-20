@@ -31,11 +31,12 @@ TEST_CASE("medium_coordinator_lanes one lane per topic serves every offered peer
     p.offer("a");
     p.offer("b");
     REQUIRE(p.mints == 1);
-    REQUIRE(p.c.offers("a", "alpha"));
-    REQUIRE(p.c.offers("b", "alpha"));
+    REQUIRE(p.c.offer_for("a", "alpha") == companion_event::offered);
+    REQUIRE(p.c.offer_for("b", "alpha") == companion_event::offered);
     REQUIRE(p.c.lane_for("alpha") != nullptr);
 
     p.c.set_topic_hint("beta", dispatch_hint::frequent);
+    p.c.on_local_publisher("beta", true);
     p.c.on_edge("a", "beta", demand_transition::up, demand_role::publisher);
     REQUIRE(p.mints == 2);
     REQUIRE(p.live == 2);
@@ -64,7 +65,7 @@ TEST_CASE("medium_coordinator_lanes the lane outlives one holder's withdrawal wh
 
     REQUIRE(p.live == 1);
     REQUIRE(p.released == 0);
-    REQUIRE_FALSE(p.c.offers("b", "alpha"));
+    REQUIRE(p.c.offer_for("b", "alpha") == companion_event::not_offered);
     REQUIRE(p.c.companion_for("a", "alpha", 1).fits);
     REQUIRE(p.c.fallbacks()[static_cast<std::size_t>(fallback_reason::withdrawn)] == 1);
 }
@@ -117,10 +118,10 @@ TEST_CASE("medium_coordinator_lanes the node's own hold mints whatever the polic
     REQUIRE(p.c.self_channel("alpha") == own);
 
     p.offer("a");
-    REQUIRE_FALSE(p.c.offers("a", "alpha"));
+    REQUIRE(p.c.offer_for("a", "alpha") == companion_event::not_offered);
     p.allow = true;
     p.offer("b");
-    REQUIRE(p.c.offers("b", "alpha"));
+    REQUIRE(p.c.offer_for("b", "alpha") == companion_event::offered);
     REQUIRE(p.mints == 1);
 }
 
@@ -148,16 +149,16 @@ TEST_CASE("medium_coordinator_lanes a lane minted on a re-attempt serves every p
     lane_end p{2};
     p.offer("a");
     p.offer("b");
-    REQUIRE_FALSE(p.c.offers("a", "alpha"));
-    REQUIRE_FALSE(p.c.offers("b", "alpha"));
+    REQUIRE(p.c.offer_for("a", "alpha") == companion_event::not_offered);
+    REQUIRE(p.c.offer_for("b", "alpha") == companion_event::not_offered);
 
     p.c.on_retry_due();
     p.c.on_retry_due();
 
     REQUIRE(p.mints == 3);
     REQUIRE(p.live == 1);
-    REQUIRE(p.c.offers("a", "alpha"));
-    REQUIRE(p.c.offers("b", "alpha"));
+    REQUIRE(p.c.offer_for("a", "alpha") == companion_event::offered);
+    REQUIRE(p.c.offer_for("b", "alpha") == companion_event::offered);
 }
 
 TEST_CASE("medium_coordinator_lanes a declined self hold holds nothing and counts its reason", "[shm][medium_coordinator_lanes]")

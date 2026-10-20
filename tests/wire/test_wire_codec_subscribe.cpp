@@ -29,13 +29,13 @@ TEST_CASE("subscribe response round-trip", "[wire][subscribe]")
     CHECK(decoded->status == subscribe_status::subscribed);
 }
 
-TEST_CASE("subscribe response carries the companion offer beside the degraded byte", "[wire][subscribe]")
+TEST_CASE("subscribe response carries the offer state beside the degraded byte", "[wire][subscribe]")
 {
-    for(const bool offered : {false, true})
+    for(const offer_state offer : {offer_state::no_publisher, offer_state::offered, offer_state::withheld})
     {
-        const auto plain    = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .companion_offered = offered});
-        const auto degraded = encode_subscribe_response(
-                {.topic_hash = 0xFEED, .status = subscribe_status::subscribed_degraded, .companion_offered = offered, .has_degraded = true, .degraded_flags = 0x05});
+        const auto plain = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .offer = offer});
+        const auto degraded =
+                encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed_degraded, .offer = offer, .has_degraded = true, .degraded_flags = 0x05});
         const auto plain_decoded    = decode_subscribe_response(plain);
         const auto degraded_decoded = decode_subscribe_response(degraded);
 
@@ -43,17 +43,28 @@ TEST_CASE("subscribe response carries the companion offer beside the degraded by
         REQUIRE(degraded.size() == subscribe_response_size + 1);
         REQUIRE(plain_decoded.has_value());
         REQUIRE(degraded_decoded.has_value());
-        CHECK(plain_decoded->companion_offered == offered);
+        CHECK(plain_decoded->offer == offer);
         CHECK_FALSE(plain_decoded->has_degraded);
-        CHECK(degraded_decoded->companion_offered == offered);
+        CHECK(degraded_decoded->offer == offer);
         CHECK(degraded_decoded->has_degraded);
         CHECK(degraded_decoded->degraded_flags == 0x05);
     }
 }
 
+TEST_CASE("subscribe response with an offer state past withheld is refused", "[wire][subscribe]")
+{
+    auto encoded = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .offer = offer_state::withheld});
+    REQUIRE(decode_subscribe_response(encoded).has_value());
+    for(const std::uint8_t value : {std::uint8_t{0x03}, std::uint8_t{0xFF}})
+    {
+        encoded[9] = std::byte{value};
+        CHECK_FALSE(decode_subscribe_response(encoded).has_value());
+    }
+}
+
 TEST_CASE("subscribe response shorter than the offer byte is refused", "[wire][subscribe]")
 {
-    const auto encoded = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .companion_offered = true});
+    const auto encoded = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .offer = offer_state::offered});
     CHECK_FALSE(decode_subscribe_response(std::span<const std::byte>{encoded.data(), subscribe_response_size - 1}).has_value());
 }
 

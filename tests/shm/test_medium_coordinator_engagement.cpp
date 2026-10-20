@@ -44,8 +44,8 @@ struct pair_end
         c.on_receive_gate([this](std::string_view, std::string_view) { return receive(); });
         c.on_companion_send([this](std::string_view, std::string_view, companion_event event, std::uint32_t) { answers.push_back(event); });
         c.set_retry_scheduler([this](std::chrono::milliseconds) { ++wakes; });
-        if(hinted)
-            c.set_topic_hint("alpha", dispatch_hint::frequent);
+        c.set_topic_hint("alpha", hinted ? dispatch_hint::frequent : dispatch_hint::none);
+        c.on_local_publisher("alpha", true);
     }
 
     upgrade_receive receive()
@@ -75,7 +75,7 @@ void subscribe(pair_end &publisher, pair_end &subscriber)
 {
     subscriber.c.on_edge("pub", "alpha", demand_transition::up, demand_role::subscriber);
     publisher.c.on_edge("sub", "alpha", demand_transition::up, demand_role::publisher);
-    subscriber.c.on_companion("pub", "alpha", publisher.c.offers("sub", "alpha") ? companion_event::offered : companion_event::not_offered);
+    subscriber.c.on_companion("pub", "alpha", publisher.c.offer_for("sub", "alpha"));
     for(const companion_event answer : subscriber.answers)
         publisher.c.on_companion("sub", "alpha", answer);
 }
@@ -100,7 +100,7 @@ TEST_CASE("medium_coordinator_engagement a publisher routes over its lane only a
 {
     pair_end publisher{true};
     publisher.c.on_edge("sub", "alpha", demand_transition::up, demand_role::publisher);
-    REQUIRE(publisher.c.offers("sub", "alpha"));
+    REQUIRE(publisher.c.offer_for("sub", "alpha") == companion_event::offered);
     REQUIRE(!publisher.c.companion_for("sub", "alpha", 1).fits);
 
     publisher.c.on_companion("sub", "alpha", companion_event::ready);
@@ -127,7 +127,7 @@ TEST_CASE("medium_coordinator_engagement a hinted publisher and an unhinted subs
     pair_end subscriber{false};
     subscribe(publisher, subscriber);
 
-    REQUIRE(publisher.c.offers("sub", "alpha"));
+    REQUIRE(publisher.c.offer_for("sub", "alpha") == companion_event::offered);
     REQUIRE(subscriber.receives == 0);
     REQUIRE(!publisher.c.companion_for("sub", "alpha", 1).fits);
 }
@@ -145,7 +145,7 @@ TEST_CASE("medium_coordinator_engagement a lost receive lane is withdrawn and th
     REQUIRE(subscriber.receives == 0);
     REQUIRE(subscriber.counted(fallback_reason::withdrawn) == 1);
     REQUIRE(publisher.sends == 0);
-    REQUIRE_FALSE(publisher.c.offers("sub", "alpha"));
+    REQUIRE(publisher.c.offer_for("sub", "alpha") == companion_event::not_offered);
     REQUIRE(!publisher.c.companion_for("sub", "alpha", 1).fits);
     REQUIRE(publisher.counted(fallback_reason::withdrawn) == 1);
 }
@@ -178,7 +178,7 @@ TEST_CASE("medium_coordinator_engagement peer death clears the offered and ready
     publisher.c.on_companion("sub", "alpha", companion_event::ready);
     subscriber.c.on_companion("pub", "alpha", companion_event::offered);
 
-    REQUIRE_FALSE(publisher.c.offers("sub", "alpha"));
+    REQUIRE(publisher.c.offer_for("sub", "alpha") == companion_event::not_offered);
     REQUIRE(!publisher.c.companion_for("sub", "alpha", 1).fits);
     REQUIRE(subscriber.receives == 0);
 }
