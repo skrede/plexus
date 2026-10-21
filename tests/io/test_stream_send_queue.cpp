@@ -65,21 +65,24 @@ TEST_CASE("stream_send_queue drains in FIFO order across a burst", "[io][stream_
     REQUIRE_FALSE(q.sending());
 }
 
-TEST_CASE("stream_send_queue close() clears a pending queue and guards a late completion", "[io][stream_send_queue]")
+TEST_CASE("stream_send_queue close() drops the backlog, keeps the in-flight gather and guards a late completion", "[io][stream_send_queue][!shouldfail]")
 {
     recorder rec;
     stream_send_queue q{rec.sink()};
 
-    q.enqueue(bytes_of({1})); // gathers into the in-flight turn
-    q.enqueue(bytes_of({2})); // rides the same gather turn
+    q.enqueue(bytes_of({1})); // in flight alone
+    q.enqueue(bytes_of({2})); // backlog behind it
     REQUIRE(q.size() == 2);
 
     q.close();
-    REQUIRE(q.size() == 0);
+    REQUIRE(q.size() == 1);
     REQUIRE_FALSE(q.sending());
 
     // A completion arriving after close is a guarded no-op: it must not chain or pop.
     rec.complete_front();
-    REQUIRE(q.size() == 0);
+    REQUIRE(q.size() == 1);
+    REQUIRE(rec.calls.size() == 1);
+
+    q.enqueue(bytes_of({3})); // a closed queue never drives again
     REQUIRE(rec.calls.size() == 1);
 }

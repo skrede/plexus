@@ -1051,6 +1051,19 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_stream_channel_asio_teardown TEST_PREFIX "integration.")
 
+    # Retire-then-drain over TCP and AF_UNIX: a channel retired with a delivery queued, after a fail, or with a write,
+    # a read or a no-progress wait pending is erased once, from its own close notification, after every one of them
+    # ran. The allocation watch replaces operator new, so the allocation cases share this executable only.
+    add_executable(test_stream_retire_drain test_stream_retire_drain.cpp test_stream_retire_drain_alloc.cpp)
+    target_link_libraries(test_stream_retire_drain PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    target_include_directories(test_stream_retire_drain PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_stream_retire_drain TEST_PREFIX "integration.")
+
     # The serial egress atomic-admission gate: a sans-IO drive of serial_bootstrap::submit against
     # a mock channel forwarding to a real stream send_queue with a tiny byte cap. Pins the
     # all-or-nothing payload+trailer admission (no torn frame under backpressure) and the
@@ -1432,6 +1445,21 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
             plexus::crypto
             Catch2::Catch2WithMain)
         catch_discover_tests(test_tls_dial_teardown TEST_PREFIX "integration."
+            PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+
+        # The TLS retire-then-drain leg: a retired channel drops a queued delivery, is erased after a fail, and
+        # frees its ssl::stream only after the aborted handshake drained.
+        add_executable(test_tls_retire_drain test_tls_retire_drain.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_tls_retire_drain PRIVATE
+            plexus::core
+            plexus::wire
+            plexus::asio
+            plexus::crypto
+            Catch2::Catch2WithMain)
+        target_include_directories(test_tls_retire_drain PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/..)
+        catch_discover_tests(test_tls_retire_drain TEST_PREFIX "integration."
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
         # The AEAD x fragment composition proof: the per-fragment seal composes with
