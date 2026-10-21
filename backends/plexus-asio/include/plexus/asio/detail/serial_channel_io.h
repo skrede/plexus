@@ -14,15 +14,17 @@
 
 namespace plexus::asio::detail {
 
-// Post an owning copy so the bytes survive the deferred delivery — the read buffer is reused
-// on the next read.
 template<typename Ch>
 void serial_post_frame(Ch &c, std::span<const std::byte> frame)
 {
+    if(!c.stream().is_open())
+        return;
     auto owned = std::make_shared<std::vector<std::byte>>(frame.begin(), frame.end());
+    c.begin_op();
     ::asio::post(c.stream().get_executor(),
                  [&c, owned = std::move(owned)]
                  {
+                     c.end_op();
                      if(c.m_on_data_cb)
                          c.m_on_data_cb(std::span<const std::byte>{*owned});
                  });
@@ -35,7 +37,7 @@ void serial_wire_decorator(Ch &c)
     c.m_decorator.on_drop(
             [&c](wire::close_cause cause)
             {
-                if(c.m_on_frame_dropped_cb)
+                if(c.stream().is_open() && c.m_on_frame_dropped_cb)
                     c.m_on_frame_dropped_cb(cause);
             });
 }
@@ -45,12 +47,16 @@ void serial_wire_decorator(Ch &c)
 template<typename Ch>
 void serial_do_read(Ch &c)
 {
-    c.stream().async_read_some(::asio::buffer(c.m_read_buf),
+    c.begin_op();
+    c.stream().async_read_some(::asio::buffer(c.read_buffer()),
                                [&c](std::error_code ec, std::size_t n)
                                {
+                                   c.end_op();
                                    if(ec)
                                        return c.fail(ec);
-                                   c.m_decorator.feed(std::span<const std::byte>{c.m_read_buf.data(), n});
+                                   if(!c.stream().is_open())
+                                       return;
+                                   c.m_decorator.feed(std::span<const std::byte>{c.read_buffer().data(), n});
                                    if(c.stream().is_open())
                                        serial_do_read(c);
                                });

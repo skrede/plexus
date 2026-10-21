@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <string_view>
 #include <type_traits>
+#include <initializer_list>
 
 namespace forward_serial_e2e_fixture {
 
@@ -224,25 +225,34 @@ struct cold_cluster
         pump([&] { return connected(*origin2, relay_id) && connected(*relay, origin2_id); });
     }
 
-    // Drain the origin's pending executor work before dropping it, so no posted callback outlives the
-    // node it captured; the relay then observes the serial drop and withdraws the relayed peer.
+    // A node is destroyed only once its channels went quiet: no redial is left to reopen a line, the sessions to the
+    // given peers close their channels in that order, and the settle runs the aborted completions.
+    template<typename Node>
+    void quiesce(Node &n, std::initializer_list<node_id> peers)
+    {
+        auto &registry = n.router().registry();
+        registry.for_each_connected([&](const node_id &slot, auto &) { registry.deny_redial(slot); });
+        for(const node_id &peer : peers)
+            if(auto *session = session_to(n, peer))
+                session->tear_down();
+        serial_fixture::settle(io, std::chrono::milliseconds(20));
+    }
+
+    // The relay observes the origin's line close and withdraws the relayed peer.
     void kill_origin()
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
+        quiesce(*origin, {relay_id});
         origin.reset();
     }
 
-    // Destroy the WHOLE relay once its TCP sessions closed and drained; the serial session dies with the node, which
-    // never redials the line, and the outliving listener retires what it still accepts. Unlike a serial-leg-down (the
-    // relay withdraws the reported origin, retiring it to disappeared), this degrades the origin to UNREACHABLE-NOT-DEAD.
+    // The serial session closes last, so its withdrawal reaches no consumer and the origin degrades to
+    // UNREACHABLE-NOT-DEAD (a serial-leg-down retires it to disappeared); the outliving listener retires late accepts.
     void kill_relay()
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
         relay_tcp.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) { refused.retire(std::move(ch)); });
-        for(const node_id &peer : {consumer_id, origin2_id})
-            if(auto *session = session_to(*relay, peer))
-                session->tear_down();
-        serial_fixture::settle(io, std::chrono::milliseconds(20));
+        quiesce(*relay, {consumer_id, origin2_id, origin_id});
         relay.reset();
     }
 

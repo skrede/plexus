@@ -16,7 +16,6 @@
 #include <asio/serial_port.hpp>
 
 #include <span>
-#include <vector>
 #include <utility>
 #include <cstddef>
 #include <system_error>
@@ -65,7 +64,6 @@ public:
                             std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
-            , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
             , m_max_frame_bytes(cfg.max_payload_size)
     {
         detail::serial_wire_decorator(*this);
@@ -75,19 +73,11 @@ public:
                    io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {}, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
-            , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
             , m_max_frame_bytes(cfg.max_payload_size)
     {
         detail::serial_wire_decorator(*this);
         // The adopt ctor's read loop, deferred until the decorator is constructed.
         start_read();
-    }
-
-    // The consumer's on_data is fed the CRC-verified bytes the decorator emits (the base
-    // stream_inbound is bypassed on serial).
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
-    {
-        m_on_data_cb = std::move(cb);
     }
 
     // The non-fatal drop seam, distinct from on_protocol_close: a CRC mismatch fires here (the
@@ -100,7 +90,7 @@ public:
     // Idempotent: the adopt ctor arms the loop once; a later transport start_read() is a no-op.
     void start_read()
     {
-        if(m_reading)
+        if(m_reading || !stream().is_open())
             return;
         m_reading = true;
         mark_open();
@@ -123,10 +113,10 @@ private:
     template<typename Ch>
     friend void detail::serial_wire_decorator(Ch &);
 
+    // These die before the base closes the port, which is safe because a channel is destroyed only after its last
+    // operation completed.
     stream::crc_serial_inbound m_decorator;
-    std::vector<std::byte> m_read_buf;
     std::size_t m_max_frame_bytes;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped_cb;
 };
 

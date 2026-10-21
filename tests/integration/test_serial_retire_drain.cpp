@@ -72,7 +72,7 @@ std::unique_ptr<pasio::serial_channel> adopt_with_bytes_queued(::asio::io_contex
 
 }
 
-TEST_CASE("serial_retire_drain a verified frame queued before close is not handed to the consumer", "[integration][serial][teardown][!shouldfail]")
+TEST_CASE("serial_retire_drain a verified frame queued before close is not handed to the consumer", "[integration][serial][teardown]")
 {
     const auto bytes = concat(serial_frame(), serial_frame());
     for(std::int32_t iter = 0; iter < k_iterations; ++iter)
@@ -108,7 +108,7 @@ TEST_CASE("serial_retire_drain a retired channel is destroyed only after its pen
     }
 }
 
-TEST_CASE("serial_retire_drain bytes read after close reach neither on_data nor on_frame_dropped", "[integration][serial][teardown][!shouldfail]")
+TEST_CASE("serial_retire_drain bytes read after close reach neither on_data nor on_frame_dropped", "[integration][serial][teardown]")
 {
     auto corrupt = serial_frame();
     corrupt[wire::header_size + 2] ^= std::byte{0xFF};
@@ -126,5 +126,39 @@ TEST_CASE("serial_retire_drain bytes read after close reach neither on_data nor 
         drain(io);
         REQUIRE(dropped == 0);
         REQUIRE(delivered == 0);
+    }
+}
+
+// A verified frame's delivery is posted and the read re-armed when the channel is retired. The erase must be the last
+// handler the drain runs.
+TEST_CASE("serial_retire_drain a retired channel's read and posts all complete before its on_closed", "[integration][serial][teardown]")
+{
+    const auto bytes = serial_frame();
+    for(std::int32_t iter = 0; iter < k_iterations; ++iter)
+    {
+        pty_pair pty;
+        ::asio::io_context io;
+        auto ch                = adopt_with_bytes_queued(io, pty, bytes);
+        std::int32_t delivered = 0;
+        ch->on_data([&](std::span<const std::byte>) { ++delivered; });
+        REQUIRE(poll_one_until(io, [&] { return ch->outstanding_ops() == 2; }));
+
+        std::int32_t ran          = 0;
+        std::int32_t ran_at_erase = -1;
+        const auto drain_counting = [&]
+        {
+            io.restart();
+            while(io.poll_one() != 0)
+                ++ran;
+            while(io.run_one_for(std::chrono::milliseconds(20)) != 0)
+                ++ran;
+        };
+        const auto outcome = retire_and_drain(ch, drain_counting, [&] { ran_at_erase = ran; });
+
+        REQUIRE(outcome.erased == 1);
+        REQUIRE(outcome.empty);
+        REQUIRE(delivered == 0);
+        REQUIRE(ran_at_erase >= 2);
+        REQUIRE(ran == ran_at_erase + 1);
     }
 }

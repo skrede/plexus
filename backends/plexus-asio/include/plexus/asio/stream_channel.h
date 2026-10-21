@@ -242,6 +242,10 @@ protected:
     {
         return m_bootstrap;
     }
+    std::vector<std::byte> &read_buffer() noexcept
+    {
+        return m_read_buf;
+    }
 
     // The single read-arm latch for this channel's lifetime. serial_channel reuses it (its own
     // start_read arms serial_do_read), so stream_shutdown_socket's reset clears the guard for both.
