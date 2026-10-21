@@ -27,13 +27,10 @@
 
 namespace plexus::freertos {
 
-// The constrained-target TCP byte_channel: a byte_channel over a connected stream_socket that
-// reuses the stream family VERBATIM — the PLAIN stream_inbound (no CRC decorator; TCP provides
-// integrity, the CRC layer is UART-only) for framing and send_queue for egress. P1 poll-from-loop:
-// a non-blocking recv() drained inside poll() on the executor task delivers on_data synchronously,
-// driven only by the user's tick/run loop — no plexus-level thread. Fully-qualify
-// plexus::detail::move_only_function below: an io/host-shim detail namespace in scope here shadows
-// the bare detail:: lookup (the documented shadowing pitfall, see freertos_policy.h).
+// The constrained-target TCP byte_channel over a connected stream_socket, framed by the plain stream_inbound (TCP
+// provides integrity, so no CRC layer). P1 polls from the loop: a non-blocking recv() inside poll() on the executor
+// task delivers on_data synchronously. plexus::detail is spelled in full: an io detail namespace in scope here shadows
+// the bare detail:: lookup.
 template<plexus::stream::stream_socket S>
 class lwip_channel
 {
@@ -80,6 +77,7 @@ public:
         m_inbound.shutdown();
         m_egress.close();
         m_socket.close();
+        m_close.shut_down();
         m_on_data           = nullptr;
         m_on_error          = nullptr;
         m_on_protocol_close = nullptr;
@@ -103,6 +101,10 @@ public:
     {
         m_close.install(std::move(cb));
     }
+    void on_shutdown(plexus::detail::move_only_function<void()> cb)
+    {
+        m_close.on_shutdown(std::move(cb));
+    }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error = std::move(cb);
@@ -112,9 +114,7 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    // One cooperative super-loop step: a non-blocking recv into the fixed read buffer, fed to the
-    // reused stream_inbound. A hard connection drop (the socket's closed predicate) fails the channel
-    // on a seam DISTINCT from on_protocol_close (the framing-violation seam stream_inbound owns).
+    // A hard connection drop fails the channel through on_error, a seam distinct from on_protocol_close.
     void poll()
     {
         m_egress.poll_egress(); // retry a soft-stalled gather (the send_queue won't re-issue it itself)

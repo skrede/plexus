@@ -11,7 +11,9 @@
 
 namespace plexus::freertos::detail {
 
-// A constrained-target channel's closed state and its on_closed, posted through the executor the channel runs on.
+// A constrained-target channel's closed state and its on_closed, posted through the executor the channel runs on. The
+// shutdown hook runs synchronously when the channel closes, for the transport that polls it, so on_closed stays the
+// owner's alone.
 class close_state
 {
 public:
@@ -19,6 +21,7 @@ public:
             : m_ex(ex)
             , m_closed(false)
             , m_notification()
+            , m_on_shutdown_cb()
     {
     }
 
@@ -34,6 +37,17 @@ public:
     bool enter() noexcept
     {
         return !std::exchange(m_closed, true);
+    }
+
+    void on_shutdown(plexus::detail::move_only_function<void()> cb)
+    {
+        m_on_shutdown_cb = std::move(cb);
+    }
+
+    void shut_down()
+    {
+        if(auto cb = std::exchange(m_on_shutdown_cb, nullptr))
+            cb();
     }
 
     void install(plexus::detail::move_only_function<void()> cb)
@@ -52,6 +66,7 @@ private:
     freertos_executor &m_ex;
     bool m_closed;
     plexus::io::detail::close_notification m_notification;
+    plexus::detail::move_only_function<void()> m_on_shutdown_cb;
 };
 
 }

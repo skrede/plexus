@@ -2,8 +2,8 @@
 // REAL localhost-TCP loopback (a genuine POSIX listener test-side, no hardware and no mock). The TU
 // proves accept -> on_accepted -> a poll-able channel, the compile-time accept cap bound (default 1
 // refuses the second client; cap 2 accepts both), and view invalidation on channel close (the
-// on_closed wired in adopt() clears the view; asan-clean under the asan tree). Additive to the host
-// suite baseline.
+// shutdown hook wired in adopt() clears the view; asan-clean under the asan tree), which leaves the
+// channel's on_closed to the owner that retires it. Additive to the host suite baseline.
 
 #include "host_tcp_listener.h" // MUST precede lwip_transport.h: declares the host POSIX listener
 #include "host_tcp_socket.h"
@@ -136,14 +136,14 @@ TEST_CASE("lwip_transport clears an accepted channel's view on close so poll nev
     REQUIRE(accepted != nullptr);
 
     accepted->close();
-    ex.drain(); // the posted on_closed wired in adopt() clears the view before the owner destroys the channel
+    ex.drain(); // close() already cleared the view through the shutdown hook wired in adopt()
     accepted.reset();
     for(int turn = 0; turn < 10; ++turn)
         transport.poll(); // poll-all must not touch the freed view (asan-clean is the proof)
     SUCCEED();
 }
 
-TEST_CASE("lwip_transport leaves a closed channel's close notification to the owner that retires it", "[seam][!shouldfail]")
+TEST_CASE("lwip_transport leaves a closed channel's close notification to the owner that retires it", "[seam]")
 {
     plexus::freertos::freertos_executor ex;
     accept_transport<> transport{ex};

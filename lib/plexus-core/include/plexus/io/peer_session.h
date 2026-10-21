@@ -21,6 +21,7 @@
 #include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_consumers.h"
@@ -69,6 +70,7 @@ public:
             , m_forwarders_installed(false)
             , m_is_inbound_bootstrap(is_inbound_bootstrap)
             , m_ctx(ctx)
+            , m_waits()
             , m_handshake_timer(executor)
             , m_fsm_cfg(fsm_cfg)
             , m_ready_latched_this_cycle(false)
@@ -85,30 +87,12 @@ public:
 
     void start()
     {
-        m_torn_down                 = false;
-        m_closed_for_protocol_error = false;
-        m_negotiator.prime();
-        m_channel.on_data([this](std::span<const std::byte> f) { on_receive(f); });
-        m_channel.on_error(
-                [this](io_error e)
-                {
-                    // would_block is a transient back-pressure stall, not a broken channel; only a
-                    // genuine channel break drives the transport-drop reconnect.
-                    if(e == io_error::would_block)
-                        return;
-                    if(m_on_drop_cb && !m_torn_down && !m_closed_for_protocol_error)
-                        m_on_drop_cb();
-                });
-        m_channel.on_protocol_close([this](wire::close_cause cause) { on_channel_protocol_close(cause); });
-        if constexpr(requires(channel_type &c) { c.on_object([](const object_carrier &) {}); })
-            m_channel.on_object([this](const object_carrier &c) { detail::deliver_session_object(*this, c); });
-        detail::register_session_consumers(*this);
-        detail::arm_handshake_timer(*this);
-        if(!m_is_inbound_bootstrap)
-        {
-            detail::execute(*this, m_fsm.on_dial_started());
-            detail::execute(*this, m_fsm.on_outbound_connected());
-        }
+        detail::start_session(*this);
+    }
+
+    io::detail::pending_ops &pending() noexcept
+    {
+        return m_waits;
     }
 
     template<typename OnMessage>
@@ -305,6 +289,7 @@ private:
     bool m_forwarders_installed;
     bool m_is_inbound_bootstrap;
     peer_context<Policy> &m_ctx;
+    io::detail::pending_ops m_waits;
     timer_type m_handshake_timer;
     handshake_fsm_config m_fsm_cfg;
     bool m_ready_latched_this_cycle;
@@ -402,6 +387,10 @@ private:
     friend void detail::receive_frame(S &, std::span<const std::byte>);
     template<typename S>
     friend void detail::arm_handshake_timer(S &);
+    template<typename S>
+    friend void detail::wire_channel_seams(S &);
+    template<typename S>
+    friend void detail::start_session(S &);
 };
 
 }

@@ -18,6 +18,7 @@
 
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
+#include "plexus/io/detail/peer_session_rebuild.h"
 
 #include "plexus/log/logger.h"
 
@@ -70,7 +71,6 @@ public:
         for(auto &[id, slot] : m_slots)
             if(slot->record.dial_endpoint == ep)
             {
-                slot->driver.mark_dial_settled();
                 if(slot->driver.redial_denied())
                     return;
                 return detail::build_session_into(*this, *slot, std::move(channel), false);

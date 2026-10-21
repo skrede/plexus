@@ -7,8 +7,11 @@
 #include "plexus/io/peer_session.h"
 #include "plexus/io/session_build_context.h"
 
+#include "plexus/io/detail/channel_graveyard.h"
+
 #include "plexus/node_id.h"
 
+#include <memory>
 #include <string>
 #include <cstddef>
 #include <cstdint>
@@ -16,13 +19,21 @@
 
 namespace plexus::io::detail {
 
-// The member order encodes the destruction discipline: session is destroyed first, so the
-// record (whose channel/epoch it borrows) and the driver outlive every incarnation.
+// The member order encodes the destruction discipline: session is destroyed first, so the record (whose channel/epoch
+// it borrows), the retired cell and the driver outlive every incarnation. A rebuild waits in parked until the old
+// session's waits have completed and retired is empty.
 template<typename Policy, typename Transport, typename Clock>
 struct session_slot
 {
+    using policy_type  = Policy;
+    using channel_type = typename Policy::byte_channel_type;
+
     session_slot(Transport &transport, session_build_context<Policy> &build, const node_id &id, const endpoint &ep, const std::string &node_name)
-            : driver(transport, build.executor, build.redial, ep, build.redial_seed)
+            : record()
+            , retired()
+            , driver(transport, build.executor, build.redial, ep, build.redial_seed)
+            , parked()
+            , session()
             , dead(false)
     {
         record.peer_id       = id;
@@ -31,7 +42,9 @@ struct session_slot
     }
 
     peer_context<Policy> record;
+    channel_graveyard<channel_type, 1> retired;
     reconnect<Policy, Transport, Clock> driver;
+    std::unique_ptr<channel_type> parked;
     std::optional<peer_session<Policy>> session;
     bool dead;
 };

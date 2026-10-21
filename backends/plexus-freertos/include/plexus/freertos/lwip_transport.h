@@ -143,17 +143,15 @@ private:
         m_on_accepted_cb(adopt(std::move(*socket), plexus::io::endpoint{"tcp", {}}));
     }
 
-    // Mint the channel, record its non-owning view, and ARM the on_closed view-invalidation hook
-    // BEFORE returning — so by the time the caller fires on_dialed/on_accepted (ownership moves to
-    // the engine) and the RX task is spawned, the hook is already wired: no window where the engine
-    // owns the channel but the transport's poll-view is uninstrumented. on_closed clears the view
-    // first if the channel closes the instant after hand-off.
+    // The view-invalidation hook is armed before the channel is handed out, so no window exists where the engine owns
+    // the channel but its poll view is uninstrumented. It rides the channel's shutdown hook, synchronously at close,
+    // because on_closed belongs to the owner, which retires the channel through it.
     std::unique_ptr<channel_type> adopt(Socket socket, const plexus::io::endpoint &ep)
     {
         auto ch          = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
         channel_type *view = ch.get();
         m_views.add(view);
-        ch->on_closed([this, view] { m_views.remove(view); });
+        ch->on_shutdown([this, view] { m_views.remove(view); });
         if(m_rx_task)
             spawn_lwip_rx_task(*view, m_executor, *m_rx_task);
         return ch;

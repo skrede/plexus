@@ -12,9 +12,7 @@
 #include "plexus/node_id.h"
 
 #include <span>
-#include <memory>
 #include <cstddef>
-#include <utility>
 #include <string_view>
 
 namespace plexus::io::detail {
@@ -95,8 +93,8 @@ void wire_object_route(Registry &reg, Slot &slot)
             });
 }
 
-// The seam, the build context, and the slot's channel all outlive every incarnation, so the
-// captured lower-channel reference stays valid. No factory leaves the hook absent, so a
+// The session is destroyed before its channel is retired, and the seam and the build context outlive every
+// incarnation, so the captured lower-channel reference stays valid. No factory leaves the hook absent, so a
 // security-engaged accept over plaintext is refused fail-closed rather than running in cleartext.
 template<typename Registry, typename Slot>
 void wire_security(Registry &reg, Slot &slot)
@@ -147,13 +145,10 @@ void wire_dead(Registry &reg, Slot &slot, const node_id &id)
             });
 }
 
-template<typename Registry, typename Slot>
-void build_session_into(Registry &reg, Slot &slot, std::unique_ptr<typename Registry::channel_type> channel, bool inbound)
+template<typename Registry, typename Build, typename Slot>
+void emplace_session(Registry &reg, Build &build, Slot &slot, bool inbound)
 {
-    slot.record.channel = std::move(channel);
-    slot.session.reset();
-    slot.session.emplace(slot.record, reg.m_build.executor, reg.m_build.fsm_cfg, reg.m_build.handshake_timeout, reg.m_build.messages, reg.m_build.procedures, inbound,
-                         reg.m_build.logger);
+    slot.session.emplace(slot.record, build.executor, build.fsm_cfg, build.handshake_timeout, build.messages, build.procedures, inbound, build.logger);
     if(inbound)
         detail::wire_inbound_drop(reg, slot, slot.record.peer_id);
     else
