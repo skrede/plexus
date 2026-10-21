@@ -1352,6 +1352,18 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         util)
     catch_discover_tests(test_forward_serial_e2e TEST_PREFIX "integration.")
 
+    # The relay arms no redial to a killed origin's serial line, whose pts name the kernel may already have handed on.
+    add_executable(test_forward_serial_kill_origin test_forward_serial_kill_origin.cpp)
+    target_link_libraries(test_forward_serial_kill_origin PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    catch_discover_tests(test_forward_serial_kill_origin TEST_PREFIX "integration.")
+
     # The consumer-side origination robustness arms over the same cold relay fixture: a dead relay
     # session fails a caller cleanly as a bounded timeout with a forward-drop count, and a single call
     # executes the origin's served handler exactly once (no direct+forwarded double-fire).
