@@ -105,7 +105,7 @@ void plexus_task(void *)
     using namespace std::chrono_literals;
 
     plexus::freertos::freertos_executor ex;
-    example::uart_transport transport; // opens UART0 and delivers the one uart_channel
+    example::uart_transport transport{ex}; // opens UART0 and delivers the one uart_channel
 
     // Point-at-port discovery: the serial link is the only peer, so the table is empty (no
     // IP discovery). The node is discoverable from birth and the serial channel is the link.

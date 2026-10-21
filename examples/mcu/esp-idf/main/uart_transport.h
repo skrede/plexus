@@ -71,8 +71,9 @@ inline constexpr int k_uart0_rx_gpio = 3;
 class uart_transport
 {
 public:
-    explicit uart_transport(uart_port_t port = UART_NUM_0)
-        : m_port(port)
+    explicit uart_transport(plexus::freertos::freertos_executor &ex, uart_port_t port = UART_NUM_0)
+        : m_ex(ex)
+        , m_port(port)
     {
     }
 
@@ -148,7 +149,7 @@ private:
     // the caller (the engine moves it into a session). The raw handle never owns.
     std::unique_ptr<plexus::freertos::uart_channel> mint_channel()
     {
-        auto ch   = std::make_unique<plexus::freertos::uart_channel>(m_port, k_max_payload_bytes, k_rx_ring_bytes);
+        auto ch   = std::make_unique<plexus::freertos::uart_channel>(m_port, m_ex, k_max_payload_bytes, k_rx_ring_bytes);
         m_channel = ch.get();
         return ch;
     }
@@ -177,6 +178,7 @@ private:
         m_installed = true;
     }
 
+    plexus::freertos::freertos_executor &m_ex;
     uart_port_t m_port;
     bool m_installed{false};
     plexus::freertos::uart_channel *m_channel{nullptr}; // non-owning poll handle; engine owns it

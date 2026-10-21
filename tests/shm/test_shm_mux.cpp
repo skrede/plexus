@@ -19,6 +19,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include "support/posted_queue.h"
 #include "support/noop_notifier.h"
 #include "support/always_live_slots.h"
 
@@ -252,7 +253,8 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
     {
         region_store store;
         stub_broker broker{store};
-        shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+        plexus::testing::posted_queue posted;
+        shm_member shm{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
         mux_t mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
@@ -285,7 +287,8 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
         stub_broker broker{store};
         broker.fail(true); // force every ring acquire to fail
 
-        shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+        plexus::testing::posted_queue posted;
+        shm_member shm{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         dummy_stream_member stream;
         mux_t mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
@@ -318,7 +321,8 @@ TEST_CASE("shm.mux a congestion-blocked send drives on_drop with cause=blocked t
     {
         region_store store;
         stub_broker broker{store};
-        shm_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+        plexus::testing::posted_queue posted;
+        shm_member shm{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
 
         std::unique_ptr<shm_member::channel_type> ch;
         shm.on_dialed([&](std::unique_ptr<shm_member::channel_type> c, const pio::endpoint &) { ch = std::move(c); });

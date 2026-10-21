@@ -65,7 +65,7 @@ auto mux_open(Member &m, const io::endpoint &ep, shm::ring_role role, shm::waite
     }
     if(ch == nullptr)
         return nullptr;
-    return std::make_unique<typename Member::channel_type>(m.m_registry, *ch, ep.address, self, ep, role, std::move(lost));
+    return std::make_unique<typename Member::channel_type>(m.m_registry, m.m_post, *ch, ep.address, self, ep, role, std::move(lost));
 }
 
 }

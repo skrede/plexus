@@ -133,7 +133,8 @@ TEST_CASE("lwip_transport clears an accepted channel's view on close so poll nev
     plexus::test::poll_until([&] { transport.poll(); }, [&] { return !(!accepted); });
     REQUIRE(accepted != nullptr);
 
-    accepted->close(); // the on_closed wired in adopt() clears the view before the channel is destroyed
+    accepted->close();
+    ex.drain(); // the posted on_closed wired in adopt() clears the view before the owner destroys the channel
     accepted.reset();
     for(int turn = 0; turn < 10; ++turn)
         transport.poll(); // poll-all must not touch the freed view (asan-clean is the proof)

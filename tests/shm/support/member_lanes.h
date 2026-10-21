@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MEMBER_LANES_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MEMBER_LANES_H
 
+#include "support/posted_queue.h"
 #include "support/delaying_broker.h"
 #include "support/coordinator_lanes.h"
 
@@ -32,7 +33,8 @@ struct member_lanes
     using coordinator_type = io::upgrade_coordinator<co_host_registry, channel_type>;
 
     member_lanes(Broker &broker, std::string fqn, typename member_type::notifier_binder bind = member_type::registry_type::default_notifier_binder())
-            : member(broker, io::reliability::reliable, io::congestion::block, std::move(bind))
+            : posted()
+            , member(broker, posted.post(), io::reliability::reliable, io::congestion::block, std::move(bind))
             , reg()
             , lanes(reg)
             , topic(std::move(fqn))
@@ -55,6 +57,7 @@ struct member_lanes
         return lanes.companion_for("peer", topic, 1).fits;
     }
 
+    posted_queue posted;
     member_type member;
     co_host_registry reg;
     coordinator_type lanes;

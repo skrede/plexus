@@ -23,6 +23,7 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/posted_queue.h"
 #include "support/region_names.h"
 #include "support/noop_notifier.h"
 
@@ -299,7 +300,8 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     }
 
     posix_shm_region_broker broker;
-    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    plexus::testing::posted_queue posted;
+    member_t member{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
     plexus::testing::bind_test_publisher(member);
     member.set_topic_geometry(fqn, declared_payload, plexus::io::same_host_geometry{capacity, plexus::io::ring_geometry_mode::wire_fallback});
 
@@ -427,7 +429,8 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     const std::string fqn = "topic.wfb.frameover." + std::to_string(plexus::testing::process_id());
 
     posix_shm_region_broker broker;
-    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    plexus::testing::posted_queue posted;
+    member_t member{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
     member.set_topic_geometry(fqn, 2 * k_kib, plexus::io::same_host_geometry{2u, plexus::io::ring_geometry_mode::wire_fallback});
 
     std::unique_ptr<shm_channel> companion_ring;

@@ -66,7 +66,10 @@ inline constexpr int         k_link_rx_gpio = 16;
 class bench_uart_transport
 {
 public:
-    bench_uart_transport() = default;
+    explicit bench_uart_transport(plexus::freertos::freertos_executor &ex)
+            : m_ex(ex)
+    {
+    }
 
     bench_uart_transport(const bench_uart_transport &)            = delete;
     bench_uart_transport &operator=(const bench_uart_transport &) = delete;
@@ -130,7 +133,7 @@ public:
 private:
     std::unique_ptr<plexus::freertos::uart_channel> mint_channel()
     {
-        auto ch   = std::make_unique<plexus::freertos::uart_channel>(k_link_uart, k_uart_max_payload, k_uart_rx_ring);
+        auto ch   = std::make_unique<plexus::freertos::uart_channel>(k_link_uart, m_ex, k_uart_max_payload, k_uart_rx_ring);
         m_channel = ch.get();
         return ch;
     }
@@ -155,6 +158,7 @@ private:
         m_installed = true;
     }
 
+    plexus::freertos::freertos_executor &m_ex;
     bool                            m_installed{false};
     plexus::freertos::uart_channel *m_channel{nullptr};
     plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> m_on_accepted;

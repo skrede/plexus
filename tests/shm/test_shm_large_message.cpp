@@ -18,6 +18,7 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/posted_queue.h"
 #include "support/region_names.h"
 #include "support/noop_notifier.h"
 
@@ -204,7 +205,8 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, plexu
         else
             slot.emplace();
     };
-    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, std::move(binder)};
+    plexus::testing::posted_queue posted;
+    member_t member{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block, std::move(binder)};
     plexus::testing::bind_test_publisher(member);
 
     // The producer-side provisioning: the publisher's effective payload width + mode +
@@ -260,7 +262,8 @@ acquire_probe<Notifier> probe_acquire(const std::string &fqn, std::size_t payloa
     using channel_t = typename member_t::channel_type;
 
     posix_shm_region_broker broker;
-    member_t member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    plexus::testing::posted_queue posted;
+    member_t member{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
     member.set_topic_geometry(fqn, payload_bytes, plexus::io::same_host_geometry{capacity, mode});
 
     std::unique_ptr<channel_t> channel;

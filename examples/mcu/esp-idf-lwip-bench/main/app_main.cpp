@@ -143,7 +143,7 @@ void drive_pipeline(const char *policy_name, Transport &transport, plexus::freer
 void plexus_task(void *)
 {
     plexus::freertos::freertos_executor ex;
-    example::bench_uart_transport transport;
+    example::bench_uart_transport transport{ex};
     #if defined(BENCH_WORKLOAD_ONEWAY)
     drive_oneway<example::bench_uart_policy>("serial-b" PP_STR(BENCH_BAUD), transport, ex, "serial", "uart1");
     #elif defined(BENCH_WORKLOAD_PIPELINE)

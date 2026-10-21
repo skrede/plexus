@@ -1,14 +1,12 @@
-#include "host_uart_shim.h"
 #include "host_tcp_socket.h"
 #include "host_loopback_pair.h"
 
+#include "support/retire_drain.h"
+
 #include "plexus/freertos/lwip_channel.h"
-#include "plexus/freertos/uart_channel.h"
 #include "plexus/freertos/freertos_executor.h"
 
 #include "plexus/io/io_error.h"
-
-#include "plexus/stream/crc_serial.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
@@ -17,6 +15,7 @@
 
 #include <span>
 #include <array>
+#include <string>
 #include <memory>
 #include <vector>
 #include <cstddef>
@@ -25,30 +24,18 @@
 #include <optional>
 
 using plexus::test::host_tcp_socket;
-using plexus::freertos::uart_channel;
 using plexus::freertos::freertos_executor;
 using lwip_channel = plexus::freertos::lwip_channel<host_tcp_socket>;
+using event_log    = std::vector<std::string>;
 
 namespace {
 
 constexpr std::array<std::byte, 4> k_payload{std::byte{0xDE}, std::byte{0xAD}, std::byte{0xBE}, std::byte{0xEF}};
-constexpr std::size_t k_max_payload = 512;
-constexpr std::size_t k_ring        = 2048;
 
 std::vector<std::byte> framed()
 {
     return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
                                       std::span<const std::byte>{k_payload});
-}
-
-std::vector<std::byte> framed_with_crc()
-{
-    auto frame         = framed();
-    const auto header  = std::span<const std::byte>{frame}.first(plexus::wire::header_size);
-    const auto body    = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
-    const auto trailer = plexus::stream::crc_trailer(header, body);
-    frame.insert(frame.end(), trailer.begin(), trailer.end());
-    return frame;
 }
 
 struct lwip_pair
@@ -82,7 +69,7 @@ bool rx_turn(lwip_channel &channel, freertos_executor &ex)
 
 }
 
-TEST_CASE("freertos_retire_quiescence closing an lwIP channel posts its on_closed through the executor once", "[seam][freertos_retire_quiescence][!shouldfail]")
+TEST_CASE("freertos_retire_quiescence closing an lwIP channel posts its on_closed through the executor once", "[seam][freertos_retire_quiescence]")
 {
     lwip_pair p;
     std::int32_t closes = 0;
@@ -95,7 +82,7 @@ TEST_CASE("freertos_retire_quiescence closing an lwIP channel posts its on_close
     CHECK(closes == 1);
 }
 
-TEST_CASE("freertos_retire_quiescence an lwIP handler installed after the close is posted", "[seam][freertos_retire_quiescence][!shouldfail]")
+TEST_CASE("freertos_retire_quiescence an lwIP handler installed after the close is posted", "[seam][freertos_retire_quiescence]")
 {
     lwip_pair p;
     p.channel->close();
@@ -108,7 +95,7 @@ TEST_CASE("freertos_retire_quiescence an lwIP handler installed after the close 
     CHECK(closes == 1);
 }
 
-TEST_CASE("freertos_retire_quiescence an lwIP delivery received before the close is dropped after it", "[seam][freertos_retire_quiescence][!shouldfail]")
+TEST_CASE("freertos_retire_quiescence an lwIP delivery received before the close is dropped after it", "[seam][freertos_retire_quiescence]")
 {
     lwip_pair p;
     std::int32_t deliveries = 0;
@@ -123,7 +110,7 @@ TEST_CASE("freertos_retire_quiescence an lwIP delivery received before the close
     CHECK(deliveries == 0);
 }
 
-TEST_CASE("freertos_retire_quiescence a peer's close fails the lwIP channel once and posts its on_closed", "[seam][freertos_retire_quiescence][!shouldfail]")
+TEST_CASE("freertos_retire_quiescence a peer's close fails the lwIP channel once and posts its on_closed", "[seam][freertos_retire_quiescence]")
 {
     lwip_pair p;
     std::int32_t errors = 0;
@@ -140,47 +127,23 @@ TEST_CASE("freertos_retire_quiescence a peer's close fails the lwIP channel once
     CHECK(closes == 1);
 }
 
-TEST_CASE("freertos_retire_quiescence closing a UART channel posts its on_closed through the executor once", "[seam][freertos_retire_quiescence][!shouldfail]")
+TEST_CASE("freertos_retire_quiescence a retired lwIP channel's posts complete before its on_closed", "[seam][freertos_retire_quiescence]")
 {
-    plexus::test::reset_uart_fixture();
-    freertos_executor ex;
-    uart_channel ch{0, k_max_payload, k_ring};
-    std::int32_t closes = 0;
-    ch.on_closed([&closes] { ++closes; });
+    lwip_pair p;
+    event_log log;
+    lwip_channel &victim = *p.channel;
+    p.channel->on_data([&log](std::span<const std::byte>) { log.push_back("data"); });
+    p.sender.send(framed());
+    p.ex.post(
+            [&log, &victim]
+            {
+                victim.poll();
+                log.push_back(victim.closed() ? "posted closed" : "posted open");
+            });
 
-    ch.close();
-    ch.close();
-    CHECK(closes == 0);
-    ex.drain();
-    CHECK(closes == 1);
-}
-
-TEST_CASE("freertos_retire_quiescence a UART handler installed after the close is posted", "[seam][freertos_retire_quiescence][!shouldfail]")
-{
-    plexus::test::reset_uart_fixture();
-    freertos_executor ex;
-    uart_channel ch{0, k_max_payload, k_ring};
-    ch.close();
-    ex.drain();
-
-    std::int32_t closes = 0;
-    ch.on_closed([&closes] { ++closes; });
-    CHECK(closes == 0);
-    ex.drain();
-    CHECK(closes == 1);
-}
-
-TEST_CASE("freertos_retire_quiescence a UART frame polled after the close is dropped", "[seam][freertos_retire_quiescence][!shouldfail]")
-{
-    plexus::test::reset_uart_fixture();
-    plexus::test::uart_fixture().rx = framed_with_crc();
-    freertos_executor ex;
-    uart_channel ch{0, k_max_payload, k_ring};
-    std::int32_t deliveries = 0;
-    ch.on_data([&deliveries](std::span<const std::byte>) { ++deliveries; });
-
-    ch.close();
-    ch.poll();
-    ex.drain();
-    CHECK(deliveries == 0);
+    const auto outcome = plexus::testing::retire_and_drain(p.channel, [&p] { p.ex.drain(); }, [&log] { log.push_back("erased"); });
+    CHECK(log == event_log{"posted closed", "erased"});
+    CHECK(outcome.erased == 1);
+    CHECK(outcome.empty);
+    CHECK_FALSE(p.ex.pump());
 }

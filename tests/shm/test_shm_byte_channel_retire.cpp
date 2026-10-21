@@ -1,3 +1,4 @@
+#include "support/posted_queue.h"
 #include "support/noop_notifier.h"
 
 #include "plexus/shm/shm_mux_member.h"
@@ -19,7 +20,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <deque>
 #include <memory>
 #include <string>
 #include <cstddef>
@@ -30,34 +30,19 @@ namespace {
 
 using member = plexus::shm::shm_mux_member<plexus::native::shm_region_broker, plexus::testing::noop_notifier>;
 
-struct posted_queue
-{
-    std::deque<plexus::detail::move_only_function<void()>> work;
-
-    void drain()
-    {
-        while(!work.empty())
-        {
-            auto fn = std::move(work.front());
-            work.pop_front();
-            fn();
-        }
-    }
-};
-
 struct dialed_channel
 {
     explicit dialed_channel(const char *tag)
             : queue()
             , broker()
-            , shm(broker, plexus::io::reliability::reliable, plexus::io::congestion::block)
+            , shm(broker, queue.post(), plexus::io::reliability::reliable, plexus::io::congestion::block)
             , channel()
     {
         shm.on_dialed([this](std::unique_ptr<member::channel_type> ch, const plexus::io::endpoint &) { channel = std::move(ch); });
         shm.dial(plexus::io::endpoint{"shm", std::string("byte_channel_retire.") + tag + "." + std::to_string(plexus::testing::process_id())});
     }
 
-    posted_queue queue;
+    plexus::testing::posted_queue queue;
     plexus::native::shm_region_broker broker;
     member shm;
     std::unique_ptr<member::channel_type> channel;
@@ -65,7 +50,7 @@ struct dialed_channel
 
 }
 
-TEST_CASE("shm_byte_channel_retire close posts on_closed instead of invoking it inside close()", "[shm][byte_channel_retire][!shouldfail]")
+TEST_CASE("shm_byte_channel_retire close posts on_closed instead of invoking it inside close()", "[shm][byte_channel_retire]")
 {
     dialed_channel d{"posted"};
     REQUIRE(d.channel);
@@ -89,7 +74,7 @@ TEST_CASE("shm_byte_channel_retire close posts on_closed instead of invoking it 
     CHECK_FALSE(inside_close);
 }
 
-TEST_CASE("shm_byte_channel_retire a channel closed twice posts one notification", "[shm][byte_channel_retire][!shouldfail]")
+TEST_CASE("shm_byte_channel_retire a channel closed twice posts one notification", "[shm][byte_channel_retire]")
 {
     dialed_channel d{"once"};
     REQUIRE(d.channel);
@@ -98,14 +83,14 @@ TEST_CASE("shm_byte_channel_retire a channel closed twice posts one notification
 
     d.channel->close();
     d.channel->close();
-    CHECK(d.queue.work.size() == 1);
+    CHECK(d.queue.size() == 1);
     d.queue.drain();
     d.channel->close();
     d.queue.drain();
     CHECK(closes == 1);
 }
 
-TEST_CASE("shm_byte_channel_retire a handler installed after the close is posted", "[shm][byte_channel_retire][!shouldfail]")
+TEST_CASE("shm_byte_channel_retire a handler installed after the close is posted", "[shm][byte_channel_retire]")
 {
     dialed_channel d{"late"};
     REQUIRE(d.channel);
@@ -119,7 +104,7 @@ TEST_CASE("shm_byte_channel_retire a handler installed after the close is posted
     CHECK(closes == 1);
 }
 
-TEST_CASE("shm_byte_channel_retire a consumer callback is detached once the channel closed", "[shm][byte_channel_retire][!shouldfail]")
+TEST_CASE("shm_byte_channel_retire a consumer callback is detached once the channel closed", "[shm][byte_channel_retire]")
 {
     dialed_channel d{"detach"};
     REQUIRE(d.channel);

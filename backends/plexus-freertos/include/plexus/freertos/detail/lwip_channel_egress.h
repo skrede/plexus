@@ -16,7 +16,8 @@ namespace plexus::freertos::detail {
 
 // The egress/drain half of an lwip_channel: a bounded send_queue over a borrowed connected
 // stream_socket. The borrowed socket and the on_error hook outlive this helper (the owning channel
-// holds both). lwIP has no scatter writev, so the gathered views are sent one by one.
+// holds both), and a hard drop fails the channel through the injected fail hook. lwIP has no
+// scatter writev, so the gathered views are sent one by one.
 //
 // Two distinct failure classes ride this path, kept textually separate so a reader
 // sees soft != hard:
@@ -25,7 +26,7 @@ namespace plexus::freertos::detail {
 //     it (block backpressures the producer with would_block; drop_newest sheds+counts). It NEVER
 //     fires the connection-drop on_error and NEVER tears the channel down.
 //   * HARD/connection — ECONNRESET/EPIPE, surfaced by the socket's closed predicate after the
-//     gather. This fires on_error(connection_reset) so the engine re-dials.
+//     gather. This fails the channel with connection_reset (on_error, then closed) so the engine re-dials.
 template<plexus::stream::stream_socket S>
 class lwip_channel_egress
 {
@@ -34,9 +35,10 @@ public:
     using buffer_seq = plexus::stream::detail::send_queue::buffer_sequence;
     using completion = plexus::stream::detail::send_queue::completion;
 
-    lwip_channel_egress(S &socket, error_cb &on_error, std::size_t egress_cap, plexus::io::congestion congestion = plexus::io::congestion::block)
+    lwip_channel_egress(S &socket, error_cb &on_error, error_cb fail, std::size_t egress_cap, plexus::io::congestion congestion = plexus::io::congestion::block)
             : m_socket(socket)
             , m_on_error(on_error)
+            , m_fail_cb(std::move(fail))
             , m_congestion(congestion)
             , m_send_queue([this](buffer_seq views, completion done) { drain_views(views, std::move(done)); }, egress_cap)
     {
@@ -107,16 +109,15 @@ private:
         done(true);
     }
 
-    // A hard close (the socket's closed predicate) is the distinct connection-drop seam: fire on_error
-    // ONCE and abandon the gather (a dead connection re-dials, it does not retry). A soft stall keeps
-    // the gather resident and stashes its completion so poll_egress() retries it next turn.
+    // A hard close (the socket's closed predicate) is the distinct connection-drop seam: fail the
+    // channel ONCE and abandon the gather (a dead connection re-dials, it does not retry). A soft stall
+    // keeps the gather resident and stashes its completion so poll_egress() retries it next turn.
     void stall(buffer_seq views, completion done)
     {
         if(m_socket.closed())
         {
-            if(m_on_error)
-                m_on_error(plexus::io::io_error::connection_reset);
             m_pending = false;
+            m_fail_cb(plexus::io::io_error::connection_reset);
             return;
         }
         m_views   = views;
@@ -126,6 +127,7 @@ private:
 
     S          &m_socket;
     error_cb   &m_on_error;
+    error_cb    m_fail_cb;
     buffer_seq  m_views{};
     completion  m_done{};
     plexus::io::congestion             m_congestion;

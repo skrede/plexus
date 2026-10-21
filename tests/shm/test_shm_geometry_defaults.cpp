@@ -11,6 +11,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include "support/posted_queue.h"
 #include "support/noop_notifier.h"
 #include "support/always_live_slots.h"
 
@@ -206,7 +207,8 @@ TEST_CASE("shm.geometry_defaults the small-payload default geometry is byte-iden
     // default resolves through default_geometry() to the SAME 256/4096 ring asserted above.
     region_store store;
     stub_broker broker{store};
-    test_member member{broker, plexus::io::reliability::reliable, plexus::io::congestion::block};
+    plexus::testing::posted_queue posted;
+    test_member member{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
 
     const plexus::io::same_host_geometry def = member.default_geometry();
     REQUIRE(def.max_consumers == 0u);

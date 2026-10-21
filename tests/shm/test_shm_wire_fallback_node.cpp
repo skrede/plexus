@@ -19,6 +19,7 @@
 
 #include "plexus/testing/platform.h"
 
+#include "support/posted_queue.h"
 #include "support/noop_notifier.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -163,7 +164,8 @@ using mux_t = pcore::multiplexing_transport<member_t, stream_member>;
 std::string route_for_mode(const std::string &fqn, pcore::ring_geometry_mode mode)
 {
     posix_shm_region_broker broker;
-    member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
+    plexus::testing::posted_queue posted;
+    member_t member{broker, posted.post(), pcore::reliability::reliable, pcore::congestion::block};
     member.set_topic_geometry(fqn, 4 * k_kib, pcore::same_host_geometry{2u, mode});
 
     stream_member stream;
@@ -290,7 +292,8 @@ TEST_CASE("shm.wire_fallback_node can_acquire declines wire_fallback without hol
     const std::string fqn = "topic.wfbn.refcount." + std::to_string(plexus::testing::process_id());
 
     posix_shm_region_broker broker;
-    member_t member{broker, pcore::reliability::reliable, pcore::congestion::block};
+    plexus::testing::posted_queue posted;
+    member_t member{broker, posted.post(), pcore::reliability::reliable, pcore::congestion::block};
 
     member.set_topic_geometry(fqn, 4 * k_kib, pcore::same_host_geometry{2u, pcore::ring_geometry_mode::wire_fallback});
     REQUIRE_FALSE(member.can_acquire(endpoint{"shm", fqn}));

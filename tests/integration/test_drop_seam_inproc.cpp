@@ -50,6 +50,7 @@
 #include "plexus/wire/handshake.h"
 #include "plexus/wire/frame_codec.h"
 
+#include "shm/support/posted_queue.h"
 #include "shm/support/noop_notifier.h"
 #include "shm/support/always_live_slots.h"
 
@@ -710,7 +711,9 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
         stub_broker broker;
         shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
-        shm_bytes bytechan(registry, channel, "shm-topic", plexus::node_id{}, plexus::io::endpoint{"shm", "shm-topic"}, plexus::shm::ring_role::producer);
+        plexus::testing::posted_queue posted;
+        plexus::shm::post_fn post = posted.post();
+        shm_bytes bytechan(registry, post, channel, "shm-topic", plexus::node_id{}, plexus::io::endpoint{"shm", "shm-topic"}, plexus::shm::ring_role::producer);
         bytechan.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
 
         std::uint32_t idx = 0;
@@ -789,7 +792,8 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         // install the engine's posted drop_sink through the ERASED on_drop verb — exactly
         // the call wire_channel_drop makes for a muxed shm node. NO concrete on_drop is bound
         // by the test; remove either the erasure forward or the engine binding and this fails.
-        auto concrete = std::make_unique<shm_bytes>(registry, channel, "shm-topic", plexus::node_id{}, plexus::io::endpoint{"shm", "shm-topic"}, plexus::shm::ring_role::producer);
+        plexus::shm::post_fn post = [&ex](plexus::detail::move_only_function<void()> fn) { ex.post(std::move(fn)); };
+        auto concrete = std::make_unique<shm_bytes>(registry, post, channel, "shm-topic", plexus::node_id{}, plexus::io::endpoint{"shm", "shm-topic"}, plexus::shm::ring_role::producer);
         plexus::io::polymorphic_byte_channel erased(std::make_unique<plexus::io::channel_adapter<shm_bytes>>(std::move(concrete)));
         erased.on_drop(eng.drop_sink());
 

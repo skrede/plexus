@@ -12,9 +12,11 @@
 
 #include "plexus/muxify.h"
 
+#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
 #include <string>
+#include <utility>
 #include <optional>
 #include <string_view>
 #include <type_traits>
@@ -31,13 +33,19 @@ inline ::plexus::shm::shm_topic_registry<::plexus::native::shm_region_broker, sh
     { slot.emplace(io, header, region_name); };
 }
 
-// The broker is borrowed (it must outlive the member); the binder captures `io` so each ring's
-// notifier wakes on that reactor. An empty region_ns shares rings host-wide (the default); a
-// distinct namespace isolates this application's same-host shm from unrelated co-host apps.
+inline ::plexus::shm::post_fn make_post(::asio::io_context &io)
+{
+    return [&io](::plexus::detail::move_only_function<void()> fn) { ::asio::post(io, std::move(fn)); };
+}
+
+// The broker is borrowed (it must outlive the member); the binder and the post capture `io` so each
+// ring's notifier wakes, and each channel's close notification runs, on that reactor. An empty
+// region_ns shares rings host-wide (the default); a distinct namespace isolates this application's
+// same-host shm from unrelated co-host apps.
 inline shm_member make_shm_member(::asio::io_context &io, ::plexus::native::shm_region_broker &broker, io::reliability rel = io::reliability::reliable,
                                   io::congestion cong = io::congestion::block, std::string region_ns = {})
 {
-    return shm_member{broker, rel, cong, make_bridge_binder(io), std::move(region_ns)};
+    return shm_member{broker, make_post(io), rel, cong, make_bridge_binder(io), std::move(region_ns)};
 }
 
 }

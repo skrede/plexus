@@ -38,10 +38,9 @@
 
 namespace plexus::shm {
 
-// The shared-memory mux member: the SECOND same-host (local-tier) transport, joining AF_UNIX through the multiplexer's
-// multi-member-per-tier seam. dial(ep) demand-acquires this node's ring for the topic (ep.address is the fqn) and mints
-// an shm_byte_channel on success / fires on_dial_failed otherwise; listen(ep) is the creator side. It OWNS the registry
-// and borrows the broker. Templated on the broker + notifier seams so this core header pulls no POSIX/asio dependency.
+// The shared-memory mux member, a local-tier transport beside AF_UNIX. dial(ep) demand-acquires this node's ring for the
+// topic (ep.address is the fqn) and mints an shm_byte_channel, else fires on_dial_failed; listen(ep) is the creator side.
+// It owns the registry and the post its channels notify through, and borrows the broker; no POSIX or asio header.
 template<typename Broker, typename Notifier>
     requires region_broker<Broker> && notifier<Notifier>
 class shm_mux_member
@@ -59,9 +58,10 @@ public:
     static constexpr bool mux_prefers_local_fast = true;
 
     // A distinct region_ns isolates this application's same-host rings from unrelated apps; empty shares them.
-    shm_mux_member(Broker &broker, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = registry_type::default_notifier_binder(),
+    shm_mux_member(Broker &broker, post_fn post, io::reliability rel, io::congestion cong, notifier_binder bind_notifier = registry_type::default_notifier_binder(),
                    std::string region_ns = {}) noexcept
             : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes, std::move(region_ns))
+            , m_post(std::move(post))
             , m_self()
     {
     }
@@ -197,8 +197,7 @@ public:
         return detail::topic_companion_route(m_geometry, fqn);
     }
 
-    // The registry already defaults to k_max_ring_slab_bytes, so a caller need only invoke this
-    // to RAISE the ceiling for a larger reliable ring.
+    // Raises the slab ceiling above the registry's k_max_ring_slab_bytes default, for a larger reliable ring.
     void set_max_ring_slab_bytes(std::uint64_t bytes) noexcept
     {
         m_registry.set_max_ring_slab_bytes(bytes);
@@ -235,6 +234,7 @@ private:
     }
 
     registry_type m_registry;
+    post_fn m_post;
     node_id m_self;
     detail::shm_geometry_map m_geometry;
     io::same_host_geometry m_default_geometry;

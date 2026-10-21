@@ -144,7 +144,7 @@ catch_discover_tests(test_lwip_transport_congestion_seam TEST_PREFIX "seam.")
 
 # The close contract on the constrained-target lwIP and UART channels, over the host loopback pair and the host UART
 # shim: on_closed posted once through the executor, a late-installed handler posted, nothing delivered after close.
-add_executable(test_freertos_retire_quiescence test_freertos_retire_quiescence.cpp)
+add_executable(test_freertos_retire_quiescence test_freertos_retire_quiescence.cpp test_freertos_retire_quiescence_uart.cpp)
 target_include_directories(test_freertos_retire_quiescence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(test_freertos_retire_quiescence PRIVATE
     plexus::core

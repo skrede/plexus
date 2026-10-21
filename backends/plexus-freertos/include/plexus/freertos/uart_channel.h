@@ -1,7 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_UART_CHANNEL_H
 #define HPP_GUARD_PLEXUS_FREERTOS_UART_CHANNEL_H
 
+#include "plexus/freertos/freertos_executor.h"
+
 #include "plexus/freertos/detail/uart_io.h"
+#include "plexus/freertos/detail/close_state.h"
 
 #include "plexus/io/byte_channel.h"
 #include "plexus/stream/crc_serial.h"
@@ -32,16 +35,19 @@ public:
     // SRAM); the egress + per-message ceilings carry the real savings. NOT grown per read.
     static constexpr std::size_t k_scratch_bytes = 2048;
 
-    explicit uart_channel(uart_port_t port, std::size_t max_payload, std::size_t rx_ring_ceiling)
+    explicit uart_channel(uart_port_t port, freertos_executor &ex, std::size_t max_payload, std::size_t rx_ring_ceiling)
             : m_port(port)
             , m_rx_ring_ceiling(rx_ring_ceiling)
             , m_decorator(max_payload)
+            , m_close(ex)
     {
         wire_decorator();
     }
 
     void send(std::span<const std::byte> framed)
     {
+        if(m_close.closed())
+            return;
         const auto header  = framed.first(plexus::wire::header_size);
         const auto payload = framed.subspan(plexus::wire::header_size);
         const auto trailer = plexus::stream::crc_trailer(header, payload); // REUSED verbatim
@@ -51,6 +57,12 @@ public:
 
     void close()
     {
+        if(!m_close.enter())
+            return;
+        m_on_data           = nullptr;
+        m_on_error          = nullptr;
+        m_on_protocol_close = nullptr;
+        m_close.notify();
     }
     plexus::io::endpoint remote_endpoint() const
     {
@@ -63,7 +75,7 @@ public:
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed = std::move(cb);
+        m_close.install(std::move(cb));
     }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
@@ -79,6 +91,8 @@ public:
     // swallowed) so a lost byte is observable and just drops+resyncs one frame.
     void poll()
     {
+        if(m_close.closed())
+            return;
         check_overrun();
         const std::size_t n = detail::uart_poll_into(m_port, m_scratch);
         if(n > 0)
@@ -146,8 +160,8 @@ private:
     std::size_t                                                          m_dropped_count{0};
     std::array<std::byte, k_scratch_bytes>                               m_scratch{};
     plexus::stream::crc_serial_inbound                                   m_decorator;
+    detail::close_state                                                  m_close;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    plexus::detail::move_only_function<void()>                           m_on_closed;
     plexus::detail::move_only_function<void(plexus::io::io_error)>       m_on_error;
     plexus::detail::move_only_function<void(plexus::wire::close_cause)>  m_on_protocol_close;
 };

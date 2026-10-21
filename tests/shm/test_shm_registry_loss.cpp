@@ -23,6 +23,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
 #include <span>
@@ -47,6 +48,11 @@ using consumer      = plexus::shm::shm_companion_consumer<plexus::native::shm_re
 registry::notifier_binder lost_binder(::asio::io_context &io)
 {
     return [&io](std::optional<lost_notifier> &slot, plexus::shm::control_header_t &header, std::string_view name) { slot.emplace(io, header, name); };
+}
+
+plexus::shm::post_fn post_on(::asio::io_context &io)
+{
+    return [&io](plexus::detail::move_only_function<void()> fn) { ::asio::post(io, std::move(fn)); };
 }
 
 std::string fresh_fqn(const char *tag)
@@ -90,7 +96,7 @@ TEST_CASE("registry_loss each holder watching a lost waiter is told once and the
 {
     ::asio::io_context io;
     plexus::native::shm_region_broker broker;
-    lost_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
+    lost_member shm{broker, post_on(io), plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
     const std::string fqn = fresh_fqn("holders");
 
     std::uint32_t told = 0;
@@ -122,7 +128,7 @@ TEST_CASE("registry_loss a holder an earlier told holder released is not told", 
 {
     ::asio::io_context io;
     plexus::native::shm_region_broker broker;
-    lost_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
+    lost_member shm{broker, post_on(io), plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
     const std::string fqn = fresh_fqn("released");
 
     std::uint32_t send_told    = 0;
@@ -148,7 +154,7 @@ TEST_CASE("registry_loss a dialed channel no owner watches closes when its waite
 {
     ::asio::io_context io;
     plexus::native::shm_region_broker broker;
-    lost_member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
+    lost_member shm{broker, post_on(io), plexus::io::reliability::reliable, plexus::io::congestion::block, lost_binder(io)};
     const std::string fqn = fresh_fqn("dialed");
 
     std::unique_ptr<lost_member::channel_type> dialed;

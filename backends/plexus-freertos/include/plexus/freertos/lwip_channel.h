@@ -1,12 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_LWIP_CHANNEL_H
 #define HPP_GUARD_PLEXUS_FREERTOS_LWIP_CHANNEL_H
 
-#include "plexus/freertos/detail/lwip_channel_egress.h"
-#include "plexus/freertos/detail/lwip_channel_inbound.h"
-#include "plexus/freertos/detail/null_stream_socket.h"
-#include "plexus/freertos/detail/lwip_rx_slot_pool.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
+#include "plexus/freertos/lwip_channel_limits.h"
+
+#include "plexus/freertos/detail/close_state.h"
+#include "plexus/freertos/detail/lwip_rx_slot_pool.h"
+#include "plexus/freertos/detail/null_stream_socket.h"
+#include "plexus/freertos/detail/lwip_channel_egress.h"
+#include "plexus/freertos/detail/lwip_channel_inbound.h"
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
@@ -23,20 +26,6 @@
 #include <utility>
 
 namespace plexus::freertos {
-
-// MCU knob-down defaults: an lwip_channel-LOCAL constant set, never a mutation of the shared
-// fragmentation.h ceilings (the PC build is byte-identical). The read buffer matches the lwIP
-// default TCP window (5760 B = 4x the 1440 MSS) so one recv drains a full advertised window; the
-// ceilings sit well under the 64 KiB / 128 KiB / 16 KiB host defaults. The RX pool's SRAM is
-// rx_slots * read_buffer_bytes (~22.5 KiB here), so both knobs are kept small.
-struct lwip_channel_limits
-{
-    static constexpr std::size_t read_buffer_bytes = 5760;        // the lwIP TCP_WND default
-    static constexpr std::size_t max_message_bytes = 8 * 1024;
-    static constexpr std::size_t reassembly_bytes  = 16 * 1024;
-    static constexpr std::size_t egress_cap_bytes  = 8 * 1024;
-    static constexpr std::size_t rx_slots          = 4;
-};
 
 // The constrained-target TCP byte_channel: a byte_channel over a connected stream_socket that
 // reuses the stream family VERBATIM — the PLAIN stream_inbound (no CRC decorator; TCP provides
@@ -58,11 +47,12 @@ public:
     lwip_channel(S socket, freertos_executor &ex, plexus::io::endpoint remote, std::size_t read_buffer = lwip_channel_limits::read_buffer_bytes,
                  std::size_t max_message = lwip_channel_limits::max_message_bytes, std::size_t reassembly_budget = lwip_channel_limits::reassembly_bytes,
                  std::size_t egress_cap = lwip_channel_limits::egress_cap_bytes, plexus::io::congestion congestion = plexus::io::congestion::block)
-            : m_socket(std::move(socket))
+            : m_close(ex)
+            , m_socket(std::move(socket))
             , m_remote(std::move(remote))
             , m_read_buffer(read_buffer)
             , m_inbound(ex, plexus::stream::with_message_limits({}, max_message, reassembly_budget))
-            , m_egress(m_socket, m_on_error, egress_cap, congestion)
+            , m_egress(m_socket, m_on_error, [this](plexus::io::io_error e) { fail(e); }, egress_cap, congestion)
             , m_rx_pool(*this)
     {
         wire_inbound();
@@ -79,16 +69,22 @@ public:
 
     void send(std::span<const std::byte> framed)
     {
-        m_egress.send(framed);
+        if(!m_close.closed())
+            m_egress.send(framed);
     }
 
     void close()
     {
+        if(!m_close.enter())
+            return;
         m_inbound.shutdown();
         m_egress.close();
         m_socket.close();
-        if(m_on_closed)
-            m_on_closed();
+        m_on_data           = nullptr;
+        m_on_error          = nullptr;
+        m_on_protocol_close = nullptr;
+        // The notification does not yet wait for RX slots the receive task acquired: a feed it posted may still be queued.
+        m_close.notify();
     }
     plexus::io::endpoint remote_endpoint() const
     {
@@ -105,7 +101,7 @@ public:
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed = std::move(cb);
+        m_close.install(std::move(cb));
     }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
@@ -117,7 +113,7 @@ public:
     }
 
     // One cooperative super-loop step: a non-blocking recv into the fixed read buffer, fed to the
-    // reused stream_inbound. A hard connection drop (the socket's closed predicate) fires on_error
+    // reused stream_inbound. A hard connection drop (the socket's closed predicate) fails the channel
     // on a seam DISTINCT from on_protocol_close (the framing-violation seam stream_inbound owns).
     void poll()
     {
@@ -146,7 +142,8 @@ public:
     // release the slot back to the fixed pool. No per-recv heap — the bytes lived in pool storage.
     void feed_from_slot(rx_slot &slot)
     {
-        m_inbound.feed(std::span<const std::byte>{slot.buffer.data(), slot.len});
+        if(!m_close.closed())
+            m_inbound.feed(std::span<const std::byte>{slot.buffer.data(), slot.len});
         release_rx_slot(slot);
     }
 
@@ -158,25 +155,34 @@ public:
 
 private:
     // The shared recv + hard-drop classification both receive paths run: a recv into the caller's
-    // buffer, returning the byte count; a closed socket fires on_error on the connection-reset seam.
+    // buffer, returning the byte count; a closed socket fails the channel with connection_reset.
     template<typename Buffer>
     std::size_t recv_step(Buffer &buffer)
     {
         const std::size_t n = m_socket.recv(buffer);
-        if(n == 0 && m_socket.closed() && m_on_error)
-            m_on_error(plexus::io::io_error::connection_reset);
+        if(n == 0 && m_socket.closed())
+            fail(plexus::io::io_error::connection_reset);
         return n;
+    }
+
+    // The error handler is taken before the close detaches it and runs last, since it may tear the channel's owner down.
+    void fail(plexus::io::io_error e)
+    {
+        auto on_error = std::exchange(m_on_error, nullptr);
+        close();
+        if(on_error)
+            on_error(e);
     }
 
     void wire_inbound()
     {
-        detail::lwip_wire_inbound(m_inbound, m_on_data, m_on_protocol_close);
+        detail::lwip_wire_inbound(m_inbound, m_on_data, m_on_protocol_close, [this] { close(); });
     }
 
-    // m_on_error precedes m_egress: the egress borrows it by reference (hard send drop + block
-    // backpressure surface through it), so it must be constructed first.
+    // m_on_error precedes m_egress: the egress borrows it by reference (block backpressure surfaces
+    // through it), so it must be constructed first.
     detail::on_data_cb                                                 m_on_data;
-    plexus::detail::move_only_function<void()>                         m_on_closed;
+    detail::close_state                                                m_close;
     plexus::detail::move_only_function<void(plexus::io::io_error)>     m_on_error;
     detail::on_protocol_close_cb                                       m_on_protocol_close;
     S                                                                   m_socket;

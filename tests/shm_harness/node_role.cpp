@@ -30,6 +30,7 @@
 #include "plexus/io/reliability.h"
 #include "plexus/io/upgrade_channel.h"
 
+#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
 #include <span>
@@ -114,7 +115,8 @@ void run_test_member(const node_args &args, node_slot &slot, Bind bind)
     ::asio::io_context io;
     plexus::discovery::static_discovery disc{peer_cards(args)};
     plexus::native::shm_region_broker broker;
-    Member shm{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, bind(io)};
+    Member shm{broker, [&io](plexus::detail::move_only_function<void()> fn) { ::asio::post(io, std::move(fn)); }, plexus::io::reliability::reliable, plexus::io::congestion::block,
+               bind(io)};
     plexus::asio::unix_transport local{io};
     plexus::asio::asio_transport remote{io};
     plexus::node_options opts        = dial_opts();
