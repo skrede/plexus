@@ -12,13 +12,11 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/egress_capacity.h"
 
-#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/serial_port.hpp>
 
 #include <span>
 #include <vector>
-#include <memory>
 #include <utility>
 #include <cstddef>
 #include <system_error>
@@ -70,7 +68,7 @@ public:
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
             , m_max_frame_bytes(cfg.max_payload_size)
     {
-        wire_decorator();
+        detail::serial_wire_decorator(*this);
     }
 
     serial_channel(::asio::io_context &io, ::asio::serial_port connected, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
@@ -80,7 +78,7 @@ public:
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
             , m_max_frame_bytes(cfg.max_payload_size)
     {
-        wire_decorator();
+        detail::serial_wire_decorator(*this);
         // The adopt ctor's read loop, deferred until the decorator is constructed.
         start_read();
     }
@@ -109,20 +107,6 @@ public:
         detail::serial_do_read(*this);
     }
 
-    // The serial read-loop seam (reached by detail::serial_do_read).
-    ::asio::serial_port &serial_stream() noexcept
-    {
-        return stream();
-    }
-    std::vector<std::byte> &serial_read_buf() noexcept
-    {
-        return m_read_buf;
-    }
-    stream::crc_serial_inbound &serial_decorator() noexcept
-    {
-        return m_decorator;
-    }
-
     // The per-MESSAGE size ceiling for this leg (the inbound reassembler's max payload). The splice
     // gates an outbound forwarded envelope against this so a frame too large for the serial leg
     // drops-with-count rather than being sent and rejected at the peer's reassembler (a teardown).
@@ -132,29 +116,12 @@ public:
     }
 
 private:
-    void wire_decorator()
-    {
-        m_decorator.on_match([this](std::span<const std::byte> f) { post_frame(f); });
-        m_decorator.on_drop(
-                [this](wire::close_cause c)
-                {
-                    if(m_on_frame_dropped_cb)
-                        m_on_frame_dropped_cb(c);
-                });
-    }
-
-    // Post an owning copy so the bytes survive the deferred delivery — the read buffer is reused
-    // on the next read.
-    void post_frame(std::span<const std::byte> frame)
-    {
-        auto owned = std::make_shared<std::vector<std::byte>>(frame.begin(), frame.end());
-        ::asio::post(stream().get_executor(),
-                     [this, owned = std::move(owned)]
-                     {
-                         if(m_on_data_cb)
-                             m_on_data_cb(std::span<const std::byte>{*owned});
-                     });
-    }
+    template<typename Ch>
+    friend void detail::serial_do_read(Ch &);
+    template<typename Ch>
+    friend void detail::serial_post_frame(Ch &, std::span<const std::byte>);
+    template<typename Ch>
+    friend void detail::serial_wire_decorator(Ch &);
 
     stream::crc_serial_inbound m_decorator;
     std::vector<std::byte> m_read_buf;
