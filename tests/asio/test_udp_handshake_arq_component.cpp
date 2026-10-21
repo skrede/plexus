@@ -1,11 +1,14 @@
+#include "queued_teardown.h"
 #include "test_udp_handshake_arq_common.h"
+
+#include <cstdint>
 
 using namespace udp_handshake_arq_fixture;
 
+using arq_t = pasio::udp_transport::arq_type;
+
 TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired frame cancels it", "[udp][handshake]")
 {
-    using arq_t = plexus::datagram::detail::udp_handshake_arq<pasio::udp_policy>;
-
     SECTION("a paired frame mid-ladder establishes and stops further transmits")
     {
         ::asio::io_context io;
@@ -59,5 +62,40 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
         }
         io.poll(); // a canceled timer must not fire on a dead ARQ
         SUCCEED();
+    }
+}
+
+// The resolving action runs in the reactor pass that already queued the first retransmit expiry.
+TEST_CASE("udp handshake_arq component: a handshake ARQ whose retransmit expiry is already queued when it resolves does not retransmit", "[udp][handshake][!shouldfail]")
+{
+    for(std::int32_t i = 0; i < plexus::testing::k_teardown_iterations; ++i)
+    {
+        ::asio::io_context io;
+        arq_t arq{io, fast_ladder};
+        std::int32_t transmits = 0;
+        arq.on_transmit([&transmits] { ++transmits; });
+        arq.start();
+
+        plexus::testing::queued_action resolving{io, [&arq] { arq.on_paired_frame(); }};
+        resolving.run_after(ms{40});
+
+        CHECK(transmits == 1);
+    }
+}
+
+TEST_CASE("udp handshake_arq component: a handshake ARQ whose retransmit expiry is already queued when it is canceled does not retransmit", "[udp][handshake][!shouldfail]")
+{
+    for(std::int32_t i = 0; i < plexus::testing::k_teardown_iterations; ++i)
+    {
+        ::asio::io_context io;
+        arq_t arq{io, fast_ladder};
+        std::int32_t transmits = 0;
+        arq.on_transmit([&transmits] { ++transmits; });
+        arq.start();
+
+        plexus::testing::queued_action canceling{io, [&arq] { arq.cancel(); }};
+        canceling.run_after(ms{40});
+
+        CHECK(transmits == 1);
     }
 }
