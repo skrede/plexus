@@ -50,7 +50,6 @@ public:
             : m_timer(ex)
             , m_shut_down(false)
             , m_cfg(cfg)
-            , m_timer_generation(0)
             , m_pending()
             , m_reassembler(cfg.max_payload_size, cfg.buffered_bytes_cap)
             , m_armed_deadline(0)
@@ -81,7 +80,7 @@ public:
 
         if(result.error != wire::feed_error::none)
         {
-            cancel_timer();
+            m_timer.cancel();
             if(m_protocol_close_cb)
                 m_protocol_close_cb(wire::to_close_cause(result.error));
             return;
@@ -93,7 +92,7 @@ public:
     void shutdown()
     {
         m_shut_down = true;
-        cancel_timer();
+        m_timer.cancel();
         m_pending.close();
     }
 
@@ -106,7 +105,6 @@ private:
     Timer m_timer;
     bool m_shut_down;
     stream_inbound_config m_cfg;
-    std::uint64_t m_timer_generation;
     io::detail::pending_ops m_pending;
     wire::frame_reassembler m_reassembler;
     std::chrono::nanoseconds m_armed_deadline;
@@ -122,7 +120,7 @@ private:
             return;
         if(!m_reassembler.frame_in_progress())
         {
-            cancel_timer();
+            m_timer.cancel();
             m_armed_deadline = std::chrono::nanoseconds{0};
             return;
         }
@@ -152,35 +150,23 @@ private:
 
     void arm(std::chrono::nanoseconds d)
     {
-        const std::uint64_t gen = ++m_timer_generation;
         m_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(d));
         m_pending.begin();
-        m_timer.async_wait([this, gen](std::error_code ec) { on_expiry(gen, ec); });
+        m_timer.async_wait([this](std::error_code ec) { on_expiry(ec); });
         m_armed_deadline = d;
     }
 
     // The count ends first, on every completion, so pending() stays exact whatever the outcome; only
     // then does the object's own state decide whether the expiry acts.
-    void on_expiry(std::uint64_t gen, std::error_code ec)
+    void on_expiry(std::error_code ec)
     {
         m_pending.end();
-        if(ec || m_shut_down)
-            return;
-        // An already-expired timer's completion is queued with ec==success and cannot be
-        // recalled by cancel(); a generation bumped by any re-arm or cancel since this wait
-        // armed marks the completion stale, so it must not close a channel that moved on.
-        if(gen != m_timer_generation || !m_reassembler.frame_in_progress())
+        // Each wait completes exactly once and a single-threaded executor runs completions in order,
+        // so a wait still outstanding here was armed after this one and supersedes it.
+        if(ec || m_shut_down || m_pending.count() != 0 || !m_reassembler.frame_in_progress())
             return;
         if(m_protocol_close_cb)
             m_protocol_close_cb(wire::close_cause::no_progress_timeout);
-    }
-
-    // Bumping the generation defeats a stale queued expiry even across an equal-deadline re-arm,
-    // which m_timer.cancel() alone cannot do (it cannot recall an already-expired completion).
-    void cancel_timer()
-    {
-        ++m_timer_generation;
-        m_timer.cancel();
     }
 };
 
