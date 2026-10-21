@@ -12,6 +12,7 @@
 #include "plexus/io/subscription_endpoint.h"
 
 #include "plexus/io/detail/procedure_fanout.h"
+#include "plexus/io/detail/procedure_deadline.h"
 
 #include "plexus/log/logger.h"
 
@@ -124,7 +125,7 @@ public:
         detail::emit_rpc_call(*this, fqn, corr_id);
 
         auto [it, _] = per_peer.emplace(corr_id, pending_rpc{std::string{fqn}, std::move(on_response), std::make_unique<timer_type>(m_executor)});
-        arm_deadline(p.node_name, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
+        detail::arm_deadline(*this, p.node_name, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
     }
 
     // The relayed sibling of call(): with no direct session to the responder, mint the correlation, build
@@ -149,7 +150,7 @@ public:
         detail::emit_rpc_call(*this, fqn, corr_id);
 
         auto [it, _] = per_peer.emplace(corr_id, pending_rpc{std::string{fqn}, std::move(on_response), std::make_unique<timer_type>(m_executor)});
-        arm_deadline(key, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
+        detail::arm_deadline(*this, key, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
     }
 
     // Per-(peer, fqn) refcount gate: on 0->1 it emits a subscribe. A call() needs no prior attach.
@@ -318,33 +319,8 @@ private:
     friend void detail::send_data(F &, C &, wire::msg_type, std::span<const std::byte>, std::uint64_t);
     template<typename F, typename C>
     friend void detail::send_subscribe(F &, C &, std::string_view, std::uint64_t);
-
-    // The handler looks the entry up by (node_name, corr_id) rather than capturing it, which moves.
-    void arm_deadline(const std::string &node_name, std::uint64_t corr_id, timer_type &timer, std::chrono::nanoseconds deadline)
-    {
-        timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(deadline));
-        timer.async_wait(
-                [this, node_name, corr_id](std::error_code ec)
-                {
-                    if(ec)
-                        return;
-                    fire_timeout(node_name, corr_id);
-                });
-    }
-
-    // A no-op if the entry already resolved, so the expiry is idempotent against a cancel race.
-    void fire_timeout(const std::string &node_name, std::uint64_t corr_id)
-    {
-        auto peer_it = m_outstanding.find(node_name);
-        if(peer_it == m_outstanding.end())
-            return;
-        auto entry_it = peer_it->second.find(corr_id);
-        if(entry_it == peer_it->second.end())
-            return;
-        pending_rpc pending = std::move(entry_it->second);
-        peer_it->second.erase(entry_it);
-        pending.on_response(wire::rpc_status::timeout, {});
-    }
+    template<typename F>
+    friend void detail::fire_timeout(F &, const std::string &, std::uint64_t);
 
     wire::bidirectional_header request_header(std::string_view fqn, std::uint64_t corr_id)
     {

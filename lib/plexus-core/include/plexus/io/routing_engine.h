@@ -40,6 +40,7 @@
 #include "plexus/io/detail/routing_lifecycle.h"
 #include "plexus/io/detail/routing_relay_emit.h"
 #include "plexus/io/detail/routing_forward_rpc.h"
+#include "plexus/io/detail/routing_graph_change.h"
 #include "plexus/io/detail/routing_relay_demand.h"
 #include "plexus/io/detail/routing_sink_install.h"
 #include "plexus/io/detail/peer_report_consumers.h"
@@ -639,6 +640,12 @@ private:
     template<typename E>
     friend void detail::install_splice_refan(E &);
 
+    template<typename E>
+    friend void detail::fire_graph_wakeup(E &);
+
+    template<typename E>
+    friend void detail::sweep_aged_awareness(E &);
+
     bool demand_in_scope(const node_id &id, locality reach_mask) const
     {
         if(reach_mask == locality::any)
@@ -704,53 +711,7 @@ private:
         if(m_graph_wakeup_pending)
             return;
         m_graph_wakeup_pending = true;
-        Policy::post(m_executor, [this] { fire_graph_wakeup(); });
-    }
-
-    // The posted wakeup: fires the coarse edge once at the FINAL generation, then drains the host
-    // delta log to the opt-in observers. It walks the live observer list by index, not through
-    // detail::fan_out: fan_out's snapshot copy would allocate on every wakeup and the coarse path must
-    // stay allocation-free (the [this] closure fits move_only_function's SBO), while indexing survives
-    // a callback that (un)registers an observer. It re-reads known_peers/topic_table only, never
-    // slot_block, so a peer torn down before the drain cannot be re-entered.
-    void fire_graph_wakeup()
-    {
-        m_graph_wakeup_pending = false;
-        const std::uint64_t gen = m_graph_generation;
-        for(std::size_t i = 0; i < m_observers.size(); ++i)
-            m_observers[i].get().on_graph_changed(gen);
-        const auto deltas = m_graph_log.drain();
-        if(deltas.empty())
-            return;
-        for(std::size_t i = 0; i < m_observers.size(); ++i)
-        {
-            observer &o = m_observers[i].get();
-            if(o.observes_graph())
-                for(const graph::graph_change &delta : deltas)
-                    o.on_graph_delta(delta);
-        }
-        m_graph_log.clear();
-    }
-
-    // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was
-    // not refreshed by a heartbeat. A reported origin ages out the same way — its topics retire with
-    // it (a live reporter is the only refresh). NEVER touches m_registry — an active session outlives
-    // its awareness entry.
-    void sweep_aged_awareness()
-    {
-        const std::uint64_t now      = now_for_aging();
-        const std::uint64_t ttl      = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(m_liveliness.awareness_ttl).count());
-        const std::uint64_t deadline = now > ttl ? now - ttl : 0;
-        m_known_peers.expire_older_than(deadline,
-                                        [this](const node_id &id)
-                                        {
-                                            detail::release_all_reporter_load(*this, id);
-                                            m_peer_liveliness.note_awareness_lost(id);
-                                            detail::relay_withdraw(*this, id);
-                                            if(m_reported.erase(id) != 0)
-                                                m_topics.remove_node(id);
-                                            bump_graph_generation(true, id, graph::change_kind::disappeared);
-                                        });
+        Policy::post(m_executor, [this] { detail::fire_graph_wakeup(*this); });
     }
 };
 

@@ -55,6 +55,7 @@
 #include "plexus/detail/node_subscriptions.h"
 #include "plexus/detail/node_discovery_glue.h"
 #include "plexus/detail/node_upgrade_wiring.h"
+#include "plexus/detail/node_object_dispatch.h"
 #include "plexus/detail/node_self_carrier_sync.h"
 
 #include <span>
@@ -238,7 +239,7 @@ public:
         // The routes are installed and the card advertised synchronously in the ctor turn, before
         // any session is built (the set-before-listen contract).
         m_engine.on_message_route([this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info) { dispatch_message(fqn, bytes, info); });
-        m_engine.on_object_route([this](std::string_view fqn, const io::object_carrier &carrier) { dispatch_object(fqn, carrier); });
+        m_engine.on_object_route([this](std::string_view fqn, const io::object_carrier &carrier) { detail::dispatch_object(*this, fqn, carrier); });
         m_engine.add_observer(m_peer_watch);
         detail::advertise_card(*this);
         m_disc.browse([this](const discovery::service_info &peer) { detail::note_from_card(*this, peer); });
@@ -565,51 +566,6 @@ private:
                 sub.cb(bytes, info);
     }
 
-    // A native_key MATCH dispatches the concrete T for the callback's duration only (the session
-    // releases the slot right after); a MISMATCH is counted and warn-and-dropped, never a cast.
-    void dispatch_object(std::string_view fqn, const io::object_carrier &carrier)
-    {
-        detail::subscription_table::dispatch_guard guard{m_subscriptions};
-
-        // The receive clock is read at most once, and only if a matching subscriber wants
-        // message_info.
-        std::uint64_t reception = 0;
-        bool reception_read     = false;
-
-        for(auto &[rid, sub] : m_subscriptions.entries())
-        {
-            if(sub.fqn != fqn || sub.obj.native_key == nullptr || m_subscriptions.pending_removed(rid))
-                continue;
-            if(sub.obj.native_key != carrier.native_key)
-            {
-                ++m_object_dispatch_mismatch;
-                m_logger.warn("plexus: node object_native_key_mismatch");
-                continue;
-            }
-            sub.obj.dispatch(carrier, object_info_for(sub, carrier, reception, reception_read));
-        }
-    }
-
-    // reception / reception_read are threaded by reference so the receive clock is read once on
-    // first need and shared across the fan; a subscriber wanting no info gets a 0 stamp.
-    io::message_info object_info_for(const subscription &sub, const io::object_carrier &carrier, std::uint64_t &reception, bool &reception_read) const
-    {
-        io::message_info info{};
-        info.publication_sequence = carrier.sequence;
-        info.from_intra_process   = true;
-        if(sub.qos.wants_message_info)
-        {
-            if(!reception_read)
-            {
-                reception      = wire::now_timestamp_ns();
-                reception_read = true;
-            }
-            info.source_timestamp    = carrier.source_timestamp;
-            info.reception_timestamp = reception;
-        }
-        return info;
-    }
-
     // The registry-facing self-route: the concrete loopback channel on a single-transport node, or
     // the reference-adapter wrapper (the registry's polymorphic_byte_channel) on a multi-transport one.
     engine_channel &self_route() noexcept
@@ -636,7 +592,7 @@ private:
     {
         const std::string_view fqn = m_engine.messages().fqn_for(carrier.topic_hash);
         if(!fqn.empty())
-            dispatch_object(fqn, carrier);
+            detail::dispatch_object(*this, fqn, carrier);
     }
 
     // The bytes self-route: strip the frame header off the posted frame and route the inner through
@@ -857,6 +813,8 @@ private:
     friend void detail::teardown_shm_self_carrier(N &, const std::string &);
     template<typename N>
     friend void detail::self_carrier_bytes(N &, std::string_view, std::span<const std::byte>);
+    template<typename N>
+    friend void detail::dispatch_object(N &, std::string_view, const io::object_carrier &);
 };
 
 // Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this

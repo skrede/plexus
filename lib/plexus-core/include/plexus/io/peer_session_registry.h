@@ -27,8 +27,8 @@
 #include <memory>
 #include <string>
 #include <cstdint>
+#include <utility>
 #include <optional>
-#include <type_traits>
 
 namespace plexus::io {
 
@@ -54,7 +54,7 @@ public:
     {
         if(m_slots.find(id) != m_slots.end())
             return true;
-        if(endpoint_claimed(id, ep))
+        if(detail::endpoint_claimed(*this, id, ep))
         {
             m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
             return false;
@@ -68,13 +68,7 @@ public:
 
     void build_session_for_endpoint(const endpoint &ep, std::unique_ptr<channel_type> channel)
     {
-        for(auto &[id, slot] : m_slots)
-            if(slot->record.dial_endpoint == ep)
-            {
-                if(slot->driver.redial_denied())
-                    return;
-                return detail::build_session_into(*this, *slot, std::move(channel), false);
-            }
+        detail::build_for_endpoint(*this, ep, std::move(channel));
     }
 
     // Awareness for id was withdrawn: cancel an armed backoff and refuse a redial for its slot, so
@@ -89,18 +83,7 @@ public:
     template<typename PreBuild = std::nullptr_t>
     node_id accept_session(std::unique_ptr<channel_type> channel, PreBuild &&pre_build = nullptr)
     {
-        const node_id inbound_id = detail::inbound_slot_id(m_next_inbound++);
-        auto slot                = std::make_unique<slot_block>(m_transport, m_build, inbound_id, endpoint{}, node_name_of(inbound_id));
-        auto [it, inserted]      = m_slots.emplace(inbound_id, std::move(slot));
-        if(!inserted)
-        {
-            m_build.logger.warn("plexus: inbound id collision — accept dropped");
-            return inbound_id;
-        }
-        if constexpr(!std::is_null_pointer_v<std::decay_t<PreBuild>>)
-            pre_build(*channel, inbound_id);
-        detail::build_session_into(*this, *it->second, std::move(channel), true);
-        return inbound_id;
+        return detail::accept_into_slot(*this, std::move(channel), std::forward<PreBuild>(pre_build));
     }
 
     std::optional<node_id> id_for_endpoint(const endpoint &ep) const
@@ -206,14 +189,12 @@ private:
     friend void detail::fire_dead(R &, S &, const node_id &);
     template<typename R, typename S>
     friend void detail::build_session_into(R &, S &, std::unique_ptr<typename R::channel_type>, bool);
-
-    bool endpoint_claimed(const node_id &id, const endpoint &ep) const
-    {
-        for(const auto &[other, slot] : m_slots)
-            if(other != id && slot->record.dial_endpoint == ep)
-                return true;
-        return false;
-    }
+    template<typename R>
+    friend bool detail::endpoint_claimed(const R &, const node_id &, const endpoint &);
+    template<typename R>
+    friend void detail::build_for_endpoint(R &, const endpoint &, std::unique_ptr<typename R::channel_type>);
+    template<typename R, typename P>
+    friend node_id detail::accept_into_slot(R &, std::unique_ptr<typename R::channel_type>, P &&);
 };
 
 }

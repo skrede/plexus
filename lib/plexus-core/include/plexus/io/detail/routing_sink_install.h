@@ -14,6 +14,7 @@
 #include "plexus/io/detail/routing_lifecycle.h"
 #include "plexus/io/detail/routing_relay_emit.h"
 #include "plexus/io/detail/routing_forward_rpc.h"
+#include "plexus/io/detail/routing_graph_change.h"
 
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"
@@ -157,7 +158,7 @@ void install_routing_sinks(Engine &e)
                     detail::relay_reassert(e);
                     last_emit_ns = now;
                 }
-                e.sweep_aged_awareness();
+                detail::sweep_aged_awareness(e);
                 e.m_peer_liveliness.evaluate(now);
             });
     e.m_monitor.start();
