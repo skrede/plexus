@@ -21,7 +21,6 @@
 #include <cstring>
 #include <optional>
 #include <span>
-#include <thread>
 #include <utility>
 
 namespace plexus::shm {
@@ -134,13 +133,6 @@ public:
     }
 
 private:
-    // The cap on CONSECUTIVE no-progress yield turns before a still-congested reliable+block
-    // loan surfaces congested. Gated on consumer PROGRESS, not a fixed turn count: every time
-    // the slowest cursor advances the consumer freed a slot, so blocking stays LOSSLESS for any
-    // live-but-lagging consumer; the budget only elapses across a whole window of NO cursor
-    // motion (a wedged/dead peer), surfacing congested observably rather than hanging.
-    static constexpr int k_no_progress_budget = 1 << 16;
-
     Notifier &m_notifier;
     broadcast_ring &m_ring;
     slot_publisher m_publisher;
@@ -157,27 +149,8 @@ private:
             return st;
         reclaim_dead_cursors();
         do
-            st = loan_until_stalled(size, out);
+            st = m_publisher.loan_until_stalled(size, out);
         while(st == loan_status::congested && reclaim_dead_cursors());
-        return st;
-    }
-
-    loan_status loan_until_stalled(std::size_t size, loaned_buffer &out) noexcept
-    {
-        loan_status st          = m_publisher.loan(size, out);
-        std::uint64_t last_seen = m_publisher.slowest_consumer_position();
-        for(int stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget; ++stalled)
-        {
-            std::this_thread::yield();
-            st = m_publisher.loan(size, out);
-
-            const std::uint64_t now = m_publisher.slowest_consumer_position();
-            if(now != last_seen)
-            {
-                last_seen = now;
-                stalled   = -1; // a live consumer freed a slot: reset the window (++ returns it to 0)
-            }
-        }
         return st;
     }
 

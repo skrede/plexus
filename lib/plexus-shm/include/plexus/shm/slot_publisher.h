@@ -8,7 +8,9 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 
+#include <thread>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace plexus::shm {
@@ -71,7 +73,33 @@ public:
         return m_ring.slowest_consumer_position();
     }
 
+    loan_status loan_until_stalled(std::size_t size, loaned_buffer &out) noexcept
+    {
+        loan_status st          = loan(size, out);
+        std::uint64_t last_seen = slowest_consumer_position();
+        for(std::int32_t stalled = 0; st == loan_status::congested && stalled < k_no_progress_budget; ++stalled)
+        {
+            std::this_thread::yield();
+            st = loan(size, out);
+
+            const std::uint64_t now = slowest_consumer_position();
+            if(now != last_seen)
+            {
+                last_seen = now;
+                stalled   = -1; // a live consumer freed a slot: reset the window (++ returns it to 0)
+            }
+        }
+        return st;
+    }
+
 private:
+    // The cap on CONSECUTIVE no-progress yield turns before a still-congested reliable+block
+    // loan surfaces congested. Gated on consumer PROGRESS, not a fixed turn count: every time
+    // the slowest cursor advances the consumer freed a slot, so blocking stays LOSSLESS for any
+    // live-but-lagging consumer; the budget only elapses across a whole window of NO cursor
+    // motion (a wedged/dead peer), surfacing congested observably rather than hanging.
+    static constexpr std::int32_t k_no_progress_budget = 1 << 16;
+
     broadcast_ring &m_ring;
     io::reliability m_reliability;
     io::congestion m_congestion;

@@ -36,7 +36,7 @@ loan_status ring_consume(Ring &r, std::uint64_t cursor, typename Ring::consume_r
         return loan_status::empty;
     if(dif > 0)
     {
-        if(dif < static_cast<std::int64_t>(r.m_cell_count))
+        if(dif < static_cast<std::int64_t>(r.cell_count()))
             return loan_status::congested;
         // A lap leaves the producer's tail past the cursor. A sequence a lap ahead with no tail past the cursor is one no
         // producer wrote, and following it could walk a reader through the ring forever.
@@ -49,7 +49,7 @@ loan_status ring_consume(Ring &r, std::uint64_t cursor, typename Ring::consume_r
         return loan_status::congested;
 
     out.position = cursor;
-    out.slab     = r.slot_span(cursor).subspan(0, static_cast<std::size_t>(len > r.m_slot_capacity ? r.m_slot_capacity : len));
+    out.slab     = r.slot_span(cursor).subspan(0, static_cast<std::size_t>(len > r.slot_capacity() ? r.slot_capacity() : len));
     return loan_status::ok;
 }
 

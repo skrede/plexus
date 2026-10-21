@@ -80,17 +80,17 @@ loan_status claim_reliable(Ring &r, std::uint64_t &pos, typename Ring::claim_res
 {
     for(;;)
     {
-        if(!consumers_passed(*r.m_header, r.m_cell_count, pos))
+        if(!consumers_passed(r.header(), r.cell_count(), pos))
             return loan_status::congested;
-        if(!occupant_committed(r.cell_at(pos), pos, r.m_cell_count))
+        if(!occupant_committed(r.cell_at(pos), pos, r.cell_count()))
         {
-            const std::uint64_t now = r.m_header->enqueue_pos.load(std::memory_order_relaxed);
+            const std::uint64_t now = r.header().enqueue_pos.load(std::memory_order_relaxed);
             if(now == pos)
                 return loan_status::congested;
             pos = now;
             continue;
         }
-        if(!r.m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+        if(!r.header().enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
             continue;
         return clear_pin_or_skip(r, pos, out);
     }
@@ -102,9 +102,9 @@ loan_status claim_reliable(Ring &r, std::uint64_t &pos, typename Ring::claim_res
 template<typename Ring>
 bool await_committed_occupant(Ring &r, std::uint64_t &pos) noexcept
 {
-    for(std::uint32_t stalled = 0; !occupant_committed(r.cell_at(pos), pos, r.m_cell_count);)
+    for(std::uint32_t stalled = 0; !occupant_committed(r.cell_at(pos), pos, r.cell_count());)
     {
-        const std::uint64_t now = r.m_header->enqueue_pos.load(std::memory_order_relaxed);
+        const std::uint64_t now = r.header().enqueue_pos.load(std::memory_order_relaxed);
         stalled                 = now == pos ? stalled + 1 : 0;
         if(stalled >= Ring::k_pin_clear_spin_budget)
             return false;
@@ -124,7 +124,7 @@ loan_status claim_best_effort(Ring &r, std::uint64_t &pos, typename Ring::claim_
     {
         if(!await_committed_occupant(r, pos))
             return loan_status::congested;
-        if(!r.m_header->enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
+        if(!r.header().enqueue_pos.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed))
             continue;
         if(announce_and_check_pin(r.cell_at(pos), pos))
         {
@@ -133,9 +133,9 @@ loan_status claim_best_effort(Ring &r, std::uint64_t &pos, typename Ring::claim_
             return loan_status::ok;
         }
         stamp_skip(r.cell_at(pos), pos);
-        if(++skipped >= r.m_cell_count)
+        if(++skipped >= r.cell_count())
             return loan_status::congested;
-        pos = r.m_header->enqueue_pos.load(std::memory_order_relaxed);
+        pos = r.header().enqueue_pos.load(std::memory_order_relaxed);
     }
 }
 
@@ -158,7 +158,7 @@ loan_status claim_with_policy(Ring &r, std::size_t size, io::reliability rel, ty
 template<typename Ring>
 loan_status ring_commit(Ring &r, std::uint64_t position, std::size_t filled_len) noexcept
 {
-    if(filled_len > r.m_slot_capacity)
+    if(filled_len > r.slot_capacity())
         return loan_status::rejected;
 
     cell_t &c = r.cell_at(position);

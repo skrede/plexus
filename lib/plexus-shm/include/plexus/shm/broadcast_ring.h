@@ -113,6 +113,17 @@ public:
         detail::publish_cursor(*m_header, m_consumer_capacity, index, position);
     }
 
+    cell_t &cell_at(std::uint64_t position) noexcept
+    {
+        return m_cells[position & m_mask];
+    }
+
+    std::span<std::byte> slot_span(std::uint64_t position) noexcept
+    {
+        const std::size_t offset = static_cast<std::size_t>(position & m_mask) * m_stride;
+        return m_slab.subspan(offset, m_stride);
+    }
+
     std::atomic<std::uint32_t> &refcount_at(std::uint64_t position) noexcept
     {
         return cell_at(position).take_refcount;
@@ -168,31 +179,6 @@ private:
 
     template<typename R>
     friend void detail::bind_ring(R &, std::span<std::byte>, std::span<std::byte>, control_header_t *, cell_t *, std::uint64_t, std::uint64_t, std::uint64_t, std::uint64_t) noexcept;
-    template<typename R>
-    friend loan_status detail::claim_reliable(R &, std::uint64_t &, typename R::claim_result &) noexcept;
-    template<typename R>
-    friend loan_status detail::clear_pin_or_skip(R &, std::uint64_t, typename R::claim_result &) noexcept;
-    template<typename R>
-    friend bool detail::await_committed_occupant(R &, std::uint64_t &) noexcept;
-    template<typename R>
-    friend loan_status detail::claim_best_effort(R &, std::uint64_t &, typename R::claim_result &) noexcept;
-    template<typename R>
-    friend loan_status detail::ring_commit(R &, std::uint64_t, std::size_t) noexcept;
-    template<typename R>
-    friend void detail::ring_abandon(R &, std::uint64_t) noexcept;
-    template<typename R>
-    friend loan_status detail::ring_consume(R &, std::uint64_t, typename R::consume_result &) noexcept;
-
-    cell_t &cell_at(std::uint64_t position) noexcept
-    {
-        return m_cells[position & m_mask];
-    }
-
-    std::span<std::byte> slot_span(std::uint64_t position) noexcept
-    {
-        const std::size_t offset = static_cast<std::size_t>(position & m_mask) * m_stride;
-        return m_slab.subspan(offset, m_stride);
-    }
 };
 
 }
