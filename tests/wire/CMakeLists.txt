@@ -118,6 +118,7 @@ target_link_libraries(test_stream_inbound PRIVATE
     plexus::stream
     plexus::inproc
     Catch2::Catch2WithMain)
+target_include_directories(test_stream_inbound PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_stream_inbound TEST_PREFIX "wire.")
 
 # The handshake encode-into NOALLOC gate is isolated in its own executable:
