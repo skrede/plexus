@@ -136,9 +136,10 @@ public:
         dispatch(route_of(ep), [&](auto &m) { m.dial(ep); });
     }
 
+    // A member detached first retires whatever it still completes into its own table.
     void close()
     {
-        std::apply([](auto &...m) { (m.close(), ...); }, m_members);
+        std::apply([](auto &...m) { ((detail::unwire_member(m), m.close()), ...); }, m_members);
     }
 
     // Apply fn to each borrowed member by reference (cold-path): the caller selects the member it

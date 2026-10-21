@@ -6,7 +6,7 @@
 
 using namespace node_close_fixture;
 
-TEST_CASE("node_close a closed node's sessions drop at its peer and its slots hold no channel", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a closed node's sessions drop at its peer and its slots hold no channel", "[node][node_close]")
 {
     close_net net;
     net.connect();
@@ -19,7 +19,7 @@ TEST_CASE("node_close a closed node's sessions drop at its peer and its slots ho
     REQUIRE(net.live_channels() == 1);
 }
 
-TEST_CASE("node_close a closed node arms no redial however long its executor runs", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a closed node arms no redial however long its executor runs", "[node][node_close]")
 {
     close_net net;
     net.connect();
@@ -33,7 +33,7 @@ TEST_CASE("node_close a closed node arms no redial however long its executor run
     REQUIRE(net.b_sessions() == 0);
 }
 
-TEST_CASE("node_close close is idempotent and stops the node's discovery once", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close close is idempotent and stops the node's discovery once", "[node][node_close]")
 {
     close_net net;
     net.connect();
@@ -45,7 +45,7 @@ TEST_CASE("node_close close is idempotent and stops the node's discovery once", 
     REQUIRE(net.disc_b.stops() == 0);
 }
 
-TEST_CASE("node_close a closed composed node leaves no callback of its own on its member transports", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a closed composed node leaves no callback of its own on its member transports", "[node][node_close]")
 {
     inproc_bus<> bus;
     inproc_executor<> ex{bus};

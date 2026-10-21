@@ -9,6 +9,8 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/reconnect_config.h"
 
+#include "plexus/io/detail/pending_ops.h"
+
 #include <chrono>
 #include <random>
 #include <cstdint>
@@ -42,6 +44,7 @@ public:
             : m_transport(transport)
             , m_cfg(cfg)
             , m_endpoint(std::move(endpoint))
+            , m_ops()
             , m_backoff_timer(executor)
             , m_rng(seed)
     {
@@ -62,7 +65,7 @@ public:
     // queued — a use-after-free on the write completion.
     void start()
     {
-        if(m_dialing)
+        if(m_dialing || m_ops.closing())
             return;
         m_denied        = false;
         m_first_attempt = Clock::now();
@@ -95,6 +98,18 @@ public:
         return m_denied;
     }
 
+    // Denies every redial for good; pending() settles once an armed backoff wait has completed.
+    void close()
+    {
+        deny_redial();
+        m_ops.close();
+    }
+
+    io::detail::pending_ops &pending() noexcept
+    {
+        return m_ops;
+    }
+
     // A transport drop on an already-complete session. A clean/intentional close must NOT route
     // here — only a transport drop does, so a self-defending close never amplifies into a re-dial.
     void on_channel_dropped()
@@ -121,10 +136,12 @@ private:
         if(surrendered())
             return report_dead();
         m_backoff_timer.expires_after(compute_backoff(m_cfg, m_attempt, m_rng));
+        m_ops.begin();
         m_backoff_timer.async_wait(
                 [this](std::error_code ec)
                 {
-                    if(ec)
+                    m_ops.end();
+                    if(ec || m_denied)
                         return;
                     dial();
                 });
@@ -158,6 +175,7 @@ private:
     Transport &m_transport;
     reconnect_config m_cfg;
     io::endpoint m_endpoint;
+    io::detail::pending_ops m_ops;
     timer_type m_backoff_timer;
     std::mt19937_64 m_rng;
     typename Clock::time_point m_first_attempt{};

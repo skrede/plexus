@@ -42,6 +42,15 @@ void wire_member(Mux &mux, M &m)
             });
 }
 
+template<typename M>
+void unwire_member(M &m)
+{
+    m.on_accepted(nullptr);
+    m.on_dialed(nullptr);
+    m.on_dial_failed(nullptr);
+    m.on_error(nullptr);
+}
+
 template<typename Mux, std::size_t I, typename Candidates>
 void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidates &out, std::size_t &count)
 {

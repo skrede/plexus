@@ -33,6 +33,8 @@
 #include "plexus/graph/topic_type_table.h"
 #include "plexus/graph/vector_graph_change_log.h"
 
+#include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/routing_close.h"
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/routing_reports.h"
@@ -119,6 +121,7 @@ public:
             , m_messages(logger, global_default)
             , m_procedures(executor, handshake_timeout, logger)
             , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures, redial, redial_seed, logger, {}, {}, {}, {}, routes.usage == route_usage::never, {}, m_security_fanout, {}, {}}
+            , m_ops()
             , m_registry(transport, m_build)
             , m_monitor(m_executor)
             , m_peer_liveliness(m_liveliness)
@@ -191,6 +194,17 @@ public:
         if(!m_registry.ensure_slot(id, ep, node_name_of(id)))
             return;
         m_registry.driver_for(id).start();
+    }
+
+    // Detaches from the transport, then closes every slot and the transport without arming a redial.
+    void close()
+    {
+        detail::close_engine(*this);
+    }
+
+    bool closing() const noexcept
+    {
+        return m_ops.closing();
     }
 
     void note_peer(const node_id &id, const endpoint &ep)
@@ -474,6 +488,7 @@ private:
     message_forwarder<Policy> m_messages;
     procedure_forwarder<Policy> m_procedures;
     session_build_context<Policy> m_build;
+    io::detail::pending_ops m_ops;
     registry_type m_registry;
     basic_known_peers<PeerStorage> m_known_peers;
     graph::basic_topic_type_table<TopicStorage> m_topics;
@@ -639,6 +654,9 @@ private:
 
     template<typename E>
     friend void detail::install_splice_refan(E &);
+
+    template<typename E>
+    friend void detail::close_engine(E &);
 
     template<typename E>
     friend void detail::fire_graph_wakeup(E &);

@@ -11,6 +11,8 @@
 
 #include "plexus/node_id.h"
 
+#include "plexus/detail/compat.h"
+
 #include <memory>
 #include <string>
 #include <cstddef>
@@ -21,7 +23,8 @@ namespace plexus::io::detail {
 
 // The member order encodes the destruction discipline: session is destroyed first, so the record (whose channel/epoch
 // it borrows), the retired cell and the driver outlive every incarnation. A rebuild waits in parked until the old
-// session's waits have completed and retired is empty.
+// session's waits have completed and retired is empty. A denied or closing slot retires instead of building, and runs
+// on_emptied_cb once it holds nothing and its driver has settled.
 template<typename Policy, typename Transport, typename Clock>
 struct session_slot
 {
@@ -35,6 +38,7 @@ struct session_slot
             , parked()
             , session()
             , dead(false)
+            , on_emptied_cb()
     {
         record.peer_id       = id;
         record.node_name     = node_name;
@@ -47,6 +51,7 @@ struct session_slot
     std::unique_ptr<channel_type> parked;
     std::optional<peer_session<Policy>> session;
     bool dead;
+    plexus::detail::move_only_function<void()> on_emptied_cb;
 };
 
 inline node_id inbound_slot_id(std::uint64_t n)

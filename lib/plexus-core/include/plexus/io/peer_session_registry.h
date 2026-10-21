@@ -19,6 +19,7 @@
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
 #include "plexus/io/detail/peer_session_rebuild.h"
+#include "plexus/io/detail/peer_session_retire.h"
 
 #include "plexus/log/logger.h"
 
@@ -161,6 +162,11 @@ public:
                 return slot->driver.notify_dial_failed();
     }
 
+    void close(detail::pending_ops &owner)
+    {
+        detail::close_slots(*this, owner);
+    }
+
 private:
     using slot_block = detail::session_slot<Policy, Transport, Clock>;
 
@@ -193,8 +199,12 @@ private:
     friend bool detail::endpoint_claimed(const R &, const node_id &, const endpoint &);
     template<typename R>
     friend void detail::build_for_endpoint(R &, const endpoint &, std::unique_ptr<typename R::channel_type>);
-    template<typename R, typename P>
-    friend node_id detail::accept_into_slot(R &, std::unique_ptr<typename R::channel_type>, P &&);
+    template<typename R>
+    friend typename R::slot_block &detail::emplace_inbound_slot(R &);
+    template<typename R>
+    friend void detail::retire_unclaimed(R &, std::unique_ptr<typename R::channel_type>);
+    template<typename R>
+    friend void detail::close_slots(R &, detail::pending_ops &);
 };
 
 }

@@ -41,7 +41,7 @@ void require_retired(slot_rebuild_fixture &fx, slot_channel &channel, const chan
 
 }
 
-TEST_CASE("registry_retire a dialed channel for an endpoint no slot claims is retired, not destroyed", "[io][registry_retire][!shouldfail]")
+TEST_CASE("registry_retire a dialed channel for an endpoint no slot claims is retired, not destroyed", "[io][registry_retire]")
 {
     slot_rebuild_fixture fx;
     slot_channel &channel = dial_completion(fx, {"tcp", "203.0.113.9:4200"});
@@ -49,7 +49,7 @@ TEST_CASE("registry_retire a dialed channel for an endpoint no slot claims is re
     REQUIRE_FALSE(fx.registry.has_session(fx.peer));
 }
 
-TEST_CASE("registry_retire a dialed channel arriving after its slot's redial was denied is retired through the slot's cell", "[io][registry_retire][!shouldfail]")
+TEST_CASE("registry_retire a dialed channel arriving after its slot's redial was denied is retired through the slot's cell", "[io][registry_retire]")
 {
     slot_rebuild_fixture fx;
     fx.registry.deny_redial(fx.peer);
@@ -58,7 +58,7 @@ TEST_CASE("registry_retire a dialed channel arriving after its slot's redial was
     REQUIRE_FALSE(fx.registry.has_session(fx.peer));
 }
 
-TEST_CASE("registry_retire an accept whose next inbound id a slot already holds gets a fresh slot and a session", "[io][registry_retire][!shouldfail]")
+TEST_CASE("registry_retire an accept whose next inbound id a slot already holds gets a fresh slot and a session", "[io][registry_retire]")
 {
     slot_rebuild_fixture fx;
     const plexus::node_id taken = plexus::io::detail::inbound_slot_id(1);

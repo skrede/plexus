@@ -42,6 +42,7 @@
 #include "plexus/transport_priority.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/node_close.h"
 #include "plexus/detail/fail_closed.h"
 #include "plexus/detail/topic_sweep.h"
 #include "plexus/detail/address_parse.h"
@@ -260,25 +261,30 @@ public:
     basic_node(basic_node &&)                 = delete;
     basic_node &operator=(basic_node &&)      = delete;
 
-    // The peer watcher is deregistered FIRST so the teardown edge's observer snapshot (captured in
-    // place of the engine, which is destroyed before the executor drains the closure) holds only
-    // externally-owned observers that outlive the drain. A dtor must not throw — the post is wrapped.
+    // A dtor must not throw — the post is wrapped. A closed node posted its destroyed edge when it closed.
     ~basic_node()
     {
 #if defined(__cpp_exceptions)
         try
         {
-            m_engine.remove_observer(m_peer_watch);
-            m_engine.post_participant_teardown({io::participant_edge::destroyed, m_id});
+            if(!m_engine.closing())
+                detail::post_destroyed_edge(*this);
         }
         catch(...)
         {
         }
 #else
-        m_engine.remove_observer(m_peer_watch);
-        m_engine.post_participant_teardown({io::participant_edge::destroyed, m_id});
+        if(!m_engine.closing())
+            detail::post_destroyed_edge(*this);
 #endif
         detail::withdraw_fallback_counting(*this);
+    }
+
+    // Withdraws the node from discovery and closes every session, channel and transport it holds without arming a
+    // redial. A closed node is still destroyed with its executor not run again.
+    void close()
+    {
+        detail::close_node(*this);
     }
 
     // An advertised listen requires an EXPLICIT port ("host:port"): a port-0 auto-assign cannot be
@@ -815,6 +821,10 @@ private:
     friend void detail::self_carrier_bytes(N &, std::string_view, std::span<const std::byte>);
     template<typename N>
     friend void detail::dispatch_object(N &, std::string_view, const io::object_carrier &);
+    template<typename N>
+    friend void detail::post_destroyed_edge(N &);
+    template<typename N>
+    friend void detail::close_node(N &);
 };
 
 // Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this
