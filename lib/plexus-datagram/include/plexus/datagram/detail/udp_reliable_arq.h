@@ -3,6 +3,8 @@
 
 #include "plexus/policy.h"
 
+#include "plexus/io/detail/pending_ops.h"
+
 #include "plexus/datagram/detail/udp_rto_estimator.h"
 #include "plexus/datagram/detail/udp_reorder_buffer.h"
 
@@ -64,6 +66,7 @@ public:
             , m_next(initial_seq)
             , m_base(initial_seq)
             , m_rto(cfg.initial_rto, cfg.min_rto, cfg.max_rto)
+            , m_pending()
     {
         for(auto &s : m_slots)
             s.timer = std::make_unique<timer_type>(m_executor);
@@ -148,6 +151,12 @@ public:
         m_dead = true;
         for(auto &s : m_slots)
             s.timer->cancel();
+        m_pending.close();
+    }
+
+    plexus::io::detail::pending_ops &pending() noexcept
+    {
+        return m_pending;
     }
 
     std::size_t in_flight() const noexcept
@@ -181,11 +190,13 @@ private:
     {
         auto &s = m_slots[seq % m_window];
         s.timer->expires_after(m_rto.backed_off(s.retransmits)); // Karn backoff per retransmit
+        m_pending.begin();
         s.timer->async_wait(
                 [this, seq](std::error_code ec)
                 {
+                    m_pending.end();
                     if(ec || m_dead)
-                        return; // canceled by ack/teardown — never fire dead
+                        return;
                     on_rto(seq);
                 });
     }
@@ -268,6 +279,7 @@ private:
     std::uint16_t m_next{0};
     std::uint16_t m_base{0};
     udp_rto_estimator m_rto;
+    plexus::io::detail::pending_ops m_pending;
     bool m_dead{false};
     plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> m_on_transmit;
     plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;

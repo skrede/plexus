@@ -15,7 +15,9 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/datagram/detail/reassembler.h"
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
+#include "plexus/io/detail/close_notification.h"
 #include "plexus/datagram/detail/udp_reliable_arq.h"
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 #include "plexus/datagram/detail/udp_backpressure_queue.h"
@@ -85,8 +87,11 @@ public:
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_out_seq(0)
             , m_out_msg_id(0)
+            , m_ops()
+            , m_closed()
             , m_open(true)
     {
+        m_ops.on_settled([this] { detail::udp_notify_closed(*this); });
     }
 
     udp_channel(const udp_channel &)            = delete;
@@ -94,9 +99,6 @@ public:
     udp_channel(udp_channel &&)                 = delete;
     udp_channel &operator=(udp_channel &&)      = delete;
 
-    // LIFETIME: every inbound datagram posts a this-capturing delivery through post_on_data, so the
-    // owner MUST drain/quiesce the executor before destroying the channel — the dtor cannot cancel
-    // an already-posted handler (only the timers).
     ~udp_channel()
     {
         detail::udp_destroy(*this);
@@ -123,7 +125,7 @@ public:
 
     void close()
     {
-        detail::udp_close(*this);
+        detail::udp_close_with(*this, [] {});
     }
 
     // The scheme reflects the channel's mode: a best_effort channel reports "udp", a
@@ -152,7 +154,8 @@ public:
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed_cb = std::move(cb);
+        m_closed.install(std::move(cb));
+        detail::udp_notify_closed(*this);
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
@@ -171,7 +174,7 @@ public:
     }
 
     // The transport's private teardown seam: the transport demuxes inbound by endpoint to a
-    // NON-owning raw ref, and erases that ref here when the owner destroys the channel, so a later
+    // NON-owning raw ref, and erases that ref here when the channel closes, so a later
     // datagram is a clean MISS rather than a freed-pointer deref.
     void on_teardown(plexus::detail::move_only_function<void()> cb)
     {
@@ -208,7 +211,8 @@ public:
     // dropped (no on_protocol_close).
     void deliver_inbound(std::span<const std::byte> datagram)
     {
-        detail::deliver_inbound(*this, datagram);
+        if(m_open)
+            detail::deliver_inbound(*this, datagram);
     }
 
     // Unique per object, so a reconnect at a reused heap address cannot bleed a stale band entry
@@ -265,9 +269,11 @@ private:
     template<typename Ch>
     friend void detail::post_on_data_owned(Ch &, wire::shared_bytes);
     template<typename Ch>
-    friend void detail::udp_post_on_closed(Ch &);
+    friend void detail::udp_notify_closed(Ch &);
+    template<typename Ch, typename BeforeTeardown>
+    friend void detail::udp_close_with(Ch &, BeforeTeardown);
     template<typename Ch>
-    friend void detail::udp_close(Ch &);
+    friend void detail::udp_fail(Ch &, io::io_error);
     template<typename Ch>
     friend void detail::udp_destroy(Ch &);
     template<typename Ch>
@@ -314,8 +320,9 @@ private:
     std::vector<std::byte> m_frag_scratch;
     std::unique_ptr<arq_type> m_arq;
     std::unique_ptr<reassembler_type> m_reassembler;
+    io::detail::pending_ops m_ops;
+    io::detail::close_notification m_closed;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
-    plexus::detail::move_only_function<void()> m_on_closed_cb;
     plexus::detail::move_only_function<void()> m_on_teardown_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;

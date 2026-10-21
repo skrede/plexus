@@ -81,13 +81,6 @@ struct silent_peer
     }
 };
 
-void drain(::asio::io_context &io)
-{
-    io.restart();
-    io.poll();
-    io.run_for(50ms);
-}
-
 std::vector<std::byte> best_effort_datagram()
 {
     return plexus::wire::wrap_udp(plexus::wire::udp_envelope_kind::best_effort, 0, k_payload);
@@ -95,7 +88,7 @@ std::vector<std::byte> best_effort_datagram()
 
 }
 
-TEST_CASE("udp_retire_drain a delivery queued before close is not handed to the consumer", "[udp][teardown][!shouldfail]")
+TEST_CASE("udp_retire_drain a delivery queued before close is not handed to the consumer", "[udp][teardown]")
 {
     for(std::int32_t i = 0; i < k_teardown_iterations; ++i)
     {
@@ -104,22 +97,22 @@ TEST_CASE("udp_retire_drain a delivery queued before close is not handed to the 
         h.accepted->on_data([&delivered](std::span<const std::byte>) { ++delivered; });
         h.accepted->deliver_inbound(best_effort_datagram());
 
-        const auto outcome = retire_and_drain(h.accepted, [&] { drain(h.io); });
+        const auto outcome = retire_and_drain(h.accepted, [&] { h.drain(); });
 
         REQUIRE(outcome.erased == 1);
         CHECK(delivered == 0);
     }
 }
 
-TEST_CASE("udp_retire_drain a channel whose close notification already ran is still erased when retired", "[udp][teardown][!shouldfail]")
+TEST_CASE("udp_retire_drain a channel whose close notification already ran is still erased when retired", "[udp][teardown]")
 {
     for(std::int32_t i = 0; i < k_teardown_iterations; ++i)
     {
         loopback h;
         h.accepted->close();
-        drain(h.io);
+        h.drain();
 
-        const auto outcome = retire_and_drain(h.accepted, [&] { drain(h.io); });
+        const auto outcome = retire_and_drain(h.accepted, [&] { h.drain(); });
 
         CHECK(outcome.erased == 1);
         CHECK(outcome.empty);
@@ -127,7 +120,7 @@ TEST_CASE("udp_retire_drain a channel whose close notification already ran is st
 }
 
 // The retire runs in the reactor pass that already queued the retransmit expiry.
-TEST_CASE("udp_retire_drain a reliable channel closed in the pass that queued its retransmit sends nothing after close", "[udp][teardown][!shouldfail]")
+TEST_CASE("udp_retire_drain a reliable channel closed in the pass that queued its retransmit sends nothing after close", "[udp][teardown]")
 {
     for(std::int32_t i = 0; i < k_teardown_iterations; ++i)
     {
@@ -151,7 +144,7 @@ TEST_CASE("udp_retire_drain a reliable channel closed in the pass that queued it
 }
 
 // The retire runs in the reactor pass that already queued the reassembly timeout.
-TEST_CASE("udp_retire_drain a reassembly timeout queued in the closing pass reports no drop after close", "[udp][teardown][!shouldfail]")
+TEST_CASE("udp_retire_drain a reassembly timeout queued in the closing pass reports no drop after close", "[udp][teardown]")
 {
     std::vector<std::byte> first_of_two;
     plexus::wire::wrap_udp_fragment_into(first_of_two, plexus::wire::udp_envelope_kind::best_effort, 0, 1, 0, 2, k_payload);
@@ -170,5 +163,37 @@ TEST_CASE("udp_retire_drain a reassembly timeout queued in the closing pass repo
 
         REQUIRE(erased == 1);
         CHECK(drops == 0);
+    }
+}
+
+// A reliable channel with a delivery queued and a retransmit wait armed: the erase must be the last handler the drain runs.
+TEST_CASE("udp_retire_drain a retired channel's posts and timers all complete before its on_closed", "[udp][teardown]")
+{
+    for(std::int32_t i = 0; i < k_teardown_iterations; ++i)
+    {
+        silent_peer h{datagram::udp_channel_mode::reliable_datagram, {.initial_rto = 1000ms}, 1000ms};
+        std::int32_t delivered = 0;
+        h.channel->on_data([&delivered](std::span<const std::byte>) { ++delivered; });
+        h.channel->send(k_payload);
+        plexus::testing::pump_until(h.io, [&] { return h.peer.available() != 0; }, 5s);
+        h.channel->deliver_inbound(best_effort_datagram());
+
+        std::int32_t ran          = 0;
+        std::int32_t ran_at_erase = -1;
+        const auto drain_counting = [&]
+        {
+            h.io.restart();
+            while(h.io.poll_one() != 0)
+                ++ran;
+            while(h.io.run_one_for(20ms) != 0)
+                ++ran;
+        };
+        const auto outcome = retire_and_drain(h.channel, drain_counting, [&] { ran_at_erase = ran; });
+
+        REQUIRE(outcome.erased == 1);
+        REQUIRE(outcome.empty);
+        REQUIRE(delivered == 0);
+        REQUIRE(ran_at_erase >= 2);
+        REQUIRE(ran == ran_at_erase + 1);
     }
 }

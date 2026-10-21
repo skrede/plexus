@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_UDP_CHANNEL_IO_H
 
 #include "plexus/asio/detail/udp_channel_post.h"
+#include "plexus/asio/detail/udp_channel_lifecycle.h"
 
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
@@ -188,12 +189,7 @@ void ensure_arq(Ch &c)
                 c.m_server.send_to(c.m_ack_scratch, c.m_dest);
             });
     c.m_arq->on_deliver_seq([&c](std::uint16_t, bool fragmented, std::span<const std::byte> payload) { deliver_reliable_inorder(c, fragmented, payload); });
-    c.m_arq->on_exhausted(
-            [&c]
-            {
-                if(c.m_on_error_cb)
-                    c.m_on_error_cb(io::io_error::timed_out);
-            });
+    c.m_arq->on_exhausted([&c] { udp_fail(c, io::io_error::timed_out); });
     c.m_arq->on_window_advance([&c] { drain_backpressure(c); });
 }
 

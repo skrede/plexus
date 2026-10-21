@@ -51,8 +51,8 @@ void send_handshake(T &t, const typename T::endpoint_type &dest, typename T::hs_
     t.m_server.send_to(t.m_hs_scratch, dest);
 }
 
-// The engine owns the handed-out channel but the demux keeps a non-owning ref, so the channel's
-// dtor drops it; the identity-guarded erase leaves a same-endpoint re-dial untouched.
+// The demux keeps a non-owning ref the channel drops when it closes; the identity-guarded erase leaves a
+// same-endpoint re-dial untouched.
 template<typename T>
 void wire_teardown(T &t, udp_channel &ch, const typename T::endpoint_type &key)
 {

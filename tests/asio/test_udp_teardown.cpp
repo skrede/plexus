@@ -1,19 +1,11 @@
-// Teardown-discipline regression for the connectionless UDP transport demux lifetime.
-//
-// The transport shares ONE bound socket and demuxes inbound datagrams in userspace
-// (sender endpoint -> udp_channel*). On a successful accept/dial the channel's
-// unique_ptr is moved OUT to the engine while the demux keeps a NON-owning raw ref so
-// inbound keeps routing. If the engine destroys that completed channel mid-session
-// (any normal session teardown) BEFORE transport::close(), the next datagram from that
-// source must NOT dereference the freed pointer in on_datagram -> lookup ->
-// deliver_inbound. The structural fix erases the demux entry when the channel tears
-// down; this case is the proof (a heap-use-after-free under asan on the pre-fix code).
-//
-// The current udp transport suite never destroys a live completed channel mid-session,
-// so it never reaches this path. Looped to shake out any nondeterminism; the asan tree
-// (-fsanitize=address,undefined -fno-sanitize-recover=all) is where the UAF is caught.
+// The transport shares one bound socket and demuxes inbound datagrams to a non-owning udp_channel ref while the
+// engine owns the channel. A channel the engine retires mid-session (any normal session teardown) before
+// transport::close() leaves the demux when it closes, so the next datagram from that source is a clean miss rather
+// than a freed-pointer deref in on_datagram -> lookup -> deliver_inbound (a heap-use-after-free under asan).
 
 #include "udp_loopback.h"
+
+#include "support/retire_drain.h"
 
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_policy.h"
@@ -36,12 +28,14 @@
 #include <chrono>
 #include <memory>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 
 namespace pasio = plexus::asio;
 namespace pio   = plexus::io;
 
 using plexus::testing::loopback;
+using plexus::testing::retire_and_drain;
 
 namespace {
 
@@ -58,15 +52,10 @@ std::vector<std::byte> bytes_of(const std::string &s)
 
 }
 
-TEST_CASE("udp.teardown: an inbound datagram after the engine destroys a completed accepted "
+TEST_CASE("udp.teardown: an inbound datagram after the engine retires a completed accepted "
           "channel is safe, looped",
           "[udp][teardown]")
 {
-    // Complete the accept, then destroy the engine-owned accepted channel mid-session
-    // (the natural session-teardown reaction) and deliver a fresh datagram from the
-    // SAME source. Pre-fix: the demux still holds the freed accepted-channel pointer,
-    // so on_datagram -> lookup -> deliver_inbound is a heap-use-after-free (asan). The
-    // fix erases the demux entry on teardown, so the datagram resolves to a clean MISS.
     constexpr int k_iterations = 50;
     int survived               = 0;
     for(int i = 0; i < k_iterations; ++i)
@@ -75,10 +64,9 @@ TEST_CASE("udp.teardown: an inbound datagram after the engine destroys a complet
         REQUIRE(h.dialed != nullptr);
         REQUIRE(h.accepted != nullptr);
 
-        // Engine teardown: destroy the completed accepted channel while the dialer (and
+        // Engine teardown: retire the completed accepted channel while the dialer (and
         // the demux entry keyed on the dialer's source endpoint) are still live.
-        h.accepted.reset();
-        h.drain();
+        REQUIRE(retire_and_drain(h.accepted, [&] { h.drain(); }).erased == 1);
 
         // The dialer sends another frame: it arrives at the server from the SAME source
         // endpoint the demux is keyed on. The torn-down entry must be gone (a clean MISS),
@@ -115,14 +103,18 @@ TEST_CASE("udp.teardown: the transport stays healthy for a NEW peer after a comp
     plexus::testing::pump_until(io, [&] { return first_dialed != nullptr && accepted.size() == 1; }, std::chrono::seconds(5));
     REQUIRE(accepted.size() == 1);
 
-    // Tear the first accepted channel down, then bring up a fresh dialer.
-    accepted.clear();
-    for(int i = 0; i < 256; ++i)
+    // Retire the first accepted channel, then bring up a fresh dialer.
+    const auto drain = [&io]
     {
-        io.poll();
-        if(io.stopped())
-            io.restart();
-    }
+        for(std::int32_t i = 0; i < 256; ++i)
+        {
+            io.poll();
+            if(io.stopped())
+                io.restart();
+        }
+    };
+    REQUIRE(retire_and_drain(accepted.front(), drain).erased == 1);
+    accepted.clear();
 
     pasio::udp_transport second{io};
     std::unique_ptr<pasio::udp_channel> second_dialed;

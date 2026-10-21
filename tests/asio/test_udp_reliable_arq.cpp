@@ -1,21 +1,9 @@
-// The reliable-data ARQ over loss: the load-bearing beyond-parity proof. A
-// selective-repeat sliding window + a head-of-line reorder receiver + an adaptive RTO
-// (Karn) must deliver every reliable payload EXACTLY ONCE and IN PUBLISH ORDER over a
-// deterministically lossy/reordering/duplicating link. The loss is injected by a
-// programmable UDP relay (an extension of the handshake-ARQ lossy_relay): the handshake
-// and the acks always pass; the relay scripts per-data-segment actions (drop / reorder /
-// duplicate) so the test controls exactly which segments are lost or shuffled and the
-// ARQ retransmit/reorder is what restores order.
+// A selective-repeat sliding window + a head-of-line reorder receiver + an adaptive RTO (Karn) must deliver every
+// reliable payload exactly once and in publish order over a deterministically lossy/reordering/duplicating link. A
+// programmable UDP relay passes the handshake and the acks and scripts per-data-segment actions (drop / reorder /
+// duplicate), so the test controls which segments are lost or shuffled and the ARQ is what restores order.
 //
-// Each scenario loops 100 iterations in-body and the ctest invocation is re-run across
-// >=3 process runs (a transport/timing claim is NEVER made from a single run — the
-// scenarios use a deliberately lossy path, so the proof is reproducibility, not luck).
-//
-// Covered:
-//   (a) a single lost data segment is retransmitted and delivered in order;
-//   (b) out-of-order arrival behind a gap is held then released in order (HOL e2e);
-//   (c) a duplicated segment is deduped (delivered once);
-//   (d) all-loss for one segment exhausts the retransmit cap -> a connection-fatal error.
+// The scenarios use a deliberately lossy path, so each loops in-body and the ctest invocation is re-run >=3 times.
 
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_policy.h"
@@ -55,10 +43,8 @@ using ms = std::chrono::milliseconds;
 
 constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80}};
 
-// A compressed ARQ config so the loss legs run fast while exercising the SAME
-// selective-repeat/RTO/exhaustion mechanics as the swept production defaults: a small
-// initial RTO and a low retransmit cap keep the exhaustion leg sub-second. NOT a
-// mutable setter — bound at construction via the same structural seam production uses.
+// A compressed ARQ config so the loss legs run fast while exercising the same selective-repeat/RTO/exhaustion
+// mechanics as the swept production defaults, bound at construction through the seam production uses.
 inline plexus::datagram::detail::udp_arq_config fast_arq()
 {
     return plexus::datagram::detail::udp_arq_config{.window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 10};
@@ -96,9 +82,8 @@ enum class action
     hold
 };
 
-// A programmable loss-injecting relay between a dialing client and a real server. It
-// forwards every datagram both ways; for client->server DATA segments it consults a
-// scripted action queue (drop one, duplicate one, hold-then-release to reorder).
+// A loss-injecting relay between a dialing client and a real server. It forwards every datagram both ways; for
+// client->server data segments it consults a scripted action queue (drop, duplicate, hold-then-release to reorder).
 struct relay
 {
     ::asio::io_context &io;
@@ -202,9 +187,8 @@ struct relay
         }
     }
 
-    // Release every held segment (out of order, after later ones already passed) to
-    // exercise the receiver's reorder/HOL path end-to-end. Subsequent retransmits of the
-    // released seqs then pass normally (the hold no longer applies).
+    // Release every held segment out of order, after later ones already passed, to exercise the receiver's
+    // reorder/HOL path end-to-end. Later retransmits of the released seqs then pass normally.
     void release_held()
     {
         for(auto &h : held)
@@ -261,9 +245,8 @@ struct fixture
                     dialed = std::move(ch);
                     dialed->on_error([this](plexus::io::io_error e) { dialed_error = e; });
                 });
-        // Dial "udpr" so BOTH ends are reliable_datagram mode: the accepted channel must
-        // be reliable-mode to deliver the kind=1 ARQ segments (a best_effort channel drops
-        // them — the mode, not the envelope kind alone, gates the reliable path).
+        // Dial "udpr" so both ends are reliable_datagram mode: a best_effort accepted channel drops the kind=1 ARQ
+        // segments (the mode, not the envelope kind alone, gates the reliable path).
         client.dial({"udpr", "127.0.0.1:" + std::to_string(link->port())});
         plexus::testing::pump_until(io, [this] { return dialed && accepted; });
     }
@@ -345,8 +328,7 @@ TEST_CASE("udp reliable_arq: a duplicated segment is delivered exactly once", "[
         REQUIRE(f.dialed != nullptr);
         REQUIRE(f.accepted != nullptr);
 
-        // Duplicate every data segment at the relay: the receiver must deliver each
-        // payload exactly once (the reorder buffer drops the duplicate).
+        // Duplicate every data segment at the relay: the reorder buffer must drop each duplicate.
         f.link->data_script = {action::duplicate, action::duplicate, action::duplicate};
 
         std::vector<std::string> sent;
@@ -392,8 +374,7 @@ TEST_CASE("udp reliable_arq: exhausting the retransmit cap surfaces a connection
 
 TEST_CASE("udp reliable_arq: the bounded send window admits up to W then reports window_full", "[udp][reliable_arq]")
 {
-    // A pure engine unit (no socket): submit W payloads -> all admitted; the W+1th ->
-    // window_full (a non-blocking backpressure signal, NOT an io_context stall).
+    // A pure engine unit: the W+1th submit reports window_full, a non-blocking backpressure signal.
     ::asio::io_context io;
     using engine = plexus::datagram::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
     engine arq{io, plexus::datagram::detail::udp_arq_config{.window = 4}};
@@ -433,4 +414,23 @@ TEST_CASE("udp reliable_arq: an ack cumulative ahead of the highest-sent seq mus
     arq.cancel();
     io.poll();
     SUCCEED();
+}
+
+TEST_CASE("udp reliable_arq: cancel settles the wait count once, after the last aborted wait completed", "[udp][reliable_arq]")
+{
+    ::asio::io_context io;
+    using engine = plexus::datagram::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
+    engine arq{io, plexus::datagram::detail::udp_arq_config{.window = 4}};
+    std::int32_t settled = 0;
+    arq.pending().on_settled([&settled] { ++settled; });
+    auto one = bytes_of("x");
+    REQUIRE(arq.submit(one) == engine::submit_result::admitted);
+    REQUIRE(arq.submit(one) == engine::submit_result::admitted);
+    REQUIRE(arq.pending().count() == 2);
+
+    arq.cancel();
+    REQUIRE(settled == 0);
+    io.poll();
+    REQUIRE(settled == 1);
+    REQUIRE(arq.pending().count() == 0);
 }

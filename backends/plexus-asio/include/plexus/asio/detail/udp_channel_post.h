@@ -18,10 +18,14 @@ namespace plexus::asio::detail {
 template<typename Ch>
 void post_on_data(Ch &c, std::span<const std::byte> frame)
 {
+    if(!c.m_open)
+        return;
+    c.m_ops.begin();
     auto owned = std::make_shared<std::vector<std::byte>>(frame.begin(), frame.end());
     ::asio::post(c.m_io,
                  [&c, owned]
                  {
+                     c.m_ops.end();
                      if(c.m_on_data_cb)
                          c.m_on_data_cb(std::span<const std::byte>{*owned});
                  });
@@ -31,9 +35,13 @@ void post_on_data(Ch &c, std::span<const std::byte> frame)
 template<typename Ch>
 void post_on_data_owned(Ch &c, wire::shared_bytes owned)
 {
+    if(!c.m_open)
+        return;
+    c.m_ops.begin();
     ::asio::post(c.m_io,
                  [&c, owned = std::move(owned)]
                  {
+                     c.m_ops.end();
                      if(c.m_on_data_cb)
                          c.m_on_data_cb(static_cast<std::span<const std::byte>>(owned));
                  });

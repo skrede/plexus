@@ -48,14 +48,15 @@ target_link_libraries(test_udp_handshake_arq PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_handshake_arq TEST_PREFIX "udp.")
 
-# The teardown-discipline proof: an inbound datagram delivered AFTER the engine
-# destroys a completed accepted/dialed channel mid-session must resolve to a clean
-# demux MISS, never a freed-pointer deref (a heap-use-after-free under asan on the
-# pre-fix code). Run under the build-asan tree as the boundary proof.
+# The teardown-discipline proof: an inbound datagram delivered after the engine
+# retires a completed accepted/dialed channel mid-session must resolve to a clean
+# demux miss, never a freed-pointer deref (a heap-use-after-free under asan).
 add_executable(test_udp_teardown test_udp_teardown.cpp)
 target_link_libraries(test_udp_teardown PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
+target_include_directories(test_udp_teardown PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_udp_teardown TEST_PREFIX "udp.")
 
 # Retire-then-drain: a retired UDP channel hands nothing to its consumer after close, its reliable ARQ and reassembly
