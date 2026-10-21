@@ -104,7 +104,7 @@ catch_discover_tests(test_lwip_rx_task_seam TEST_PREFIX "seam.")
 # (poll-all never touches the freed view; the asan tree is the witness). The current source dir is on
 # the include path so the host listener/socket headers resolve. Registered under the `seam.` prefix.
 add_executable(test_lwip_accept_seam test_lwip_accept_seam.cpp)
-target_include_directories(test_lwip_accept_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(test_lwip_accept_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(test_lwip_accept_seam PRIVATE
     plexus::core
     plexus::wire

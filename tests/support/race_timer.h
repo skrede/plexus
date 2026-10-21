@@ -71,6 +71,11 @@ public:
         ex.register_timer(*this);
     }
 
+    race_timer(race_executor &ex, std::error_code &)
+            : race_timer(ex)
+    {
+    }
+
     race_timer(const race_timer &)            = delete;
     race_timer &operator=(const race_timer &) = delete;
 

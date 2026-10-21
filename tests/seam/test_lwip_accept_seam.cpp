@@ -17,6 +17,8 @@
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
 
+#include "support/retire_drain.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -139,4 +141,29 @@ TEST_CASE("lwip_transport clears an accepted channel's view on close so poll nev
     for(int turn = 0; turn < 10; ++turn)
         transport.poll(); // poll-all must not touch the freed view (asan-clean is the proof)
     SUCCEED();
+}
+
+TEST_CASE("lwip_transport leaves a closed channel's close notification to the owner that retires it", "[seam][!shouldfail]")
+{
+    plexus::freertos::freertos_executor ex;
+    accept_transport<> transport{ex};
+    host_tcp_listener  probe;
+    REQUIRE_FALSE(probe.bind_and_listen(plexus::io::endpoint{"tcp", "127.0.0.1:0"}));
+    const auto address = probe.local_endpoint();
+    probe.close();
+    transport.listen(address);
+
+    std::unique_ptr<lwip_channel> accepted;
+    transport.on_accepted([&](std::unique_ptr<lwip_channel> ch) { accepted = std::move(ch); });
+    host_tcp_socket client = dial_loopback(address);
+    plexus::test::poll_until([&] { transport.poll(); }, [&] { return !(!accepted); });
+    REQUIRE(accepted != nullptr);
+
+    accepted->close();
+    ex.drain();
+    const auto outcome = plexus::testing::retire_and_drain(accepted, [&ex] { ex.drain(); });
+    REQUIRE(outcome.erased == 1);
+    REQUIRE(outcome.empty);
+    for(int turn = 0; turn < 10; ++turn)
+        transport.poll();
 }
