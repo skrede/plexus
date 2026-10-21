@@ -132,7 +132,7 @@ public:
         m_messages.set_forward_options(forward);
         m_messages.set_consume_relayed(routes.usage != route_usage::never);
         detail::install_routing_sinks(*this);
-        detail::install_upgrade_retry(m_coordinator, m_retry_timer);
+        detail::install_upgrade_retry(m_coordinator, m_retry_timer, m_ops);
         detail::install_splice_refan(*this);
     }
 
@@ -201,7 +201,8 @@ public:
         detail::hang_up_endpoint(*this, ep);
     }
 
-    // Detaches from the transport, then closes every slot and the transport without arming a redial.
+    // Detaches from the transport, closes its timers and pending calls, then every slot and the transport without arming
+    // a redial. pending() settles once the last of them, and every observation posted meanwhile, has completed.
     void close()
     {
         detail::close_engine(*this);
@@ -210,6 +211,11 @@ public:
     bool closing() const noexcept
     {
         return m_ops.closing();
+    }
+
+    io::detail::pending_ops &pending() noexcept
+    {
+        return m_ops;
     }
 
     void note_peer(const node_id &id, const endpoint &ep)
@@ -463,12 +469,12 @@ public:
 
     void post_participant(const participant_event &ev)
     {
-        Policy::post(m_executor, [this, ev] { detail::fan_out(*this, [&](observer &o) { o.on_participant(ev); }); });
+        detail::post_counted(*this, [ev](routing_engine &e) { detail::fan_out(e, [&](observer &o) { o.on_participant(ev); }); });
     }
 
     void post_endpoint(std::string_view fqn, const endpoint_event &ev)
     {
-        Policy::post(m_executor, [this, fqn = std::string{fqn}, ev] { detail::fan_out(*this, [&](observer &o) { o.on_endpoint(fqn, ev); }); });
+        detail::post_counted(*this, [fqn = std::string{fqn}, ev](routing_engine &e) { detail::fan_out(e, [&](observer &o) { o.on_endpoint(fqn, ev); }); });
     }
 
     void post_participant_teardown(const participant_event &ev)
@@ -539,6 +545,9 @@ private:
 
     template<typename E, typename Deliver>
     friend void detail::fan_out(E &, Deliver);
+
+    template<typename E, typename Fn>
+    friend void detail::post_counted(E &, Fn);
 
     template<typename E>
     friend void detail::post_edge(E &, const lifecycle_event &, void (observer::*)(const node_id &, std::string_view, peer_kind));
@@ -737,7 +746,7 @@ private:
         if(m_graph_wakeup_pending)
             return;
         m_graph_wakeup_pending = true;
-        Policy::post(m_executor, [this] { detail::fire_graph_wakeup(*this); });
+        detail::post_counted(*this, [](routing_engine &e) { detail::fire_graph_wakeup(e); });
     }
 };
 

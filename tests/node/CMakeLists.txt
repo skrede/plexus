@@ -345,6 +345,15 @@ target_link_libraries(test_node_close_quiescence PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_close_quiescence TEST_PREFIX "node.")
 
+# A relay that closes withdraws none of the origins it reported, so its consumers see the path drop, not the origin leave.
+add_executable(test_node_close_relay test_node_close_relay.cpp)
+target_link_libraries(test_node_close_relay PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_node_close_relay TEST_PREFIX "node.")
+
 # The dispatch re-entrancy contract: a callback that subscribes a new endpoint (forcing the
 # subscription table to grow) or drops its own handle mid-fan is safe — delivery fans from a frozen
 # view and defers the edit to the outermost fan's exit. asan/ubsan is the load-bearing gate.

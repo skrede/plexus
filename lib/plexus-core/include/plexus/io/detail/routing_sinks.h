@@ -46,48 +46,44 @@ auto make_wire_sink(Engine &e, const node_id &peer)
 template<typename Engine>
 auto make_publish_sink(Engine &e)
 {
-    using policy_type = typename Engine::policy_type;
     return [&e](std::uint64_t hash, std::string_view fqn, const message_view &v)
     {
         if(!e.m_capture.should_emit(hash))
             return;
-        policy_type::post(e.m_executor, [&e, fqn = std::string{fqn}, v] { fan_out(e, [&](observer &o) { o.on_message_published(fqn, v); }); });
+        post_counted(e, [fqn = std::string{fqn}, v](Engine &eng) { fan_out(eng, [&](observer &o) { o.on_message_published(fqn, v); }); });
     };
 }
 
 template<typename Engine>
 auto make_deliver_sink(Engine &e)
 {
-    using policy_type = typename Engine::policy_type;
     return [&e](std::uint64_t hash, std::string_view fqn, const message_info &info, const message_view &v)
     {
         if(!e.m_capture.should_emit(hash))
             return;
-        policy_type::post(e.m_executor, [&e, fqn = std::string{fqn}, info, v] { fan_out(e, [&](observer &o) { o.on_message_delivered(fqn, info, v); }); });
+        post_counted(e, [fqn = std::string{fqn}, info, v](Engine &eng) { fan_out(eng, [&](observer &o) { o.on_message_delivered(fqn, info, v); }); });
     };
 }
 
 template<typename Engine>
 auto make_qos_change_sink(Engine &e)
 {
-    using policy_type = typename Engine::policy_type;
     return [&e](const qos_change_event &ev)
     {
         if(e.m_capture.observers_present() == 0)
             return;
-        policy_type::post(e.m_executor, [&e, ev] { fan_out(e, [&](observer &o) { o.on_qos_change(ev); }); });
+        post_counted(e, [ev](Engine &eng) { fan_out(eng, [&](observer &o) { o.on_qos_change(ev); }); });
     };
 }
 
 template<typename Engine, typename Edge>
 auto make_rpc_sink(Engine &e, Edge edge)
 {
-    using policy_type = typename Engine::policy_type;
     return [&e, edge](std::string_view fqn, const auto &v)
     {
         if(e.m_capture.observers_present() == 0)
             return;
-        policy_type::post(e.m_executor, [&e, edge, fqn = std::string{fqn}, v] { fan_out(e, [&](observer &o) { (o.*edge)(fqn, v); }); });
+        post_counted(e, [edge, fqn = std::string{fqn}, v](Engine &eng) { fan_out(eng, [&](observer &o) { (o.*edge)(fqn, v); }); });
     };
 }
 

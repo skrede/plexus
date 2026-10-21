@@ -11,6 +11,7 @@
 #include "plexus/io/subscriber_registry.h"
 #include "plexus/io/subscription_endpoint.h"
 
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/procedure_fanout.h"
 #include "plexus/io/detail/procedure_deadline.h"
 
@@ -73,6 +74,7 @@ public:
             , m_max_outstanding(max_outstanding)
             , m_next_correlation_id{1}
             , m_default_deadline(default_deadline)
+            , m_ops()
     {
     }
 
@@ -115,6 +117,8 @@ public:
     void call(const peer &p, std::string_view fqn, std::span<const std::byte> param, on_response_fn on_response, std::optional<std::chrono::nanoseconds> deadline = std::nullopt,
               std::uint64_t session_id = 0)
     {
+        if(m_ops.closing())
+            return on_response(wire::rpc_status::canceled, {});
         auto &per_peer = m_outstanding[p.node_name];
         if(per_peer.size() >= m_max_outstanding)
             return on_response(wire::rpc_status::error, {});
@@ -137,6 +141,8 @@ public:
     void forward_call(const node_id &destination, std::string_view fqn, std::span<const std::byte> param, on_response_fn on_response,
                       std::optional<std::chrono::nanoseconds> deadline = std::nullopt)
     {
+        if(m_ops.closing())
+            return on_response(wire::rpc_status::canceled, {});
         const std::string key = node_name_of(destination);
         auto &per_peer        = m_outstanding[key];
         if(per_peer.size() >= m_max_outstanding)
@@ -259,6 +265,18 @@ public:
         pending.on_response(decoded->status, decoded->return_data);
     }
 
+    // Every pending call completes once with canceled, and so does every later call; pending() settles once the canceled
+    // deadline waits have completed.
+    void close()
+    {
+        detail::close_forwarder(*this);
+    }
+
+    io::detail::pending_ops &pending() noexcept
+    {
+        return m_ops;
+    }
+
     // Introspection: the total pending calls across peers. A relay that only re-forwards holds none, so
     // this stays zero on the relay reply path — the stateless-reply invariant, observable in a test.
     std::size_t outstanding() const noexcept
@@ -299,6 +317,7 @@ private:
     std::vector<std::byte> m_resp_scratch;
     std::vector<std::byte> m_frame_scratch;
     std::chrono::nanoseconds m_default_deadline;
+    io::detail::pending_ops m_ops;
     forward_rpc_fn m_forward_rpc;
     std::unordered_map<std::string, handler_fn> m_providers;
     std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;
@@ -321,6 +340,8 @@ private:
     friend void detail::send_subscribe(F &, C &, std::string_view, std::uint64_t);
     template<typename F>
     friend void detail::fire_timeout(F &, const std::string &, std::uint64_t);
+    template<typename F>
+    friend void detail::close_forwarder(F &);
 
     wire::bidirectional_header request_header(std::string_view fqn, std::uint64_t corr_id)
     {

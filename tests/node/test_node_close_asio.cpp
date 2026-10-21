@@ -25,6 +25,7 @@
 #include <chrono>
 #include <string>
 #include <cstddef>
+#include <memory>
 #include <cstdint>
 #include <optional>
 
@@ -64,15 +65,14 @@ void poll_for(::asio::io_context &io, std::chrono::milliseconds span, plexus::pu
 
 }
 
-TEST_CASE("node_close a TCP node destroyed inside its on_closed while its peer keeps running is ASan-clean", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a TCP node destroyed inside its on_closed while its peer keeps running is ASan-clean", "[node][node_close]")
 {
     ::asio::io_context io;
     plexus::discovery::static_discovery disc_a{{}};
     plexus::discovery::static_discovery disc_b{{}};
     plexus::asio::asio_transport ta{io};
     plexus::asio::asio_transport tb{io};
-    std::optional<tcp_node> a;
-    a.emplace(io, disc_a, make_id(0x0A), ta, tcp_opts());
+    auto a = std::make_unique<tcp_node>(io, disc_a, make_id(0x0A), ta, tcp_opts());
     tcp_node b{io, disc_b, make_id(0x0B), tb, tcp_opts()};
 
     a->listen({"tcp", "127.0.0.1:0"});
@@ -107,7 +107,7 @@ TEST_CASE("node_close a TCP node destroyed inside its on_closed while its peer k
                       });
     close_or_fail(*a);
     REQUIRE(plexus::testing::pump_until(io, [&] { return closed; }));
-    REQUIRE_FALSE(a.has_value());
+    REQUIRE(a == nullptr);
     REQUIRE(completed == 1);
 
     poll_for(io, 300ms, pub);

@@ -26,18 +26,37 @@ void fire_timeout(Forwarder &f, const std::string &node_name, std::uint64_t corr
     pending.on_response(wire::rpc_status::timeout, {});
 }
 
-// The handler looks the entry up by (node_name, corr_id) rather than capturing it, which moves.
+// The handler looks the entry up by (node_name, corr_id) rather than capturing it, which moves. Each wait is one
+// operation of the forwarder, which outlives the entry's timer.
 template<typename Forwarder>
 void arm_deadline(Forwarder &f, const std::string &node_name, std::uint64_t corr_id, typename Forwarder::timer_type &timer, std::chrono::nanoseconds deadline)
 {
     timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(deadline));
+    f.pending().begin();
     timer.async_wait(
             [&f, node_name, corr_id](std::error_code ec)
             {
-                if(ec)
-                    return;
-                detail::fire_timeout(f, node_name, corr_id);
+                f.pending().end();
+                if(!ec)
+                    detail::fire_timeout(f, node_name, corr_id);
             });
+}
+
+// The count closes after every timer was canceled and before any call completes, so a call a completion issues
+// completes at once with canceled instead of arming a wait.
+template<typename Forwarder>
+void close_forwarder(Forwarder &f)
+{
+    if(f.m_ops.closing())
+        return;
+    auto detached = std::exchange(f.m_outstanding, {});
+    for(auto &[node_name, per_peer] : detached)
+        for(auto &[corr_id, pending] : per_peer)
+            pending.timer->cancel();
+    f.m_ops.close();
+    for(auto &[node_name, per_peer] : detached)
+        for(auto &[corr_id, pending] : per_peer)
+            pending.on_response(wire::rpc_status::canceled, {});
 }
 
 }

@@ -80,7 +80,8 @@ std::shared_ptr<void> mint_self_reader(Node &n, const std::string &fqn)
 
 // The node's own subscriber holds the topic's lane as its self-route and reads the same ring as one more consumer, so
 // one write serves the node and every co-host reader. Its latched replay reaches the node alone, on a later executor turn
-// as a ring frame would. A lost ring tears the carrier down; the next pub/sub seam that re-drives the sync installs it.
+// as a ring frame would, as one operation of the node. A lost ring tears the carrier down; the next pub/sub seam that
+// re-drives the sync installs it.
 template<typename Node>
 void install_shm_self_carrier(Node &n, const std::string &fqn)
 {
@@ -92,7 +93,17 @@ void install_shm_self_carrier(Node &n, const std::string &fqn)
         return n.m_engine.coordinator().release_self(fqn);
     n.m_self_carriers.insert_or_assign(fqn, std::move(reader));
     auto replay = [&n, fqn](std::span<const std::byte> framed)
-    { Node::policy_type::post(n.m_executor, [&n, fqn, owned = std::vector<std::byte>(framed.begin(), framed.end())] { self_carrier_bytes(n, fqn, owned); }); };
+    {
+        if(n.m_ops.settled())
+            return;
+        n.m_ops.begin();
+        Node::policy_type::post(n.m_executor,
+                                [&n, fqn, owned = std::vector<std::byte>(framed.begin(), framed.end())]
+                                {
+                                    n.m_ops.end();
+                                    self_carrier_bytes(n, fqn, owned);
+                                });
+    };
     n.m_engine.messages().attach_local(fqn, *lane, n.m_service_name, n.m_subscriptions.qos_for(fqn), n.m_subscriptions.type_id_for(fqn), replay);
 }
 

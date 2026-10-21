@@ -9,6 +9,7 @@
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/liveness_storage.h"
 
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/liveliness_scan.h"
 #include "plexus/io/detail/endpoint_liveness.h"
 
@@ -33,12 +34,25 @@ public:
             : m_executor(executor)
             , m_tick(m_executor)
             , m_granularity(k_tick_granularity)
+            , m_ops()
     {
     }
 
     void start()
     {
         arm_tick();
+    }
+
+    // The tick never re-arms once shut down; pending() settles once its last wait has completed.
+    void shutdown()
+    {
+        m_tick.cancel();
+        m_ops.close();
+    }
+
+    io::detail::pending_ops &pending() noexcept
+    {
+        return m_ops;
     }
 
     // A 0 period leaves the axis inert (it never fires).
@@ -96,11 +110,15 @@ private:
 
     void arm_tick()
     {
+        if(m_ops.closing())
+            return;
         m_tick.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(m_granularity));
+        m_ops.begin();
         m_tick.async_wait(
                 [this](std::error_code ec)
                 {
-                    if(!ec)
+                    m_ops.end();
+                    if(!ec && !m_ops.closing())
                         on_tick();
                 });
     }
@@ -122,6 +140,7 @@ private:
     executor_type m_executor;
     timer_type m_tick;
     std::chrono::nanoseconds m_granularity;
+    io::detail::pending_ops m_ops;
     Storage m_storage;
     plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
     plexus::detail::move_only_function<void()> m_on_tick_action;

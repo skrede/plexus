@@ -17,10 +17,14 @@ void relay_send(Engine &e, typename Engine::session_type &s, const wire::peer_re
 }
 
 // Send one report to every connected session but the origin's own — an origin is never announced
-// back to itself. The encode is per-broadcast, off the emitted report only.
+// back to itself. The encode is per-broadcast, off the emitted report only. A closing relay sends
+// none: its sessions end together, and a withdrawal would tell a peer the origin left when only
+// this path did.
 template<typename Engine>
 void relay_broadcast(Engine &e, const wire::peer_report &pr)
 {
+    if(e.closing())
+        return;
     auto bytes = wire::encode_peer_report(pr);
     e.m_registry.for_each_connected(
             [&](const node_id &, typename Engine::session_type &s)

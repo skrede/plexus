@@ -19,8 +19,6 @@
 #include "plexus/node_options.h"
 #include "plexus/target_profile.h"
 
-#include "plexus/io/detail/channel_graveyard.h"
-
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/graph/participant_record.h"
@@ -31,7 +29,6 @@
 
 #include <span>
 #include <array>
-#include <memory>
 #include <string>
 #include <cstddef>
 #include <cstdint>
@@ -40,7 +37,6 @@
 #include <algorithm>
 #include <string_view>
 #include <type_traits>
-#include <initializer_list>
 
 namespace forward_serial_e2e_fixture {
 
@@ -111,8 +107,9 @@ inline const graph::participant_record *find_participant(const consumer_node &c,
 }
 
 // Three fresh nodes plus their borrowed substrate, reconstructed per run. bring_up_serial and bring_up_tcp establish
-// the two live sessions cold; kill_origin tears the origin down so the relay withdraws the relayed peer over session B.
-// A cluster is destroyed without its executor running again, so no completion reaches a destroyed node or channel.
+// the two live sessions cold; kill_origin closes the origin so the relay withdraws the relayed peer over session B. A
+// killed node is closed and destroyed once nothing of it is left to run; the cluster itself is destroyed without its
+// executor running again.
 struct cold_cluster
 {
     ::asio::io_context io;
@@ -151,7 +148,6 @@ struct cold_cluster
     std::optional<consumer_node> origin2;
 
     std::uint16_t tcp_port{0};
-    plexus::io::detail::channel_graveyard<pasio::asio_channel, 4> refused;
 
     explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct, plexus::io::route_usage origin_usage = plexus::io::route_usage::prefer_direct)
             : consumer{io, cdisc, consumer_id, consumer_tcp, logged(usage_options("consumer", consumer_usage), consumer_log)}
@@ -225,35 +221,30 @@ struct cold_cluster
         pump([&] { return connected(*origin2, relay_id) && connected(*relay, origin2_id); });
     }
 
-    // A node is destroyed only once its channels went quiet: no redial is left to reopen a line, the sessions to the
-    // given peers close their channels in that order, and the settle runs the aborted completions.
     template<typename Node>
-    void quiesce(Node &n, std::initializer_list<node_id> peers)
+    void destroy_once_closed(std::optional<Node> &n)
     {
-        auto &registry = n.router().registry();
-        registry.for_each_connected([&](const node_id &slot, auto &) { registry.deny_redial(slot); });
-        for(const node_id &peer : peers)
-            if(auto *session = session_to(n, peer))
-                session->tear_down();
-        serial_fixture::settle(io, std::chrono::milliseconds(20));
+        bool closed = false;
+        n->on_closed([&closed] { closed = true; });
+        pump([&] { return closed; });
+        n.reset();
     }
 
     // The relay observes the origin's line close and withdraws the relayed peer.
     void kill_origin()
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
-        quiesce(*origin, {relay_id});
-        origin.reset();
+        origin->close();
+        destroy_once_closed(origin);
     }
 
-    // The serial session closes last, so its withdrawal reaches no consumer and the origin degrades to
-    // UNREACHABLE-NOT-DEAD (a serial-leg-down retires it to disappeared); the outliving listener retires late accepts.
+    // A closing relay withdraws no origin, so the consumer sees only the path drop and the origin degrades to
+    // UNREACHABLE-NOT-DEAD (a serial-leg-down retires it to disappeared).
     void kill_relay()
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
-        relay_tcp.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) { refused.retire(std::move(ch)); });
-        quiesce(*relay, {consumer_id, origin2_id, origin_id});
-        relay.reset();
+        relay->close();
+        destroy_once_closed(relay);
     }
 
     // Reconstruct the relay under the SAME identity on fresh transports and re-establish BOTH legs, so the consumer can

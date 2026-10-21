@@ -88,6 +88,14 @@ private:
     }
 };
 
+// The component counts as one operation of its owner until it settles. The hook is installed when the owner closes,
+// after the begin, so an owner destroyed without closing never ends a count it did not begin.
+inline void hold_until_settled(pending_ops &owner, pending_ops &component)
+{
+    owner.begin();
+    component.on_settled([&owner] { owner.end(); });
+}
+
 }
 
 #endif

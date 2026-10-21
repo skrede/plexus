@@ -156,11 +156,10 @@ struct relay_posture
     bool        declining;
 };
 
-// LIFETIME: the node BORROWS its executor, discovery, and transport leaves and OWNS only the
-// engine and (for >1 transport) the multiplexing glue. Every engine callback is POSTED on the
-// borrowed executor and captures `this`. The borrowed substrate MUST outlive the node, and the
-// executor MUST be drained before the node is destroyed — the structural single-owner
-// discipline. The node pins `this` into those callbacks, so it is non-copyable and non-movable.
+// LIFETIME: the node BORROWS its executor, discovery, and transport leaves, which MUST outlive it, and OWNS only the
+// engine and (for >1 transport) the multiplexing glue. Its posts and waits capture `this`, so it is non-copyable and
+// non-movable. A closed node may be destroyed inside or after its on_closed while the executor keeps running; a node
+// never closed is destroyed only with its executor not run again.
 template<typename Profile, typename... Transports>
     requires detail::target_profile<Profile> && (sizeof...(Transports) >= 1) &&
         (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, typename detail::profile_traits<Profile>::policy> : (io::mux_member<Transports> && ...))
@@ -228,6 +227,8 @@ public:
             , m_service_name(opts.name.empty() ? io::node_name_of(id) : opts.name)
             , m_max_message_bytes(opts.max_message_bytes)
             , m_wire_crypto_position(opts.wire.position)
+            , m_ops()
+            , m_close_notification()
             // The leaves are BORROWED three ways and never consumed (mux glue, resolve_hook's
             // by-ref capture, engine_leaf's re-read), so a future edit must NOT move into the mux
             // ctor — that would invalidate the subsequent engine_leaf / resolve_hook reads.
@@ -280,11 +281,18 @@ public:
         detail::withdraw_fallback_counting(*this);
     }
 
-    // Withdraws the node from discovery and closes every session, channel and transport it holds without arming a
-    // redial. A closed node is still destroyed with its executor not run again.
+    // Withdraws the node from discovery and closes every session, channel, transport, timer and pending call it holds
+    // without arming a redial. on_closed then fires once, posted, after the last of them has completed.
     void close()
     {
         detail::close_node(*this);
+    }
+
+    // A handler installed after the node settled is posted when installed; a delivered notification never repeats.
+    void on_closed(plexus::detail::move_only_function<void()> cb)
+    {
+        m_close_notification.install(std::move(cb));
+        detail::notify_node_closed(*this);
     }
 
     // An advertised listen requires an EXPLICIT port ("host:port"): a port-0 auto-assign cannot be
@@ -756,6 +764,8 @@ private:
     std::vector<discovery::listening_transport> m_listens;
     std::size_t m_max_message_bytes;
     wire_crypto_position m_wire_crypto_position;
+    io::detail::pending_ops m_ops;
+    io::detail::close_notification m_close_notification;
 
     // The non-movable mux is never a prvalue, so the empty single-transport glue keeps its
     // zero-size overlap under [[no_unique_address]].
@@ -832,6 +842,10 @@ private:
     friend void detail::post_destroyed_edge(N &);
     template<typename N>
     friend void detail::close_node(N &);
+    template<typename N>
+    friend void detail::close_self_route(N &);
+    template<typename N>
+    friend void detail::notify_node_closed(N &);
 };
 
 // Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this

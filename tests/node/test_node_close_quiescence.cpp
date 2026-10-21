@@ -20,7 +20,7 @@
 using namespace node_close_fixture;
 using namespace std::chrono_literals;
 
-TEST_CASE("node_close a closed node fires on_closed once, after every edge it posted, and its peer sees the session drop", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a closed node fires on_closed once, after every edge it posted, and its peer sees the session drop", "[node][node_close]")
 {
     edge_log log;
     close_net net;
@@ -44,7 +44,7 @@ TEST_CASE("node_close a closed node fires on_closed once, after every edge it po
     REQUIRE(net.b_sessions() == 0);
 }
 
-TEST_CASE("node_close a call pending at close completes once with a failure before on_closed", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a call pending at close completes once with a failure before on_closed", "[node][node_close]")
 {
     edge_log log;
     close_net net;
@@ -64,7 +64,7 @@ TEST_CASE("node_close a call pending at close completes once with a failure befo
     REQUIRE(log.ends_with("closed"));
 }
 
-TEST_CASE("node_close a handler installed after the node settled is posted once and a delivered notification never repeats", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a handler installed after the node settled is posted once and a delivered notification never repeats", "[node][node_close]")
 {
     close_net net;
     net.connect();
@@ -85,7 +85,7 @@ TEST_CASE("node_close a handler installed after the node settled is posted once 
     REQUIRE(second == 0);
 }
 
-TEST_CASE("node_close a node closed from inside its own subscriber callback settles once", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a node closed from inside its own subscriber callback settles once", "[node][node_close]")
 {
     close_net net;
     net.connect();
@@ -107,7 +107,7 @@ TEST_CASE("node_close a node closed from inside its own subscriber callback sett
     REQUIRE(closed == 1);
 }
 
-TEST_CASE("node_close a closed node's on_closed waits for its liveliness tick and its pending call deadline", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a closed node's on_closed waits for its liveliness tick and its pending call deadline", "[node][node_close]")
 {
     edge_log log;
     close_net net;
@@ -135,7 +135,7 @@ TEST_CASE("node_close a closed node's on_closed waits for its liveliness tick an
     REQUIRE(transient_declines(net.a) == declines);
 }
 
-TEST_CASE("node_close a node destroyed inside its on_closed leaves its peer running", "[node][node_close][!shouldfail]")
+TEST_CASE("node_close a node destroyed inside its on_closed leaves its peer running", "[node][node_close]")
 {
     owned_net net;
     plexus::procedure<> held{net.b, "proc", hold_request};
@@ -159,7 +159,7 @@ TEST_CASE("node_close a node destroyed inside its on_closed leaves its peer runn
     close_or_fail(*net.a);
     net.ex.drain();
     REQUIRE(closed);
-    REQUIRE_FALSE(net.a.has_value());
+    REQUIRE(net.a == nullptr);
 
     const auto until = std::chrono::steady_clock::now() + 300ms;
     while(std::chrono::steady_clock::now() < until)

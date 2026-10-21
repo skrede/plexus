@@ -19,12 +19,12 @@
 
 #include <span>
 #include <array>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <optional>
 #include <algorithm>
 #include <string_view>
 
@@ -94,7 +94,7 @@ inline std::uint64_t transient_declines(const dialer_node &node)
     return node.same_host_fallbacks()[static_cast<std::size_t>(plexus::io::fallback_reason::transient)];
 }
 
-// A lives in an optional so its owner can destroy it inside its own on_closed.
+// A lives on the heap so its owner can destroy it inside its own on_closed and AddressSanitizer sees any later use.
 struct owned_net
 {
     inproc_bus<> bus;
@@ -104,12 +104,12 @@ struct owned_net
     counting_discovery disc_a;
     counting_discovery disc_b;
     endpoint ep_b{"inproc", "host-b:6000"};
-    std::optional<dialer_node> a;
+    std::unique_ptr<dialer_node> a;
     listener_node b{ex, disc_b, make_id(0x0B), tb, make_opts()};
 
     owned_net()
     {
-        a.emplace(ex, disc_a, make_id(0x0A), ta, make_opts());
+        a = std::make_unique<dialer_node>(ex, disc_a, make_id(0x0A), ta, make_opts());
         b.listen(ep_b);
         a->dial(ep_b);
         ex.drain();

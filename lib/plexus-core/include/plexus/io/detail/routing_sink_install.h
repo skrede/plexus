@@ -9,6 +9,7 @@
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/peer_liveliness_event.h"
 
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_lifecycle.h"
@@ -36,18 +37,23 @@
 
 namespace plexus::io::detail {
 
-// The coordinator's posted re-attempts share one engine timer; a canceled wait (the engine tearing down) touches nothing.
+// The coordinator's re-attempts share one engine timer whose every wait is one operation of the engine; a closing engine
+// arms no wait, and a wait that completes once it is closing re-attempts nothing.
 template<typename Coordinator, typename Timer>
-void install_upgrade_retry(Coordinator &coordinator, Timer &timer)
+void install_upgrade_retry(Coordinator &coordinator, Timer &timer, pending_ops &ops)
 {
     coordinator.set_retry_scheduler(
-            [&coordinator, &timer](std::chrono::milliseconds delay)
+            [&coordinator, &timer, &ops](std::chrono::milliseconds delay)
             {
+                if(ops.closing())
+                    return;
                 timer.expires_after(delay);
+                ops.begin();
                 timer.async_wait(
-                        [&coordinator](std::error_code ec)
+                        [&coordinator, &ops](std::error_code ec)
                         {
-                            if(!ec)
+                            ops.end();
+                            if(!ec && !ops.closing())
                                 coordinator.on_retry_due();
                         });
             });
@@ -80,7 +86,6 @@ template<typename Engine>
 // NOLINTNEXTLINE(readability-function-size)
 void install_routing_sinks(Engine &e)
 {
-    using policy_type  = typename Engine::policy_type;
     using channel_type = typename Engine::channel_type;
     using session_type = typename Engine::session_type;
 
@@ -138,7 +143,7 @@ void install_routing_sinks(Engine &e)
     // A peer's heartbeat also carries its cooperative decline posture; the engine honors the transition
     // (withdraw an emitted report / re-lift on un-decline), a no-op on a non-relay node's null twin.
     e.m_build.on_decline_seen = [&e](const node_id &ep, bool declines) { detail::note_decline(e, ep, declines); };
-    e.m_monitor.on_liveness([&e](const liveness_event &ev) { policy_type::post(e.m_executor, [&e, ev] { detail::fan_liveness(e, ev); }); });
+    e.m_monitor.on_liveness([&e](const liveness_event &ev) { detail::post_counted(e, [ev](Engine &eng) { detail::fan_liveness(eng, ev); }); });
     e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
     // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
     // the configured interval has elapsed (the default equals the tick cadence, so emission is
