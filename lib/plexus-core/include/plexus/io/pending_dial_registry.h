@@ -13,8 +13,9 @@
 namespace plexus::io {
 
 // The half-open dial table and the accepted table a transport holds its channels in until the engine adopts them. A
-// fail edge may fire inside the channel's own member call, so no verb here destroys a channel: fail(), fail_accepted()
-// and retire_all() hand it to the retiring table, which keeps it until its own on_closed.
+// fail edge may fire inside the channel's own member call, so no verb here destroys a channel: fail(), fail_accepted(),
+// retire_all() and a deliver_or_retire() with no consumer hand it to the retiring table, which keeps it until its own
+// on_closed.
 template<typename Channel>
     requires io::byte_channel<Channel>
 class pending_dial_registry
@@ -65,6 +66,12 @@ public:
     void fail_accepted(Channel *raw)
     {
         m_retiring.retire(adopt_accepted(raw));
+    }
+
+    template<typename Sink, typename... Args>
+    void deliver_or_retire(Sink &sink, std::unique_ptr<Channel> channel, const Args &...args)
+    {
+        m_retiring.deliver_or_retire(sink, std::move(channel), args...);
     }
 
     void retire_all()

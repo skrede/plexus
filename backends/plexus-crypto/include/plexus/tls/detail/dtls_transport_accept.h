@@ -55,11 +55,7 @@ void wire_teardown(T &t, dtls_channel &ch, const typename T::endpoint_type &key)
 template<typename T>
 void resolve_accept(T &t, dtls_channel *raw)
 {
-    auto ch = t.m_registry.adopt_accepted(raw);
-    if(!ch)
-        return;
-    if(t.m_on_accepted_cb)
-        t.m_on_accepted_cb(std::move(ch));
+    t.m_registry.deliver_or_retire(t.m_on_accepted_cb, t.m_registry.adopt_accepted(raw));
 }
 
 // A handshake/verify failure on an accept-side channel: drop it fail-closed (the source never
@@ -110,11 +106,7 @@ template<typename T>
 void resolve_dial(T &t, const io::endpoint &ep, dtls_channel *raw)
 {
     const io::endpoint dialed = ep;
-    auto ch                   = t.m_registry.resolve(raw);
-    if(!ch)
-        return;
-    if(t.m_on_dialed_cb)
-        t.m_on_dialed_cb(std::move(ch), dialed);
+    t.m_registry.deliver_or_retire(t.m_on_dialed_cb, t.m_registry.resolve(raw), dialed);
 }
 
 // COPY ep AND erase the demux ref before fail() erases the entry (fail() fired from inside raw's own

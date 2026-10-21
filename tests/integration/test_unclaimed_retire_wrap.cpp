@@ -103,7 +103,7 @@ TEST_CASE("unclaimed_retire a dtls transport with no consumer keeps a dialed cha
 }
 #endif
 
-TEST_CASE("unclaimed_retire an inproc transport with no consumer keeps an accepted end until its on_closed", "[integration][unclaimed_retire][inproc][!shouldfail]")
+TEST_CASE("unclaimed_retire an inproc transport with no consumer keeps an accepted end until its on_closed", "[integration][unclaimed_retire][inproc]")
 {
     inproc_link link;
     link.dialer.on_dialed([&link](std::unique_ptr<pinproc::inproc_channel<>> ch, const pio::endpoint &) { link.take(std::move(ch)); });
@@ -114,7 +114,7 @@ TEST_CASE("unclaimed_retire an inproc transport with no consumer keeps an accept
     CHECK(link.broken);
 }
 
-TEST_CASE("unclaimed_retire an inproc transport with no consumer keeps a dialed end until its on_closed", "[integration][unclaimed_retire][inproc][!shouldfail]")
+TEST_CASE("unclaimed_retire an inproc transport with no consumer keeps a dialed end until its on_closed", "[integration][unclaimed_retire][inproc]")
 {
     inproc_link link;
     link.listener.on_accepted([&link](std::unique_ptr<pinproc::inproc_channel<>> ch) { link.take(std::move(ch)); });

@@ -67,9 +67,7 @@ void adopt_peer(L &l, ::asio::local::stream_protocol::socket peer)
         (void)peer.close(ic);
         return;
     }
-    auto channel = std::make_unique<unix_channel>(l.m_io, std::move(peer), l.m_cfg, l.m_congestion, l.m_egress_capacity, l.m_socket_options);
-    if(l.m_on_accepted_cb)
-        l.m_on_accepted_cb(std::move(channel));
+    l.m_retiring.deliver_or_retire(l.m_on_accepted_cb, std::make_unique<unix_channel>(l.m_io, std::move(peer), l.m_cfg, l.m_congestion, l.m_egress_capacity, l.m_socket_options));
 }
 
 // The closure captures the listener, which its owner stops and drains before destroying, so a success queued before

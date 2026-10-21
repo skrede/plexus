@@ -23,6 +23,7 @@
 #include "plexus/io/same_host_geometry.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
+#include "plexus/io/detail/retiring_table.h"
 
 #include "plexus/node_id.h"
 
@@ -63,6 +64,7 @@ public:
             : m_registry(broker, rel, cong, std::move(bind_notifier), k_max_ring_slab_bytes, std::move(region_ns))
             , m_post(std::move(post))
             , m_self()
+            , m_retiring()
     {
     }
 
@@ -88,9 +90,7 @@ public:
 
     void listen(const io::endpoint &ep)
     {
-        auto ch = detail::mux_open(*this, ep, ring_role::both);
-        if(ch && m_on_accepted)
-            m_on_accepted(std::move(ch));
+        m_retiring.deliver_or_retire(m_on_accepted, detail::mux_open(*this, ep, ring_role::both));
     }
 
     // Carries the dialed io::endpoint back so the engine correlates the completion to its slot.
@@ -99,8 +99,7 @@ public:
         auto ch = detail::mux_open(*this, ep, ring_role::both);
         if(!ch)
             return report_dial_fail(ep, io::io_error::connection_refused);
-        if(m_on_dialed)
-            m_on_dialed(std::move(ch), ep);
+        m_retiring.deliver_or_retire(m_on_dialed, std::move(ch), ep);
     }
 
     void close()
@@ -236,6 +235,7 @@ private:
     registry_type m_registry;
     post_fn m_post;
     node_id m_self;
+    io::detail::retiring_table<channel_type> m_retiring;
     detail::shm_geometry_map m_geometry;
     io::same_host_geometry m_default_geometry;
     upgrade_policy_fn m_upgrade_policy{&default_upgrade_policy};

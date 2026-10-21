@@ -145,9 +145,7 @@ private:
     // hand it to on_accepted.
     void resolve_accept(tls_channel *raw)
     {
-        auto ch = m_accepting.adopt_accepted(raw);
-        if(ch && m_on_accepted_cb)
-            m_on_accepted_cb(std::move(ch));
+        m_accepting.deliver_or_retire(m_on_accepted_cb, m_accepting.adopt_accepted(raw));
     }
 
     void drop_accept(tls_channel *raw)

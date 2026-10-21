@@ -91,12 +91,7 @@ protected:
             , m_socket_options(socket_options)
             , m_pending()
     {
-        m_listener.on_accepted(
-                [this](std::unique_ptr<Channel> ch)
-                {
-                    if(m_on_accepted_cb)
-                        m_on_accepted_cb(std::move(ch));
-                });
+        m_listener.on_accepted([this](std::unique_ptr<Channel> ch) { m_pending.deliver_or_retire(m_on_accepted_cb, std::move(ch)); });
         m_listener.on_error(
                 [this](io::io_error e)
                 {
@@ -129,8 +124,7 @@ private:
             return report_dial_fail(ep, io::io_error::operation_aborted);
         Traits::after_connect(*ch, m_no_delay);
         ch->start_read();
-        if(m_on_dialed_cb)
-            m_on_dialed_cb(std::move(ch), ep);
+        m_pending.deliver_or_retire(m_on_dialed_cb, std::move(ch), ep);
     }
 
     void report_dial_fail(const io::endpoint &ep, io::io_error e)

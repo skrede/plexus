@@ -35,6 +35,17 @@ public:
         retired.close();
     }
 
+    template<typename Sink, typename... Args>
+    void deliver_or_retire(Sink &sink, std::unique_ptr<Channel> channel, const Args &...args)
+    {
+        if(!channel)
+            return;
+        if(sink)
+            sink(std::move(channel), args...);
+        else
+            retire(std::move(channel));
+    }
+
     std::size_t size() const noexcept
     {
         return m_retiring.size();

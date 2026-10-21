@@ -9,6 +9,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
+#include "plexus/io/detail/retiring_table.h"
 #include "plexus/detail/compat.h"
 
 #include <chrono>
@@ -29,6 +30,7 @@ public:
     inproc_transport(inproc_executor<Clock> &exec, inproc_bus<Clock> &bus)
             : m_exec(exec)
             , m_bus(bus)
+            , m_retiring()
     {
     }
 
@@ -55,12 +57,7 @@ public:
     void listen(const io::endpoint &ep)
     {
         m_listen_ep = ep;
-        m_bus.register_listener(ep,
-                                [this](std::unique_ptr<inproc_channel<Clock>> ch)
-                                {
-                                    if(m_on_accepted_cb)
-                                        m_on_accepted_cb(std::move(ch));
-                                });
+        m_bus.register_listener(ep, [this](std::unique_ptr<inproc_channel<Clock>> ch) { m_retiring.deliver_or_retire(m_on_accepted_cb, std::move(ch)); });
     }
 
     void dial(const io::endpoint &ep)
@@ -72,10 +69,8 @@ public:
         auto accepted = std::make_unique<inproc_channel<Clock>>(m_exec);
         dialer->connect_to(accepted->local_endpoint());
         accepted->connect_to(dialer->local_endpoint());
-        if(acc->on_accepted_cb)
-            acc->on_accepted_cb(std::move(accepted));
-        if(m_on_dialed_cb)
-            m_on_dialed_cb(std::move(dialer), ep);
+        m_retiring.deliver_or_retire(acc->on_accepted_cb, std::move(accepted));
+        m_retiring.deliver_or_retire(m_on_dialed_cb, std::move(dialer), ep);
     }
 
     void close()
@@ -92,6 +87,7 @@ private:
 
     inproc_executor<Clock> &m_exec;
     inproc_bus<Clock> &m_bus;
+    io::detail::retiring_table<inproc_channel<Clock>> m_retiring;
     io::endpoint m_listen_ep;
     detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> m_on_accepted_cb;
     detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>, const io::endpoint &)> m_on_dialed_cb;

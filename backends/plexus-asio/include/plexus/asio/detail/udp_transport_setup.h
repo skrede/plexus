@@ -65,11 +65,7 @@ template<typename T>
 void resolve_dial(T &t, const io::endpoint &ep, udp_channel *raw)
 {
     const io::endpoint dialed = ep;
-    auto ch                   = t.m_dials.resolve(raw);
-    if(!ch)
-        return;
-    if(t.m_on_dialed_cb)
-        t.m_on_dialed_cb(std::move(ch), dialed);
+    t.m_dials.deliver_or_retire(t.m_on_dialed_cb, t.m_dials.resolve(raw), dialed);
 }
 
 // The registry keeps a failed dial's channel, and with it the closure ep is bound to, until its own close
@@ -101,8 +97,7 @@ void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<cons
     wire_teardown(t, *raw, from);
     t.m_dials.insert_accepted(raw, std::move(ch));
     send_handshake(t, from, T::hs_type::response, hs->mode, hs->initial_seq);
-    if(t.m_on_accepted_cb)
-        t.m_on_accepted_cb(t.m_dials.adopt_accepted(raw));
+    t.m_dials.deliver_or_retire(t.m_on_accepted_cb, t.m_dials.adopt_accepted(raw));
 }
 
 template<typename T>

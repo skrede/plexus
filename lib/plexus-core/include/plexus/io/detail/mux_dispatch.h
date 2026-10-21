@@ -23,22 +23,11 @@ std::unique_ptr<polymorphic_byte_channel> mux_wrap(std::unique_ptr<C> ch)
 }
 
 template<typename Mux, typename M>
-// NOLINTNEXTLINE(readability-function-size)
 void wire_member(Mux &mux, M &m)
 {
     using C = typename M::channel_type;
-    m.on_accepted(
-            [&mux](std::unique_ptr<C> ch)
-            {
-                if(mux.m_on_accepted)
-                    mux.m_on_accepted(mux_wrap(std::move(ch)));
-            });
-    m.on_dialed(
-            [&mux](std::unique_ptr<C> ch, const endpoint &ep)
-            {
-                if(mux.m_on_dialed)
-                    mux.m_on_dialed(mux_wrap(std::move(ch)), ep);
-            });
+    m.on_accepted([&mux](std::unique_ptr<C> ch) { mux.m_retiring.deliver_or_retire(mux.m_on_accepted, mux_wrap(std::move(ch))); });
+    m.on_dialed([&mux](std::unique_ptr<C> ch, const endpoint &ep) { mux.m_retiring.deliver_or_retire(mux.m_on_dialed, mux_wrap(std::move(ch)), ep); });
     m.on_dial_failed(
             [&mux](const endpoint &ep, io_error e)
             {

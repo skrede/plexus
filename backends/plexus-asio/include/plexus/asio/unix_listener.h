@@ -12,6 +12,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/egress_capacity.h"
+#include "plexus/io/detail/retiring_table.h"
 #include "plexus/io/security/peer_cred_policy.h"
 #include "plexus/detail/compat.h"
 #include "plexus/detail/socket_compat.h"
@@ -49,6 +50,7 @@ public:
                            const io::security::peer_cred_policy &policy = io::security::shared_accept_any_peer_cred(), io::congestion congestion = io::congestion::block,
                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
             : m_io(io)
+            , m_retiring()
             , m_acceptor(io)
             , m_cfg(cfg)
             , m_mode(mode)
@@ -137,6 +139,7 @@ private:
     friend void detail::do_accept(L &);
 
     ::asio::io_context &m_io;
+    io::detail::retiring_table<unix_channel> m_retiring;
     ::asio::local::stream_protocol::acceptor m_acceptor;
     stream::stream_inbound_config m_cfg;
     plexus::detail::socket_mode m_mode;

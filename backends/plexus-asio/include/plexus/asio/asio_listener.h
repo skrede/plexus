@@ -11,6 +11,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/egress_capacity.h"
+#include "plexus/io/detail/retiring_table.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/ip/tcp.hpp>
@@ -31,6 +32,7 @@ public:
     explicit asio_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
             : m_io(io)
+            , m_retiring()
             , m_acceptor(io)
             , m_cfg(cfg)
             , m_no_delay(no_delay)
@@ -110,9 +112,7 @@ private:
                         std::error_code nec;
                         (void)peer.set_option(::asio::ip::tcp::no_delay(true), nec);
                     }
-                    auto channel = std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg, m_congestion, m_egress_capacity, m_socket_options);
-                    if(m_on_accepted_cb)
-                        m_on_accepted_cb(std::move(channel));
+                    m_retiring.deliver_or_retire(m_on_accepted_cb, std::make_unique<asio_channel>(m_io, std::move(peer), m_cfg, m_congestion, m_egress_capacity, m_socket_options));
                     if(m_running)
                         do_accept();
                 });
@@ -125,6 +125,7 @@ private:
     }
 
     ::asio::io_context &m_io;
+    io::detail::retiring_table<asio_channel> m_retiring;
     ::asio::ip::tcp::acceptor m_acceptor;
     stream::stream_inbound_config m_cfg;
     bool m_no_delay;

@@ -8,6 +8,7 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+#include "plexus/io/detail/retiring_table.h"
 
 #include <span>
 #include <array>
@@ -97,6 +98,7 @@ public:
             : m_selector(selector)
             , m_members(members...)
             , m_hook(std::move(hook))
+            , m_retiring()
     {
         std::apply([this](auto &...m) { (detail::wire_member(*this, m), ...); }, m_members);
     }
@@ -151,6 +153,7 @@ private:
     transport_selector m_selector;
     std::tuple<Members &...> m_members;
     selection_hook m_hook;
+    detail::retiring_table<polymorphic_byte_channel> m_retiring;
     plexus::detail::move_only_function<void(io_error)> m_on_error;
     plexus::detail::move_only_function<void(const endpoint &, io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>)> m_on_accepted;

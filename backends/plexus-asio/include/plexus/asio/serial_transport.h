@@ -15,6 +15,7 @@
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
+#include "plexus/io/detail/retiring_table.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -42,6 +43,7 @@ public:
                               io::egress_capacity egress = io::egress_capacity::bounded_default(), std::size_t global_default = io::global_default_max_message_bytes,
                               std::size_t reassembly_budget = io::reassembly_memory_budget)
             : m_io(io)
+            , m_retiring()
             , m_cfg(stream::with_message_limits(cfg, global_default, reassembly_budget))
             , m_congestion(congestion)
             , m_egress(egress)
@@ -75,8 +77,7 @@ public:
         auto ch = open_channel(ep, ec);
         if(ec)
             return report_error(detail::map_error(ec));
-        if(m_on_accepted_cb)
-            m_on_accepted_cb(std::move(ch));
+        m_retiring.deliver_or_retire(m_on_accepted_cb, std::move(ch));
     }
 
     // The dialed endpoint rides back through on_dialed / on_dial_failed so the engine correlates
@@ -87,8 +88,7 @@ public:
         auto ch = open_channel(ep, ec);
         if(ec)
             return report_dial_fail(ep, detail::map_error(ec));
-        if(m_on_dialed_cb)
-            m_on_dialed_cb(std::move(ch), ep);
+        m_retiring.deliver_or_retire(m_on_dialed_cb, std::move(ch), ep);
     }
 
     void close()
@@ -152,6 +152,7 @@ private:
     }
 
     ::asio::io_context &m_io;
+    io::detail::retiring_table<serial_channel> m_retiring;
     stream::stream_inbound_config m_cfg;
     io::congestion m_congestion;
     io::egress_capacity m_egress;

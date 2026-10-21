@@ -60,12 +60,7 @@ public:
             , m_socket_options(socket_options)
             , m_pending()
     {
-        m_listener.on_accepted(
-                [this](std::unique_ptr<tls_channel> ch)
-                {
-                    if(m_on_accepted_cb)
-                        m_on_accepted_cb(std::move(ch));
-                });
+        m_listener.on_accepted([this](std::unique_ptr<tls_channel> ch) { m_pending.deliver_or_retire(m_on_accepted_cb, std::move(ch)); });
         m_listener.on_error(
                 [this](io::io_error e)
                 {

@@ -35,9 +35,7 @@ template<typename T>
 void tls_resolve_dial(T &t, const io::endpoint &ep, tls_channel *raw)
 {
     const io::endpoint dialed = ep;
-    auto ch                   = t.m_pending.resolve(raw);
-    if(ch && t.m_on_dialed_cb)
-        t.m_on_dialed_cb(std::move(ch), dialed);
+    t.m_pending.deliver_or_retire(t.m_on_dialed_cb, t.m_pending.resolve(raw), dialed);
 }
 
 // A handshake/verify failure: retire the dial in the registry, then report on_dial_failed. Copy ep
