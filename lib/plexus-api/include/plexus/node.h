@@ -309,6 +309,13 @@ public:
         m_engine.dial(ep);
     }
 
+    // Withdraws a dial made with dial(): the endpoint is never redialed and its session is retired. dial() again
+    // re-adds it.
+    void hang_up(const io::endpoint &ep)
+    {
+        m_engine.hang_up(ep);
+    }
+
     const plexus::node_id &id() const noexcept
     {
         return m_id;

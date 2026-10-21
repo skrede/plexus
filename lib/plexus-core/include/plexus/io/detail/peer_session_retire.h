@@ -4,6 +4,8 @@
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/peer_session_rebuild.h"
 
+#include "plexus/node_id.h"
+
 #include <memory>
 #include <utility>
 
@@ -52,6 +54,16 @@ void withdraw_slot(Registry &reg, Build &build, Slot &slot)
     if(slot.session && !slot.session->pending().closing())
         slot.session->tear_down();
     retire_step(reg, build, slot);
+}
+
+template<typename Registry>
+void hang_up_slot(Registry &reg, const node_id &id)
+{
+    auto it = reg.m_slots.find(id);
+    if(it == reg.m_slots.end())
+        return;
+    it->second->driver.deny_redial();
+    withdraw_slot(reg, reg.m_build, *it->second);
 }
 
 // Every slot's redial is denied before any session is torn down, so no teardown can arm a redial. Each slot is then

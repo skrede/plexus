@@ -21,7 +21,7 @@ void hang_up_or_fail(Node &node, const endpoint &ep)
 
 }
 
-TEST_CASE("hang_up a hung-up endpoint's session drops at its peer and is never redialed", "[node][hang_up][!shouldfail]")
+TEST_CASE("hang_up a hung-up endpoint's session drops at its peer and is never redialed", "[node][hang_up]")
 {
     close_net net;
     net.connect();
@@ -39,7 +39,7 @@ TEST_CASE("hang_up a hung-up endpoint's session drops at its peer and is never r
     REQUIRE(net.a.router().attempt_count(net.dialed_slot) == attempts);
 }
 
-TEST_CASE("hang_up a dial after a hang-up dials again and the session comes back", "[node][hang_up][!shouldfail]")
+TEST_CASE("hang_up a dial after a hang-up dials again and the session comes back", "[node][hang_up]")
 {
     close_net net;
     net.connect();
@@ -54,7 +54,7 @@ TEST_CASE("hang_up a dial after a hang-up dials again and the session comes back
     REQUIRE(net.b_sessions() == 1);
 }
 
-TEST_CASE("hang_up of an endpoint the node never dialed leaves the session accepted from that peer", "[node][hang_up][!shouldfail]")
+TEST_CASE("hang_up of an endpoint the node never dialed leaves the session accepted from that peer", "[node][hang_up]")
 {
     close_net net;
     net.connect();
@@ -65,7 +65,7 @@ TEST_CASE("hang_up of an endpoint the node never dialed leaves the session accep
     REQUIRE(net.a.router().is_connected(net.dialed_slot));
 }
 
-TEST_CASE("hang_up of a dial still in flight retires its late channel and builds no session", "[node][hang_up][!shouldfail]")
+TEST_CASE("hang_up of a dial still in flight retires its late channel and builds no session", "[node][hang_up]")
 {
     close_net net;
     net.a.dial(net.ep_b);

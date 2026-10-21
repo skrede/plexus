@@ -167,6 +167,11 @@ public:
         detail::close_slots(*this, owner);
     }
 
+    void hang_up(const node_id &id)
+    {
+        detail::hang_up_slot(*this, id);
+    }
+
 private:
     using slot_block = detail::session_slot<Policy, Transport, Clock>;
 
@@ -205,6 +210,8 @@ private:
     friend void detail::retire_unclaimed(R &, std::unique_ptr<typename R::channel_type>);
     template<typename R>
     friend void detail::close_slots(R &, detail::pending_ops &);
+    template<typename R>
+    friend void detail::hang_up_slot(R &, const node_id &);
 };
 
 }

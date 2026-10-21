@@ -196,6 +196,11 @@ public:
         m_registry.driver_for(id).start();
     }
 
+    void hang_up(const endpoint &ep)
+    {
+        detail::hang_up_endpoint(*this, ep);
+    }
+
     // Detaches from the transport, then closes every slot and the transport without arming a redial.
     void close()
     {
@@ -657,6 +662,9 @@ private:
 
     template<typename E>
     friend void detail::close_engine(E &);
+
+    template<typename E>
+    friend void detail::hang_up_endpoint(E &, const endpoint &);
 
     template<typename E>
     friend void detail::fire_graph_wakeup(E &);
