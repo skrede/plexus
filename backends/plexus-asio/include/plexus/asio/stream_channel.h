@@ -5,6 +5,7 @@
 #include "plexus/asio/stream_socket_options.h"
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/stream_channel_io.h"
+#include "plexus/asio/detail/stream_consumer_hooks.h"
 #include "plexus/asio/detail/stream_channel_lifecycle.h"
 
 #include "plexus/stream/stream_inbound.h"
@@ -42,7 +43,7 @@ namespace plexus::asio {
 // path: plaintext sends reach the egress directly; a TLS bootstrap routes them through an
 // open-before-data gate so no plaintext is written before the handshake completes.
 template<typename Stream, typename Traits, typename Bootstrap>
-class stream_channel
+class stream_channel : public detail::stream_consumer_hooks
 {
     using traits_type = Traits;
 
@@ -142,21 +143,9 @@ public:
         return Traits::format_endpoint(m_stream);
     }
 
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
-    {
-        m_on_data_cb = std::move(cb);
-    }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
         m_on_closed_cb = std::move(cb);
-    }
-    void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
-    {
-        m_on_error_cb = std::move(cb);
-    }
-    void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
-    {
-        m_on_protocol_close_cb = std::move(cb);
     }
 
     decltype(auto) socket() noexcept
@@ -294,10 +283,7 @@ private:
     std::size_t m_dropped;
     stream::detail::send_queue m_egress;
     std::shared_ptr<io::detail::liveness_token> m_life;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void()> m_on_closed_cb;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
     bool m_open;
 };
 
