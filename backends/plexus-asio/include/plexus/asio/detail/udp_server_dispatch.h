@@ -62,11 +62,13 @@ typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink make
     using endpoint_type = typename S::endpoint_type;
     return [&s](std::span<const std::byte> bytes, const endpoint_type &dest, typename datagram::detail::send_queue<endpoint_type>::completion done)
     {
+        s.m_ops.begin();
         s.m_socket.async_send_to(::asio::buffer(bytes.data(), bytes.size()), dest,
                                  [&s, done = std::move(done)](std::error_code ec, std::size_t) mutable
                                  {
+                                     s.m_ops.end();
                                      if(ec == ::asio::error::operation_aborted || !s.m_open)
-                                         return;
+                                         return done(false);
                                      if(!ec)
                                          return done(true);
                                      if(transient_send_error(ec))
@@ -76,6 +78,7 @@ typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink make
                                      }
                                      server_report(s, ec); // a fatal socket error: report once and stop the chain
                                      s.m_send_queue.close();
+                                     done(false);
                                  });
     };
 }
@@ -117,9 +120,11 @@ void fail(S &s, const std::error_code &ec)
 template<typename S>
 void do_receive(S &s)
 {
+    s.m_ops.begin();
     s.m_socket.async_receive_from(::asio::buffer(s.m_recv_buf), s.m_sender,
                                   [&s](std::error_code ec, std::size_t n)
                                   {
+                                      s.m_ops.end();
                                       if(ec)
                                           return fail(s, ec);
                                       if(s.m_on_datagram_cb)

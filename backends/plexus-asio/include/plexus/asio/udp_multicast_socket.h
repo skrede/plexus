@@ -9,6 +9,7 @@
 #include "plexus/stream/datagram_socket.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/datagram/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
@@ -48,6 +49,7 @@ public:
             , m_dropped(0)
             , m_send_errors(0)
             , m_recv_resets(0)
+            , m_ops()
             , m_send_queue(detail::make_send_sink(*this), send_queue_bytes)
             , m_group(group)
             , m_egress(std::move(egress))
@@ -92,6 +94,11 @@ public:
         return m_effective_interface;
     }
 
+    std::size_t outstanding_ops() const noexcept
+    {
+        return m_ops.count();
+    }
+
     void send_multicast(std::span<const std::byte> bytes)
     {
         if(!m_open)
@@ -118,6 +125,7 @@ public:
         (void)m_socket.close(ec);
         m_open = false;
         m_send_queue.close();
+        m_ops.close();
     }
 
 private:
@@ -145,6 +153,7 @@ private:
     std::size_t m_dropped;
     std::size_t m_send_errors;
     std::size_t m_recv_resets;
+    io::detail::pending_ops m_ops;
     datagram::detail::send_queue<endpoint_type> m_send_queue;
     ::asio::ip::address_v4 m_group;
     io::network_interface m_egress;

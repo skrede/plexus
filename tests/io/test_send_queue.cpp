@@ -62,7 +62,7 @@ TEST_CASE("send_queue drains in FIFO order across a burst", "[io][send_queue]")
     REQUIRE_FALSE(q.sending());
 }
 
-TEST_CASE("send_queue close() drops the backlog and keeps the in-flight datagram until its completion", "[io][send_queue][!shouldfail]")
+TEST_CASE("send_queue close() drops the backlog and keeps the in-flight datagram until its completion", "[io][send_queue]")
 {
     recorder rec;
     send_queue q{rec.sink()};

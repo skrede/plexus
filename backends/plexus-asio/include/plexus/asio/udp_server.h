@@ -7,6 +7,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/datagram/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
@@ -16,7 +17,6 @@
 
 #include <span>
 #include <array>
-#include <vector>
 #include <cstddef>
 #include <utility>
 #include <algorithm>
@@ -24,10 +24,9 @@
 
 namespace plexus::asio {
 
-// The shared bound UDP socket: ONE ::asio::ip::udp::socket per node-port, bound at start(), shared
-// across every logical peer (UDP is connectionless — no per-peer kernel socket). The owning
-// udp_transport closes the socket before the server dies, so a completion after teardown
-// self-guards on operation_aborted.
+// The shared bound UDP socket: ONE ::asio::ip::udp::socket per node-port, bound at start(), shared across every
+// logical peer (UDP is connectionless). Its owner closes the channels first, then the server, and destroys it only
+// once the executor drained its receive and send operations (outstanding_ops() reads zero).
 class udp_server
 {
 public:
@@ -37,8 +36,7 @@ public:
     // whole (a one-datagram cap would refuse fragment 1 and lose the message).
     static constexpr std::size_t default_send_queue_bytes = std::max<std::size_t>(65536, io::global_default_max_message_bytes);
 
-    // 0 leaves the kernel default — a loopback sweep moved p50 under the 2% noise bar; a non-zero
-    // value is applied once at start() (after open, before bind).
+    // 0 leaves the kernel default: a loopback sweep of overrides moved p50 by less than the 2% noise bar.
     static constexpr std::size_t default_so_sndbuf = 0;
     static constexpr std::size_t default_so_rcvbuf = 0;
 
@@ -53,6 +51,7 @@ public:
             , m_dropped(0)
             , m_send_errors(0)
             , m_recv_resets(0)
+            , m_ops()
             , m_send_queue(detail::make_send_sink(*this), send_queue_bytes)
             , m_open(false)
     {
@@ -73,9 +72,8 @@ public:
         m_socket.open(bind_ep.protocol(), ec);
         if(ec)
             return detail::server_report(*this, ec);
-        // The idle fast-path issues a synchronous send_to on the io thread; non-blocking mode
-        // makes a full socket buffer return would_block (the enqueue fallback) instead of
-        // stalling the thread. asio's reactor manages descriptor readiness, so this is compatible.
+        // The idle fast path issues a synchronous send_to on the io thread; non-blocking mode makes a full socket
+        // buffer return would_block (the enqueue fallback) instead of stalling the thread.
         (void)m_socket.non_blocking(true, ec);
         detail::apply_socket_buffers(*this);
         m_socket.bind(bind_ep, ec);
@@ -85,8 +83,6 @@ public:
         detail::do_receive(*this);
     }
 
-    // The send_queue copies the bytes into an owned node synchronously, so the caller's scratch is
-    // never referenced live across the async op.
     void send_to(std::span<const std::byte> bytes, const endpoint_type &dest)
     {
         if(!m_open)
@@ -95,11 +91,10 @@ public:
             detail::on_send_queue_full(*this);
     }
 
-    // A whole small message: when the outbound queue is idle a SYNCHRONOUS send_to hands the
-    // datagram to the kernel during the call (the small-datagram latency win). It fires ONLY when
-    // idle so it can never reorder ahead of queued bytes; a would_block falls through to the async
-    // queue. NOT for a fragment burst (use send_to): an unpaced synchronous blast overruns the
-    // receiver and loses the whole best-effort message.
+    // A whole small message: when the outbound queue is idle a SYNCHRONOUS send_to hands the datagram to the kernel
+    // during the call (the small-datagram latency win). It fires ONLY when idle so it can never reorder ahead of
+    // queued bytes; a would_block falls through to the async queue. NOT for a fragment burst (use send_to): an
+    // unpaced synchronous blast overruns the receiver and loses the whole best-effort message.
     void send_standalone_to(std::span<const std::byte> bytes, const endpoint_type &dest)
     {
         if(!m_open)
@@ -117,7 +112,6 @@ public:
             detail::on_send_queue_full(*this);
     }
 
-    // Installed by the transport: (sender, datagram bytes) per inbound completion.
     void on_datagram(plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> cb)
     {
         m_on_datagram_cb = std::move(cb);
@@ -144,6 +138,11 @@ public:
         return m_send_queue.queued_bytes();
     }
 
+    std::size_t outstanding_ops() const noexcept
+    {
+        return m_ops.count();
+    }
+
     io::congestion congestion_mode() const noexcept
     {
         return m_congestion;
@@ -160,9 +159,8 @@ public:
     {
         return m_dropped;
     }
-    // Transient per-datagram send failures (unreachable destination, momentary buffer-full):
-    // best-effort UDP loss NOT surfaced through on_error, so an unreachable port cannot storm
-    // the owner.
+    // Transient per-datagram send failures (unreachable destination, momentary buffer-full): best-effort UDP loss NOT
+    // surfaced through on_error, so an unreachable port cannot storm the owner.
     std::size_t send_error_count() const noexcept
     {
         return m_send_errors;
@@ -182,6 +180,7 @@ public:
         (void)m_socket.close(ec);
         m_open = false;
         m_send_queue.close();
+        m_ops.close();
     }
 
 private:
@@ -209,6 +208,7 @@ private:
     std::size_t m_dropped;
     std::size_t m_send_errors;
     std::size_t m_recv_resets;
+    io::detail::pending_ops m_ops;
     datagram::detail::send_queue<endpoint_type> m_send_queue;
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;

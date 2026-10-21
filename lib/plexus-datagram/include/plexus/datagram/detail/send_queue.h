@@ -66,15 +66,19 @@ public:
         return m_sending;
     }
 
-    // A completion firing after close is a guarded no-op; close() is terminal (m_open never
-    // re-arms), so the recycled-buffer pool is released here too.
+    // Close drops only the backlog not yet handed to the sink: the in-flight datagram stays owned until its
+    // completion pops it or the queue is destroyed, because the aborted send may still read it. Close is terminal,
+    // so the recycled-buffer pool is released here and a closed queue never drives again.
     void close()
     {
-        m_open    = false;
-        m_sending = false;
-        m_queue.clear();
+        if(!m_open)
+            return;
+        const std::size_t in_flight = m_sending ? 1 : 0;
+        m_open                      = false;
+        m_sending                   = false;
+        m_queue.erase(m_queue.begin() + static_cast<std::ptrdiff_t>(in_flight), m_queue.end());
         m_free_buffers.clear();
-        m_bytes = 0;
+        m_bytes = in_flight == 0 ? 0 : m_queue.front().bytes.size();
     }
 
 private:
@@ -113,11 +117,11 @@ private:
             m_free_buffers.push_back(std::move(buf));
     }
 
-    // Send the front node; on completion pop it, recycle its buffer, and chain the next. At most
+    // Send the front node; on completion pop it and, while open, recycle its buffer and chain the next. At most
     // one send-sink invocation is outstanding, so a node's bytes stay valid until its completion.
     void drive()
     {
-        if(m_queue.empty())
+        if(m_queue.empty() || !m_open)
         {
             m_sending = false;
             return;
@@ -127,9 +131,9 @@ private:
         m_sink(std::span<const std::byte>{front.bytes}, front.dest,
                [this](bool /*ok*/)
                {
-                   if(!m_open)
-                       return;
                    m_bytes -= m_queue.front().bytes.size();
+                   if(!m_open)
+                       return m_queue.pop_front();
                    recycle_buffer(std::move(m_queue.front().bytes));
                    m_queue.pop_front();
                    drive();
