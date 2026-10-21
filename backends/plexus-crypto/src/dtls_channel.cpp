@@ -47,10 +47,8 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
         , m_gate([this](std::span<const std::byte> bytes) { secure_send(bytes); })
         , m_peer_addr_block(detail::pack_peer_addr(m_dest))
 {
-    // Hold the largest single DTLS record either direction in ONE buffer: the configured
-    // record budget plus headroom for the 13-byte record header and worst-case cipher
-    // expansion (IV/tag/block padding). Sizing from the knob (not a 2048 constant) keeps
-    // SSL_read from discarding and BIO_read from splitting a record once record_mtu rises.
+    // One record either direction fits one buffer: the record budget plus headroom for the 13-byte header and worst-case
+    // cipher expansion, so SSL_read never discards and BIO_read never splits a record once record_mtu rises.
     constexpr std::size_t k_record_overhead = 256;
     m_drain_buf.resize(m_record_mtu + k_record_overhead);
 
@@ -104,9 +102,6 @@ void dtls_channel::publish_cookie_ex_data()
 {
     ::SSL_set_ex_data(m_ssl, dtls_cookie_secret_ex_index(), &m_cookie_state);
     ::SSL_set_ex_data(m_ssl, dtls_peer_addr_ex_index(), m_peer_addr_block.data());
-    // Publish the facts-stash destination so the verify callback writes the ONE
-    // verify-time leaf extraction back into this channel's m_peer_facts (the same
-    // per-instance ex_data stitch, never thread_local).
     ::SSL_set_ex_data(m_ssl, dtls_peer_facts_ex_index(), &m_peer_facts);
 }
 
@@ -121,18 +116,10 @@ void dtls_channel::start_handshake()
 
 void dtls_channel::send(std::span<const std::byte> bytes)
 {
-    // DROP-PRESERVING gate: a send before the ready edge is DROPPED, never buffered
-    // (the gate is composed in pass-through mode — m_gate.submit is never called before
-    // mark_ready, so the buffer always stays empty). After the ready edge the gate
-    // forwards straight through to secure_send (its installed drain).
     if(!m_open || !m_ssl || !m_gate.is_ready())
         return;
-    // Every post-ready app send rides the UDP envelope so the receiver has an UNAMBIGUOUS
-    // whole-vs-fragment discriminator (the FRAGMENTED bit) — an opaque user frame's first
-    // byte cannot alias the discriminator, the failure a bare in-band marker would have. A
-    // frame whose enveloped size fits ONE encrypted record rides one record; a larger frame
-    // is SPLIT across numbered records (the per-record budget bounds each); only a frame
-    // beyond the bounded max-message size is rejected.
+    // Every send rides the UDP envelope, so the FRAGMENTED bit discriminates whole from fragment and an opaque frame's
+    // first byte can never alias it, as a bare in-band marker could.
     if(bytes.size() + wire::udp_envelope_overhead > record_budget())
         return send_large(bytes);
     wire::wrap_udp_into(m_frag_scratch, wire::udp_envelope_kind::best_effort, 0, bytes);
@@ -141,9 +128,6 @@ void dtls_channel::send(std::span<const std::byte> bytes)
 
 std::size_t dtls_channel::record_budget() const noexcept
 {
-    // the encrypted per-record budget OpenSSL reports post-handshake (the real fit in
-    // one DTLS record), capped by the configured logical ceiling — min(max_payload,
-    // DTLS_get_data_mtu). This is the oversize-reject term AND the fragmenter's split budget.
     const long data_mtu = static_cast<long>(::DTLS_get_data_mtu(m_ssl));
     return data_mtu > 0 ? std::min(m_max_payload, static_cast<std::size_t>(data_mtu)) : m_max_payload;
 }
@@ -159,9 +143,7 @@ void dtls_channel::send_large(std::span<const std::byte> bytes)
     const std::uint16_t msg_id = m_out_msg_id++;
     io::fragment_sink sink     = [this, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
     {
-        // Each fragment is one FRAGMENTED-bit envelope (kind is nominal — DTLS owns its own
-        // anti-replay, so the seq field is unused) submitted through the ready gate; the per-
-        // record budget bounds the wrapped fragment to one DTLS record (drop-whole on loss).
+        // DTLS owns its anti-replay, so the envelope's seq field is unused.
         wire::wrap_udp_fragment_into(m_frag_scratch, wire::udp_envelope_kind::best_effort, 0, msg_id, idx, cnt, slice);
         m_gate.submit(std::span<const std::byte>{m_frag_scratch});
     };
@@ -204,10 +186,7 @@ void dtls_channel::drain_outbound()
         const int n = ::BIO_read(bio, m_drain_buf.data(), to_int(m_drain_buf.size()));
         if(n <= 0)
             break;
-        // Send DIRECTLY from the owned drain buffer (sized at construction from the record
-        // budget, no per-datagram scratch reallocation on the steady-state hot path):
-        // udp_server's outbound queue owns each in-flight datagram's bytes across its
-        // async_send_to, so the buffer is free to be overwritten by the next BIO_read on return.
+        // udp_server's send queue copies the datagram, so the next BIO_read may overwrite the drain buffer at once.
         m_server.send_to(std::span<const std::byte>{reinterpret_cast<const std::byte *>(m_drain_buf.data()), static_cast<std::size_t>(n)}, m_dest);
     }
 }
@@ -233,18 +212,7 @@ void dtls_channel::drain_inbound()
             {
                 m_open = false;
                 m_retransmit.cancel();
-                // Post off the current stack, mirroring close(): a consumer that
-                // destroys the channel in its on_closed handler (the natural reaction
-                // to a peer close) would otherwise free `this` mid-drain_inbound,
-                // then the loop / try_complete() touches freed members (a UAF). The
-                // synchronous m_on_error_cb in fail() is only safe because the transport's
-                // error handlers defer destruction; the close path has no such deferral.
-                ::asio::post(m_io,
-                             [this]
-                             {
-                                 if(m_on_closed_cb)
-                                     m_on_closed_cb();
-                             });
+                notify_closed();
                 break;
             }
             drain_outbound(); // flush any fatal alert to the peer first
@@ -252,10 +220,7 @@ void dtls_channel::drain_inbound()
             break;
         }
         const std::span<const std::byte> plaintext{reinterpret_cast<const std::byte *>(m_drain_buf.data()), static_cast<std::size_t>(n)};
-        // Strip the envelope every send wraps: the FRAGMENTED bit is the unambiguous
-        // discriminator. A fragment record feeds the reassembler (a completed message posts
-        // on_data); a whole record posts its inner frame directly. A malformed record (under
-        // the envelope overhead) is dropped — never indexed past the span (fail-closed).
+        // A record under the envelope overhead is dropped, never indexed past.
         if(auto dec = wire::unwrap_udp(plaintext); dec)
         {
             if(dec->fragmented)
@@ -277,13 +242,10 @@ void dtls_channel::try_complete()
     const bool ok = peer && ::SSL_get_verify_result(m_ssl) == X509_V_OK;
     if(ok)
     {
-        capture_peer_identity(); // identity from the stashed verify-time facts
-        // OpenSSL resets the SSL MTU to the conservative DTLS minimum during the
-        // handshake (a memory-BIO pair cannot do path-MTU discovery), so re-assert the
-        // configured record budget now that the cipher is negotiated — DTLS_get_data_mtu
-        // (the send() oversize-reject term) otherwise collapses to the ~219-byte floor
-        // instead of the intended ~1400 budget.
-        ::SSL_set_mtu(m_ssl, dtls_mtu()); // completion edge: re-assert the configured budget
+        capture_peer_identity();
+        // OpenSSL resets the MTU to the DTLS minimum during the handshake (a memory-BIO pair cannot discover the path
+        // MTU), which would collapse DTLS_get_data_mtu to its ~219-byte floor.
+        ::SSL_set_mtu(m_ssl, dtls_mtu());
         m_complete_fired = true;
         m_gate.mark_ready(); // the ready edge: send() now passes through
         if(peer)
@@ -299,10 +261,6 @@ void dtls_channel::try_complete()
 
 void dtls_channel::capture_peer_identity()
 {
-    // The peer identity comes from the ONE verify-time cert_facts extraction the
-    // verify callback stashed into m_peer_facts — no second SPKI digest, no X509
-    // re-parse at the completion edge. node_id is the first 16 bytes of the full
-    // SPKI digest; node_name is the cert subject.
     m_node_id   = io::security::to_node_id(m_peer_facts);
     m_node_name = m_peer_facts.subject;
 }
@@ -343,12 +301,18 @@ void dtls_channel::close()
         return;
     m_open = false;
     m_retransmit.cancel();
+    notify_closed();
+}
+
+// Posted, so a consumer that destroys the channel in on_closed never frees it under drain_inbound.
+void dtls_channel::notify_closed()
+{
     ::asio::post(m_io,
                  [this]
                  {
                      if(m_on_closed_cb)
                          m_on_closed_cb();
-                 }); // posted, never synchronous
+                 });
 }
 
 void dtls_channel::fail(io::io_error e)
@@ -385,11 +349,6 @@ void dtls_channel::ensure_reassembler()
 {
     if(m_reassembler)
         return;
-    // Sans-IO block: an assembled message POSTS on_data (the channel owns the post). The
-    // reassembler's per-message timeout reclaims a stalled best-effort partial (DTLS app
-    // records are unreliable, like UDP best_effort — a lost fragment drops the whole message).
-    // The per-message ceiling, the aggregate budget, and the reclaim window are the threaded
-    // node-options knobs, so a large message clears the receive bounds it must reach.
     m_reassembler = std::make_unique<reassembler_type>(
             m_io, reassembler_type::config{.max_message_size = m_max_message_bytes, .total_memory_cap = m_reassembly_budget, .per_message_timeout = m_reassembly_timeout});
     m_reassembler->on_deliver([this](std::span<const std::byte> msg) { post_on_data(msg); });

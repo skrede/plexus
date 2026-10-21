@@ -170,8 +170,6 @@ public:
     }
 
 private:
-    // The configurable SSL_set_mtu record budget (both set-points consult this so unpinning
-    // honors the ctor value at construction AND at the post-handshake completion re-assert).
     long dtls_mtu() const noexcept
     {
         return static_cast<long>(m_record_mtu);
@@ -194,6 +192,7 @@ private:
     void arm_retransmit();
     void on_retransmit();
     void fail(io::io_error e);
+    void notify_closed();
     void post_on_data(std::span<const std::byte> frame);
     void publish_cookie_ex_data();
     void capture_peer_identity();
@@ -215,10 +214,7 @@ private:
     void *m_external_bio{nullptr}; // BIO* (opaque in the header)
     plexus::asio::asio_timer m_retransmit;
 
-    // The open-before-data gate, in DROP-PRESERVING / ready-edge mode: a pre-ready send is
-    // DROPPED (send() never submits before the ready edge), so the gate's buffer stays empty here.
-    // try_complete() flips the ready edge; after that send() forwards straight through to the
-    // post-ready SSL_write -> drain_outbound egress.
+    // A send before the ready edge is dropped, never submitted, so the gate's buffer stays empty.
     io::detail::handshake_gate m_gate;
 
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
@@ -227,17 +223,11 @@ private:
     // chunks one record across reads — sizing from the knob keeps one record == one buffer.
     std::vector<unsigned char> m_drain_buf;
 
-    // The fragment/reassemble blocks, owned members the channel drives directly: the splitter
-    // encodes into m_frag_scratch (reused); the bounded reassembler (built lazily on the first
-    // inbound fragment) sits on the decrypted drain_inbound path. Its timeout timer is canceled
-    // in the dtor FIRST so a post-teardown fire is a guarded no-op.
-    std::vector<std::byte> m_frag_scratch; // reused fragment-encode buffer
-    std::uint16_t m_out_msg_id{0};         // per-message fragment grouping id (sender)
+    std::vector<std::byte> m_frag_scratch;
+    std::uint16_t m_out_msg_id{0}; // per-message fragment grouping id (sender)
     std::unique_ptr<reassembler_type> m_reassembler;
 
-    // The verify-time depth-0 leaf facts the verify callback stashes through the per-instance SSL
-    // ex_data slot (the ONE cert extraction per handshake). The completion edge derives node_id
-    // (first 16 bytes of spki_sha256) + node_name (subject) from it.
+    // The verify callback stashes the leaf's facts here through the SSL ex_data slot, so the cert is extracted once.
     io::security::cert_facts m_peer_facts;
     node_id m_node_id{};
     std::string m_node_name;
