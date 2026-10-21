@@ -66,7 +66,10 @@ public:
         m_retire = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
-    subscriber(subscriber &&) noexcept        = default;
+    subscriber(subscriber &&other) noexcept
+            : m_retire(std::exchange(other.m_retire, nullptr))
+    {
+    }
 
     subscriber(const subscriber &)            = delete;
     subscriber &operator=(const subscriber &) = delete;
@@ -132,7 +135,11 @@ public:
         return m_state->decode_failed;
     }
 
-    subscriber(subscriber &&) noexcept        = default;
+    subscriber(subscriber &&other) noexcept
+            : m_state(std::move(other.m_state))
+            , m_retire(std::exchange(other.m_retire, nullptr))
+    {
+    }
 
     subscriber(const subscriber &)            = delete;
     subscriber &operator=(const subscriber &) = delete;

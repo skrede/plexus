@@ -51,11 +51,15 @@ public:
         m_retire = [seam, fqn = m_fqn] { seam.retire_procedure(seam.ctx, fqn); };
     }
 
-    procedure(procedure &&) noexcept            = default;
-    procedure &operator=(procedure &&) noexcept = default;
+    procedure(procedure &&other) noexcept
+            : m_fqn(std::move(other.m_fqn))
+            , m_retire(std::exchange(other.m_retire, nullptr))
+    {
+    }
 
     procedure(const procedure &)            = delete;
     procedure &operator=(const procedure &) = delete;
+    procedure &operator=(procedure &&)      = delete;
 
     ~procedure()
     {
@@ -95,11 +99,15 @@ public:
         m_retire = [seam, fqn = m_fqn] { seam.retire_procedure(seam.ctx, fqn); };
     }
 
-    procedure(procedure &&) noexcept            = default;
-    procedure &operator=(procedure &&) noexcept = default;
+    procedure(procedure &&other) noexcept
+            : m_fqn(std::move(other.m_fqn))
+            , m_retire(std::exchange(other.m_retire, nullptr))
+    {
+    }
 
     procedure(const procedure &)            = delete;
     procedure &operator=(const procedure &) = delete;
+    procedure &operator=(procedure &&)      = delete;
 
     ~procedure()
     {

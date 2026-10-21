@@ -67,7 +67,11 @@ public:
         m_retire = [engine_ptr = &engine, sink_ptr = m_sink.get()] { engine_ptr->remove_observer(*sink_ptr); };
     }
 
-    graph_change_handle(graph_change_handle &&) noexcept        = default;
+    graph_change_handle(graph_change_handle &&other) noexcept
+            : m_sink(std::move(other.m_sink))
+            , m_retire(std::exchange(other.m_retire, nullptr))
+    {
+    }
 
     graph_change_handle(const graph_change_handle &)            = delete;
     graph_change_handle &operator=(const graph_change_handle &) = delete;

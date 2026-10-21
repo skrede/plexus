@@ -59,6 +59,14 @@ static_assert(std::is_move_constructible_v<typed_logger>);
 static_assert(!std::is_move_assignable_v<typed_logger>);
 static_assert(!std::is_copy_constructible_v<typed_logger>);
 
+static_assert(std::is_move_constructible_v<bytes_procedure>);
+static_assert(!std::is_move_assignable_v<bytes_procedure>);
+static_assert(std::is_move_constructible_v<typed_procedure>);
+static_assert(!std::is_move_assignable_v<typed_procedure>);
+
+static_assert(std::is_move_constructible_v<plexus::graph_change_handle>);
+static_assert(!std::is_move_assignable_v<plexus::graph_change_handle>);
+
 void reply_ok(std::span<const std::byte>, bytes_procedure::reply_fn &reply)
 {
     reply(plexus::wire::rpc_status::success, {});
@@ -67,21 +75,6 @@ void reply_ok(std::span<const std::byte>, bytes_procedure::reply_fn &reply)
 plexus::expected<sample, std::error_code> echo(const sample &request)
 {
     return request;
-}
-
-template<typename Procedure, typename Handler>
-void serve_again_after_assignment(Handler handler)
-{
-    if constexpr(std::is_move_assignable_v<Procedure>)
-    {
-        fixture f;
-        {
-            Procedure kept{f.node(), "kept", handler};
-            Procedure overwritten{f.node(), "overwritten", handler};
-            overwritten = std::move(kept);
-        }
-        CHECK_NOTHROW((Procedure{f.node(), "overwritten", handler}));
-    }
 }
 
 template<typename Procedure, typename Handler>
@@ -139,10 +132,8 @@ TEST_CASE("handle_move_assign: a move-constructed typed subscriber still deliver
     REQUIRE(got.front() == 0xABCDu);
 }
 
-TEST_CASE("handle_move_assign: a procedure cannot be move-assigned, so assignment cannot leak its registration", "[node][handles][!shouldfail]")
+TEST_CASE("handle_move_assign: a procedure cannot be move-assigned, so assignment cannot leak its registration", "[node][handles]")
 {
-    serve_again_after_assignment<bytes_procedure>(&reply_ok);
-    serve_again_after_assignment<typed_procedure>(&echo);
     CHECK(!std::is_move_assignable_v<bytes_procedure>);
     CHECK(!std::is_move_assignable_v<typed_procedure>);
 }

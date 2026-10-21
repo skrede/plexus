@@ -80,7 +80,11 @@ public:
         return m_state->decode_failed;
     }
 
-    value_logger(value_logger &&) noexcept        = default;
+    value_logger(value_logger &&other) noexcept
+            : m_state(std::move(other.m_state))
+            , m_retire(std::exchange(other.m_retire, nullptr))
+    {
+    }
 
     value_logger(const value_logger &)            = delete;
     value_logger &operator=(const value_logger &) = delete;
