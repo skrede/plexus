@@ -35,8 +35,8 @@ void tls_resolve_dial(T &t, const io::endpoint &ep, tls_channel *raw)
         t.m_on_dialed_cb(std::move(ch), dialed);
 }
 
-// A handshake/verify failure: drop the dial through the registry's deferred-destroy (the channel
-// is freed OFF its own async stack), then report on_dial_failed. Copy ep before fail()/erase.
+// A handshake/verify failure: retire the dial in the registry, then report on_dial_failed. Copy ep
+// before fail() erases the entry.
 template<typename T>
 void tls_fail_dial(T &t, const io::endpoint &ep, tls_channel *raw, io::io_error e)
 {
@@ -47,7 +47,7 @@ void tls_fail_dial(T &t, const io::endpoint &ep, tls_channel *raw, io::io_error 
 
 // Run the client handshake; deliver to on_dialed only on success. The minted channel is owned by
 // the registry across the handshake (no self-owning readiness closure); a handshake/verify failure
-// routes through the channel's on_error to tls_fail_dial (deferred-destroy + on_dial_failed).
+// routes through the channel's on_error to tls_fail_dial.
 template<typename T>
 void tls_run_handshake(T &t, std::unique_ptr<tls_channel> ch, tls_channel *raw, const io::endpoint &ep)
 {

@@ -20,7 +20,6 @@
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 #include "plexus/detail/compat.h"
 
-#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
@@ -44,8 +43,8 @@ namespace plexus::asio {
 // (sender host:port -> channel), the per-peer handshake-ARQ dial table, and every minted
 // udp_channel. It mints logical channels over the shared socket (NO acceptor). A MISS from a
 // never-seen source synthesizes an accept ONLY from a handshake request — the source endpoint is
-// not trusted as identity. close() cancels every pending ARQ timer then drops the channels and
-// the socket.
+// not trusted as identity. close() retires every held channel before it drops the demux and closes
+// the shared socket; the destructor notifies nothing.
 class udp_transport
 {
 public:
@@ -72,7 +71,7 @@ public:
             , m_hs_ladder(hs_ladder)
             , m_arq_cfg(arq_cfg)
             , m_congestion(congestion)
-            , m_dials(make_defer_destroy())
+            , m_dials()
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { detail::on_datagram(*this, from, bytes); });
         m_server.on_error(
@@ -85,11 +84,6 @@ public:
 
     udp_transport(const udp_transport &)            = delete;
     udp_transport &operator=(const udp_transport &) = delete;
-
-    ~udp_transport()
-    {
-        close();
-    }
 
     // The ONE datagram member serves BOTH "udp" (best_effort) and "udpr" (reliable-datagram, the
     // ARQ engaged): the channel's mode differs by scheme, the member is the same.
@@ -162,10 +156,7 @@ public:
 
     void close()
     {
-        // Destroying an ARQ cancels its pending retransmit timer (the timer's queued completion
-        // guards on the aborted error before touching the freed ARQ), so the cancel-then-drop
-        // teardown holds.
-        m_dials.clear();
+        m_dials.retire_all();
         m_demux = detail::udp_inbound_demux{m_max_peers};
         m_server.close();
     }
@@ -177,13 +168,6 @@ public:
 
 private:
     using dial_registry = io::pending_dial_registry<udp_channel, std::unique_ptr<arq_type>>;
-
-    // A fail edge may fire from inside the channel's own member stack, so destroying the channel
-    // there frees it mid-unwind; posting defers the destruction off the current stack.
-    dial_registry::defer_destroy make_defer_destroy()
-    {
-        return [this](std::unique_ptr<udp_channel> ch) { ::asio::post(m_io, [ch = std::move(ch)]() mutable { ch.reset(); }); };
-    }
 
     static datagram::detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
     {

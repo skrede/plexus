@@ -1419,10 +1419,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         catch_discover_tests(test_tls_channel_backpressure_asio TEST_PREFIX "integration."
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-        # The TLS pending-dial teardown asan proof: an in-flight TLS dial whose io_context
-        # (and owning transport) is destroyed mid-handshake leaks nothing — the transport-
-        # owned pending_dial_registry frees the half-open channel/socket/timer with no
-        # leak/UAF (a verify-and-prove rider). Serialized + RESOURCE_LOCK on the
+        # The TLS pending-dial teardown asan proof: a dial whose io_context and transport are
+        # destroyed mid-handshake leaks nothing, and a dial whose transport closes mid-handshake
+        # is not freed under its pending handshake read. Serialized + RESOURCE_LOCK on the
         # shared loopback resource alongside the other real-socket legs.
         add_executable(test_tls_dial_teardown test_tls_dial_teardown.cpp
             $<TARGET_OBJECTS:plexus-crypto>)

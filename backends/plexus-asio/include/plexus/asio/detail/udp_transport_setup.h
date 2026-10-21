@@ -86,7 +86,7 @@ void fail_dial(T &t, const io::endpoint &ep, udp_channel *raw)
 {
     const io::endpoint failed = ep;
     t.m_demux.erase(raw->dest());
-    t.m_dials.fail(raw); // routes the freed channel through the deferred-destroy sink
+    t.m_dials.fail(raw);
     report_dial_fail(t, failed, io::io_error::timed_out);
 }
 

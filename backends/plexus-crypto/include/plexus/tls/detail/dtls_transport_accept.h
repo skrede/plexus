@@ -63,8 +63,8 @@ void resolve_accept(T &t, dtls_channel *raw)
 }
 
 // A handshake/verify failure on an accept-side channel: drop it fail-closed (the source never
-// proved a pinned identity). fail_accepted routes the freed channel through the deferred-destroy
-// sink; detach the demux ref now (the failure fired from inside raw's own drain stack).
+// proved a pinned identity). Detach the demux ref now and retire the channel, which keeps it alive
+// under raw's own drain stack, where the failure fired.
 template<typename T>
 void drop_accept(T &t, dtls_channel *raw)
 {
@@ -117,10 +117,10 @@ void resolve_dial(T &t, const io::endpoint &ep, dtls_channel *raw)
         t.m_on_dialed_cb(std::move(ch), dialed);
 }
 
-// COPY ep AND erase the demux ref before fail() moves the channel out (fail() fired from inside
-// raw's own drain stack, so the registry routes the freed channel through the deferred-destroy
-// sink). Thread the channel's actual error through so the consumer can distinguish "peer never
-// answered" from "peer presented an unpinned cert".
+// COPY ep AND erase the demux ref before fail() erases the entry (fail() fired from inside raw's own
+// drain stack, so the registry retires the channel rather than destroying it). Thread the channel's
+// actual error through so the consumer can distinguish "peer never answered" from "peer presented an
+// unpinned cert".
 template<typename T>
 void fail_dial(T &t, const io::endpoint &ep, dtls_channel *raw, io::io_error e)
 {

@@ -1,65 +1,51 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PENDING_DIAL_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_PENDING_DIAL_REGISTRY_H
 
-#include "plexus/detail/compat.h"
+#include "plexus/io/byte_channel.h"
 
 #include <memory>
+#include <ranges>
 #include <variant>
+#include <cstddef>
 #include <utility>
 #include <unordered_map>
 
 namespace plexus::io {
 
-// The half-open dial table + the accepted table + their ownership-transfer, hoisted
-// out of every datagram transport so a plain UDP backend and a crypto backend reuse
-// the SAME block instead of re-inlining three near-identical maps. The transport owns
-// each minted channel (unique_ptr) keyed by its raw pointer; the registry holds the
-// two tables and the strictly-shaped transfer verbs. Generic over Channel and a
-// per-entry Payload (the ARQ for UDP, an empty std::monostate for a crypto backend
-// that owns its retransmit in-channel), so the block forks for neither.
-//
-// Two lifetime hazards are designed-out at the API shape, not left to the caller:
-//
-//   COPY-BEFORE-ERASE: resolve() moves the channel out into a LOCAL and erases the
-//   entry BEFORE returning — it never reads the entry after the erase. The caller
-//   copies any endpoint/value it carries OUT before calling, because the value is
-//   typically bound to the erased entry's own closure capture; re-reading it after
-//   the erase is a use-after-free.
-//
-//   DEFERRED-DESTROY: a fail edge may fire from INSIDE the channel's own member call
-//   (its deliver_inbound / drain stack), so destroying the channel synchronously
-//   there frees it mid-stack — a use-after-free as that stack unwinds. fail() never
-//   destroys the channel itself: it moves the channel out and routes it through an
-//   injected defer-destroy callback that the owner posts to a continuation, so the
-//   channel is destroyed only after the current stack unwinds. The UDP path (whose
-//   fail is a clean timer callback) adopts the same defer harmlessly — strictly safe.
-//
-// The flood cap stays in the transport demux (insert is called only on an admitted
-// entry), so the registry holds only admitted entries and never grows unbounded.
-// Single-owner, no shared lifetime — the owner clears the block before it dies.
+// The half-open dial table and the accepted table a transport holds its channels in until the engine adopts them,
+// generic over the channel and a per-entry payload. resolve() erases the entry before returning, so a caller copies
+// out any value bound to the entry's closures first. A fail edge may fire inside the channel's own member call, so no
+// verb here destroys a channel: fail(), fail_accepted() and retire_all() move it into the retiring table, install
+// on_closed to erase it by identity, then close it, and it is destroyed inside its own posted notification. A channel
+// that closed before it was retired and never notifies again stays held until the registry is destroyed.
 template<typename Channel, typename Payload = std::monostate>
+    requires io::byte_channel<Channel>
 class pending_dial_registry
 {
-public:
-    // The defer-destroy sink: hand it the freed channel and it destroys it OFF the
-    // current stack (a posted continuation that owns it until it runs). Installed at
-    // construction; fail() routes the freed channel through it.
-    using defer_destroy = plexus::detail::move_only_function<void(std::unique_ptr<Channel>)>;
+    struct entry
+    {
+        std::unique_ptr<Channel> channel;
+        Payload payload;
+    };
 
-    explicit pending_dial_registry(defer_destroy defer)
-            : m_defer(std::move(defer))
+    using table = std::unordered_map<Channel *, std::unique_ptr<Channel>>;
+
+public:
+    pending_dial_registry()
+            : m_accepted()
+            , m_retiring()
+            , m_pending()
     {
     }
 
-    // Book a half-open dial entry keyed by the raw channel pointer.
+    pending_dial_registry(const pending_dial_registry &)            = delete;
+    pending_dial_registry &operator=(const pending_dial_registry &) = delete;
+
     void insert(Channel *raw, std::unique_ptr<Channel> channel, Payload payload = {})
     {
         m_pending.insert_or_assign(raw, entry{std::move(channel), std::move(payload)});
     }
 
-    // Move the channel out into a LOCAL, erase the entry, THEN return — the entry is
-    // never read after the erase (copy-before-erase: the caller copies any value the
-    // entry carries OUT before calling). Returns nullptr on a miss.
     std::unique_ptr<Channel> resolve(Channel *raw)
     {
         auto it = m_pending.find(raw);
@@ -70,61 +56,40 @@ public:
         return channel;
     }
 
-    // Drop a half-open dial entry, destroying its channel DEFERRED (never synchronously
-    // from inside the channel's own member call). Copy-before-erase applies to the
-    // caller exactly as for resolve(). A no-op on a miss.
     void fail(Channel *raw)
     {
-        auto it = m_pending.find(raw);
-        if(it == m_pending.end())
-            return;
-        auto channel = std::move(it->second.channel);
-        m_pending.erase(it);
-        if(m_defer)
-            m_defer(std::move(channel));
+        retire(resolve(raw));
     }
 
-    // Read the per-entry payload (the ARQ for UDP); nullptr on a miss.
     Payload *payload_of(Channel *raw)
     {
         auto it = m_pending.find(raw);
         return it == m_pending.end() ? nullptr : &it->second.payload;
     }
 
-    // The accepted table: a server-minted channel awaiting its hand-off.
     void insert_accepted(Channel *raw, std::unique_ptr<Channel> channel)
     {
         m_accepted.insert_or_assign(raw, std::move(channel));
     }
 
-    // Move an accepted channel out, erase, return (the demux raw ref stays intact — the
-    // owner keeps routing inbound by endpoint). Returns nullptr on a miss.
     std::unique_ptr<Channel> adopt_accepted(Channel *raw)
     {
-        auto it = m_accepted.find(raw);
-        if(it == m_accepted.end())
-            return nullptr;
-        auto channel = std::move(it->second);
-        m_accepted.erase(it);
-        return channel;
+        return take(m_accepted, raw);
     }
 
-    // Drop an accepted entry, destroying its channel DEFERRED through the SAME injected
-    // sink fail() uses — the accept-side analog of fail(). An accept-side handshake fail
-    // may fire from INSIDE the channel's own deliver_inbound/drain stack (the triggering
-    // datagram is fed straight into the freshly-minted accept channel), so destroying it
-    // synchronously there frees it mid-stack — a use-after-free as that stack unwinds.
-    // Moves the channel out, erases the entry, then routes it through m_defer. A no-op on
-    // a miss. Copy-before-erase applies to the caller exactly as for resolve()/fail().
     void fail_accepted(Channel *raw)
     {
-        auto it = m_accepted.find(raw);
-        if(it == m_accepted.end())
-            return;
-        auto channel = std::move(it->second);
-        m_accepted.erase(it);
-        if(m_defer)
-            m_defer(std::move(channel));
+        retire(adopt_accepted(raw));
+    }
+
+    void retire_all()
+    {
+        auto pending  = std::exchange(m_pending, {});
+        auto accepted = std::exchange(m_accepted, {});
+        for(auto &held : std::views::values(pending))
+            retire(std::move(held.channel));
+        for(auto &channel : std::views::values(accepted))
+            retire(std::move(channel));
     }
 
     std::size_t pending_size() const noexcept
@@ -137,24 +102,35 @@ public:
         return m_accepted.size();
     }
 
-    // Drop both tables (teardown). Destroys the held channels synchronously — the owner
-    // calls clear() from its own close path, not from inside a channel's member call.
-    void clear()
+    std::size_t retiring_size() const noexcept
     {
-        m_pending.clear();
-        m_accepted.clear();
+        return m_retiring.size();
     }
 
 private:
-    struct entry
-    {
-        std::unique_ptr<Channel> channel;
-        Payload payload;
-    };
-
-    defer_destroy m_defer;
+    table m_accepted;
+    table m_retiring;
     std::unordered_map<Channel *, entry> m_pending;
-    std::unordered_map<Channel *, std::unique_ptr<Channel>> m_accepted;
+
+    static std::unique_ptr<Channel> take(table &from, Channel *raw)
+    {
+        auto it = from.find(raw);
+        if(it == from.end())
+            return nullptr;
+        auto channel = std::move(it->second);
+        from.erase(it);
+        return channel;
+    }
+
+    void retire(std::unique_ptr<Channel> channel)
+    {
+        if(!channel)
+            return;
+        Channel &retired = *channel;
+        m_retiring.insert_or_assign(std::addressof(retired), std::move(channel));
+        retired.on_closed([this, &retired] { take(m_retiring, std::addressof(retired)); });
+        retired.close();
+    }
 };
 
 }

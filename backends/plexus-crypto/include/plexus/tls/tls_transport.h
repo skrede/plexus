@@ -23,7 +23,6 @@
 #include "plexus/io/pending_dial_registry.h"
 #include "plexus/detail/compat.h"
 
-#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
 #include <array>
@@ -37,14 +36,10 @@
 
 namespace plexus::tls {
 
-// The TLS connector: a protocol-type swap of the plaintext transport with a handshake hop. It
-// wraps tls_listener for listen + accept and adds an async-connect-then-client-handshake dial over
-// the ssl::stream. dial(ep) async-connects a fresh client channel then runs the client handshake,
-// handing the live channel to on_dialed ONLY POST-handshake (a verify-rejected peer never yields a
-// live channel — fail-closed). Each half-open dial is owned by the transport's
-// pending_dial_registry (copy-before-erase resolve, deferred-destroy fail), so a fail edge firing
-// from inside the channel's async stack frees it OFF that stack. The credential is REQUIRED
-// (non-defaultable, first after io); the dialed endpoint rides the async closure so on_dialed /
+// The TLS connector: a protocol-type swap of the plaintext transport with a handshake hop. It wraps tls_listener for
+// listen + accept and adds an async-connect-then-client-handshake dial over the ssl::stream, handing the channel to
+// on_dialed only after the handshake (a verify-rejected peer never yields a live channel — fail-closed). The
+// credential is REQUIRED (non-defaultable, first after io); the dialed endpoint rides the async closure so on_dialed /
 // on_dial_failed carry it back for the engine's by-endpoint correlation.
 class tls_transport
 {
@@ -64,9 +59,7 @@ public:
             , m_congestion(congestion)
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
-            // Destroy a freed channel OFF the current stack: a posted continuation owns it until
-            // it runs, so teardown follows the channel's own async-completion unwind.
-            , m_pending([this](std::unique_ptr<tls_channel> ch) { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); })
+            , m_pending()
     {
         m_listener.on_accepted(
                 [this](std::unique_ptr<tls_channel> ch)
@@ -143,7 +136,7 @@ public:
 
     void close()
     {
-        m_pending.clear();
+        m_pending.retire_all();
         m_listener.stop();
     }
 

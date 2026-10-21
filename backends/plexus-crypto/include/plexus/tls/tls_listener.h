@@ -16,7 +16,6 @@
 #include "plexus/io/pending_dial_registry.h"
 #include "plexus/detail/compat.h"
 
-#include <asio/post.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
 
@@ -52,7 +51,8 @@ public:
             , m_congestion(congestion)
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
-            , m_accepting([this](std::unique_ptr<tls_channel> ch) { defer_destroy(std::move(ch)); })
+            , m_accepting()
+            , m_running(false)
     {
     }
 
@@ -94,7 +94,7 @@ public:
         std::error_code ec;
         (void)m_acceptor.cancel(ec);
         (void)m_acceptor.close(ec);
-        m_accepting.clear();
+        m_accepting.retire_all();
     }
 
     uint16_t port() const
@@ -128,12 +128,8 @@ private:
                 });
     }
 
-    // Run the server handshake before delivering the channel: the accepted channel is
-    // owned by the registry's accepted table across the handshake (never by its own
-    // readiness closure), so a verify reject — which fires the channel's error/fail edge
-    // from inside its own async stack — drops it through the registry's deferred-destroy
-    // (freed OFF that stack) and the consumer never receives a verify-rejected peer's
-    // channel (fail-closed, symmetric with the dial side's post-handshake delivery).
+    // The accepted channel stays in the registry across the server handshake, so a verify reject never reaches the
+    // consumer (fail-closed, symmetric with the dial side's post-handshake delivery).
     void run_server_handshake(std::unique_ptr<tls_channel> ch)
     {
         auto *raw = ch.get();
@@ -151,19 +147,9 @@ private:
             m_on_accepted_cb(std::move(ch));
     }
 
-    // A handshake/verify failure: drop the accepted channel OFF its own async stack via a
-    // posted continuation (the deferred-destroy sink), never synchronously mid-call.
     void drop_accept(tls_channel *raw)
     {
-        if(auto ch = m_accepting.adopt_accepted(raw))
-            defer_destroy(std::move(ch));
-    }
-
-    // Destroy a freed channel OFF the current stack: a posted continuation owns it until
-    // it runs, so it is torn down after the channel's own async-completion call unwinds.
-    void defer_destroy(std::unique_ptr<tls_channel> ch)
-    {
-        ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); });
+        m_accepting.fail_accepted(raw);
     }
 
     void report(const std::error_code &ec)
@@ -183,7 +169,7 @@ private:
     io::pending_dial_registry<tls_channel, std::monostate> m_accepting; // accepted-table owner
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
-    bool m_running{false};
+    bool m_running;
 };
 
 }

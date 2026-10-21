@@ -21,7 +21,6 @@
 #include "plexus/io/pending_dial_registry.h"
 #include "plexus/detail/compat.h"
 
-#include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
@@ -60,7 +59,7 @@ public:
             , m_max_payload(max_payload)
             , m_max_message_bytes(global_default)
             , m_reassembly_budget(reassembly_budget)
-            , m_registry(make_defer_destroy())
+            , m_registry()
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { detail::on_datagram(*this, from, bytes); });
         m_server.on_error(
@@ -73,11 +72,6 @@ public:
 
     dtls_transport(const dtls_transport &)            = delete;
     dtls_transport &operator=(const dtls_transport &) = delete;
-
-    ~dtls_transport()
-    {
-        close();
-    }
 
     // The concrete channel this member's completions deliver + its routing identity: the
     // schemes it serves and the locality tier. DTLS-over-UDP is a remote (encrypted
@@ -150,9 +144,7 @@ public:
 
     void close()
     {
-        // clear() drops both registry tables, destroying each held channel synchronously
-        // from this own-close path (never from inside a channel's member call).
-        m_registry.clear();
+        m_registry.retire_all();
         m_demux = plexus::asio::detail::basic_inbound_demux<dtls_channel>{};
         m_server.close();
     }
@@ -164,17 +156,6 @@ public:
 
 private:
     using dial_registry = io::pending_dial_registry<dtls_channel, std::monostate>;
-
-    // The deferred-destroy sink the registry routes a failed channel through (both the
-    // dial fail and the accept-side fail_accepted): a fail edge may fire from inside the
-    // channel's own deliver_inbound/drain stack (the triggering datagram is fed straight
-    // into a freshly-minted accept channel), so destroying it there frees it mid-unwind.
-    // Posting it to a continuation that owns it until it runs defers the destruction off
-    // the current stack.
-    dial_registry::defer_destroy make_defer_destroy()
-    {
-        return [this](std::unique_ptr<dtls_channel> ch) { ::asio::post(m_io, [owned = std::move(ch)]() mutable { owned.reset(); }); };
-    }
 
     template<typename U>
     friend void detail::report_dial_fail(U &, const io::endpoint &, io::io_error);
