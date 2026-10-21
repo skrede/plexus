@@ -43,6 +43,11 @@ public:
         return take(m_pending, raw);
     }
 
+    bool is_pending(Channel *raw) const
+    {
+        return m_pending.contains(raw);
+    }
+
     void fail(Channel *raw)
     {
         retire(resolve(raw));

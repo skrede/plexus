@@ -10,6 +10,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/egress_capacity.h"
+#include "plexus/io/pending_dial_registry.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -21,10 +22,9 @@
 
 namespace plexus::asio {
 
-// The shared connector core for the plaintext stream backends (TCP, AF_UNIX): a Listener for
-// listen + accept plus an async-connect dial. The connect closure OWNS the channel for the
-// duration of the async op (the move_only_function holds the unique_ptr) — no shared lifetime
-// handle is taken, so the transport owner MUST outlive any pending connect.
+// The shared connector core for the plaintext stream backends (TCP, AF_UNIX): a Listener for listen + accept plus an
+// async-connect dial. A dial sits in the pending table from before its connect, which it counts as an operation of the
+// channel, so close() retires a dial still connecting; the owner closes the transport and drains before destroying it.
 template<typename Channel, typename Listener, typename Traits>
 class stream_transport
 {
@@ -66,21 +66,15 @@ public:
         if(pec)
             return report_dial_fail(ep, detail::map_error(pec));
         auto ch   = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
-        auto &raw = *ch;
-        raw.socket().async_connect(target,
-                                   [this, ep, ch = std::move(ch)](std::error_code ec) mutable
-                                   {
-                                       if(ec)
-                                           return report_dial_fail(ep, detail::map_error(ec));
-                                       Traits::after_connect(*ch, m_no_delay);
-                                       ch->start_read();
-                                       if(m_on_dialed_cb)
-                                           m_on_dialed_cb(std::move(ch), ep);
-                                   });
+        auto *raw = ch.get();
+        m_pending.insert(raw, std::move(ch));
+        raw->begin_op();
+        raw->socket().async_connect(target, [this, ep, raw](std::error_code ec) { finish_dial(ep, raw, ec); });
     }
 
     void close()
     {
+        m_pending.retire_all();
         m_listener.stop();
     }
 
@@ -95,6 +89,7 @@ protected:
             , m_congestion(congestion)
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
+            , m_pending()
     {
         m_listener.on_accepted(
                 [this](std::unique_ptr<Channel> ch)
@@ -120,6 +115,24 @@ protected:
     }
 
 private:
+    // A connect that succeeded for a dial close() already retired is still that dial's one failure.
+    void finish_dial(const io::endpoint &ep, Channel *raw, std::error_code ec)
+    {
+        raw->end_op();
+        if(ec)
+        {
+            m_pending.fail(raw);
+            return report_dial_fail(ep, detail::map_error(ec));
+        }
+        auto ch = m_pending.resolve(raw);
+        if(!ch)
+            return report_dial_fail(ep, io::io_error::operation_aborted);
+        Traits::after_connect(*ch, m_no_delay);
+        ch->start_read();
+        if(m_on_dialed_cb)
+            m_on_dialed_cb(std::move(ch), ep);
+    }
+
     void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
         if(m_on_dial_failed_cb)
@@ -133,6 +146,7 @@ private:
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;
     stream_socket_options m_socket_options;
+    io::pending_dial_registry<Channel> m_pending;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed_cb;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;

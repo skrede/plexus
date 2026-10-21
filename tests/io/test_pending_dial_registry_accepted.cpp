@@ -69,6 +69,7 @@ TEST_CASE("pending_dial_registry retire_all retires both tables and destroys eac
     REQUIRE(reg.pending_size() == 0);
     REQUIRE(reg.accepted_size() == 0);
     REQUIRE(reg.retiring_size() == 2);
+    REQUIRE_FALSE(reg.is_pending(raw_dial));
     REQUIRE(reg.resolve(raw_dial) == nullptr);
     REQUIRE(reg.adopt_accepted(raw_acc) == nullptr);
     REQUIRE(log.empty());

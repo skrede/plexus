@@ -13,10 +13,12 @@ TEST_CASE("pending_dial_registry insert+resolve returns the same owned channel a
     auto *raw = ch.get();
     reg.insert(raw, std::move(ch));
     REQUIRE(reg.pending_size() == 1);
+    REQUIRE(reg.is_pending(raw));
 
     auto resolved = reg.resolve(raw);
     REQUIRE(resolved.get() == raw);
     REQUIRE(reg.pending_size() == 0);
+    REQUIRE_FALSE(reg.is_pending(raw));
     REQUIRE(reg.resolve(raw) == nullptr);
     REQUIRE(reg.retiring_size() == 0);
     REQUIRE(executor.queued() == 0);

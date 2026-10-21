@@ -104,6 +104,8 @@ public:
     }
 
 private:
+    // The closure captures the listener, which its owner stops and drains before destroying, so a success queued before
+    // stop() finds it alive and stopped and drops the socket.
     void do_accept()
     {
         m_acceptor.async_accept(
@@ -115,6 +117,8 @@ private:
                             report(ec);
                         return;
                     }
+                    if(!m_running)
+                        return;
                     if(m_no_delay)
                     {
                         std::error_code nec;

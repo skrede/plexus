@@ -49,7 +49,7 @@ struct socket_dir
 // A unix connect to a listener with room completes inside dial() and only its completion is queued, so the transport
 // closes with the dial's outcome not yet handled.
 TEST_CASE("transport_dial_cancel: a unix dial whose connect completion is still queued when its transport closes reports one aborted failure and is never dialed",
-          "[integration][transport][unix][dial_cancel][!shouldfail]")
+          "[integration][transport][unix][dial_cancel]")
 {
     socket_dir sock;
     ::asio::io_context io;
@@ -67,7 +67,7 @@ TEST_CASE("transport_dial_cancel: a unix dial whose connect completion is still 
     CHECK(seen.failures.front() == pio::io_error::operation_aborted);
 }
 
-TEST_CASE("transport_accept_cancel: a unix accept completed but not yet handled when its transport closes is dropped", "[integration][transport][unix][accept_cancel][!shouldfail]")
+TEST_CASE("transport_accept_cancel: a unix accept completed but not yet handled when its transport closes is dropped", "[integration][transport][unix][accept_cancel]")
 {
     socket_dir sock;
     ::asio::io_context io;

@@ -72,6 +72,8 @@ void adopt_peer(L &l, ::asio::local::stream_protocol::socket peer)
         l.m_on_accepted_cb(std::move(channel));
 }
 
+// The closure captures the listener, which its owner stops and drains before destroying, so a success queued before
+// stop() finds it alive and stopped and drops the socket.
 template<typename L>
 void do_accept(L &l)
 {
@@ -84,6 +86,8 @@ void do_accept(L &l)
                         report(l, ec);
                     return;
                 }
+                if(!l.m_running)
+                    return;
                 adopt_peer(l, std::move(peer));
                 if(l.m_running)
                     do_accept(l);

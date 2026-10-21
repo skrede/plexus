@@ -17,8 +17,7 @@ namespace pio  = plexus::io;
 
 using namespace transport_dial_cancel;
 
-TEST_CASE("transport_dial_cancel: a TLS dial still connecting when its transport closes reports one aborted failure and is never dialed",
-          "[integration][transport][tls][dial_cancel][!shouldfail]")
+TEST_CASE("transport_dial_cancel: a TLS dial still connecting when its transport closes reports one aborted failure and is never dialed", "[integration][transport][tls][dial_cancel]")
 {
     tls_retire_drain::mutual_credentials creds;
     ::asio::io_context io;
@@ -37,7 +36,7 @@ TEST_CASE("transport_dial_cancel: a TLS dial still connecting when its transport
     CHECK(seen.failures.front() == pio::io_error::operation_aborted);
 }
 
-TEST_CASE("transport_accept_cancel: a TLS accept completed but not yet handled when its transport closes is dropped", "[integration][transport][tls][accept_cancel][!shouldfail]")
+TEST_CASE("transport_accept_cancel: a TLS accept completed but not yet handled when its transport closes is dropped", "[integration][transport][tls][accept_cancel]")
 {
     tls_retire_drain::mutual_credentials creds;
     ::asio::io_context io;

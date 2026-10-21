@@ -4,11 +4,16 @@
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/detail/tls_context.h"
 
+#include "plexus/asio/detail/asio_error_map.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 
-#include <memory>
+#include <asio/ip/tcp.hpp>
+
+#include <string>
 #include <utility>
+#include <system_error>
 
 namespace plexus::tls::detail {
 
@@ -45,16 +50,32 @@ void tls_fail_dial(T &t, const io::endpoint &ep, tls_channel *raw, io::io_error 
     tls_report_dial_fail(t, failed, e);
 }
 
-// Run the client handshake; deliver to on_dialed only on success. The minted channel is owned by
-// the registry across the handshake (no self-owning readiness closure); a handshake/verify failure
-// routes through the channel's on_error to tls_fail_dial.
+// Run the client handshake; deliver to on_dialed only on success. The dial's registry entry, made before its connect,
+// holds the channel across the handshake; a handshake/verify failure routes through the channel's on_error to
+// tls_fail_dial.
 template<typename T>
-void tls_run_handshake(T &t, std::unique_ptr<tls_channel> ch, tls_channel *raw, const io::endpoint &ep)
+void tls_run_handshake(T &t, tls_channel *raw, const io::endpoint &ep)
 {
-    t.m_pending.insert(raw, std::move(ch));
     raw->on_error([&t, ep, raw](io::io_error e) { tls_fail_dial(t, ep, raw, e); });
     auto host = sni_host(ep.address);
     raw->start_client_handshake(host, [&t, ep, raw]() mutable { tls_resolve_dial(t, ep, raw); });
+}
+
+// A connect that succeeded for a dial close() already retired is still that dial's one failure.
+template<typename T>
+void tls_finish_connect(T &t, const io::endpoint &ep, tls_channel *raw, std::error_code ec)
+{
+    raw->end_op();
+    if(ec)
+        return tls_fail_dial(t, ep, raw, plexus::asio::detail::map_error(ec));
+    if(!t.m_pending.is_pending(raw))
+        return tls_report_dial_fail(t, ep, io::io_error::operation_aborted);
+    if(t.m_no_delay)
+    {
+        std::error_code nec;
+        (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true), nec);
+    }
+    tls_run_handshake(t, raw, ep);
 }
 
 }

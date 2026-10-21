@@ -118,19 +118,9 @@ public:
             return detail::tls_report_dial_fail(*this, ep, plexus::asio::detail::map_error(pec));
         auto ch   = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
-        raw->socket().async_connect(target,
-                                    [this, ep, ch = std::move(ch), raw](std::error_code ec) mutable
-                                    {
-                                        if(ec)
-                                            return detail::tls_report_dial_fail(*this, ep, plexus::asio::detail::map_error(ec));
-                                        if(m_no_delay)
-                                        {
-                                            std::error_code nec;
-                                            (void)raw->socket().set_option(::asio::ip::tcp::no_delay(true),
-                                                                           nec); // disable Nagle pre-handshake
-                                        }
-                                        detail::tls_run_handshake(*this, std::move(ch), raw, ep);
-                                    });
+        m_pending.insert(raw, std::move(ch));
+        raw->begin_op();
+        raw->socket().async_connect(target, [this, ep, raw](std::error_code ec) { detail::tls_finish_connect(*this, ep, raw, ec); });
     }
 
     void close()
@@ -147,7 +137,9 @@ private:
     template<typename U>
     friend void detail::tls_fail_dial(U &, const io::endpoint &, tls_channel *, io::io_error);
     template<typename U>
-    friend void detail::tls_run_handshake(U &, std::unique_ptr<tls_channel>, tls_channel *, const io::endpoint &);
+    friend void detail::tls_run_handshake(U &, tls_channel *, const io::endpoint &);
+    template<typename U>
+    friend void detail::tls_finish_connect(U &, const io::endpoint &, tls_channel *, std::error_code);
 
     ::asio::io_context &m_io;
     const tls_credential &m_cred;

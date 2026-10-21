@@ -18,8 +18,7 @@ namespace pio   = plexus::io;
 
 using namespace transport_dial_cancel;
 
-TEST_CASE("transport_dial_cancel: a TCP dial still connecting when its transport closes reports one aborted failure and is never dialed",
-          "[integration][transport][dial_cancel][!shouldfail]")
+TEST_CASE("transport_dial_cancel: a TCP dial still connecting when its transport closes reports one aborted failure and is never dialed", "[integration][transport][dial_cancel]")
 {
     ::asio::io_context io;
     full_backlog peer{io};
@@ -37,7 +36,7 @@ TEST_CASE("transport_dial_cancel: a TCP dial still connecting when its transport
     CHECK(seen.failures.front() == pio::io_error::operation_aborted);
 }
 
-TEST_CASE("transport_accept_cancel: a TCP accept completed but not yet handled when its transport closes is dropped", "[integration][transport][accept_cancel][!shouldfail]")
+TEST_CASE("transport_accept_cancel: a TCP accept completed but not yet handled when its transport closes is dropped", "[integration][transport][accept_cancel]")
 {
     ::asio::io_context io;
     outcome<pasio::asio_channel> seen;
