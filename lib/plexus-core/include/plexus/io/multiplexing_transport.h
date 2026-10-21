@@ -184,13 +184,7 @@ private:
     template<typename F>
     void dispatch(std::size_t index, F &&fn)
     {
-        dispatch_at(index, std::forward<F>(fn), std::index_sequence_for<Members...>{});
-    }
-
-    template<typename F, std::size_t... I>
-    void dispatch_at(std::size_t index, F &&fn, std::index_sequence<I...>)
-    {
-        ((index == I ? (void)fn(std::get<I>(m_members)) : (void)0), ...);
+        detail::mux_dispatch_at(m_members, index, std::forward<F>(fn), std::index_sequence_for<Members...>{});
     }
 };
 

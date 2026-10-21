@@ -67,6 +67,12 @@ void mux_consider(const Mux &, const endpoint &ep, transport_kind tier, Candidat
         }
 }
 
+template<typename Members, typename F, std::size_t... I>
+void mux_dispatch_at(Members &members, std::size_t index, F &&fn, std::index_sequence<I...>)
+{
+    ((index == I ? (void)fn(std::get<I>(members)) : (void)0), ...);
+}
+
 template<typename Mux, typename Candidates, std::size_t... I>
 void mux_collect_candidates(const Mux &mux, const endpoint &ep, transport_kind tier, Candidates &out, std::size_t &count, std::index_sequence<I...>)
 {

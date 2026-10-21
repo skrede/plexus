@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_PENDING_DIAL_REGISTRY_H
 
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/detail/retiring_table.h"
 
 #include <memory>
 #include <ranges>
@@ -13,9 +14,7 @@ namespace plexus::io {
 
 // The half-open dial table and the accepted table a transport holds its channels in until the engine adopts them. A
 // fail edge may fire inside the channel's own member call, so no verb here destroys a channel: fail(), fail_accepted()
-// and retire_all() move it into the retiring table, install on_closed to erase it by identity, then close it, and it is
-// destroyed inside its own posted notification. A channel that closed before it was retired and never notifies again
-// stays held until the registry is destroyed.
+// and retire_all() hand it to the retiring table, which keeps it until its own on_closed.
 template<typename Channel>
     requires io::byte_channel<Channel>
 class pending_dial_registry
@@ -50,7 +49,7 @@ public:
 
     void fail(Channel *raw)
     {
-        retire(resolve(raw));
+        m_retiring.retire(resolve(raw));
     }
 
     void insert_accepted(Channel *raw, std::unique_ptr<Channel> channel)
@@ -65,7 +64,7 @@ public:
 
     void fail_accepted(Channel *raw)
     {
-        retire(adopt_accepted(raw));
+        m_retiring.retire(adopt_accepted(raw));
     }
 
     void retire_all()
@@ -73,9 +72,9 @@ public:
         auto pending  = std::exchange(m_pending, {});
         auto accepted = std::exchange(m_accepted, {});
         for(auto &channel : std::views::values(pending))
-            retire(std::move(channel));
+            m_retiring.retire(std::move(channel));
         for(auto &channel : std::views::values(accepted))
-            retire(std::move(channel));
+            m_retiring.retire(std::move(channel));
     }
 
     std::size_t pending_size() const noexcept
@@ -96,7 +95,7 @@ public:
 private:
     table m_pending;
     table m_accepted;
-    table m_retiring;
+    detail::retiring_table<Channel> m_retiring;
 
     static std::unique_ptr<Channel> take(table &from, Channel *raw)
     {
@@ -106,16 +105,6 @@ private:
         auto channel = std::move(it->second);
         from.erase(it);
         return channel;
-    }
-
-    void retire(std::unique_ptr<Channel> channel)
-    {
-        if(!channel)
-            return;
-        Channel &retired = *channel;
-        m_retiring.insert_or_assign(std::addressof(retired), std::move(channel));
-        retired.on_closed([this, &retired] { take(m_retiring, std::addressof(retired)); });
-        retired.close();
     }
 };
 
