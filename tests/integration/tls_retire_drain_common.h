@@ -79,6 +79,12 @@ struct identity
         auto policy = std::make_shared<const plexus::io::security::spki_pin_policy>(std::vector<spki_digest>{peer});
         return plexus::tls::load_credential((dir / "cert.pem").string(), (dir / "key.pem").string(), policy);
     }
+
+    plexus::tls::tls_credential dtls_credential(const spki_digest &peer) const
+    {
+        auto policy = std::make_shared<const plexus::io::security::spki_pin_policy>(std::vector<spki_digest>{peer});
+        return plexus::tls::load_dtls_credential((dir / "cert.pem").string(), (dir / "key.pem").string(), policy);
+    }
 };
 
 // A server and a client identity pinned to each other; the credentials outlive every channel built from them.
@@ -94,6 +100,22 @@ struct mutual_credentials
             , client_id("cli")
             , server(server_id.credential(client_id.digest))
             , client(client_id.credential(server_id.digest))
+    {
+    }
+};
+
+struct mutual_dtls_credentials
+{
+    identity server_id;
+    identity client_id;
+    plexus::tls::tls_credential server;
+    plexus::tls::tls_credential client;
+
+    mutual_dtls_credentials()
+            : server_id("dsrv")
+            , client_id("dcli")
+            , server(server_id.dtls_credential(client_id.digest))
+            , client(client_id.dtls_credential(server_id.digest))
     {
     }
 };

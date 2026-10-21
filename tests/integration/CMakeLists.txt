@@ -1181,6 +1181,42 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     endif()
     catch_discover_tests(test_transport_dial_cancel TEST_PREFIX "integration.")
 
+    # A transport or listener with no consumer installed retires the channel it would have handed over instead of
+    # destroying it under its pending read, handshake wait or posted delivery. Stream families (TCP, AF_UNIX, TLS,
+    # serial) in one binary; datagram, inproc, shared-memory and the core wrappers in the other.
+    add_executable(test_unclaimed_retire_stream test_unclaimed_retire_stream.cpp)
+    target_link_libraries(test_unclaimed_retire_stream PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::testing
+        Catch2::Catch2WithMain)
+    if(NOT WIN32)
+        target_link_libraries(test_unclaimed_retire_stream PRIVATE util)
+    endif()
+    add_executable(test_unclaimed_retire_wrap test_unclaimed_retire_wrap.cpp)
+    target_link_libraries(test_unclaimed_retire_wrap PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        plexus::testing
+        Catch2::Catch2WithMain)
+    if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+        foreach(unclaimed_target test_unclaimed_retire_stream test_unclaimed_retire_wrap)
+            target_sources(${unclaimed_target} PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
+            target_link_libraries(${unclaimed_target} PRIVATE plexus::crypto)
+            target_compile_definitions(${unclaimed_target} PRIVATE PLEXUS_HAVE_CRYPTO)
+        endforeach()
+    endif()
+    if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::native)
+        target_include_directories(test_unclaimed_retire_wrap PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)
+        target_link_libraries(test_unclaimed_retire_wrap PRIVATE plexus::shm plexus::native)
+        target_compile_definitions(test_unclaimed_retire_wrap PRIVATE PLEXUS_HAVE_SHM)
+    endif()
+    catch_discover_tests(test_unclaimed_retire_stream TEST_PREFIX "integration.")
+    catch_discover_tests(test_unclaimed_retire_wrap TEST_PREFIX "integration.")
+
     # The AF_UNIX capability gate — the ONE unix leg that builds on Windows too (NOT
     # NOT-WIN32-excluded): an in-process listener+client round-trip over a real local
     # stream socket proves AF_UNIX delivers bytes both ways, and the platform-divergent
