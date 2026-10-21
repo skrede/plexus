@@ -1,10 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_CRYPTO_DETAIL_DATAGRAM_AEAD_PATH_H
 #define HPP_GUARD_PLEXUS_CRYPTO_DETAIL_DATAGRAM_AEAD_PATH_H
 
-#include "plexus/crypto/anti_replay_window.h"
 #include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/aead_epoch.h"
+
+#include "plexus/datagram/anti_replay_window.h"
 
 #include "plexus/wire/frame.h"
 
@@ -115,10 +116,10 @@ void datagram_on_lower_data(Ch &c, std::span<const std::byte> bytes)
     if(!advances_epoch)
     {
         const auto verdict = c.m_window.would_accept(seq);
-        if(verdict != replay_verdict::accept)
+        if(verdict != datagram::replay_verdict::accept)
         {
             ++c.m_replay_dropped;
-            emit_drop(c, verdict == replay_verdict::reject_old ? io::detail::drop_cause::too_old : io::detail::drop_cause::replay);
+            emit_drop(c, verdict == datagram::replay_verdict::reject_old ? io::detail::drop_cause::too_old : io::detail::drop_cause::replay);
             return;
         }
     }

@@ -17,7 +17,7 @@
 // deterministic, so two back-to-back runs produce identical results (no CPU-exclusivity
 // caveat applies — the metric is a pure-computation false-reject count, not a timing).
 
-#include "plexus/crypto/anti_replay_window.h"
+#include "plexus/datagram/anti_replay_window.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -28,8 +28,8 @@
 #include <utility>
 #include <algorithm>
 
-using plexus::crypto::anti_replay_window;
-using plexus::crypto::replay_verdict;
+using plexus::datagram::anti_replay_window;
+using plexus::datagram::replay_verdict;
 
 namespace {
 
@@ -161,9 +161,9 @@ bool verdicts_match(const std::vector<std::uint64_t> &arrival)
     return true;
 }
 
-TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the bit-by-bit "
+TEST_CASE("anti_replay_window_sweep word-shift slide is bitmap-identical to the bit-by-bit "
           "reference",
-          "[crypto][anti_replay]")
+          "[datagram][anti_replay]")
 {
     // A schedule spanning the displacement classes the word-shift must get right:
     // by % 64 == 0 (pure word move, the shift-by-64 edge), by % 64 != 0 (intra-word
@@ -179,9 +179,9 @@ TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the
                                                    1000,
                                                    1024,
                                                    1025,
-                                                   plexus::crypto::k_anti_replay_window_bits - 1,
-                                                   plexus::crypto::k_anti_replay_window_bits,
-                                                   plexus::crypto::k_anti_replay_window_bits + 1,
+                                                   plexus::datagram::k_anti_replay_window_bits - 1,
+                                                   plexus::datagram::k_anti_replay_window_bits,
+                                                   plexus::datagram::k_anti_replay_window_bits + 1,
                                                    7,
                                                    33,
                                                    4095,
@@ -204,7 +204,7 @@ TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the
     REQUIRE(verdicts_match<64>(arrival));
     REQUIRE(verdicts_match<256>(arrival));
     REQUIRE(verdicts_match<1024>(arrival));
-    REQUIRE(verdicts_match<plexus::crypto::k_anti_replay_window_bits>(arrival));
+    REQUIRE(verdicts_match<plexus::datagram::k_anti_replay_window_bits>(arrival));
 
     // Also pin the reordered sweep schedule (the same arrival the reject-set sweep uses)
     // across the candidate widths — a verdict divergence anywhere fails the identity.
@@ -212,12 +212,12 @@ TEST_CASE("crypto.anti_replay_window word-shift slide is bitmap-identical to the
     REQUIRE(verdicts_match<64>(reordered));
     REQUIRE(verdicts_match<256>(reordered));
     REQUIRE(verdicts_match<1024>(reordered));
-    REQUIRE(verdicts_match<plexus::crypto::k_anti_replay_window_bits>(reordered));
+    REQUIRE(verdicts_match<plexus::datagram::k_anti_replay_window_bits>(reordered));
 }
 
-TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject rates across "
+TEST_CASE("anti_replay_window_sweep records fragment-scale false-reject rates across "
           "candidate widths",
-          "[crypto][anti_replay]")
+          "[datagram][anti_replay]")
 {
     // A 4 MiB message at the 1200-byte MTU fragments into ~3500 sealed datagrams.
     constexpr std::size_t count  = 3500;
@@ -251,7 +251,7 @@ TEST_CASE("crypto.anti_replay_window_sweep records fragment-scale false-reject r
     // realistic-link reorder depth — a regression that shrinks it below that property
     // (e.g. to 1024, which false-rejects at the full realistic-link in-flight window)
     // fails here.
-    REQUIRE(plexus::crypto::k_anti_replay_window_bits == 4096);
-    REQUIRE(false_rejects<plexus::crypto::k_anti_replay_window_bits>(realistic) == 0);
-    REQUIRE(false_rejects<plexus::crypto::k_anti_replay_window_bits>(loopback) == 0);
+    REQUIRE(plexus::datagram::k_anti_replay_window_bits == 4096);
+    REQUIRE(false_rejects<plexus::datagram::k_anti_replay_window_bits>(realistic) == 0);
+    REQUIRE(false_rejects<plexus::datagram::k_anti_replay_window_bits>(loopback) == 0);
 }

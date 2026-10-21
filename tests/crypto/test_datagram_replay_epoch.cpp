@@ -42,7 +42,7 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[
 TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too-old", "[crypto][datagram_replay]")
 {
     const auto keys               = fixed_keys();
-    const std::size_t past_window = plexus::crypto::k_anti_replay_window_bits + 8;
+    const std::size_t past_window = plexus::datagram::k_anti_replay_window_bits + 8;
     const auto wire               = seal_datagrams(keys, past_window + 1);
 
     wire_lower recv_wire;

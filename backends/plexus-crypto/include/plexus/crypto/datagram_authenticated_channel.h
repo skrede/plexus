@@ -1,11 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_CRYPTO_DATAGRAM_AUTHENTICATED_CHANNEL_H
 #define HPP_GUARD_PLEXUS_CRYPTO_DATAGRAM_AUTHENTICATED_CHANNEL_H
 
-#include "plexus/crypto/anti_replay_window.h"
 #include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/aead_epoch.h"
 #include "plexus/crypto/detail/datagram_aead_path.h"
+
+#include "plexus/datagram/anti_replay_window.h"
 
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/frame.h"
@@ -162,7 +163,7 @@ private:
     std::uint32_t m_send_epoch;
     std::uint32_t m_recv_epoch;
     std::uint64_t m_send_seq{0};
-    anti_replay_window<> m_window;
+    datagram::anti_replay_window<> m_window;
     std::size_t m_replay_dropped{0};
     std::size_t m_tamper_dropped{0};
     std::vector<std::byte> m_seal_scratch;

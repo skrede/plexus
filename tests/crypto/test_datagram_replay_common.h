@@ -10,9 +10,10 @@
 // too-old. The drop counters read on demand.
 
 #include "plexus/crypto/datagram_authenticated_channel.h"
-#include "plexus/crypto/anti_replay_window.h"
 #include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+
+#include "plexus/datagram/anti_replay_window.h"
 
 #include "plexus/io/byte_channel.h"
 #include "plexus/wire/frame_codec.h"

@@ -6,7 +6,7 @@ TEST_CASE("crypto.anti_replay_window would_accept predicts check_and_set without
 {
     // would_accept must return the SAME verdict check_and_set would, while leaving the
     // window untouched (so a pre-auth probe cannot itself slide the window).
-    plexus::crypto::anti_replay_window<> window;
+    plexus::datagram::anti_replay_window<> window;
 
     const std::array<std::uint64_t, 9> seqs{5, 9, 9, 7, 3, 200, 200, 8, 1};
     for(std::uint64_t s : seqs)

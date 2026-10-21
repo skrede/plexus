@@ -443,7 +443,7 @@ TEST_CASE("integration.drop_coverage replay / too_old / tamper post through the 
 
         // The window width: deliver a sequence this far ahead, then a low one falls below
         // the floor as too_old rather than replay.
-        const std::size_t batch = plexus::crypto::k_anti_replay_window_bits + 4;
+        const std::size_t batch = plexus::datagram::k_anti_replay_window_bits + 4;
         const auto wire         = seal_datagrams(keys, batch);
 
         wire_lower recv_wire;

@@ -1,11 +1,11 @@
-#ifndef HPP_GUARD_PLEXUS_CRYPTO_ANTI_REPLAY_WINDOW_H
-#define HPP_GUARD_PLEXUS_CRYPTO_ANTI_REPLAY_WINDOW_H
+#ifndef HPP_GUARD_PLEXUS_DATAGRAM_ANTI_REPLAY_WINDOW_H
+#define HPP_GUARD_PLEXUS_DATAGRAM_ANTI_REPLAY_WINDOW_H
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace plexus::crypto {
+namespace plexus::datagram {
 
 // The sliding-window width (in slots) the datagram anti-replay filter tracks below
 // the highest accepted sequence. Set from a recorded reproducible sweep
