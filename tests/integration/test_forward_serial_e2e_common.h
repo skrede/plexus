@@ -19,6 +19,8 @@
 #include "plexus/node_options.h"
 #include "plexus/target_profile.h"
 
+#include "plexus/io/endpoint.h"
+
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/graph/participant_record.h"
@@ -116,6 +118,7 @@ struct cold_cluster
 
     pty_pair pty;
     std::string slave_device{::ptsname(pty.master)};
+    plexus::io::endpoint serial_line{"serial", slave_device + "@115200"};
 
     plexus::discovery::static_discovery odisc{{}};
     plexus::discovery::static_discovery rdisc{{}};
@@ -195,7 +198,7 @@ struct cold_cluster
     void bring_up_serial()
     {
         ::close(pty.take_slave());
-        relay->dial({"serial", slave_device + "@115200"});
+        relay->dial(serial_line);
         serial_fixture::settle(io, std::chrono::milliseconds(50));
         origin->router().registry().accept_session(adopt_channel(io, pty.take_master()));
         pump([&] { return connected(*relay, origin_id) && connected(*origin, relay_id); });
@@ -230,10 +233,12 @@ struct cold_cluster
         n.reset();
     }
 
-    // The relay observes the origin's line close and withdraws the relayed peer.
+    // The relay hangs up the origin's line first: the line is freed with the origin, and the kernel may give its name to
+    // another terminal. Dropping that session withdraws the relayed peer.
     void kill_origin()
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
+        relay->hang_up(serial_line);
         origin->close();
         destroy_once_closed(origin);
     }
@@ -255,13 +260,13 @@ struct cold_cluster
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
         revive_pty.emplace();
-        const std::string revive_slave{::ptsname(revive_pty->master)};
+        serial_line = {"serial", std::string{::ptsname(revive_pty->master)} + "@115200"};
         revive_relay_serial.emplace(io);
         revive_relay_tcp.emplace(io);
         relay.emplace(io, rdisc, relay_id, *revive_relay_serial, *revive_relay_tcp, logged(named("relay"), relay_log));
 
         ::close(revive_pty->take_slave());
-        relay->dial({"serial", revive_slave + "@115200"});
+        relay->dial(serial_line);
         serial_fixture::settle(io, std::chrono::milliseconds(50));
         origin->router().registry().accept_session(adopt_channel(io, revive_pty->take_master()));
         pump([&] { return connected(*relay, origin_id) && connected(*origin, relay_id); });

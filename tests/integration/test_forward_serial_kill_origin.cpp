@@ -3,8 +3,6 @@
 
 #include "test_forward_serial_e2e_common.h"
 
-#include "plexus/io/endpoint.h"
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
@@ -25,8 +23,7 @@ void run_killed_origin_line_never_redialed()
     cold_cluster cluster;
     cluster.bring_up_serial();
     cluster.bring_up_tcp();
-    const plexus::io::endpoint line{"serial", cluster.slave_device + "@115200"};
-    const std::optional<node_id> slot = cluster.relay->router().registry().id_for_endpoint(line);
+    const std::optional<node_id> slot = cluster.relay->router().registry().id_for_endpoint(cluster.serial_line);
     REQUIRE(slot.has_value());
     const std::uint32_t attempts = cluster.relay->router().attempt_count(*slot);
 
@@ -38,7 +35,7 @@ void run_killed_origin_line_never_redialed()
 
 }
 
-TEST_CASE("a relay whose serial origin was killed arms no redial to the freed line, over cold runs", "[integration][serial][relay][e2e][kill_origin][!shouldfail]")
+TEST_CASE("a relay whose serial origin was killed arms no redial to the freed line, over cold runs", "[integration][serial][relay][e2e][kill_origin]")
 {
     for(int run = 0; run < k_runs; ++run)
     {
