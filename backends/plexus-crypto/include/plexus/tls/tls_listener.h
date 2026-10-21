@@ -21,7 +21,6 @@
 
 #include <string>
 #include <memory>
-#include <variant>
 #include <utility>
 #include <cstddef>
 #include <cstdint>
@@ -166,7 +165,7 @@ private:
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
-    io::pending_dial_registry<tls_channel, std::monostate> m_accepting; // accepted-table owner
+    io::pending_dial_registry<tls_channel> m_accepting; // accepted-table owner
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     bool m_running;

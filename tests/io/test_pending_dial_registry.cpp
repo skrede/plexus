@@ -2,9 +2,6 @@
 
 #include "plexus/io/io_error.h"
 
-#include <string>
-#include <cstdint>
-
 using namespace pending_dial_registry_fixture;
 
 TEST_CASE("pending_dial_registry insert+resolve returns the same owned channel and erases the entry", "[io][pending_dial_registry]")
@@ -25,22 +22,20 @@ TEST_CASE("pending_dial_registry insert+resolve returns the same owned channel a
     REQUIRE(executor.queued() == 0);
 }
 
-TEST_CASE("pending_dial_registry resolve honors copy-before-erase (a copied-out value survives the erase)", "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry resolve erases only the entry and neither closes nor destroys the channel it hands out", "[io][pending_dial_registry]")
 {
     fifo_executor executor;
     event_log log;
-    plexus::io::pending_dial_registry<contract_channel, std::string> reg;
+    registry reg;
     auto ch   = make_channel(executor, log);
     auto *raw = ch.get();
-    reg.insert(raw, std::move(ch), std::string{"203.0.113.5:9000"});
+    reg.insert(raw, std::move(ch));
 
-    // Under asan a read of the entry after the erase would corrupt this copy.
-    const std::string endpoint_copy = *reg.payload_of(raw);
-    auto resolved                   = reg.resolve(raw);
+    auto resolved = reg.resolve(raw);
+    executor.drain();
 
     REQUIRE(resolved.get() == raw);
-    REQUIRE(endpoint_copy == "203.0.113.5:9000");
-    REQUIRE(reg.payload_of(raw) == nullptr);
+    REQUIRE(log.empty());
 }
 
 TEST_CASE("pending_dial_registry fail keeps a dial with an operation pending until its own close notification", "[io][pending_dial_registry]")
@@ -93,20 +88,4 @@ TEST_CASE("pending_dial_registry fail on a miss is a no-op", "[io][pending_dial_
     reg.fail(&never_inserted);
     REQUIRE(reg.retiring_size() == 0);
     REQUIRE(executor.queued() == 0);
-}
-
-TEST_CASE("pending_dial_registry threads a non-monostate Payload through payload_of", "[io][pending_dial_registry]")
-{
-    fifo_executor executor;
-    event_log log;
-    plexus::io::pending_dial_registry<contract_channel, std::int32_t> reg;
-    auto ch   = make_channel(executor, log);
-    auto *raw = ch.get();
-    reg.insert(raw, std::move(ch), 1234);
-
-    REQUIRE(reg.payload_of(raw) != nullptr);
-    REQUIRE(*reg.payload_of(raw) == 1234);
-    *reg.payload_of(raw) = 5678;
-    REQUIRE(*reg.payload_of(raw) == 5678);
-    REQUIRE(reg.payload_of(nullptr) == nullptr);
 }

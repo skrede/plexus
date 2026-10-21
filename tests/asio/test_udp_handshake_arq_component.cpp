@@ -49,24 +49,28 @@ TEST_CASE("udp handshake_arq component: the ladder retransmits and a paired fram
         REQUIRE(timed_out);
         REQUIRE(transmits == 3); // the three ladder attempts, then surrender
     }
+}
 
-    SECTION("single-owner teardown cancels a pending timer cleanly")
-    {
-        ::asio::io_context io;
-        {
-            arq_t arq{io, fast_ladder};
-            arq.on_transmit([] {});
-            arq.start();  // a timer is pending
-            arq.cancel(); // the owner tears it down
-            REQUIRE(arq.resolved());
-        }
-        io.poll(); // a canceled timer must not fire on a dead ARQ
-        SUCCEED();
-    }
+TEST_CASE("udp handshake_arq component: cancel settles the wait count once, after the last aborted wait completed", "[udp][handshake]")
+{
+    ::asio::io_context io;
+    arq_t arq{io, fast_ladder};
+    std::int32_t settled = 0;
+    arq.pending().on_settled([&settled] { ++settled; });
+    arq.on_transmit([] {});
+    arq.start();
+    REQUIRE(arq.pending().count() == 1);
+
+    arq.cancel();
+    REQUIRE(arq.resolved());
+    REQUIRE(settled == 0);
+    io.poll();
+    REQUIRE(settled == 1);
+    REQUIRE(arq.pending().count() == 0);
 }
 
 // The resolving action runs in the reactor pass that already queued the first retransmit expiry.
-TEST_CASE("udp handshake_arq component: a handshake ARQ whose retransmit expiry is already queued when it resolves does not retransmit", "[udp][handshake][!shouldfail]")
+TEST_CASE("udp handshake_arq component: a handshake ARQ whose retransmit expiry is already queued when it resolves does not retransmit", "[udp][handshake]")
 {
     for(std::int32_t i = 0; i < plexus::testing::k_teardown_iterations; ++i)
     {
@@ -83,7 +87,7 @@ TEST_CASE("udp handshake_arq component: a handshake ARQ whose retransmit expiry 
     }
 }
 
-TEST_CASE("udp handshake_arq component: a handshake ARQ whose retransmit expiry is already queued when it is canceled does not retransmit", "[udp][handshake][!shouldfail]")
+TEST_CASE("udp handshake_arq component: a handshake ARQ whose retransmit expiry is already queued when it is canceled does not retransmit", "[udp][handshake]")
 {
     for(std::int32_t i = 0; i < plexus::testing::k_teardown_iterations; ++i)
     {

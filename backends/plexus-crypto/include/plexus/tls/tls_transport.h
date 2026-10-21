@@ -27,7 +27,6 @@
 
 #include <array>
 #include <memory>
-#include <variant>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -158,7 +157,7 @@ private:
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
-    io::pending_dial_registry<tls_channel, std::monostate> m_pending; // transport-owned half-open dials
+    io::pending_dial_registry<tls_channel> m_pending; // transport-owned half-open dials
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed_cb;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;

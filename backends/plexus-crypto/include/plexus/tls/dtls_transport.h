@@ -28,7 +28,6 @@
 #include <array>
 #include <memory>
 #include <string>
-#include <variant>
 #include <utility>
 #include <cstddef>
 #include <string_view>
@@ -155,7 +154,7 @@ public:
     }
 
 private:
-    using dial_registry = io::pending_dial_registry<dtls_channel, std::monostate>;
+    using dial_registry = io::pending_dial_registry<dtls_channel>;
 
     template<typename U>
     friend void detail::report_dial_fail(U &, const io::endpoint &, io::io_error);

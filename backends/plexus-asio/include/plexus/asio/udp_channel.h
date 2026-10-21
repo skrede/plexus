@@ -19,6 +19,7 @@
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/detail/close_notification.h"
 #include "plexus/datagram/detail/udp_reliable_arq.h"
+#include "plexus/datagram/detail/udp_handshake_arq.h"
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 #include "plexus/datagram/detail/udp_backpressure_queue.h"
 #include "plexus/asio/detail/udp_channel_io.h"
@@ -61,6 +62,7 @@ public:
 
     using arq_type         = datagram::detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
     using reassembler_type = datagram::detail::reassembler<::asio::io_context &, asio_timer>;
+    using handshake_type   = datagram::detail::udp_handshake_arq<::asio::io_context &, asio_timer>;
 
     // max_message_bytes is the per-MESSAGE size ceiling (send-side oversize-reject AND the receive
     // reassembler's per-message ceiling), distinct from max_payload (the per-FRAGMENT MTU budget).
@@ -78,8 +80,6 @@ public:
             , m_reassembly_timeout(reassembly_timeout)
             , m_arq_cfg(arq_cfg)
             , m_congestion(congestion)
-            // Floor the cap at the per-message ceiling: a single within-ceiling message's full
-            // fragment backlog must always be admissible regardless of the back-pressure knob.
             , m_backpressure(std::max(backpressure_bytes, max_message_bytes))
             , m_dropped(0)
             , m_mode(mode)
@@ -128,8 +128,6 @@ public:
         detail::udp_close_with(*this, [] {});
     }
 
-    // The scheme reflects the channel's mode: a best_effort channel reports "udp", a
-    // reliable_datagram channel reports "udpr".
     io::endpoint remote_endpoint() const
     {
         const char *scheme = m_mode == datagram::detail::udp_channel_mode::reliable_datagram ? "udpr" : "udp";
@@ -206,9 +204,6 @@ public:
         m_on_reliable_cb = std::move(cb);
     }
 
-    // Called BY the transport demux on each datagram for this peer (the channel owns no socket): it
-    // strips the envelope, dedups best_effort, and posts the inner frame. A malformed datagram is
-    // dropped (no on_protocol_close).
     void deliver_inbound(std::span<const std::byte> datagram)
     {
         if(m_open)
@@ -277,6 +272,10 @@ private:
     template<typename Ch>
     friend void detail::udp_destroy(Ch &);
     template<typename Ch>
+    friend typename Ch::handshake_type &detail::udp_arm_handshake(Ch &, typename Ch::handshake_type::schedule);
+    template<typename Ch>
+    friend void detail::udp_pair_handshake(Ch &);
+    template<typename Ch>
     friend void detail::ensure_reassembler(Ch &);
     template<typename Ch>
     friend void detail::feed_fragment(Ch &, std::span<const std::byte>);
@@ -320,6 +319,7 @@ private:
     std::vector<std::byte> m_frag_scratch;
     std::unique_ptr<arq_type> m_arq;
     std::unique_ptr<reassembler_type> m_reassembler;
+    std::unique_ptr<handshake_type> m_handshake;
     io::detail::pending_ops m_ops;
     io::detail::close_notification m_closed;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;

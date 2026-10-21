@@ -5,66 +5,47 @@
 
 #include <memory>
 #include <ranges>
-#include <variant>
 #include <cstddef>
 #include <utility>
 #include <unordered_map>
 
 namespace plexus::io {
 
-// The half-open dial table and the accepted table a transport holds its channels in until the engine adopts them,
-// generic over the channel and a per-entry payload. resolve() erases the entry before returning, so a caller copies
-// out any value bound to the entry's closures first. A fail edge may fire inside the channel's own member call, so no
-// verb here destroys a channel: fail(), fail_accepted() and retire_all() move it into the retiring table, install
-// on_closed to erase it by identity, then close it, and it is destroyed inside its own posted notification. A channel
-// that closed before it was retired and never notifies again stays held until the registry is destroyed.
-template<typename Channel, typename Payload = std::monostate>
+// The half-open dial table and the accepted table a transport holds its channels in until the engine adopts them. A
+// fail edge may fire inside the channel's own member call, so no verb here destroys a channel: fail(), fail_accepted()
+// and retire_all() move it into the retiring table, install on_closed to erase it by identity, then close it, and it is
+// destroyed inside its own posted notification. A channel that closed before it was retired and never notifies again
+// stays held until the registry is destroyed.
+template<typename Channel>
     requires io::byte_channel<Channel>
 class pending_dial_registry
 {
-    struct entry
-    {
-        std::unique_ptr<Channel> channel;
-        Payload payload;
-    };
-
     using table = std::unordered_map<Channel *, std::unique_ptr<Channel>>;
 
 public:
     pending_dial_registry()
-            : m_accepted()
+            : m_pending()
+            , m_accepted()
             , m_retiring()
-            , m_pending()
     {
     }
 
     pending_dial_registry(const pending_dial_registry &)            = delete;
     pending_dial_registry &operator=(const pending_dial_registry &) = delete;
 
-    void insert(Channel *raw, std::unique_ptr<Channel> channel, Payload payload = {})
+    void insert(Channel *raw, std::unique_ptr<Channel> channel)
     {
-        m_pending.insert_or_assign(raw, entry{std::move(channel), std::move(payload)});
+        m_pending.insert_or_assign(raw, std::move(channel));
     }
 
     std::unique_ptr<Channel> resolve(Channel *raw)
     {
-        auto it = m_pending.find(raw);
-        if(it == m_pending.end())
-            return nullptr;
-        auto channel = std::move(it->second.channel);
-        m_pending.erase(it);
-        return channel;
+        return take(m_pending, raw);
     }
 
     void fail(Channel *raw)
     {
         retire(resolve(raw));
-    }
-
-    Payload *payload_of(Channel *raw)
-    {
-        auto it = m_pending.find(raw);
-        return it == m_pending.end() ? nullptr : &it->second.payload;
     }
 
     void insert_accepted(Channel *raw, std::unique_ptr<Channel> channel)
@@ -86,8 +67,8 @@ public:
     {
         auto pending  = std::exchange(m_pending, {});
         auto accepted = std::exchange(m_accepted, {});
-        for(auto &held : std::views::values(pending))
-            retire(std::move(held.channel));
+        for(auto &channel : std::views::values(pending))
+            retire(std::move(channel));
         for(auto &channel : std::views::values(accepted))
             retire(std::move(channel));
     }
@@ -108,9 +89,9 @@ public:
     }
 
 private:
+    table m_pending;
     table m_accepted;
     table m_retiring;
-    std::unordered_map<Channel *, entry> m_pending;
 
     static std::unique_ptr<Channel> take(table &from, Channel *raw)
     {

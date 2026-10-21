@@ -16,7 +16,6 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
-#include "plexus/datagram/detail/udp_handshake_arq.h"
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 #include "plexus/detail/compat.h"
 
@@ -40,16 +39,16 @@
 namespace plexus::asio {
 
 // The connectionless UDP transport_backend: owns the ONE bound udp_server, the inbound demux
-// (sender host:port -> channel), the per-peer handshake-ARQ dial table, and every minted
-// udp_channel. It mints logical channels over the shared socket (NO acceptor). A MISS from a
-// never-seen source synthesizes an accept ONLY from a handshake request — the source endpoint is
-// not trusted as identity. close() retires every held channel before it drops the demux and closes
-// the shared socket; the destructor notifies nothing.
+// (sender host:port -> channel), the half-open dial table, and every minted udp_channel; a
+// dialed channel carries its own handshake ARQ. It mints logical channels over the shared socket
+// (NO acceptor). A MISS from a never-seen source synthesizes an accept ONLY from a handshake
+// request — the source endpoint is not trusted as identity. close() retires every held channel
+// before it drops the demux and closes the shared socket; the destructor notifies nothing.
 class udp_transport
 {
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
-    using arq_type      = datagram::detail::udp_handshake_arq<udp_policy>;
+    using arq_type      = udp_channel::handshake_type;
     using hs_type       = datagram::detail::udp_hs_type;
 
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload, arq_type::schedule hs_ladder = arq_type::default_ladder,
@@ -144,14 +143,13 @@ public:
         m_demux.insert(dest, raw);
         detail::wire_teardown(*this, *raw, dest);
 
-        auto arq      = std::make_unique<arq_type>(m_io, m_hs_ladder);
-        auto *raw_arq = arq.get();
-        raw_arq->on_transmit([this, dest, mode, isn] { detail::send_handshake(*this, dest, hs_type::request, mode, isn); });
-        raw_arq->on_established([this, ep, raw] { detail::resolve_dial(*this, ep, raw); });
-        raw_arq->on_timeout([this, ep, raw] { detail::fail_dial(*this, ep, raw); });
+        auto &arq = detail::udp_arm_handshake(*raw, m_hs_ladder);
+        arq.on_transmit([this, dest, mode, isn] { detail::send_handshake(*this, dest, hs_type::request, mode, isn); });
+        arq.on_established([this, ep, raw] { detail::resolve_dial(*this, ep, raw); });
+        arq.on_timeout([this, ep, raw] { detail::fail_dial(*this, ep, raw); });
 
-        m_dials.insert(raw, std::move(ch), std::move(arq));
-        raw_arq->start();
+        m_dials.insert(raw, std::move(ch));
+        arq.start();
     }
 
     void close()
@@ -167,7 +165,7 @@ public:
     }
 
 private:
-    using dial_registry = io::pending_dial_registry<udp_channel, std::unique_ptr<arq_type>>;
+    using dial_registry = io::pending_dial_registry<udp_channel>;
 
     static datagram::detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
     {
@@ -196,8 +194,6 @@ private:
     friend void detail::send_handshake(U &, const typename U::endpoint_type &, typename U::hs_type, datagram::detail::udp_channel_mode, std::uint16_t);
     template<typename U>
     friend void detail::wire_teardown(U &, udp_channel &, const typename U::endpoint_type &);
-    template<typename U>
-    friend void detail::resolve_paired(U &, udp_channel *);
     template<typename U>
     friend void detail::resolve_dial(U &, const io::endpoint &, udp_channel *);
     template<typename U>

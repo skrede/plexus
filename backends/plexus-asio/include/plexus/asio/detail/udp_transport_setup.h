@@ -59,15 +59,8 @@ void wire_teardown(T &t, udp_channel &ch, const typename T::endpoint_type &key)
     ch.on_teardown([&t, key, raw = &ch] { t.m_demux.erase_if_matches(key, raw); });
 }
 
-template<typename T>
-void resolve_paired(T &t, udp_channel *ch)
-{
-    if(auto *arq = t.m_dials.payload_of(ch))
-        (*arq)->on_paired_frame();
-}
-
-// COPY ep before resolve erases the entry: ep is bound to the pending entry's ARQ-closure capture
-// that the erase destroys, so re-emitting the reference would be a use-after-free.
+// ep is bound to a closure of the handshake the channel owns, and the consumer may destroy the
+// channel, so it is copied before the channel is handed on.
 template<typename T>
 void resolve_dial(T &t, const io::endpoint &ep, udp_channel *raw)
 {
@@ -79,15 +72,13 @@ void resolve_dial(T &t, const io::endpoint &ep, udp_channel *raw)
         t.m_on_dialed_cb(std::move(ch), dialed);
 }
 
-// COPY ep and erase the demux entry before fail erases the registry entry (which owns the ARQ
-// closure ep is bound to, and moves out the channel the demux is keyed on).
+// The registry keeps a failed dial's channel, and with it the closure ep is bound to, until its own close
+// notification; closing it leaves the demux.
 template<typename T>
 void fail_dial(T &t, const io::endpoint &ep, udp_channel *raw)
 {
-    const io::endpoint failed = ep;
-    t.m_demux.erase(raw->dest());
     t.m_dials.fail(raw);
-    report_dial_fail(t, failed, io::io_error::timed_out);
+    report_dial_fail(t, ep, io::io_error::timed_out);
 }
 
 // ONLY a handshake request synthesizes an accept from a never-seen source (bare data is not
@@ -120,7 +111,7 @@ void route_to_peer(T &t, const typename T::endpoint_type &from, udp_channel *ch,
     if(auto hs = datagram::detail::decode_handshake(bytes))
     {
         if(hs->type == T::hs_type::response)
-            resolve_paired(t, ch);
+            udp_pair_handshake(*ch);
         else
             send_handshake(t, from, T::hs_type::response, hs->mode, hs->initial_seq);
         return;
