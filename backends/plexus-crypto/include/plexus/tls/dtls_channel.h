@@ -17,7 +17,9 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/handshake_gate.h"
 #include "plexus/datagram/detail/reassembler.h"
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
+#include "plexus/io/detail/close_notification.h"
 #include "plexus/detail/compat.h"
 
 #include "plexus/node_id.h"
@@ -82,8 +84,6 @@ public:
     dtls_channel(dtls_channel &&)                 = delete;
     dtls_channel &operator=(dtls_channel &&)      = delete;
 
-    // The dtor cancels the retransmit timer FIRST, then frees the external BIO (SSL_free frees the
-    // internal BIO). No on_closed post (a this-capturing post could outlive the channel).
     ~dtls_channel();
 
     void send(std::span<const std::byte> bytes);
@@ -97,7 +97,8 @@ public:
     }
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed_cb = std::move(cb);
+        m_closed.install(std::move(cb));
+        notify_closed();
     }
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
@@ -192,6 +193,7 @@ private:
     void arm_retransmit();
     void on_retransmit();
     void fail(io::io_error e);
+    void shut_down();
     void notify_closed();
     void post_on_data(std::span<const std::byte> frame);
     void publish_cookie_ex_data();
@@ -233,12 +235,13 @@ private:
     std::string m_node_name;
 
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
-    plexus::detail::move_only_function<void()> m_on_closed_cb;
     plexus::detail::move_only_function<void()> m_on_teardown_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
     plexus::detail::move_only_function<void()> m_on_external_complete_cb;
 
+    io::detail::pending_ops m_ops;
+    io::detail::close_notification m_closed;
     bool m_open{true};
     bool m_complete_fired{false};
 };

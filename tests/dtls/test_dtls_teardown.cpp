@@ -1,5 +1,7 @@
 #include "dtls_test_support.h"
 
+#include "support/retire_drain.h"
+
 #include "plexus/tls/dtls_transport.h"
 #include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/dtls_cookie.h"
@@ -199,18 +201,15 @@ struct dial_link
 
 }
 
-TEST_CASE("dtls.teardown: an inbound datagram after the engine destroys a completed accepted "
+TEST_CASE("dtls.teardown: an inbound datagram after the engine retires a completed accepted "
           "channel is safe, looped",
           "[dtls][teardown]")
 {
     pdt::identity_fixture server_id("td_srv");
     pdt::identity_fixture client_id("td_cli");
 
-    // Complete the dialed handshake, then destroy the engine-owned accepted channel
-    // mid-session and have the dialer send another frame from the SAME source. Pre-fix:
-    // the server transport's demux still holds the freed accepted-channel pointer, so
-    // on_datagram -> lookup -> deliver_inbound is a heap-use-after-free (asan). The fix
-    // erases the demux entry when the channel tears down, so the frame is a clean MISS.
+    // Retire the engine-owned accepted channel mid-session, then have the dialer send another frame from the same
+    // source: closing erased the demux entry, so the frame is a clean miss, never a freed-pointer deref.
     constexpr int k_iterations = 50;
     int survived               = 0;
     for(int i = 0; i < k_iterations; ++i)
@@ -221,14 +220,9 @@ TEST_CASE("dtls.teardown: an inbound datagram after the engine destroys a comple
         REQUIRE(l.accepted != nullptr);
         REQUIRE(l.dialed != nullptr);
 
-        // Engine teardown: destroy the completed accepted channel while the dialer (and
-        // the demux entry keyed on its source endpoint) stay live.
-        l.accepted.reset();
-        l.drain();
+        const auto retired = plexus::testing::retire_and_drain(l.accepted, [&] { l.drain(); });
+        REQUIRE(retired.erased == 1);
 
-        // The dialer sends an app frame over the live DTLS channel: it arrives at the
-        // server from the SAME source the demux is keyed on. The torn-down entry must be
-        // gone, never a freed-pointer deref.
         const std::string payload = "after-teardown-" + std::to_string(i);
         std::vector<std::byte> frame(reinterpret_cast<const std::byte *>(payload.data()), reinterpret_cast<const std::byte *>(payload.data()) + payload.size());
         l.dialed->send(std::span<const std::byte>{frame});

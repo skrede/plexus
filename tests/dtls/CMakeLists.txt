@@ -71,6 +71,8 @@ target_link_libraries(test_dtls_teardown PRIVATE
     plexus::crypto
     Catch2::Catch2WithMain)
 
+target_include_directories(test_dtls_teardown PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
 catch_discover_tests(test_dtls_teardown TEST_PREFIX "dtls.")
 
 # The large-payload fragmentation proof: over a live completed DTLS session a payload

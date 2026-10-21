@@ -3,13 +3,10 @@
 
 #include "support/retire_drain.h"
 
-#include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_channel.h"
 
 #include "plexus/wire/udp_envelope.h"
 
-#include "plexus/io/congestion.h"
-#include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/channel_graveyard.h"
 
@@ -18,18 +15,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <asio/buffer.hpp>
-#include <asio/ip/udp.hpp>
 #include <asio/io_context.hpp>
 
 #include <span>
 #include <array>
 #include <chrono>
-#include <memory>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <system_error>
+#include <utility>
 
 namespace pasio    = plexus::asio;
 namespace pio      = plexus::io;
@@ -37,49 +31,14 @@ namespace datagram = plexus::datagram::detail;
 
 using namespace std::chrono_literals;
 using plexus::testing::loopback;
+using plexus::testing::silent_peer;
 using plexus::testing::queued_action;
 using plexus::testing::retire_and_drain;
 using plexus::testing::k_teardown_iterations;
 
 namespace {
 
-const ::asio::ip::udp::endpoint k_any_loopback{::asio::ip::make_address("127.0.0.1"), 0};
 const std::array<std::byte, 16> k_payload{};
-
-// A channel over its own server whose peer is a bound socket that never answers, so nothing ever acks it.
-struct silent_peer
-{
-    ::asio::io_context io;
-    pasio::udp_server server;
-    ::asio::ip::udp::socket peer;
-    std::unique_ptr<pasio::udp_channel> channel;
-
-    silent_peer(datagram::udp_channel_mode mode, datagram::udp_arq_config arq, std::chrono::milliseconds reassembly_timeout)
-            : io()
-            , server(io)
-            , peer(io, k_any_loopback)
-            , channel()
-    {
-        server.start(k_any_loopback);
-        channel = std::make_unique<pasio::udp_channel>(io, server, peer.local_endpoint(), pasio::udp_channel::default_max_payload, arq, pio::congestion::block,
-                                                       pasio::udp_channel::default_backpressure_bytes, mode, std::uint16_t{0}, pio::global_default_max_message_bytes,
-                                                       pio::reassembly_memory_budget, reassembly_timeout);
-    }
-
-    std::int32_t take_received()
-    {
-        std::int32_t taken = 0;
-        std::array<std::byte, 2048> buf{};
-        ::asio::ip::udp::endpoint from;
-        std::error_code ec;
-        while(peer.available(ec) != 0 && !ec)
-        {
-            peer.receive_from(::asio::buffer(buf), from, 0, ec);
-            ++taken;
-        }
-        return taken;
-    }
-};
 
 std::vector<std::byte> best_effort_datagram()
 {
@@ -194,6 +153,36 @@ TEST_CASE("udp_retire_drain a retired channel's posts and timers all complete be
         REQUIRE(outcome.empty);
         REQUIRE(delivered == 0);
         REQUIRE(ran_at_erase >= 2);
+        REQUIRE(ran == ran_at_erase + 1);
+    }
+}
+
+// A best-effort channel holding the first of two fragments: the erase must follow the reassembly timeout's completion.
+TEST_CASE("udp_retire_drain a retired channel with a partial reassembly completes its timeout before its on_closed", "[udp][teardown]")
+{
+    std::vector<std::byte> first_of_two;
+    plexus::wire::wrap_udp_fragment_into(first_of_two, plexus::wire::udp_envelope_kind::best_effort, 0, 1, 0, 2, k_payload);
+
+    for(std::int32_t i = 0; i < k_teardown_iterations; ++i)
+    {
+        silent_peer h{datagram::udp_channel_mode::best_effort, {}, 1000ms};
+        h.channel->deliver_inbound(first_of_two);
+
+        std::int32_t ran          = 0;
+        std::int32_t ran_at_erase = -1;
+        const auto drain_counting = [&]
+        {
+            h.io.restart();
+            while(h.io.poll_one() != 0)
+                ++ran;
+            while(h.io.run_one_for(20ms) != 0)
+                ++ran;
+        };
+        const auto outcome = retire_and_drain(h.channel, drain_counting, [&] { ran_at_erase = ran; });
+
+        REQUIRE(outcome.erased == 1);
+        REQUIRE(outcome.empty);
+        REQUIRE(ran_at_erase >= 1);
         REQUIRE(ran == ran_at_erase + 1);
     }
 }

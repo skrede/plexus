@@ -80,7 +80,7 @@ struct silent_dial
 
 }
 
-TEST_CASE("dtls_retire_drain a delivery queued before close is not handed to the consumer", "[dtls][teardown][!shouldfail]")
+TEST_CASE("dtls_retire_drain a delivery queued before close is not handed to the consumer", "[dtls][teardown]")
 {
     pdt::identity_fixture server_id("rd_srv");
     pdt::identity_fixture client_id("rd_cli");
@@ -99,7 +99,7 @@ TEST_CASE("dtls_retire_drain a delivery queued before close is not handed to the
     }
 }
 
-TEST_CASE("dtls_retire_drain a channel closed by the peer's close_notify is still erased when retired", "[dtls][teardown][!shouldfail]")
+TEST_CASE("dtls_retire_drain a channel closed by the peer's close_notify is still erased when retired", "[dtls][teardown]")
 {
     pdt::identity_fixture server_id("rd_srv");
     pdt::identity_fixture client_id("rd_cli");
@@ -138,5 +138,40 @@ TEST_CASE("dtls_retire_drain a retransmit expiry queued in the closing pass does
 
         REQUIRE(erased == 1);
         CHECK(h.take_received() == 0);
+    }
+}
+
+// A delivery queued, the handshake's retransmit wait still armed and a partial message held: the erase must be the
+// last handler the drain runs.
+TEST_CASE("dtls_retire_drain a retired channel's posts and timers all complete before its on_closed", "[dtls][teardown]")
+{
+    pdt::identity_fixture server_id("rd_srv");
+    pdt::identity_fixture client_id("rd_cli");
+    for(std::int32_t i = 0; i < k_teardown_iterations; ++i)
+    {
+        pdt::raw_client h(server_id, client_id);
+        h.handshake();
+        std::int32_t delivered = 0;
+        h.channel->on_data([&delivered](std::span<const std::byte>) { ++delivered; });
+        h.send_first_of_two(k_payload);
+        h.send_whole(k_payload);
+
+        std::int32_t ran          = 0;
+        std::int32_t ran_at_erase = -1;
+        const auto drain_counting = [&]
+        {
+            h.io.restart();
+            while(h.io.poll_one() != 0)
+                ++ran;
+            while(h.io.run_one_for(20ms) != 0)
+                ++ran;
+        };
+        const auto outcome = retire_and_drain(h.channel, drain_counting, [&] { ran_at_erase = ran; });
+
+        REQUIRE(outcome.erased == 1);
+        REQUIRE(outcome.empty);
+        REQUIRE(delivered == 0);
+        REQUIRE(ran_at_erase >= 3);
+        REQUIRE(ran == ran_at_erase + 1);
     }
 }

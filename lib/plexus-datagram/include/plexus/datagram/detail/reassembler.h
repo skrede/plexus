@@ -9,6 +9,7 @@
 
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/pending_ops.h"
 
 #include "plexus/wire/frame_reassembler.h"
 
@@ -23,18 +24,16 @@
 
 namespace plexus::datagram::detail {
 
-// Holds out-of-order fragments keyed by msg_id until a message completes, then hands the
-// assembled bytes to an owner-installed sink once. feed() is the untrusted-input surface: it
-// range-checks every field before indexing, has no exception path, and returns a drop outcome on
-// any malformed/over-budget shape. The total-memory cap is the hard DoS bound and counts both held
-// payload and the per-entry slot/present metadata a claimed frag_cnt forces (charged at
-// open_entry), so a tiny datagram claiming a huge frag_cnt cannot mint an outsized slot table.
+// Holds out-of-order fragments keyed by msg_id until a message completes, then hands the assembled bytes to the sink once.
+// feed() is the untrusted-input surface: it range-checks every field before indexing and has no exception path. The
+// total-memory cap also charges the slot table a claimed frag_cnt forces, so a tiny datagram cannot mint an outsized one.
 template<typename Executor, typename Timer>
     requires plexus::timer<Timer> && std::constructible_from<Timer, Executor>
 class reassembler
 {
 public:
     using deliver_sink = plexus::detail::move_only_function<void(wire::shared_bytes)>;
+    using drop_sink    = plexus::detail::move_only_function<void(const plexus::io::detail::drop_event &)>;
 
     struct config
     {
@@ -54,14 +53,13 @@ public:
     explicit reassembler(Executor executor, config cfg = {})
             : m_executor(executor)
             , m_cfg(cfg)
+            , m_pending()
             , m_table(cap_implied_max_partials(cfg.total_memory_cap, structural_cost(1)))
     {
     }
 
     reassembler(const reassembler &)            = delete;
     reassembler &operator=(const reassembler &) = delete;
-
-    using drop_sink = plexus::detail::move_only_function<void(const plexus::io::detail::drop_event &)>;
 
     void on_deliver(deliver_sink cb)
     {
@@ -73,8 +71,6 @@ public:
         m_on_drop = std::move(cb);
     }
 
-    // Range-checks precede every index; once all frag_cnt fragments for one msg_id have arrived
-    // (in any order) the message assembles and fires on_deliver exactly once.
     outcome feed(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt, std::span<const std::byte> bytes)
     {
         const outcome o =
@@ -91,6 +87,12 @@ public:
         m_dead = true;
         for(auto &kv : m_table)
             kv.second.timer->cancel();
+        m_pending.close();
+    }
+
+    plexus::io::detail::pending_ops &pending() noexcept
+    {
+        return m_pending;
     }
 
     std::size_t in_flight() const noexcept
@@ -102,8 +104,6 @@ public:
         return m_held;
     }
 
-    // The per-entry slot/present cost a claimed frag_cnt forces, charged against the same cap as
-    // payload so the slot table cannot be minted past the memory bound.
     static constexpr std::size_t structural_cost(std::uint32_t frag_cnt) noexcept
     {
         return static_cast<std::size_t>(frag_cnt) * sizeof(std::vector<std::byte>) + (static_cast<std::size_t>(frag_cnt) + 7u) / 8u;
@@ -124,11 +124,9 @@ private:
     {
         auto it = m_table.find(msg_id);
         if(it == m_table.end())
-        {
             it = open_entry(msg_id, frag_cnt, bytes.size());
-            if(it == m_table.end())
-                return outcome::dropped_cap; // the byte cap or the count ceiling refused
-        }
+        if(it == m_table.end())
+            return outcome::dropped_cap; // the byte cap or the count ceiling refused
         return store(it->second, msg_id, frag_idx, bytes);
     }
 
@@ -157,7 +155,6 @@ private:
             return outcome::admitted; // duplicate / overlap — ignore, keep the first
         if(e.size + bytes.size() > m_cfg.max_message_size || m_held + bytes.size() > m_cfg.total_memory_cap)
             return outcome::dropped_malformed; // per-message ceiling / total cap overrun
-
         e.slots[frag_idx].assign(bytes.begin(), bytes.end());
         e.present[frag_idx] = true;
         e.size += bytes.size();
@@ -184,12 +181,14 @@ private:
     void arm_timeout(std::uint16_t msg_id, entry &e)
     {
         e.timer->expires_after(m_cfg.per_message_timeout);
+        m_pending.begin();
         e.timer->async_wait(
                 [this, msg_id](std::error_code ec)
                 {
+                    m_pending.end();
                     if(ec || m_dead)
-                        return;    // canceled by completion / teardown
-                    evict(msg_id); // best-effort reclaim of the stalled partial
+                        return;
+                    evict(msg_id);
                     emit_drop(plexus::io::detail::drop_cause::reassembly_evicted);
                 });
     }
@@ -212,6 +211,7 @@ private:
 
     Executor m_executor;
     config m_cfg;
+    plexus::io::detail::pending_ops m_pending;
     reassembler_flat_map<entry> m_table;
     std::size_t m_held{0};
     bool m_dead{false};

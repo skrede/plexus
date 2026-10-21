@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
@@ -71,4 +72,27 @@ TEST_CASE("reassembler keeps held_bytes within the cap as crafted opens are refu
     const std::size_t per_entry = test_reassembler::structural_cost(frag_cnt);
     CHECK(r.in_flight() <= cap / per_entry + 1);
     CHECK(r.held_bytes() <= cap);
+}
+
+TEST_CASE("reassembler settles after cancel once the last timeout wait it issued has completed", "[reassemble][teardown]")
+{
+    testing::harness h;
+    test_reassembler r{h.ex, {.per_message_timeout = std::chrono::milliseconds(1000)}};
+    REQUIRE(r.feed(1, 0, 2, one_byte()) == test_reassembler::outcome::admitted);
+    h.advance(std::chrono::milliseconds(500));
+    REQUIRE(r.feed(2, 0, 2, one_byte()) == test_reassembler::outcome::admitted);
+    REQUIRE(r.pending().count() == 2);
+
+    h.advance(std::chrono::milliseconds(500));
+    CHECK(r.pending().count() == 1);
+    CHECK(r.in_flight() == 1);
+
+    std::int32_t settled = 0;
+    r.pending().on_settled([&settled] { ++settled; });
+    CHECK(settled == 0);
+    r.cancel();
+    CHECK(r.pending().count() == 0);
+    CHECK(settled == 1);
+    h.advance(std::chrono::milliseconds(1000));
+    CHECK(r.in_flight() == 1);
 }

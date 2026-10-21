@@ -2,12 +2,15 @@
 
 #include "plexus/tls/detail/dtls_identity.h"
 
+#include "plexus/asio/detail/udp_channel_lifecycle.h"
+
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
 #include <chrono>
 #include <cstring>
+#include <utility>
 #include <algorithm>
 #include <stdexcept>
 
@@ -46,7 +49,10 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
         , m_retransmit(io)
         , m_gate([this](std::span<const std::byte> bytes) { secure_send(bytes); })
         , m_peer_addr_block(detail::pack_peer_addr(m_dest))
+        , m_ops()
+        , m_closed()
 {
+    m_ops.on_settled([this] { notify_closed(); });
     // One record either direction fits one buffer: the record budget plus headroom for the 13-byte header and worst-case
     // cipher expansion, so SSL_read never discards and BIO_read never splits a record once record_mtu rises.
     constexpr std::size_t k_record_overhead = 256;
@@ -79,12 +85,10 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
 
 dtls_channel::~dtls_channel()
 {
-    m_open = false;
-    m_retransmit.cancel(); // cancel the timer FIRST (no use-after-free on teardown)
-    if(m_reassembler)
-        m_reassembler->cancel(); // cancel the reassembly timeout(s) before teardown
-    if(m_on_teardown_cb)
-        m_on_teardown_cb(); // erase the transport demux ref BEFORE this object dies
+    m_ops.on_settled({});
+    plexus::asio::detail::udp_cancel_unhooked(m_reassembler);
+    if(auto leave_demux = std::exchange(m_on_teardown_cb, nullptr))
+        leave_demux();
     if(m_ssl)
     {
         ::SSL_set_ex_data(m_ssl, dtls_peer_addr_ex_index(), nullptr);
@@ -210,9 +214,7 @@ void dtls_channel::drain_inbound()
             }
             if(err == SSL_ERROR_ZERO_RETURN) // clean close_notify
             {
-                m_open = false;
-                m_retransmit.cancel();
-                notify_closed();
+                close();
                 break;
             }
             drain_outbound(); // flush any fatal alert to the peer first
@@ -235,7 +237,7 @@ void dtls_channel::drain_inbound()
 // NOLINTNEXTLINE(readability-function-size)
 void dtls_channel::try_complete()
 {
-    if(m_complete_fired || !m_ssl || !::SSL_is_init_finished(m_ssl))
+    if(m_complete_fired || !m_open || !m_ssl || !::SSL_is_init_finished(m_ssl))
         return;
     // Fail-closed mutual-auth gate: a verified peer cert is mandatory.
     X509 *peer    = ::SSL_get1_peer_certificate(m_ssl);
@@ -275,10 +277,12 @@ void dtls_channel::arm_retransmit()
     const auto ms = std::chrono::milliseconds(static_cast<std::int64_t>(tv.tv_sec) * 1000 + static_cast<std::int64_t>(tv.tv_usec) / 1000);
     m_retransmit.cancel();
     m_retransmit.expires_after(ms);
+    m_ops.begin();
     m_retransmit.async_wait(
             [this](std::error_code ec)
             {
-                if(ec) // operation_aborted on teardown self-guards
+                m_ops.end();
+                if(ec || !m_open)
                     return;
                 on_retransmit();
             });
@@ -297,22 +301,8 @@ void dtls_channel::on_retransmit()
 
 void dtls_channel::close()
 {
-    if(!m_open)
-        return;
-    m_open = false;
-    m_retransmit.cancel();
-    notify_closed();
-}
-
-// Posted, so a consumer that destroys the channel in on_closed never frees it under drain_inbound.
-void dtls_channel::notify_closed()
-{
-    ::asio::post(m_io,
-                 [this]
-                 {
-                     if(m_on_closed_cb)
-                         m_on_closed_cb();
-                 });
+    if(m_open)
+        shut_down();
 }
 
 void dtls_channel::fail(io::io_error e)
@@ -320,17 +310,43 @@ void dtls_channel::fail(io::io_error e)
     if(!m_open)
         return;
     m_open = false;
+    if(auto on_error = std::exchange(m_on_error_cb, nullptr))
+        on_error(e);
+    shut_down();
+}
+
+// Closing runs once and nothing begins after it. The built reassembler is held as one operation until its own waits
+// settle, so on_closed is posted by whichever completion drains the count last.
+void dtls_channel::shut_down()
+{
+    m_open                 = false;
+    m_on_data_cb           = nullptr;
+    m_on_error_cb          = nullptr;
+    m_on_protocol_close_cb = nullptr;
     m_retransmit.cancel();
-    if(m_on_error_cb)
-        m_on_error_cb(e);
+    plexus::asio::detail::udp_hold_until_settled(m_ops, m_reassembler);
+    plexus::asio::detail::udp_cancel(m_reassembler);
+    if(auto leave_demux = std::exchange(m_on_teardown_cb, nullptr))
+        leave_demux();
+    m_ops.close();
+}
+
+void dtls_channel::notify_closed()
+{
+    if(m_ops.settled())
+        m_closed.notify([this](auto closure) { ::asio::post(m_io, std::move(closure)); });
 }
 
 void dtls_channel::post_on_data(std::span<const std::byte> frame)
 {
+    if(!m_open)
+        return;
+    m_ops.begin();
     auto owned = std::make_shared<std::vector<std::byte>>(frame.begin(), frame.end());
     ::asio::post(m_io,
                  [this, owned]
                  {
+                     m_ops.end();
                      if(m_on_data_cb)
                          m_on_data_cb(std::span<const std::byte>{*owned});
                  });

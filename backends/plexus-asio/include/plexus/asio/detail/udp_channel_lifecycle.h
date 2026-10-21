@@ -59,8 +59,8 @@ void udp_cancel_unhooked(std::unique_ptr<Component> &component)
     component->cancel();
 }
 
-// Closing runs once and nothing begins after it. Each built ARQ is held as one operation until its own waits settle,
-// so on_closed is posted by whichever completion drains the count last.
+// Closing runs once and nothing begins after it. Each built component is held as one operation until its own waits
+// settle, so on_closed is posted by whichever completion drains the count last.
 template<typename Ch, typename BeforeTeardown>
 void udp_close_with(Ch &c, BeforeTeardown before_teardown)
 {
@@ -69,6 +69,7 @@ void udp_close_with(Ch &c, BeforeTeardown before_teardown)
     c.m_open = false;
     udp_hold_until_settled(c.m_ops, c.m_arq);
     udp_hold_until_settled(c.m_ops, c.m_handshake);
+    udp_hold_until_settled(c.m_ops, c.m_reassembler);
     c.m_ops.close();
     before_teardown();
     udp_cancel(c.m_arq);
@@ -101,7 +102,7 @@ void udp_destroy(Ch &c)
     c.m_ops.on_settled({});
     udp_cancel_unhooked(c.m_arq);
     udp_cancel_unhooked(c.m_handshake);
-    udp_cancel(c.m_reassembler);
+    udp_cancel_unhooked(c.m_reassembler);
     if(auto leave_demux = std::exchange(c.m_on_teardown_cb, nullptr))
         leave_demux();
 }
