@@ -35,7 +35,7 @@ using plexus::testing::lifetime_fqn;
 using values        = std::vector<std::uint32_t>;
 using hooked_holder = plexus::testing::basic_ring_holder<plexus::testing::hold_hook_broker<plexus::testing::native_broker>>;
 
-constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'34'00ull; // "PLXRNG4\0"
+constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
 
 }
 

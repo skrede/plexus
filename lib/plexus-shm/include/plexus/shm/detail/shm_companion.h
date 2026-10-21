@@ -10,6 +10,7 @@
 #include "plexus/shm/shm_acquire_result.h"
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/upgrade_channel.h"
 
 #include "plexus/node_id.h"
 
@@ -27,13 +28,13 @@ std::unique_ptr<typename Member::channel_type> companion_send(Member &m, const s
     return mux_open(m, io::endpoint{"shm", fqn}, shm::ring_role::producer, std::move(lost));
 }
 
-// The reader in slot reader gates the node's send ring for fqn from its newest message on; false when that ring is gone or
-// the slot is not claimed.
+// The reader in the claimed slot gates the node's send ring for fqn from its newest message on; false when that ring is
+// gone or the slot is not claimed under that claim's generation.
 template<typename Member>
-bool companion_place(Member &m, const std::string &fqn, std::uint32_t reader)
+bool companion_place(Member &m, const std::string &fqn, io::reader_claim reader)
 {
     auto *channel = m.registry().channel_for(fqn, shm::ring_direction::request, m.self_id());
-    return channel != nullptr && channel->place_reader(reader);
+    return channel != nullptr && channel->place_reader(reader.slot, reader.generation);
 }
 
 // The handle is minted held: it takes nothing until it is resumed.

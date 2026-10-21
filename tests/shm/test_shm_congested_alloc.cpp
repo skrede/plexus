@@ -93,7 +93,7 @@ TEST_CASE("shm.congested a reliable claim on a pinned cell returns congested pas
     // occupant in its cell. A registered idle cursor keeps consumers_passed true so
     // the claim reaches the pin-clear spin rather than the cursor gate.
     std::uint32_t idx = 0;
-    REQUIRE(f.ring.register_cursor(idx) == loan_status::ok);
+    REQUIRE(f.ring.register_cursor(idx));
     for(std::uint64_t i = 0; i < k_cells; ++i)
     {
         broadcast_ring::claim_result claim;

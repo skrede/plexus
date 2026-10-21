@@ -15,6 +15,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace plexus::shm {
 
@@ -82,12 +83,12 @@ public:
         return detail::ring_consume(*this, cursor, out);
     }
 
-    loan_status register_cursor(std::uint32_t &out_index) noexcept
+    std::optional<std::uint32_t> register_cursor(std::uint32_t &out_index) noexcept
     {
         return detail::register_cursor(*m_header, m_consumer_capacity, out_index);
     }
 
-    bool claim_cursor(std::uint32_t index) noexcept
+    std::optional<std::uint32_t> claim_cursor(std::uint32_t index) noexcept
     {
         return detail::claim_cursor(*m_header, m_consumer_capacity, index);
     }
@@ -103,9 +104,9 @@ public:
         return detail::reclaim_cursor(*m_header, m_consumer_capacity, index, owner_alive);
     }
 
-    bool place_cursor(std::uint32_t index, std::uint64_t position) noexcept
+    bool place_cursor(std::uint32_t index, std::uint32_t generation, std::uint64_t position) noexcept
     {
-        return detail::place_cursor(*m_header, m_consumer_capacity, index, position);
+        return detail::place_cursor(*m_header, m_consumer_capacity, index, generation, position);
     }
 
     void publish_cursor(std::uint32_t index, std::uint64_t position) noexcept

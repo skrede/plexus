@@ -6,6 +6,7 @@
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/companion_event.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/peer_liveliness_event.h"
 
@@ -65,16 +66,16 @@ template<typename Forwarder, typename Coordinator, typename Registry>
 void install_companion_sinks(Forwarder &messages, Coordinator &coordinator, Registry &registry)
 {
     using channel_type = typename Coordinator::channel_type;
-    messages.on_companion({.event_cb = [&coordinator](std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
+    messages.on_companion({.event_cb = [&coordinator](std::string_view node_name, std::string_view fqn, companion_event event, reader_claim reader)
                            { coordinator.on_companion(node_name, fqn, event, reader); },
                            .switch_cb = [&coordinator](std::string_view node_name, std::string_view fqn, std::uint64_t first) { coordinator.on_switch(node_name, fqn, first); },
-                           .place_cb  = [&coordinator](std::string_view fqn, std::uint32_t reader) { return coordinator.place(fqn, reader); },
+                           .place_cb  = [&coordinator](std::string_view fqn, reader_claim reader) { return coordinator.place(fqn, reader); },
                            .offer_cb  = [&coordinator](std::string_view node_name, std::string_view fqn) { return coordinator.offer_for(node_name, fqn); },
                            .lane_cb   = [&coordinator](std::string_view fqn) { return coordinator.lane_for(fqn); }});
     messages.on_companion_route([&coordinator](std::string_view node_name, std::string_view fqn, std::size_t bytes) { return coordinator.companion_for(node_name, fqn, bytes); });
     coordinator.on_lane_released([&messages](channel_type &channel) { messages.forget_channel(channel); });
     coordinator.on_companion_send(
-            [&messages, &registry](std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
+            [&messages, &registry](std::string_view node_name, std::string_view fqn, companion_event event, reader_claim reader)
             {
                 const auto *session = registry.session_for_name(node_name);
                 if(session != nullptr && session->is_complete())

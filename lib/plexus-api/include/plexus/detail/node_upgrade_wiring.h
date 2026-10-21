@@ -115,7 +115,7 @@ io::upgrade_receive mint_receive_lane(Engine &engine, Member &member, std::strin
     auto handle = member.mint_receive_companion(key, session->peer_identity(), drop_lanes_on_loss(engine, key));
     if(!handle)
         return io::upgrade_receive{member.last_fallback_reason()};
-    const std::uint32_t reader = handle->reader_slot();
+    const io::reader_claim reader = handle->reader_claim();
     return io::upgrade_receive{[&engine, peer = std::string{node_name}, h = std::move(handle)](std::uint64_t first_sequence) mutable
                                { h->resume(deliver_from(engine, peer, first_sequence)); }, reader};
 }

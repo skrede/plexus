@@ -12,7 +12,7 @@ TEST_CASE("shm.congested a fully-pinned best_effort ring surfaces congested off 
     // Pin every cell with a held take so no slot is recyclable. We pin directly on
     // the ring (the Dekker reader half) to set up the fully-congested state.
     std::uint32_t idx = 0;
-    REQUIRE(f.ring.register_cursor(idx) == loan_status::ok);
+    REQUIRE(f.ring.register_cursor(idx));
     std::uint64_t cursor = f.ring.tail_position();
     for(std::uint64_t i = 0; i < 16; ++i)
     {

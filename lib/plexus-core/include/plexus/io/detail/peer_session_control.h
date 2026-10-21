@@ -119,7 +119,7 @@ void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type,
     if(type == wire::msg_type::companion_ready)
     {
         if(auto ready = wire::decode_companion_ready(inner))
-            messages.note_companion(s.msg_peer(), ready->topic_hash, companion_event::ready, ready->reader);
+            messages.note_companion(s.msg_peer(), ready->topic_hash, companion_event::ready, {ready->reader, ready->generation});
         return;
     }
     const companion_event event = type == wire::msg_type::companion_offer ? companion_event::offered : companion_event::withdrawn;

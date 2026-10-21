@@ -33,7 +33,7 @@ inline constexpr std::size_t k_max_consumers = 16;
 // Magic + version word stamped by the creator into the control header and
 // re-validated by an attacher before it trusts any other header field. A
 // mismatch means the region is foreign or a layout-incompatible build.
-inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
+inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'36'00ull; // "PLXRNG6\0"
 
 // The retired stamp: the ring's names are being removed, so a joiner must not adopt it.
 inline constexpr std::uint64_t k_ring_retired = 0x50'4c'58'52'45'54'49'52ull; // "PLXRETIR"
@@ -65,12 +65,14 @@ inline constexpr std::uint32_t k_park_notified = 2;
 // producer's enqueue counter. `position` is a 64-bit monotonically-advancing
 // index, mirroring the sequence width. `active` marks a registered slot.
 // `waiter_tag` names the waiter's own doorbell where the platform wakes through
-// a named kernel object instead of a futex.
+// a named kernel object instead of a futex. `generation` advances on every claim:
+// a placement names the claim it answers, so a re-claimed slot is not placed for its new holder.
 struct alignas(k_cache_line) cursor_t
 {
     std::atomic<std::uint64_t> position;
     std::atomic<std::uint32_t> active;
     std::atomic<std::uint32_t> waiter_tag;
+    std::atomic<std::uint32_t> generation;
 };
 
 // Control header placement-new'd at the front of the control+cells region. The
@@ -100,9 +102,11 @@ struct control_header_t
 
     // The region sizes exactly as the creator's broker mapped them and the publishing node's id, so an attacher
     // checks the regions it mapped and the ring's owner before trusting any size it computes from the header.
+    // identity is the creator's non-zero random stamp, which tells this ring from another created under its name.
     std::uint64_t control_bytes;
     std::uint64_t slab_bytes;
     node_id publisher;
+    std::atomic<std::uint64_t> identity;
 
     alignas(k_cache_line) cursor_t cursors[k_max_consumers];
 
@@ -160,7 +164,8 @@ static_assert(sizeof(control_header_t) == k_cache_line * 3 + k_max_consumers * s
 static_assert(sizeof(cursor_t) == k_cache_line, "cursor_t must stay one cache line");
 static_assert(sizeof(control_header_t::park) == k_cache_line && alignof(control_header_t) >= k_cache_line, "the park words must fill exactly one cache line");
 static_assert(offsetof(control_header_t, park) == k_cache_line * 4 + k_max_consumers * sizeof(cursor_t), "the park line must follow the notify_generation line");
-static_assert(offsetof(control_header_t, publisher) + sizeof(node_id) <= offsetof(control_header_t, cursors), "the config block must end before the cursor array");
+static_assert(offsetof(control_header_t, identity) == offsetof(control_header_t, publisher) + sizeof(node_id), "the ring identity must follow the publisher id");
+static_assert(offsetof(control_header_t, identity) + sizeof(std::uint64_t) <= offsetof(control_header_t, cursors), "the config block must end before the cursor array");
 static_assert(k_max_consumers <= 32, "a 32-bit parked-slot mask must cover every cursor");
 static_assert(k_cursor_idle == UINT64_MAX, "an idle (registered-but-not-gating) cursor must read as the max sentinel");
 

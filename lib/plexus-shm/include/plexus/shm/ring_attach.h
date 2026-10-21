@@ -9,6 +9,7 @@
 #include <new>
 #include <span>
 #include <atomic>
+#include <random>
 #include <cstddef>
 #include <cstdint>
 
@@ -17,6 +18,16 @@ namespace plexus::shm::detail {
 inline bool is_power_of_two(std::uint64_t v) noexcept
 {
     return v != 0 && (v & (v - 1)) == 0;
+}
+
+// Zero is re-drawn, so a stamped ring never reads as one without an identity.
+inline std::uint64_t draw_ring_identity()
+{
+    std::random_device source;
+    std::uint64_t identity = 0;
+    while(identity == 0)
+        identity = (std::uint64_t{static_cast<std::uint32_t>(source())} << 32) | static_cast<std::uint32_t>(source());
+    return identity;
 }
 
 // Every hot counter, config field and cursor slot is initialized; the magic stays unstamped.
@@ -32,12 +43,14 @@ inline control_header_t *init_header(std::span<std::byte> control, std::span<std
     header->control_bytes     = control.size();
     header->slab_bytes        = slab.size();
     header->publisher         = publisher;
+    header->identity.store(draw_ring_identity(), std::memory_order_relaxed);
     header->notify_generation.store(0, std::memory_order_relaxed);
     header->high_water.store(0, std::memory_order_relaxed);
     for(std::size_t i = 0; i < k_max_consumers; ++i)
     {
         header->cursors[i].position.store(k_cursor_idle, std::memory_order_relaxed);
         header->cursors[i].active.store(0, std::memory_order_relaxed);
+        header->cursors[i].generation.store(0, std::memory_order_relaxed);
     }
     return header;
 }

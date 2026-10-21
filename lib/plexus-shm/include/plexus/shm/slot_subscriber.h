@@ -45,30 +45,35 @@ public:
             : m_ring(ring)
             , m_spin_budget(spin_budget)
             , m_cursor_index(0)
+            , m_generation(0)
             , m_cursor(0)
             , m_registered(false)
             , m_mapping()
     {
-        if(m_ring.register_cursor(m_cursor_index) == loan_status::ok)
+        if(const std::optional<std::uint32_t> generation = m_ring.register_cursor(m_cursor_index))
         {
             m_registered = true;
+            m_generation = *generation;
             m_cursor     = m_ring.tail_position();
             m_ring.publish_cursor(m_cursor_index, m_cursor);
         }
     }
 
     // Takes over a cursor index the caller has already claimed on the ring, gating from the producer's tail.
-    slot_subscriber(broadcast_ring &ring, adopt_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget, detail::mapping_pin mapping = {}) noexcept
-            : slot_subscriber(ring, hold_cursor, cursor_index, spin_budget, std::move(mapping))
+    slot_subscriber(broadcast_ring &ring, adopt_cursor_t, std::uint32_t cursor_index, std::uint32_t generation, std::uint32_t spin_budget = default_spin_budget,
+                    detail::mapping_pin mapping = {}) noexcept
+            : slot_subscriber(ring, hold_cursor, cursor_index, generation, spin_budget, std::move(mapping))
     {
         m_ring.publish_cursor(m_cursor_index, m_cursor);
     }
 
     // Takes over a claimed cursor index that gates nothing until the producer places it or resume starts it.
-    slot_subscriber(broadcast_ring &ring, hold_cursor_t, std::uint32_t cursor_index, std::uint32_t spin_budget = default_spin_budget, detail::mapping_pin mapping = {}) noexcept
+    slot_subscriber(broadcast_ring &ring, hold_cursor_t, std::uint32_t cursor_index, std::uint32_t generation, std::uint32_t spin_budget = default_spin_budget,
+                    detail::mapping_pin mapping = {}) noexcept
             : m_ring(ring)
             , m_spin_budget(spin_budget)
             , m_cursor_index(cursor_index)
+            , m_generation(generation)
             , m_cursor(ring.tail_position())
             , m_registered(true)
             , m_mapping(std::move(mapping))
@@ -133,6 +138,11 @@ public:
         return m_cursor_index;
     }
 
+    std::uint32_t cursor_generation() const noexcept
+    {
+        return m_generation;
+    }
+
 private:
     // Spin (relaxing the core) within the budget so a back-to-back arrival is caught before
     // reporting empty; true past the budget hands off to the backend futex park (~0% CPU idle).
@@ -175,6 +185,7 @@ private:
     broadcast_ring &m_ring;
     std::uint32_t m_spin_budget;
     std::uint32_t m_cursor_index;
+    std::uint32_t m_generation;
     std::uint64_t m_cursor;
     bool m_registered;
     detail::mapping_pin m_mapping;

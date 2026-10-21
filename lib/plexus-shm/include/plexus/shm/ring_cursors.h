@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_RING_CURSORS_H
 #define HPP_GUARD_PLEXUS_SHM_RING_CURSORS_H
 
-#include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_header.h"
 
 #include <atomic>
 #include <cstdint>
+#include <optional>
 
 namespace plexus::shm::detail {
 
@@ -39,29 +39,36 @@ inline std::uint32_t cursor_scan_bound(const control_header_t &h) noexcept
 // can move it, so the reclaimer's liveness probe and its clearing stores cannot land on a newcomer's cursor.
 inline constexpr std::uint32_t k_cursor_reclaiming = 2;
 
-// Claims cursor `index` (it starts at k_cursor_idle, not gating); false when another consumer has it.
-inline bool claim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index) noexcept
+// The active word of a cursor whose claim is advancing its generation: a placement accepts only the claimed word, which
+// the claim stores with release after the generation, so a placer that reads it reads that claim's generation.
+inline constexpr std::uint32_t k_cursor_claiming = 3;
+
+// Claims cursor `index` (it starts at k_cursor_idle, not gating) and returns the claim's generation; nullopt when another
+// consumer has it.
+inline std::optional<std::uint32_t> claim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index) noexcept
 {
     std::uint32_t expected = 0;
-    if(!cursor_in_range(consumer_capacity, index) || !h.cursors[index].active.compare_exchange_strong(expected, 1, std::memory_order_acq_rel))
-        return false;
+    if(!cursor_in_range(consumer_capacity, index) || !h.cursors[index].active.compare_exchange_strong(expected, k_cursor_claiming, std::memory_order_acq_rel))
+        return std::nullopt;
     h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
+    const std::uint32_t generation = h.cursors[index].generation.fetch_add(1, std::memory_order_relaxed) + 1;
+    h.cursors[index].active.store(1, std::memory_order_release);
     raise_high_water(h, index + 1);
-    return true;
+    return generation;
 }
 
-// Rejected when consumer_capacity slots are already registered.
-inline loan_status register_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t &out_index) noexcept
+// The first free cursor's claim generation, its index in out_index; nullopt when consumer_capacity slots are registered.
+inline std::optional<std::uint32_t> register_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t &out_index) noexcept
 {
     for(std::uint32_t i = 0; i < consumer_capacity; ++i)
     {
-        if(claim_cursor(h, consumer_capacity, i))
+        if(const std::optional<std::uint32_t> generation = claim_cursor(h, consumer_capacity, i))
         {
             out_index = i;
-            return loan_status::ok;
+            return generation;
         }
     }
-    return loan_status::rejected;
+    return std::nullopt;
 }
 
 // A cursor a reclaimer has marked is left to it: the idle position no longer gates, and a reclaim pass frees the cursor
@@ -93,10 +100,12 @@ bool reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::u
 }
 
 // Places a claimed reader that has not read yet at position; one already placed or reading keeps its position. False
-// when the cursor is not claimed.
-inline bool place_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, std::uint64_t position) noexcept
+// when the cursor is not claimed under generation.
+inline bool place_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, std::uint32_t generation, std::uint64_t position) noexcept
 {
     if(!cursor_in_range(consumer_capacity, index) || h.cursors[index].active.load(std::memory_order_acquire) != 1)
+        return false;
+    if(h.cursors[index].generation.load(std::memory_order_relaxed) != generation)
         return false;
     std::uint64_t idle = k_cursor_idle;
     h.cursors[index].position.compare_exchange_strong(idle, position, std::memory_order_acq_rel);

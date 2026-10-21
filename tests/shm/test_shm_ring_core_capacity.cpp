@@ -20,8 +20,8 @@ TEST_CASE("ring_core: the reliable-reclaim scan is bounded by the registered hig
     // allocation), so the reclaim scan touches 2 cursor slots, not k_max_consumers.
     std::uint32_t a = 0;
     std::uint32_t b = 0;
-    REQUIRE(ring.register_cursor(a) == loan_status::ok);
-    REQUIRE(ring.register_cursor(b) == loan_status::ok);
+    REQUIRE(ring.register_cursor(a));
+    REQUIRE(ring.register_cursor(b));
     REQUIRE(a == 0);
     REQUIRE(b == 1);
     REQUIRE(ring.registered_high_water() == 2);
@@ -102,9 +102,9 @@ TEST_CASE("ring_core: a per-ring consumer_capacity bounds cursor registration", 
     // The first C registrations succeed; the (C+1)th rejects below the absolute cap.
     std::uint32_t idx[k_capacity] = {};
     for(std::uint64_t i = 0; i < k_capacity; ++i)
-        REQUIRE(ring.register_cursor(idx[i]) == loan_status::ok);
+        REQUIRE(ring.register_cursor(idx[i]));
     std::uint32_t overflow = 0;
-    REQUIRE(ring.register_cursor(overflow) == loan_status::rejected);
+    REQUIRE_FALSE(ring.register_cursor(overflow));
     REQUIRE(k_capacity < k_max_consumers);
 
     // publish/unregister operate within the capacity with no out-of-range touch.
@@ -117,9 +117,9 @@ TEST_CASE("ring_core: a per-ring consumer_capacity bounds cursor registration", 
     REQUIRE(broadcast_ring::attach(control.span(), slab.span(), plexus::node_id{}, attacher) == loan_status::ok);
     std::uint32_t a_idx[k_capacity] = {};
     for(std::uint64_t i = 0; i < k_capacity; ++i)
-        REQUIRE(attacher.register_cursor(a_idx[i]) == loan_status::ok);
+        REQUIRE(attacher.register_cursor(a_idx[i]));
     std::uint32_t a_overflow = 0;
-    REQUIRE(attacher.register_cursor(a_overflow) == loan_status::rejected);
+    REQUIRE_FALSE(attacher.register_cursor(a_overflow));
 }
 
 TEST_CASE("ring_core: create rejects an out-of-range consumer_capacity", "[shm][ring_core]")

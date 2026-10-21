@@ -58,7 +58,7 @@ struct marker_lane
 
     bool place()
     {
-        return member.companion_place(fqn)(receive->reader_slot());
+        return member.companion_place(fqn)(receive->reader_claim());
     }
 
     void resume()
@@ -81,7 +81,7 @@ struct marker_lane
 
     std::uint64_t reader_position()
     {
-        return probe.position(receive->reader_slot());
+        return probe.position(receive->reader_claim().slot);
     }
 
     std::uint32_t cells() const

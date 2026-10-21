@@ -26,7 +26,7 @@ using namespace shm_harness;
 
 namespace {
 
-constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'34'00ull; // "PLXRNG4\0"
+constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
 
 }
 

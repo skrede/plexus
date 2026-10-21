@@ -93,10 +93,12 @@ enum class cursor_claim : std::uint8_t
 // An active cursor whose slot no other holder has belongs to a dead owner, since an owner holds the slot from before its
 // claim until after its release; that cursor is reclaimed for this reader.
 template<typename Entry>
-bool topic_claim_or_reclaim(Entry &e, std::uint32_t i)
+std::optional<std::uint32_t> topic_claim_or_reclaim(Entry &e, std::uint32_t i)
 {
     auto owner_alive = [&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); };
-    return e.ring.claim_cursor(i) || (e.ring.reclaim_cursor(i, owner_alive) && e.ring.claim_cursor(i));
+    if(const std::optional<std::uint32_t> generation = e.ring.claim_cursor(i))
+        return generation;
+    return e.ring.reclaim_cursor(i, owner_alive) ? e.ring.claim_cursor(i) : std::nullopt;
 }
 
 // A slot held elsewhere over an inactive cursor is a holder passing through, such as a last holder taking every slot for
@@ -109,16 +111,17 @@ cursor_claim topic_try_cursor(Entry &e, std::uint32_t i, bool held)
         return cursor_claim::unprovable;
     if(hold == shm::slot_hold::busy)
         return e.ring.header().cursors[i].active.load(std::memory_order_acquire) == 0 ? cursor_claim::passing : cursor_claim::taken;
-    const bool retired = ring_lifetime::retired(e.ring);
-    if(retired || !topic_claim_or_reclaim(e, i))
+    const bool retired                            = ring_lifetime::retired(e.ring);
+    const std::optional<std::uint32_t> generation = retired ? std::nullopt : topic_claim_or_reclaim(e, i);
+    if(!generation)
     {
         e.control.release_slot(shm::cursor_slot(i));
         return retired ? cursor_claim::retired : cursor_claim::taken;
     }
     if(held)
-        e.channel->engage_subscriber(shm::slot_subscriber::hold_cursor, i, e.mapping);
+        e.channel->engage_subscriber(shm::slot_subscriber::hold_cursor, i, *generation, e.mapping);
     else
-        e.channel->engage_subscriber(shm::slot_subscriber::adopt_cursor, i, e.mapping);
+        e.channel->engage_subscriber(shm::slot_subscriber::adopt_cursor, i, *generation, e.mapping);
     return cursor_claim::claimed;
 }
 

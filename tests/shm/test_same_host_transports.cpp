@@ -118,7 +118,7 @@ TEST_CASE("shm.same_host_transports two independent brokers share an shm ring by
                 if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) == pio::loan_status::ok)
                 {
                     std::uint32_t idx = 0;
-                    if(ring.register_cursor(idx) == pio::loan_status::ok)
+                    if(ring.register_cursor(idx))
                     {
                         std::uint64_t cursor = ring.tail_position();
                         c->consumer_armed.store(1, std::memory_order_release);

@@ -717,7 +717,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         bytechan.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
 
         std::uint32_t idx = 0;
-        REQUIRE(ring.register_cursor(idx) == loan_status::ok);
+        REQUIRE(ring.register_cursor(idx));
         std::uint64_t cursor = ring.tail_position();
         for(std::uint64_t i = 0; i < cells; ++i)
         {
@@ -798,7 +798,7 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         erased.on_drop(eng.drop_sink());
 
         std::uint32_t idx = 0;
-        REQUIRE(ring.register_cursor(idx) == loan_status::ok);
+        REQUIRE(ring.register_cursor(idx));
         std::uint64_t cursor = ring.tail_position();
         for(std::uint64_t i = 0; i < cells; ++i)
         {

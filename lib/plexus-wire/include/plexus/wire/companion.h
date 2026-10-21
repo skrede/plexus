@@ -35,21 +35,23 @@ inline std::optional<companion_signal> decode_companion(std::span<const std::byt
     return companion_signal{wire::detail::read_u64(payload.data())};
 }
 
-// The payload of companion_ready: the topic and the ring slot of the subscriber's reader, which the publisher places at
-// the first message it routes to the subscriber over the lane.
+// The payload of companion_ready: the topic, and the ring slot of the subscriber's reader with the generation of the claim
+// it holds the slot under; the publisher places that reader at the first message it routes to the subscriber over the lane.
 struct companion_ready
 {
     std::uint64_t topic_hash;
     std::uint32_t reader;
+    std::uint32_t generation;
 };
 
-constexpr std::size_t companion_ready_size = 12;
+constexpr std::size_t companion_ready_size = 16;
 
 inline std::array<std::byte, companion_ready_size> encode_companion_ready(const companion_ready &ready)
 {
     std::array<std::byte, companion_ready_size> buf{};
     wire::detail::write_u64(buf.data(), ready.topic_hash);
     wire::detail::write_u32(buf.data() + 8, ready.reader);
+    wire::detail::write_u32(buf.data() + 12, ready.generation);
     return buf;
 }
 
@@ -57,7 +59,7 @@ inline std::optional<companion_ready> decode_companion_ready(std::span<const std
 {
     if(payload.size() != companion_ready_size)
         return std::nullopt;
-    return companion_ready{wire::detail::read_u64(payload.data()), wire::detail::read_u32(payload.data() + 8)};
+    return companion_ready{wire::detail::read_u64(payload.data()), wire::detail::read_u32(payload.data() + 8), wire::detail::read_u32(payload.data() + 12)};
 }
 
 // The payload of companion_switch: the publication sequence of the first message the publisher routes to the subscriber

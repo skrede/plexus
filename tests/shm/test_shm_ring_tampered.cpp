@@ -79,7 +79,7 @@ TEST_CASE("ring_tampered a reader index past the cursor array is not placed thou
 
     plexus::testing::noop_notifier notifier;
     shm_channel<plexus::testing::noop_notifier> channel{t.ring, notifier, plexus::io::reliability::reliable, plexus::io::congestion::block};
-    CHECK_FALSE(channel.place_reader(k_park_alias));
+    CHECK_FALSE(channel.place_reader(k_park_alias, 0));
     REQUIRE(t.ring.header().park[0].load() == UINT32_MAX);
 }
 
@@ -92,7 +92,7 @@ TEST_CASE("ring_tampered a reader index past the ring's own capacity is not plac
 
     plexus::testing::noop_notifier notifier;
     shm_channel<plexus::testing::noop_notifier> channel{t.ring, notifier, plexus::io::reliability::reliable, plexus::io::congestion::block};
-    CHECK_FALSE(channel.place_reader(2));
+    CHECK_FALSE(channel.place_reader(2, 0));
     REQUIRE(t.ring.header().cursors[2].position.load() == k_cursor_idle);
 }
 

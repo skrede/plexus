@@ -23,7 +23,7 @@ namespace plexus::io::detail {
 struct lane_holder
 {
     std::string node_name;
-    std::uint32_t reader;
+    reader_claim reader;
     bool ready;
 };
 
@@ -38,7 +38,7 @@ struct send_lane
     std::vector<lane_holder> holders;
     std::unique_ptr<Channel> channel;
     plexus::detail::move_only_function<bool(std::size_t)> fits;
-    plexus::detail::move_only_function<bool(std::uint32_t)> place;
+    plexus::detail::move_only_function<bool(reader_claim)> place;
 };
 
 template<typename Channel>

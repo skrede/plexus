@@ -34,7 +34,7 @@ using demote_fn = plexus::detail::move_only_function<void(arm_status)>;
 
 constexpr std::uint64_t k_cells         = 16;
 constexpr std::uint64_t k_slot          = 64;
-constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'34'00ull; // "PLXRNG4\0"
+constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
 const std::string k_fqn                 = "medium_coordinator_member.alpha";
 
 // What each wake answers at arm; demote fires the primary's runtime demotion the way the executor runs its report.

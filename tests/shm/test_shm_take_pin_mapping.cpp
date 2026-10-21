@@ -99,15 +99,19 @@ struct pinned_ring
     explicit pinned_ring(delaying_broker &broker)
             : mapping(std::make_shared<counted_mapping>())
             , ring()
+            , generation(0)
     {
         REQUIRE(broker.create("pinned", plexus::shm::control_region_bytes(16), {}, mapping->control) == plexus::shm::region_status::ok);
         REQUIRE(broker.create("pinned.s", plexus::shm::slab_region_bytes(16, 64), {}, mapping->slab) == plexus::shm::region_status::ok);
         REQUIRE(plexus::shm::broadcast_ring::create(mapping->control.bytes(), mapping->slab.bytes(), 16, 64, plexus::node_id{}, ring) == loan_status::ok);
-        REQUIRE(ring.claim_cursor(0));
+        const std::optional<std::uint32_t> claimed = ring.claim_cursor(0);
+        REQUIRE(claimed);
+        generation = *claimed;
     }
 
     std::shared_ptr<counted_mapping> mapping;
     plexus::shm::broadcast_ring ring;
+    std::uint32_t generation;
 };
 
 }
@@ -164,7 +168,7 @@ TEST_CASE("take_pin_mapping a moved-from taken message releases neither its slot
     delaying_broker broker;
     pinned_ring pinned{broker};
     plexus::testing::noop_notifier wake;
-    std::optional<slot_subscriber> reader{std::in_place, pinned.ring, slot_subscriber::adopt_cursor, 0u, slot_subscriber::default_spin_budget, pinned.mapping};
+    std::optional<slot_subscriber> reader{std::in_place, pinned.ring, slot_subscriber::adopt_cursor, 0u, pinned.generation, slot_subscriber::default_spin_budget, pinned.mapping};
     plexus::shm::shm_channel<plexus::testing::noop_notifier> channel{pinned.ring, wake, plexus::io::reliability::reliable, plexus::io::congestion::block};
     REQUIRE(channel.send(k_payload) == loan_status::ok);
     taken_message taken;

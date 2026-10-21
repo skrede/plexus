@@ -68,7 +68,8 @@ catch_discover_tests(test_shm_scaffold TEST_PREFIX "shm.")
 # (the ring drives a caller-supplied anonymous mapped span), proving the family is
 # POSIX/asio-free. They link plexus::shm for the family include path, plexus::core
 # for the engine, and the xproc harness header path.
-add_executable(test_shm_ring_core test_shm_ring_core.cpp test_shm_ring_core_capacity.cpp test_shm_ring_magic.cpp test_shm_ring_attach_bounds.cpp test_shm_ring_tampered.cpp)
+add_executable(test_shm_ring_core test_shm_ring_core.cpp test_shm_ring_core_capacity.cpp test_shm_ring_magic.cpp test_shm_ring_attach_bounds.cpp test_shm_ring_tampered.cpp
+    test_shm_cursor_generation.cpp)
 
 target_include_directories(test_shm_ring_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})

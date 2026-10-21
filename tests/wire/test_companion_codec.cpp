@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <algorithm>
 
 using namespace plexus::wire;
 
@@ -39,15 +40,26 @@ TEST_CASE("companion a truncated or overlong payload is refused", "[wire][compan
     CHECK_FALSE(decode_companion(longer).has_value());
 }
 
-TEST_CASE("companion a ready round-trips its topic hash and reader slot through twelve bytes", "[wire][companion]")
+TEST_CASE("companion a ready round-trips its topic hash, reader slot and claim generation through sixteen bytes", "[wire][companion]")
 {
-    const std::array<std::byte, companion_ready_size> bytes = encode_companion_ready({0x0123456789ABCDEFULL, 0xA5C3E1F7u});
+    const std::array<std::byte, companion_ready_size> bytes = encode_companion_ready({0x0123456789ABCDEFULL, 0xA5C3E1F7u, 0x1E2D3C4Bu});
     const auto decoded                                      = decode_companion_ready(bytes);
 
     REQUIRE(decoded.has_value());
     CHECK(decoded->topic_hash == 0x0123456789ABCDEFULL);
     CHECK(decoded->reader == 0xA5C3E1F7u);
-    CHECK(bytes.size() == 12);
+    CHECK(decoded->generation == 0x1E2D3C4Bu);
+    CHECK(bytes.size() == 16);
+}
+
+TEST_CASE("companion a ready in the previous twelve-byte encoding decodes to nothing", "[wire][companion]")
+{
+    const std::array<std::byte, 12> previous{std::byte{0x01}, std::byte{0x23}, std::byte{0x45}, std::byte{0x67}, std::byte{0x89}, std::byte{0xAB},
+                                             std::byte{0xCD}, std::byte{0xEF}, std::byte{0xA5}, std::byte{0xC3}, std::byte{0xE1}, std::byte{0xF7}};
+    const std::array<std::byte, companion_ready_size> current = encode_companion_ready({0x0123456789ABCDEFULL, 0xA5C3E1F7u, 0});
+
+    CHECK(std::equal(previous.begin(), previous.end(), current.begin()));
+    CHECK_FALSE(decode_companion_ready(previous).has_value());
 }
 
 TEST_CASE("companion a switch round-trips its topic hash and first sequence through sixteen bytes", "[wire][companion]")

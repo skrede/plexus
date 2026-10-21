@@ -60,7 +60,7 @@ TEST_CASE("coordinator_loss a lost medium drops every peer's send and receive la
     lanes live;
     install_gates(c, live);
     std::vector<std::string> withdrawn;
-    c.on_companion_send([&withdrawn](std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t)
+    c.on_companion_send([&withdrawn](std::string_view node_name, std::string_view fqn, companion_event event, plexus::io::reader_claim)
                         { withdrawn.push_back(std::string{node_name} + "/" + std::string{fqn} + (event == companion_event::withdrawn ? " withdrawn" : " ready")); });
     engage_demand(c, "node-a", "alpha", demand_role::publisher);
     engage_demand(c, "node-b", "alpha", demand_role::subscriber);

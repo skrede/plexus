@@ -77,13 +77,13 @@ public:
         detail::upgrade_offers::publish(*this, fqn, present);
     }
 
-    void on_companion(std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader = k_no_reader)
+    void on_companion(std::string_view node_name, std::string_view fqn, companion_event event, reader_claim reader = k_no_reader)
     {
         detail::upgrade_lanes::hear(*this, node_name, fqn, event, reader);
     }
 
     // A medium with no placement verb switches its holders without placing them.
-    bool place(std::string_view fqn, std::uint32_t reader)
+    bool place(std::string_view fqn, reader_claim reader)
     {
         detail::send_lane<Channel> *lane = detail::find_send_lane(m_send, fqn);
         return lane != nullptr && (!lane->place || (reader != k_no_reader && lane->place(reader)));
@@ -96,7 +96,7 @@ public:
     }
 
     // The subscriber's ready (naming its reader slot) and withdrawn answers and late offers leave here; unset, none do.
-    void on_companion_send(plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, std::uint32_t)> send)
+    void on_companion_send(plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, reader_claim)> send)
     {
         m_companion_send_cb = std::move(send);
     }
@@ -187,7 +187,7 @@ private:
     plexus::detail::move_only_function<bool(bool, dispatch_hint)> m_policy;
     plexus::detail::move_only_function<void(std::chrono::milliseconds)> m_schedule_retry_cb;
     plexus::detail::move_only_function<void(Channel &)> m_lane_released_cb;
-    plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, std::uint32_t)> m_companion_send_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, reader_claim)> m_companion_send_cb;
 
     friend struct detail::upgrade_hints;
     friend struct detail::upgrade_lanes;

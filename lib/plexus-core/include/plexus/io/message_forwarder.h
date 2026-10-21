@@ -413,7 +413,7 @@ public:
         m_companion_hooks = std::move(hooks);
     }
 
-    void note_companion(const peer &p, std::uint64_t topic_hash, companion_event event, std::uint32_t reader = k_no_reader)
+    void note_companion(const peer &p, std::uint64_t topic_hash, companion_event event, reader_claim reader = k_no_reader)
     {
         if(m_companion_hooks.event_cb)
             m_companion_hooks.event_cb(p.node_name, fqn_for(topic_hash), event, reader);
@@ -425,7 +425,7 @@ public:
             m_companion_hooks.switch_cb(p.node_name, fqn_for(topic_hash), first_sequence);
     }
 
-    void send_companion(const peer &p, std::string_view fqn, companion_event event, std::uint32_t reader)
+    void send_companion(const peer &p, std::string_view fqn, companion_event event, reader_claim reader)
     {
         detail::send_companion(m_endpoint, p.channel, fqn, event, reader);
     }

@@ -6,7 +6,7 @@ TEST_CASE("ring_backpressure: a skip tombstone at the cursor stays congested (on
 {
     fixture f;
     std::uint32_t cursor_index = 0;
-    REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
+    REQUIRE(f.ring.register_cursor(cursor_index));
     const std::uint64_t pinned_pos = f.ring.tail_position();
 
     // Commit one value into the slot and pin it (a live take), so a producer that
@@ -68,7 +68,7 @@ TEST_CASE("ring_backpressure: reliable gates on the slowest cursor (lossless)", 
 {
     fixture f;
     std::uint32_t cursor_index = 0;
-    REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
+    REQUIRE(f.ring.register_cursor(cursor_index));
     std::uint64_t cursor = f.ring.tail_position();
     f.ring.publish_cursor(cursor_index, cursor);
 

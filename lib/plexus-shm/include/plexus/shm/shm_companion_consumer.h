@@ -53,11 +53,11 @@ public:
                                      [cb = std::move(on_frame)](::plexus::wire_bytes<shm_slot_owner> wb) mutable { cb(std::span<const std::byte>{wb.data(), wb.size()}); });
     }
 
-    // The ring slot this reader holds, which the publisher places at its switch.
-    std::uint32_t reader_slot()
+    // The ring slot this reader holds and its claim generation, which the publisher places at its switch.
+    io::reader_claim reader_claim()
     {
         shm_channel<Notifier> *channel = m_registry.channel_for(m_fqn, ring_direction::request, m_publisher);
-        return channel == nullptr ? io::k_no_reader : channel->waiter_slot().value_or(io::k_no_reader);
+        return channel == nullptr ? io::k_no_reader : channel->waiter_claim().value_or(io::k_no_reader);
     }
 
     ~shm_companion_consumer()

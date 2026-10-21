@@ -36,7 +36,7 @@ struct sent_event
 
 void record_sends(lane_end &end, std::vector<sent_event> &sent)
 {
-    end.c.on_companion_send([&sent](std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t)
+    end.c.on_companion_send([&sent](std::string_view node_name, std::string_view fqn, companion_event event, plexus::io::reader_claim)
                             { sent.push_back({std::string{node_name}, std::string{fqn}, event}); });
 }
 

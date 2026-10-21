@@ -45,8 +45,17 @@ inline constexpr std::size_t k_fallback_reason_count = static_cast<std::size_t>(
 // How often each reason struck, indexed by the reason.
 using fallback_counts = std::array<std::uint64_t, k_fallback_reason_count>;
 
+// The ring slot a subscriber's reader holds and the generation of the claim it holds it under, which its ready names.
+struct reader_claim
+{
+    std::uint32_t slot;
+    std::uint32_t generation;
+
+    friend bool operator==(const reader_claim &, const reader_claim &) = default;
+};
+
 // The receiving medium names no reader slot, so the publisher has none to place.
-inline constexpr std::uint32_t k_no_reader = 0xFFFFFFFFu;
+inline constexpr reader_claim k_no_reader{0xFFFFFFFFu, 0};
 
 // The transport-neutral mint result the engine's upgrade coordinator retains. A null channel
 // signals the gate DECLINED — the pair keeps the wire. The coordinator retains the channel
@@ -64,7 +73,7 @@ struct upgrade_mint
     }
 
     upgrade_mint(std::unique_ptr<Channel> minted, plexus::detail::move_only_function<bool(std::size_t)> route,
-                 plexus::detail::move_only_function<bool(std::uint32_t)> placer = {}) noexcept
+                 plexus::detail::move_only_function<bool(reader_claim)> placer = {}) noexcept
             : reason(fallback_reason::none)
             , channel(std::move(minted))
             , fits(std::move(route))
@@ -80,7 +89,7 @@ struct upgrade_mint
     fallback_reason reason;
     std::unique_ptr<Channel> channel;
     plexus::detail::move_only_function<bool(std::size_t)> fits;
-    plexus::detail::move_only_function<bool(std::uint32_t)> place;
+    plexus::detail::move_only_function<bool(reader_claim)> place;
 };
 
 // Where one message for one subscriber goes, and the reader slot its ready named: a null lane keeps the pair on the wire;
@@ -90,7 +99,7 @@ struct lane_route
 {
     Channel *lane;
     bool fits;
-    std::uint32_t reader;
+    reader_claim reader;
 };
 
 // The type-erased OWNER of the live receive companion, which holds it until a switch marker resumes it: calling it with
@@ -105,9 +114,9 @@ struct upgrade_receive
     {
     }
 
-    upgrade_receive(plexus::detail::move_only_function<void(std::uint64_t)> resume, std::uint32_t slot = k_no_reader) noexcept
+    upgrade_receive(plexus::detail::move_only_function<void(std::uint64_t)> resume, reader_claim claimed = k_no_reader) noexcept
             : reason(fallback_reason::none)
-            , reader(slot)
+            , reader(claimed)
             , resume_cb(std::move(resume))
     {
     }
@@ -119,7 +128,7 @@ struct upgrade_receive
     }
 
     fallback_reason reason;
-    std::uint32_t reader;
+    reader_claim reader;
     plexus::detail::move_only_function<void(std::uint64_t)> resume_cb;
 
     bool engaged() const noexcept

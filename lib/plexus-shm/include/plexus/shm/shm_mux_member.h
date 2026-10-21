@@ -141,9 +141,9 @@ public:
     }
 
     // Places a reader of the fqn's send ring at the newest message this node wrote; false when it cannot.
-    plexus::detail::move_only_function<bool(std::uint32_t)> companion_place(const std::string &fqn)
+    plexus::detail::move_only_function<bool(io::reader_claim)> companion_place(const std::string &fqn)
     {
-        return [this, fqn](std::uint32_t reader) { return detail::companion_place(*this, fqn, reader); };
+        return [this, fqn](io::reader_claim reader) { return detail::companion_place(*this, fqn, reader); };
     }
 
     // The node binds its own id and universe before any ring is minted: its send rings carry its id, and every ring name

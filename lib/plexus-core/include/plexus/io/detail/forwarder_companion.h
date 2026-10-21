@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_COMPANION_H
 
 #include "plexus/io/companion_event.h"
+#include "plexus/io/upgrade_channel.h"
 
 #include "plexus/detail/compat.h"
 
@@ -23,25 +24,25 @@ namespace plexus::io::detail {
 template<typename Channel>
 struct companion_hooks
 {
-    plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, std::uint32_t)> event_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::string_view, companion_event, reader_claim)> event_cb;
     plexus::detail::move_only_function<void(std::string_view, std::string_view, std::uint64_t)> switch_cb;
-    plexus::detail::move_only_function<bool(std::string_view, std::uint32_t)> place_cb;
+    plexus::detail::move_only_function<bool(std::string_view, reader_claim)> place_cb;
     plexus::detail::move_only_function<companion_event(std::string_view, std::string_view)> offer_cb;
     plexus::detail::move_only_function<Channel *(std::string_view)> lane_cb;
 };
 
 template<typename Endpoint, typename Channel>
-void send_companion(Endpoint &endpoint, Channel &channel, std::string_view fqn, companion_event event, std::uint32_t reader)
+void send_companion(Endpoint &endpoint, Channel &channel, std::string_view fqn, companion_event event, reader_claim reader)
 {
     if(event == companion_event::ready)
-        endpoint.send_control(channel, wire::msg_type::companion_ready, wire::encode_companion_ready({wire::fqn_topic_hash(fqn), reader}));
+        endpoint.send_control(channel, wire::msg_type::companion_ready, wire::encode_companion_ready({wire::fqn_topic_hash(fqn), reader.slot, reader.generation}));
     else if(const std::optional<wire::msg_type> verb = verb_of(event))
         endpoint.send_control(channel, *verb, wire::encode_companion({wire::fqn_topic_hash(fqn)}));
 }
 
 // A forwarder with no placement hook switches without placing.
 template<typename Channel>
-bool place_reader(companion_hooks<Channel> &hooks, std::string_view fqn, std::uint32_t reader)
+bool place_reader(companion_hooks<Channel> &hooks, std::string_view fqn, reader_claim reader)
 {
     return !hooks.place_cb || hooks.place_cb(fqn, reader);
 }

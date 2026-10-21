@@ -146,7 +146,7 @@ bool subscribe_and_check(const std::string &fqn, coord *c, const std::vector<std
         return false;
 
     std::uint32_t idx = 0;
-    if(ring.register_cursor(idx) != pio::loan_status::ok)
+    if(!ring.register_cursor(idx))
         return false;
     std::uint64_t cursor = ring.tail_position();
     c->subscriber_armed.store(1, std::memory_order_release);

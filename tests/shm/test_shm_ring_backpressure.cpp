@@ -6,7 +6,7 @@ TEST_CASE("ring_backpressure: best_effort overwrite skips a pinned slot", "[shm]
 {
     fixture f;
     std::uint32_t cursor_index = 0;
-    REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
+    REQUIRE(f.ring.register_cursor(cursor_index));
     std::uint64_t cursor = f.ring.tail_position();
 
     // Publish one value and pin it via the Dekker reader half (a held take()).
@@ -33,7 +33,7 @@ TEST_CASE("ring_backpressure: a full-lap-pinned ring returns congested", "[shm][
 {
     fixture f;
     std::uint32_t cursor_index = 0;
-    REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
+    REQUIRE(f.ring.register_cursor(cursor_index));
 
     // Fill and pin an entire lap: publish k_cells values, pinning each committed
     // slot so every cell carries take_refcount > 0.
@@ -61,7 +61,7 @@ TEST_CASE("ring_backpressure: a full-ring lap-behind reports lagged carrying the
 {
     fixture f;
     std::uint32_t cursor_index = 0;
-    REQUIRE(f.ring.register_cursor(cursor_index) == loan_status::ok);
+    REQUIRE(f.ring.register_cursor(cursor_index));
     const std::uint64_t start = f.ring.tail_position();
 
     // Lap the registered cursor by well over a full ring with best_effort publishes

@@ -42,7 +42,7 @@ struct pair_end
     {
         c.on_gate([this](std::string_view) { return upgrade_mint<counted_lane>{std::make_unique<counted_lane>(sends), [](std::size_t) { return true; }}; });
         c.on_receive_gate([this](std::string_view, std::string_view) { return receive(); });
-        c.on_companion_send([this](std::string_view, std::string_view, companion_event event, std::uint32_t) { answers.push_back(event); });
+        c.on_companion_send([this](std::string_view, std::string_view, companion_event event, plexus::io::reader_claim) { answers.push_back(event); });
         c.set_retry_scheduler([this](std::chrono::milliseconds) { ++wakes; });
         c.set_topic_hint("alpha", hinted ? dispatch_hint::frequent : dispatch_hint::none);
         c.on_local_publisher("alpha", true);

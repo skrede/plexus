@@ -30,7 +30,7 @@ struct upgrade_lanes
     }
 
     template<typename Coordinator>
-    static void send(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
+    static void send(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, reader_claim reader)
     {
         if(c.m_companion_send_cb)
             c.m_companion_send_cb(node_name, fqn, event, reader);
@@ -134,7 +134,7 @@ struct upgrade_lanes
     }
 
     template<typename Coordinator>
-    static void answer(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
+    static void answer(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, reader_claim reader)
     {
         auto *lane          = find_send_lane(c.m_send, fqn);
         lane_holder *holder = lane == nullptr ? nullptr : find_holder(lane->holders, node_name);
@@ -151,7 +151,7 @@ struct upgrade_lanes
     }
 
     template<typename Coordinator>
-    static void hear(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, std::uint32_t reader)
+    static void hear(Coordinator &c, std::string_view node_name, std::string_view fqn, companion_event event, reader_claim reader)
     {
         if(event == companion_event::ready || event == companion_event::withdrawn)
             answer(c, node_name, fqn, event, reader);

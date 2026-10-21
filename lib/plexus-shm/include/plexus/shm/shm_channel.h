@@ -12,6 +12,7 @@
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
@@ -95,9 +96,9 @@ public:
 
     // mode is slot_subscriber::adopt_cursor or slot_subscriber::hold_cursor; each message taken holds the mapping pin.
     template<typename Mode>
-    void engage_subscriber(Mode mode, std::uint32_t claimed_cursor, detail::mapping_pin mapping = {}) noexcept
+    void engage_subscriber(Mode mode, std::uint32_t claimed_cursor, std::uint32_t generation, detail::mapping_pin mapping = {}) noexcept
     {
-        m_subscriber.emplace(m_ring, mode, claimed_cursor, m_spin_budget, std::move(mapping));
+        m_subscriber.emplace(m_ring, mode, claimed_cursor, generation, m_spin_budget, std::move(mapping));
     }
 
     void resume_subscriber() noexcept
@@ -108,10 +109,10 @@ public:
 
     // The reader in slot cursor starts at the newest message this producer wrote, which the current publish may already
     // be; the switch marker skips the ones before it.
-    bool place_reader(std::uint32_t cursor) noexcept
+    bool place_reader(std::uint32_t cursor, std::uint32_t generation) noexcept
     {
         const std::uint64_t tail = m_ring.tail_position();
-        return m_ring.place_cursor(cursor, tail == 0 ? 0 : tail - 1);
+        return m_ring.place_cursor(cursor, generation, tail == 0 ? 0 : tail - 1);
     }
 
     void release_subscriber() noexcept
@@ -124,6 +125,14 @@ public:
         if(!m_subscriber)
             return std::nullopt;
         return m_subscriber->cursor_index();
+    }
+
+    std::optional<io::reader_claim> waiter_claim() const noexcept
+    {
+        const std::optional<std::uint32_t> slot = waiter_slot();
+        if(!slot)
+            return std::nullopt;
+        return io::reader_claim{*slot, m_subscriber->cursor_generation()};
     }
 
     // Unbound, a congested reliable send reclaims no cursor.
