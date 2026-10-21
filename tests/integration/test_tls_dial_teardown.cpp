@@ -1,15 +1,6 @@
-// The TLS pending-dial teardown proof (asan): an in-flight TLS dial whose
-// io_context (and owning transport) is destroyed mid-handshake leaks nothing. The half-
-// open dial is owned by the transport's pending_dial_registry (transport-owned, not a
-// self-owning readiness closure), so destroying the transport drops the registry and frees
-// the half-open channel/socket/timer with no leak or use-after-free. This is a VERIFY-AND-
-// PROVE rider: the single-owner fix is already landed; this asan leg pins it. Run under the
-// build-asan tree (-fsanitize=address) so a residual self-owning shape surfaces as a leak.
-//
-// The dial targets a real listening TLS acceptor but the io_context is torn down BEFORE the
-// mutual handshake completes (only the connect TCP leg is pumped, then everything is
-// destroyed), so the channel is genuinely half-open at teardown. Looped so a per-iteration
-// residue accumulates into an asan report.
+// TLS dials torn down mid-handshake, under the build-asan tree: a transport destroyed with its io_context, and a
+// transport closed while its dial's handshake read is still pending, must neither leak nor free the channel under
+// that read.
 
 #include "plexus/tls/tls_transport.h"
 #include "plexus/tls/tls_credential.h"
@@ -24,6 +15,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
 
 #include <openssl/evp.h>
@@ -34,11 +26,13 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <chrono>
 #include <cstdio>
 #include <cstdint>
 #include <utility>
 #include <cstddef>
 #include <filesystem>
+#include <system_error>
 
 namespace ptls = plexus::tls;
 namespace pio  = plexus::io;
@@ -113,6 +107,13 @@ ptls::tls_credential make_cred(const identity_fixture &self, const spki_digest &
     return ptls::load_credential(self.cert_path.string(), self.key_path.string(), policy);
 }
 
+std::size_t received_bytes(const ::asio::ip::tcp::socket &peer)
+{
+    std::error_code ec;
+    const std::size_t n = peer.available(ec);
+    return ec ? 0 : n;
+}
+
 }
 
 TEST_CASE("tls_dial_teardown: an io_context destroyed mid-handshake leaks nothing", "[integration][tls][teardown]")
@@ -123,13 +124,13 @@ TEST_CASE("tls_dial_teardown: an io_context destroyed mid-handshake leaks nothin
     // A standing server credential + a listener whose io_context OUTLIVES each dial attempt:
     // the dial targets a real listening acceptor so the TCP connect succeeds, but the dialer's
     // own io_context (and transport) is destroyed before the mutual handshake completes.
-    for(int iter = 0; iter < 16; ++iter)
+    for(std::int32_t iter = 0; iter < 16; ++iter)
     {
         ::asio::io_context server_io;
         auto server_cred = make_cred(server_id, client_id.digest);
         ptls::tls_transport server{server_io, server_cred};
         server.listen(pio::endpoint{"tls", "127.0.0.1:0"});
-        for(int i = 0; i < 50 && server.port() == 0; ++i)
+        for(std::int32_t i = 0; i < 50 && server.port() == 0; ++i)
             server_io.poll();
         const std::uint16_t port = server.port();
         REQUIRE(port != 0);
@@ -140,15 +141,34 @@ TEST_CASE("tls_dial_teardown: an io_context destroyed mid-handshake leaks nothin
             ptls::tls_transport client{client_io, client_cred};
             client.dial(pio::endpoint{"tls", "127.0.0.1:" + std::to_string(port)});
 
-            // Pump JUST enough for the TCP connect to fire and the handshake to begin, then
-            // let everything tear down half-open: poll a few times, never to completion.
-            for(int i = 0; i < 3; ++i)
+            for(std::int32_t i = 0; i < 3; ++i)
             {
                 client_io.poll_one();
                 server_io.poll_one();
             }
-            // client + client_io destroyed here, mid-handshake — the registry frees the
-            // half-open dial. asan asserts no leak/UAF.
         }
     }
+}
+
+TEST_CASE("tls_dial_teardown: a TLS dial whose transport closes mid-handshake is destroyed only after its handshake drained", "[integration][tls][teardown]")
+{
+    identity_fixture client_id("cli");
+    identity_fixture peer_id("peer");
+    ::asio::io_context io;
+    ::asio::ip::tcp::acceptor silent{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
+    ::asio::ip::tcp::socket peer{io};
+    silent.async_accept(peer, [](std::error_code) {});
+
+    auto client_cred = make_cred(client_id, peer_id.digest);
+    ptls::tls_transport client{io, client_cred};
+    client.dial(pio::endpoint{"tls", "127.0.0.1:" + std::to_string(silent.local_endpoint().port())});
+    for(std::int32_t i = 0; i < 200 && received_bytes(peer) == 0; ++i)
+        io.run_one_for(std::chrono::milliseconds{10});
+    REQUIRE(received_bytes(peer) > 0);
+    // The ClientHello is out and the peer never answers, so the handshake now waits on a read.
+    io.poll();
+
+    client.close();
+    io.restart();
+    io.run_for(std::chrono::milliseconds{100});
 }
