@@ -2,7 +2,7 @@
 
 using namespace stream_send_queue_fixture;
 
-TEST_CASE("stream_send_queue fail-on-error edge: a composer that closes the block stops the chain", "[io][stream_send_queue][!shouldfail]")
+TEST_CASE("stream_send_queue fail-on-error edge: a composer that closes the block stops the chain", "[io][stream_send_queue]")
 {
     // The stream channel fails the channel on a socket error: it closes the block BEFORE
     // the completion would chain, so the post-close completion is a guarded no-op (the

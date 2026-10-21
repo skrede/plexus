@@ -66,7 +66,7 @@ struct pending_handshake
 
 }
 
-TEST_CASE("tls_retire_drain a frame delivery queued before the channel closed is not handed to the consumer", "[integration][tls][teardown][!shouldfail]")
+TEST_CASE("tls_retire_drain a frame delivery queued before the channel closed is not handed to the consumer", "[integration][tls][teardown]")
 {
     const mutual_credentials creds;
     for(std::int32_t iter = 0; iter < k_iterations; ++iter)
@@ -82,7 +82,7 @@ TEST_CASE("tls_retire_drain a frame delivery queued before the channel closed is
     }
 }
 
-TEST_CASE("tls_retire_drain a channel that failed before it was retired is still erased", "[integration][tls][teardown][!shouldfail]")
+TEST_CASE("tls_retire_drain a channel that failed before it was retired is still erased", "[integration][tls][teardown]")
 {
     const mutual_credentials creds;
     for(std::int32_t iter = 0; iter < k_iterations; ++iter)

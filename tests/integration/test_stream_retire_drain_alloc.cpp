@@ -57,7 +57,7 @@ bool freed_before_the_drain(std::unique_ptr<pasio::asio_channel> &ch, tcp_pair &
 
 }
 
-TEST_CASE("stream_retire_drain a live close keeps a pending gather's frames until the aborted write drained", "[integration][asio][teardown][!shouldfail]")
+TEST_CASE("stream_retire_drain a live close keeps a pending gather's frames until the aborted write drained", "[integration][asio][teardown]")
 {
     for(std::int32_t iter = 0; iter < k_iterations; ++iter)
     {
@@ -84,7 +84,7 @@ TEST_CASE("stream_retire_drain the read buffer is freed only after the aborted r
 }
 
 // The peer half-closes while the write is stalled, so the read fails and the fail path closes the egress.
-TEST_CASE("stream_retire_drain an in-flight frame's owner is freed only after the aborted write drained", "[integration][asio][teardown][!shouldfail]")
+TEST_CASE("stream_retire_drain an in-flight frame's owner is freed only after the aborted write drained", "[integration][asio][teardown]")
 {
     for(std::int32_t iter = 0; iter < k_iterations; ++iter)
     {

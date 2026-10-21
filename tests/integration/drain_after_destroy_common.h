@@ -37,8 +37,10 @@ bool poll_one_until(::asio::io_context &io, Pred pred)
     return pred();
 }
 
+// A poll that ran out of work stops the context, so the drain restarts it before running what the retire posted.
 inline void drain(::asio::io_context &io)
 {
+    io.restart();
     io.poll();
     io.run_for(std::chrono::milliseconds(50));
 }

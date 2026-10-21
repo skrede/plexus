@@ -30,6 +30,7 @@
 #include <memory>
 #include <cstdint>
 #include <cstdlib>
+#include <utility>
 
 namespace pasio = plexus::asio;
 namespace pio   = plexus::io;
@@ -140,8 +141,14 @@ TEST_CASE("unix_permissions: accept_any admits a local peer while a deny-all pol
         temp_dir t;
         ::asio::io_context io;
         int accepted = 0;
+        std::unique_ptr<pasio::unix_channel> admitted;
         pasio::unix_listener listener{io};
-        listener.on_accepted([&](std::unique_ptr<pasio::unix_channel>) { ++accepted; });
+        listener.on_accepted(
+                [&](std::unique_ptr<pasio::unix_channel> ch)
+                {
+                    ++accepted;
+                    admitted = std::move(ch);
+                });
         listener.start(pio::endpoint{"unix", t.path});
 
         ::asio::local::stream_protocol::socket client{io};

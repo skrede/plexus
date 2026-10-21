@@ -118,14 +118,15 @@ private:
     template<typename Channel>
     void do_handshake(Channel &c, ::asio::ssl::stream_base::handshake_type mode)
     {
+        c.begin_op();
         c.stream().async_handshake(mode,
                                    [this, &c](std::error_code ec)
                                    {
+                                       c.end_op();
                                        if(ec)
                                            return c.fail(ec);
                                        c.start_read_loop();
-                                       m_gate.mark_ready(); // drain whatever buffered while the
-                                                            // handshake was in flight
+                                       m_gate.mark_ready();
                                        if(m_on_ready_cb)
                                            m_on_ready_cb();
                                    });

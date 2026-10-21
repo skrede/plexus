@@ -1,14 +1,12 @@
 #ifndef HPP_GUARD_TESTS_INTEGRATION_FORWARD_SERIAL_E2E_COMMON_H
 #define HPP_GUARD_TESTS_INTEGRATION_FORWARD_SERIAL_E2E_COMMON_H
 
-// The two-live-transport relay acceptance substrate, driven entirely through the public node facade.
-// A serial-attached origin, a relay owning BOTH a serial and a TCP session, and a TCP-attached
-// consumer stand up on ONE shared io_context with NO direct origin<->consumer path. Session A is a
-// real openpty serial link: the origin adopts the pty MASTER (which has no device name) as an inbound
-// session, and the relay dials the SLAVE by its ptsname. Session B is a real TCP loopback: the relay
-// listens on an ephemeral port and the consumer dials it. Everything is reconstructed per cold run,
-// so each run is an independent cold establishment of BOTH sessions rather than one warm relay polled
-// repeatedly.
+// The two-live-transport relay acceptance substrate, driven entirely through the public node facade. A serial-attached
+// origin, a relay owning BOTH a serial and a TCP session, and a TCP-attached consumer stand up on ONE shared io_context
+// with NO direct origin<->consumer path. Session A is a real openpty serial link: the origin adopts the pty MASTER (which
+// has no device name) as an inbound session, and the relay dials the SLAVE by its ptsname. Session B is a real TCP
+// loopback: the relay listens on an ephemeral port and the consumer dials it. Everything is reconstructed per cold run,
+// so each run is an independent cold establishment of BOTH sessions rather than one warm relay polled repeatedly.
 
 #include "test_serial_common.h"
 
@@ -21,6 +19,8 @@
 #include "plexus/node_options.h"
 #include "plexus/target_profile.h"
 
+#include "plexus/io/detail/channel_graveyard.h"
+
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/graph/participant_record.h"
@@ -31,6 +31,7 @@
 
 #include <span>
 #include <array>
+#include <memory>
 #include <string>
 #include <cstddef>
 #include <cstdint>
@@ -60,9 +61,8 @@ inline node_id id_of(std::uint8_t seed)
     return id;
 }
 
-// Records how many warn lines the node emitted and, of those, how many were self_check() posture
-// disclosures (tagged "(self_check)" by node.h) — so a test proves relay-posture disclosure is never
-// silent without coupling to the exact wording.
+// Records how many warn lines the node emitted and, of those, how many were self_check() posture disclosures (tagged
+// "(self_check)" by node.h) — so a test proves relay-posture disclosure is never silent without coupling to the wording.
 struct capturing_logger final : plexus::log::logger
 {
     void warn(std::string_view message) override
@@ -75,14 +75,25 @@ struct capturing_logger final : plexus::log::logger
     std::size_t self_checks{0};
 };
 
-// A complete session whose HANDSHAKE-PROVEN identity is `proven` exists (slots key by endpoint hash,
-// not the proven id, so connectivity is asserted by peer_identity, never a keyed lookup).
+// The complete session whose HANDSHAKE-PROVEN identity is `proven`, if any (slots key by endpoint hash, not the proven
+// id, so a session is found by peer_identity, never a keyed lookup).
+template<typename Node>
+inline decltype(std::declval<Node &>().router().registry().session_for(node_id{})) session_to(Node &n, const node_id &proven)
+{
+    decltype(n.router().registry().session_for(proven)) found = nullptr;
+    n.router().registry().for_each_connected(
+            [&](const node_id &, auto &s)
+            {
+                if(s.peer_identity() == proven)
+                    found = &s;
+            });
+    return found;
+}
+
 template<typename Node>
 inline bool connected(Node &n, const node_id &proven)
 {
-    bool found = false;
-    n.router().registry().for_each_connected([&](const node_id &, auto &s) { if(s.peer_identity() == proven) found = true; });
-    return found;
+    return session_to(n, proven) != nullptr;
 }
 
 inline const graph::participant_record *find_participant(const consumer_node &c, const node_id &id)
@@ -98,9 +109,9 @@ inline const graph::participant_record *find_participant(const consumer_node &c,
     return &hit;
 }
 
-// Three fresh nodes plus their borrowed substrate, reconstructed per run. bring_up_serial and
-// bring_up_tcp establish the two live sessions cold; kill_origin tears the origin down so the relay
-// withdraws the relayed peer over session B.
+// Three fresh nodes plus their borrowed substrate, reconstructed per run. bring_up_serial and bring_up_tcp establish
+// the two live sessions cold; kill_origin tears the origin down so the relay withdraws the relayed peer over session B.
+// A cluster is destroyed without its executor running again, so no completion reaches a destroyed node or channel.
 struct cold_cluster
 {
     ::asio::io_context io;
@@ -119,9 +130,8 @@ struct cold_cluster
     pasio::asio_transport consumer_tcp{io};
     pasio::asio_transport origin2_tcp{io};
 
-    // A revived relay is a fresh node under the SAME relay_id on fresh transports and a fresh serial
-    // line (the first incarnation's slave fd closed on its death, EOF-tearing the origin's inbound
-    // session). Declared BEFORE relay so they outlive the node that borrows them at teardown.
+    // A revived relay is a fresh node under the SAME relay_id on fresh transports and a fresh serial line (the first
+    // incarnation's slave fd closed on its death). Declared BEFORE relay so they outlive the node that borrows them.
     std::optional<pty_pair> revive_pty;
     std::optional<pasio::serial_transport> revive_relay_serial;
     std::optional<pasio::asio_transport> revive_relay_tcp;
@@ -140,9 +150,9 @@ struct cold_cluster
     std::optional<consumer_node> origin2;
 
     std::uint16_t tcp_port{0};
+    plexus::io::detail::channel_graveyard<pasio::asio_channel, 4> refused;
 
-    explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct,
-                          plexus::io::route_usage origin_usage = plexus::io::route_usage::prefer_direct)
+    explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct, plexus::io::route_usage origin_usage = plexus::io::route_usage::prefer_direct)
             : consumer{io, cdisc, consumer_id, consumer_tcp, logged(usage_options("consumer", consumer_usage), consumer_log)}
     {
         relay.emplace(io, rdisc, relay_id, relay_serial, relay_tcp, logged(named("relay"), relay_log));
@@ -166,9 +176,9 @@ struct cold_cluster
     {
         using namespace std::chrono_literals;
         plexus::node_options opts;
-        opts.name            = std::string{n};
-        opts.reconnect       = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
-        std::uint64_t seed   = 0x9E3779B97F4A7C15ull;
+        opts.name          = std::string{n};
+        opts.reconnect     = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+        std::uint64_t seed = 0x9E3779B97F4A7C15ull;
         for(char c : n)
             seed = (seed ^ static_cast<std::uint8_t>(c)) * 1099511628211ull;
         opts.redial_seed     = seed;
@@ -182,10 +192,9 @@ struct cold_cluster
         plexus::testing::pump_until(io, pred, k_pump_bound);
     }
 
-    // Session A: the relay dials the slave by its ptsname (the slave is the only path-addressable end),
-    // THEN the origin adopts the pty master as an inbound session. The order matters: a master read armed
-    // while no slave is open reads EOF and tears the master channel down, so the slave must be open first.
-    // The openpty slave fd is released so the relay owns the sole slave handle.
+    // Session A: the relay dials the slave by its ptsname (the slave is the only path-addressable end), THEN the origin
+    // adopts the pty master as an inbound session. The order matters: a master read armed while no slave is open reads
+    // EOF and tears the master channel down, so the slave must be open first. The relay owns the sole slave handle.
     void bring_up_serial()
     {
         ::close(pty.take_slave());
@@ -223,22 +232,24 @@ struct cold_cluster
         origin.reset();
     }
 
-    // Destroy the WHOLE relay node — both its sessions — draining pending work first. Unlike a
-    // serial-leg-down (which leaves the relay alive to withdraw the reported origin, retiring it to
-    // disappeared), tearing the relay session down degrades the origin's via-relay candidate to
-    // UNREACHABLE-NOT-DEAD in the consumer's route table (the identity is retained, distinguishable from
-    // a peer that left), so a forwarded re-issue finds no live via-session and drops.
+    // Destroy the WHOLE relay once its TCP sessions closed and drained; the serial session dies with the node, which
+    // never redials the line, and the outliving listener retires what it still accepts. Unlike a serial-leg-down (the
+    // relay withdraws the reported origin, retiring it to disappeared), this degrades the origin to UNREACHABLE-NOT-DEAD.
     void kill_relay()
     {
+        serial_fixture::settle(io, std::chrono::milliseconds(20));
+        relay_tcp.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) { refused.retire(std::move(ch)); });
+        for(const node_id &peer : {consumer_id, origin2_id})
+            if(auto *session = session_to(*relay, peer))
+                session->tear_down();
         serial_fixture::settle(io, std::chrono::milliseconds(20));
         relay.reset();
     }
 
-    // Reconstruct the relay under the SAME identity on fresh transports and re-establish BOTH legs, so
-    // the consumer can observe the relayed path recover without identity churn. A fresh pty is needed:
-    // the dead incarnation's slave fd closed, EOF-tearing the origin's inbound serial session, so the
-    // origin adopts a fresh master while the revived relay dials the fresh slave (same order dependence
-    // as bring_up_serial). The revived relay listens on a fresh ephemeral port that the consumer dials.
+    // Reconstruct the relay under the SAME identity on fresh transports and re-establish BOTH legs, so the consumer can
+    // observe the relayed path recover without identity churn. A fresh pty is needed: the dead incarnation's slave fd
+    // closed, EOF-tearing the origin's inbound serial session, so the origin adopts a fresh master while the revived relay
+    // dials the fresh slave (same order dependence as bring_up_serial). It listens on a fresh port that the consumer dials.
     void revive_relay()
     {
         serial_fixture::settle(io, std::chrono::milliseconds(20));
@@ -259,21 +270,10 @@ struct cold_cluster
         consumer.dial({"tcp", "127.0.0.1:" + std::to_string(tcp_port)});
         pump([&] { return connected(consumer, relay_id) && connected(*relay, consumer_id); });
     }
-
-    // The borrowed-executor contract: drain before the nodes are destroyed so no in-flight callback
-    // references a torn-down engine.
-    ~cold_cluster()
-    {
-        origin.reset();
-        origin2.reset();
-        relay.reset();
-        serial_fixture::settle(io, std::chrono::milliseconds(30));
-    }
 };
 
 using host_node      = consumer_node;
 using tcp_relay_node = plexus::node<plexus::relay<pasio::asio_policy>, pasio::asio_transport>;
-using session_ref    = std::remove_reference_t<decltype(*std::declval<host_node &>().router().registry().session_for(node_id{}))>;
 
 // An all-TCP dual-homed substrate: origin, relay, and consumer are each an asio_transport node on one
 // shared io_context. The consumer's single transport dials the relay (the relayed path) AND, later, the
@@ -342,23 +342,13 @@ struct dualhome_cluster
         pump([&] { return connected(consumer, origin_id) && connected(*origin, consumer_id); });
     }
 
-    // Tear down ONLY the consumer's direct session to the origin, leaving consumer<->relay and
-    // relay<->origin live so the relayed path re-arms. tear_down fires the disconnected edge the re-arm
-    // keys on without disturbing the other two sessions.
+    // Tear down ONLY the consumer's direct session to the origin, leaving consumer<->relay and relay<->origin live so the
+    // relayed path re-arms. tear_down fires the disconnected edge the re-arm keys on without disturbing the other two.
     void drop_direct()
     {
-        session_ref *direct = nullptr;
-        consumer.router().registry().for_each_connected([&](const node_id &, session_ref &s) { if(s.peer_identity() == origin_id) direct = &s; });
-        if(direct != nullptr)
+        if(auto *direct = session_to(consumer, origin_id))
             direct->tear_down();
         pump([&] { return !connected(consumer, origin_id); });
-    }
-
-    ~dualhome_cluster()
-    {
-        origin.reset();
-        relay.reset();
-        serial_fixture::settle(io, std::chrono::milliseconds(30));
     }
 };
 

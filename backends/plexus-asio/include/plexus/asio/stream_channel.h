@@ -17,8 +17,9 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/egress_capacity.h"
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
-#include "plexus/io/detail/liveness_token.h"
+#include "plexus/io/detail/close_notification.h"
 #include "plexus/stream/detail/send_queue.h"
 #include "plexus/detail/compat.h"
 
@@ -27,7 +28,6 @@
 #include <asio/io_context.hpp>
 
 #include <span>
-#include <memory>
 #include <vector>
 #include <cstdint>
 #include <utility>
@@ -63,11 +63,12 @@ public:
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
-            , m_life(std::make_shared<io::detail::liveness_token>())
+            , m_ops()
+            , m_closed()
             , m_open(false)
     {
         bind_bootstrap();
-        detail::stream_wire_inbound(*this);
+        detail::stream_wire_hooks(*this);
     }
 
     // Accept-mode: adopt an already-connected socket. Plaintext starts reading immediately; TLS
@@ -85,20 +86,19 @@ public:
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)
             , m_egress(detail::stream_make_send_sink(*this), egress.bytes)
-            , m_life(std::make_shared<io::detail::liveness_token>())
+            , m_ops()
+            , m_closed()
             , m_open(false)
     {
         bind_bootstrap();
-        detail::stream_wire_inbound(*this);
+        detail::stream_wire_hooks(*this);
         m_bootstrap.arm_on_accept(*this);
         detail::stream_apply_socket_options(*this);
     }
 
     ~stream_channel()
     {
-        // Disarm before the socket teardown aborts in-flight ops: a late completion or posted on_closed
-        // sees !alive in the shared liveness block and no-ops instead of touching this freed channel.
-        m_life->alive = false;
+        m_ops.on_settled({});
         m_inbound.shutdown();
         detail::stream_shutdown_socket(*this);
         m_bootstrap.reset();
@@ -125,17 +125,10 @@ public:
         m_bootstrap.submit(*this, std::move(data));
     }
 
+    // Close abandons the unsent backlog rather than flushing it, so the residual lands on the edge a shed frame does.
     void close()
     {
-        if(!socket().is_open())
-            return;
-        m_inbound.shutdown();
-        // Count the still-unsent backlog as loss BEFORE teardown: close abandons the queued bytes
-        // rather than flushing them, so the residual lands on the same edge a shed frame does.
-        m_dropped += m_egress.close_and_drain();
-        // An aborted in-flight write must not chain onto the closed socket.
-        detail::stream_shutdown_socket(*this);
-        detail::stream_post_on_closed(*this);
+        detail::stream_close_with(*this, [this] { m_dropped += m_egress.close_and_drain(); });
     }
 
     io::endpoint remote_endpoint() const
@@ -145,7 +138,8 @@ public:
 
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
-        m_on_closed_cb = std::move(cb);
+        m_closed.install(std::move(cb));
+        detail::stream_notify_closed(*this);
     }
 
     decltype(auto) socket() noexcept
@@ -162,6 +156,8 @@ public:
     // buffer is a data race, and coalesced frames are lost).
     void start_read()
     {
+        if(m_ops.closing())
+            return;
         m_open = true;
         detail::stream_apply_socket_options(*this);
         if(m_reading)
@@ -195,7 +191,7 @@ public:
     }
     std::size_t outstanding_ops() const noexcept
     {
-        return m_life->outstanding;
+        return m_ops.count();
     }
 
     void enqueue_egress(std::span<const std::byte> bytes)
@@ -215,14 +211,14 @@ public:
     }
     void start_read_loop()
     {
-        if(m_reading)
+        if(m_reading || m_ops.closing())
             return;
         m_reading = true;
         detail::stream_do_read(*this);
     }
     void mark_open() noexcept
     {
-        m_open = true;
+        m_open = !m_ops.closing();
     }
     Stream &stream() noexcept
     {
@@ -231,6 +227,14 @@ public:
     void fail(const std::error_code &ec)
     {
         detail::stream_fail(*this, ec);
+    }
+    void begin_op() noexcept
+    {
+        m_ops.begin();
+    }
+    void end_op()
+    {
+        m_ops.end();
     }
 
 protected:
@@ -253,7 +257,7 @@ private:
     template<typename Ch>
     friend void detail::stream_post_frame(Ch &, const wire::complete_frame &);
     template<typename Ch>
-    friend void detail::stream_wire_inbound(Ch &);
+    friend void detail::stream_wire_hooks(Ch &);
     template<typename Ch>
     friend void detail::stream_do_read(Ch &);
     template<typename Ch>
@@ -261,7 +265,9 @@ private:
     template<typename Ch>
     friend void detail::stream_apply_socket_options(Ch &);
     template<typename Ch>
-    friend void detail::stream_post_on_closed(Ch &);
+    friend void detail::stream_notify_closed(Ch &);
+    template<typename Ch, typename BeforeTeardown>
+    friend void detail::stream_close_with(Ch &, BeforeTeardown);
     template<typename Ch>
     friend void detail::stream_shutdown_socket(Ch &);
 
@@ -282,8 +288,8 @@ private:
     std::uint64_t m_scheduler_key;
     std::size_t m_dropped;
     stream::detail::send_queue m_egress;
-    std::shared_ptr<io::detail::liveness_token> m_life;
-    plexus::detail::move_only_function<void()> m_on_closed_cb;
+    io::detail::pending_ops m_ops;
+    io::detail::close_notification m_closed;
     bool m_open;
 };
 

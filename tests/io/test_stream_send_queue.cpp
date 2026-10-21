@@ -65,7 +65,7 @@ TEST_CASE("stream_send_queue drains in FIFO order across a burst", "[io][stream_
     REQUIRE_FALSE(q.sending());
 }
 
-TEST_CASE("stream_send_queue close() drops the backlog, keeps the in-flight gather and guards a late completion", "[io][stream_send_queue][!shouldfail]")
+TEST_CASE("stream_send_queue close() drops the backlog, keeps the in-flight gather and guards a late completion", "[io][stream_send_queue]")
 {
     recorder rec;
     stream_send_queue q{rec.sink()};

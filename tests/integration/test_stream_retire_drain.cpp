@@ -17,6 +17,7 @@
 #include <span>
 #include <chrono>
 #include <memory>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -72,25 +73,25 @@ void retire_after_a_fail()
 
 }
 
-TEST_CASE("stream_retire_drain a frame delivery queued before the channel closed is not handed to the consumer (tcp)", "[integration][asio][teardown][!shouldfail]")
+TEST_CASE("stream_retire_drain a frame delivery queued before the channel closed is not handed to the consumer (tcp)", "[integration][asio][teardown]")
 {
     retire_with_a_delivery_queued<tcp_pair>();
 }
 
 #if !defined(_WIN32)
-TEST_CASE("stream_retire_drain a frame delivery queued before the channel closed is not handed to the consumer (unix)", "[integration][asio][teardown][!shouldfail]")
+TEST_CASE("stream_retire_drain a frame delivery queued before the channel closed is not handed to the consumer (unix)", "[integration][asio][teardown]")
 {
     retire_with_a_delivery_queued<unix_pair>();
 }
 #endif
 
-TEST_CASE("stream_retire_drain a channel that failed before it was retired is still erased (tcp)", "[integration][asio][teardown][!shouldfail]")
+TEST_CASE("stream_retire_drain a channel that failed before it was retired is still erased (tcp)", "[integration][asio][teardown]")
 {
     retire_after_a_fail<tcp_pair>();
 }
 
 #if !defined(_WIN32)
-TEST_CASE("stream_retire_drain a channel that failed before it was retired is still erased (unix)", "[integration][asio][teardown][!shouldfail]")
+TEST_CASE("stream_retire_drain a channel that failed before it was retired is still erased (unix)", "[integration][asio][teardown]")
 {
     retire_after_a_fail<unix_pair>();
 }
@@ -118,5 +119,41 @@ TEST_CASE("stream_retire_drain a no-progress expiry queued in the closing pass d
         REQUIRE(erased == 1);
         REQUIRE(graveyard.empty());
         REQUIRE_FALSE(protocol_closed);
+    }
+}
+
+// One complete frame and a partial one in a single read: the delivery is posted, the read re-armed and the no-progress
+// wait armed when the channel is retired. The erase must be the last handler the drain runs.
+TEST_CASE("stream_retire_drain a retired channel's posts, read and no-progress timer all complete before its on_closed", "[integration][asio][teardown]")
+{
+    for(std::int32_t iter = 0; iter < k_iterations; ++iter)
+    {
+        tcp_pair h;
+        auto ch                = std::make_unique<pasio::asio_channel>(h.io, std::move(h.client));
+        std::int32_t delivered = 0;
+        ch->on_data([&](std::span<const std::byte>) { ++delivered; });
+        auto bytes         = two_frames();
+        const auto partial = partial_frame();
+        bytes.resize(bytes.size() / 2);
+        bytes.insert(bytes.end(), partial.begin(), partial.end());
+        ::asio::write(h.peer, ::asio::buffer(bytes));
+        REQUIRE(poll_one_until(h.io, [&] { return ch->outstanding_ops() == 2; }));
+
+        std::int32_t ran          = 0;
+        std::int32_t ran_at_erase = -1;
+        const auto drain_counting = [&]
+        {
+            while(h.io.poll_one() != 0)
+                ++ran;
+            while(h.io.run_one_for(20ms) != 0)
+                ++ran;
+        };
+        const auto outcome = retire_and_drain(ch, drain_counting, [&] { ran_at_erase = ran; });
+
+        REQUIRE(outcome.erased == 1);
+        REQUIRE(outcome.empty);
+        REQUIRE(delivered == 0);
+        REQUIRE(ran_at_erase >= 3);
+        REQUIRE(ran == ran_at_erase + 1);
     }
 }

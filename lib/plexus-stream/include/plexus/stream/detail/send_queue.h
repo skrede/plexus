@@ -101,23 +101,28 @@ public:
         return m_sending;
     }
 
-    // A completion firing after close is a guarded no-op, so a failed write does not chain onto a
-    // dead socket.
+    // Close drops only the backlog not yet handed to the sink: the front nodes of a pending gather stay
+    // owned until the queue is destroyed, because the aborted write may still read them. A completion
+    // firing after close is a guarded no-op, so a failed write does not chain onto a dead socket.
     void close()
     {
-        m_open      = false;
-        m_sending   = false;
-        m_in_flight = 0;
-        m_queue.clear();
+        if(!m_open)
+            return;
+        const std::size_t in_flight = m_sending ? m_in_flight : 0;
+        m_open                      = false;
+        m_sending                   = false;
+        m_queue.erase(m_queue.begin() + static_cast<std::ptrdiff_t>(in_flight), m_queue.end());
         m_views.clear();
         m_bytes = 0;
+        for(const auto &node : m_queue)
+            m_bytes += node.size();
     }
 
     // Close and report the count of still-queued frames abandoned (surfaced by the caller as loss
     // under drop_cause::closed_unsent); the abandoned bytes are not flushed.
     std::size_t close_and_drain() noexcept
     {
-        const std::size_t residual = m_queue.size();
+        const std::size_t residual = m_open ? m_queue.size() : 0;
         close();
         return residual;
     }
@@ -149,7 +154,7 @@ private:
     // those N and chain the next turn.
     void drive()
     {
-        if(m_queue.empty())
+        if(m_queue.empty() || !m_open)
         {
             m_sending = false;
             return;

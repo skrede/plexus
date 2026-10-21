@@ -41,16 +41,14 @@ void stream_fail(Ch &c, const std::error_code &ec)
 {
     if(ec == ::asio::error::operation_aborted || !c.m_open)
         return;
-    c.m_open = false;
-    // Stop the drain so the failed write does not chain.
-    c.m_egress.close();
-    c.m_inbound.shutdown();
-    // A stalled or failed write must not survive into a redial.
-    stream_shutdown_socket(c);
-    auto mapped = detail::map_error(ec);
-    if(c.m_on_error_cb)
-        c.m_on_error_cb(mapped);
-    stream_post_on_closed(c);
+    stream_close_with(c,
+                      [&c, mapped = detail::map_error(ec)]
+                      {
+                          auto on_error = std::exchange(c.m_on_error_cb, nullptr);
+                          if(on_error)
+                              on_error(mapped);
+                          c.m_egress.close();
+                      });
 }
 
 // A wire protocol violation: fire the protocol-close seam, then close() (on_closed only) — NEVER
@@ -58,51 +56,55 @@ void stream_fail(Ch &c, const std::error_code &ec)
 template<typename Ch>
 void stream_handle_protocol_close(Ch &c, wire::close_cause cause)
 {
-    if(c.m_on_protocol_close_cb)
-        c.m_on_protocol_close_cb(cause);
+    auto on_protocol_close = std::exchange(c.m_on_protocol_close_cb, nullptr);
+    if(on_protocol_close)
+        on_protocol_close(cause);
     c.close();
 }
 
-// The posted closure captures the owner, keeping the bytes alive past this call (the post runs
-// later).
 template<typename Ch>
 void stream_post_frame(Ch &c, const wire::complete_frame &frame)
 {
-    wire_bytes<> owned{frame.payload};
+    if(c.m_ops.closing())
+        return;
+    c.m_ops.begin();
     ::asio::post(c.m_io,
-                 [&c, owned = std::move(owned)]
+                 [&c, owned = wire_bytes<>{frame.payload}]
                  {
+                     c.m_ops.end();
                      if(c.m_on_data_cb)
                          c.m_on_data_cb(static_cast<std::span<const std::byte>>(owned));
                  });
 }
 
 template<typename Ch>
-void stream_wire_inbound(Ch &c)
+void stream_wire_hooks(Ch &c)
 {
     c.m_inbound.on_frame([&c](const wire::complete_frame &f) { stream_post_frame(c, f); });
     c.m_inbound.on_protocol_close([&c](wire::close_cause cc) { stream_handle_protocol_close(c, cc); });
+    c.m_ops.on_settled([&c] { stream_notify_closed(c); });
 }
 
 template<typename Ch>
 void stream_do_read(Ch &c)
 {
-    ++c.m_life->outstanding;
+    c.m_ops.begin();
     c.m_stream.async_read_some(::asio::buffer(c.m_read_buf),
-                               [&c, life = c.m_life](std::error_code ec, std::size_t n)
+                               [&c](std::error_code ec, std::size_t n)
                                {
-                                   --life->outstanding;
-                                   if(!life->alive) // the channel was destroyed with this read queued
-                                       return;
+                                   c.m_ops.end();
                                    if(ec)
                                        return stream_fail(c, ec);
+                                   if(!c.m_open)
+                                       return;
                                    c.m_inbound.feed(std::span<const std::byte>{c.m_read_buf.data(), n});
-                                   if(c.m_open) // a protocol-close may have torn the socket down
+                                   // A protocol close raised by the feed closes the channel.
+                                   if(c.m_open)
                                        stream_do_read(c);
                                });
 }
 
-// Gather the block-owned node views into one ConstBufferSequence and issue a SINGLE async_write
+// Gather the queue-owned node views into one ConstBufferSequence and issue a SINGLE async_write
 // (asio lowers it to one writev/WSASend).
 template<typename Ch>
 stream::detail::send_queue::send_sink stream_make_send_sink(Ch &c)
@@ -113,16 +115,11 @@ stream::detail::send_queue::send_sink stream_make_send_sink(Ch &c)
         c.m_gather.reserve(views.size());
         for(const auto &v : views)
             c.m_gather.emplace_back(v.data(), v.size());
-        ++c.m_life->outstanding;
+        c.m_ops.begin();
         ::asio::async_write(c.m_stream, c.m_gather,
-                            [&c, life = c.m_life, done = std::move(done)](std::error_code ec, std::size_t) mutable
+                            [&c, done = std::move(done)](std::error_code ec, std::size_t) mutable
                             {
-                                --life->outstanding;
-                                // The channel (and its m_egress) may already be freed; run the
-                                // send_queue completion — which reads m_egress.m_open — only while
-                                // the owner is alive, so that read is never against freed storage.
-                                if(!life->alive)
-                                    return;
+                                c.m_ops.end();
                                 if(ec)
                                     stream_fail(c, ec);
                                 done(!ec);
