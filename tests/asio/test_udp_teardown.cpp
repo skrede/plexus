@@ -13,6 +13,8 @@
 // so it never reaches this path. Looped to shake out any nondeterminism; the asan tree
 // (-fsanitize=address,undefined -fno-sanitize-recover=all) is where the UAF is caught.
 
+#include "udp_loopback.h"
+
 #include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_server.h"
@@ -39,6 +41,8 @@
 namespace pasio = plexus::asio;
 namespace pio   = plexus::io;
 
+using plexus::testing::loopback;
+
 namespace {
 
 static_assert(pio::byte_channel<pasio::udp_channel>);
@@ -51,46 +55,6 @@ std::vector<std::byte> bytes_of(const std::string &s)
         out[i] = static_cast<std::byte>(s[i]);
     return out;
 }
-
-// A real loopback pair on one io_context: a listening server transport and a dialing
-// client. The handshake ARQ establishes before any data flows; the harness captures
-// the accepted server channel (the engine-owned channel the demux keeps routing to).
-struct loopback
-{
-    ::asio::io_context io;
-    pasio::udp_transport server{io};
-    pasio::udp_transport client{io};
-
-    std::unique_ptr<pasio::udp_channel> accepted;
-    std::unique_ptr<pasio::udp_channel> dialed;
-
-    loopback()
-    {
-        server.on_accepted([this](std::unique_ptr<pasio::udp_channel> ch) { accepted = std::move(ch); });
-        server.listen({"udp", "127.0.0.1:0"});
-        pump_until([this] { return server.port() != 0; });
-
-        client.on_dialed([this](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
-        client.dial({"udp", "127.0.0.1:" + std::to_string(server.port())});
-        pump_until([this] { return dialed != nullptr && accepted != nullptr; });
-    }
-
-    template<typename Pred>
-    void pump_until(Pred pred)
-    {
-        plexus::testing::pump_until(io, pred, std::chrono::seconds(5));
-    }
-
-    void drain()
-    {
-        for(int i = 0; i < 256; ++i)
-        {
-            io.poll();
-            if(io.stopped())
-                io.restart();
-        }
-    }
-};
 
 }
 

@@ -58,6 +58,16 @@ target_link_libraries(test_udp_teardown PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_teardown TEST_PREFIX "udp.")
 
+# Retire-then-drain: a retired UDP channel hands nothing to its consumer after close, its reliable ARQ and reassembly
+# timers act on nothing after close, and it is erased once, after its last post and timer completed.
+add_executable(test_udp_retire_drain test_udp_retire_drain.cpp)
+target_link_libraries(test_udp_retire_drain PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+target_include_directories(test_udp_retire_drain PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_udp_retire_drain TEST_PREFIX "udp.")
+
 # The reliable-data ARQ legs (header-only inside plexus::asio): the sans-IO reorder
 # buffer's head-of-line in-order release, and the selective-repeat engine proven
 # end-to-end over deterministic loss/reorder/duplication via the lossy_relay fixture.
