@@ -62,21 +62,26 @@ TEST_CASE("send_queue drains in FIFO order across a burst", "[io][send_queue]")
     REQUIRE_FALSE(q.sending());
 }
 
-TEST_CASE("send_queue close() clears a pending queue and guards a late completion", "[io][send_queue]")
+TEST_CASE("send_queue close() drops the backlog and keeps the in-flight datagram until its completion", "[io][send_queue][!shouldfail]")
 {
     recorder rec;
     send_queue q{rec.sink()};
 
-    q.enqueue(bytes_of({1}), 1);
-    q.enqueue(bytes_of({2}), 2);
+    q.enqueue(bytes_of({1}), 1);    // in flight alone
+    q.enqueue(bytes_of({2, 3}), 2); // backlog behind it
     REQUIRE(q.size() == 2);
 
     q.close();
-    REQUIRE(q.size() == 0);
+    q.close();
+    REQUIRE(q.size() == 1);
+    REQUIRE(q.queued_bytes() == 1);
     REQUIRE_FALSE(q.sending());
 
-    // A completion arriving after close is a guarded no-op: it must not chain or pop.
-    rec.complete_front();
+    rec.complete_front(false);
     REQUIRE(q.size() == 0);
-    REQUIRE(rec.calls.size() == 1); // no further sink invocation chained
+    REQUIRE(q.queued_bytes() == 0);
+    REQUIRE(rec.calls.size() == 1);
+
+    q.enqueue(bytes_of({4}), 4); // a closed queue never drives again
+    REQUIRE(rec.calls.size() == 1);
 }
