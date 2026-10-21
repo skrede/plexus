@@ -526,6 +526,25 @@ if(NOT WIN32)
     catch_discover_tests(posix_test_shm_sidecar_leak TEST_PREFIX "shm.")
 endif()
 
+# A retired ring name a holder killed before removing it left behind, and a successor's ring under the same name, over
+# the POSIX broker; on Windows a name ends with its last handle, so no name outlives its holders.
+if(NOT WIN32)
+    add_executable(test_shm_retired_name_identity test_shm_retired_name_identity.cpp)
+
+    target_include_directories(test_shm_retired_name_identity PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_retired_name_identity PRIVATE
+        plexus::plexus
+        plexus::shm
+        plexus::native
+        plexus::core
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_retired_name_identity TEST_PREFIX "shm.")
+endif()
+
 # A taken message or a wire view made from it, held past its ring entry's teardown, keeps that ring's mapping, over a
 # counting in-memory broker and over the platform broker.
 add_executable(test_shm_take_pin_mapping test_shm_take_pin_mapping.cpp)
