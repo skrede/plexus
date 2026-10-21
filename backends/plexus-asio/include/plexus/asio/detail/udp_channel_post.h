@@ -39,18 +39,6 @@ void post_on_data_owned(Ch &c, wire::shared_bytes owned)
                  });
 }
 
-// Posted, never synchronous: a this-capturing on_closed could otherwise run inline.
-template<typename Ch>
-void udp_post_on_closed(Ch &c)
-{
-    ::asio::post(c.m_io,
-                 [&c]
-                 {
-                     if(c.m_on_closed_cb)
-                         c.m_on_closed_cb();
-                 });
-}
-
 }
 
 #endif

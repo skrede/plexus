@@ -22,14 +22,12 @@
 
 namespace plexus::datagram::detail {
 
-// A selective-repeat sliding-window sender + a head-of-line reorder receiver + an adaptive
-// RFC 6298 RTO (Karn's algorithm): every reliable datagram is delivered in publish order,
-// retransmitting only the lost segment (selective-repeat, not go-back-N).
+// A selective-repeat sliding-window sender + a head-of-line reorder receiver + an adaptive RFC 6298 RTO (Karn's
+// algorithm): every reliable datagram is delivered in publish order, retransmitting only the lost segment.
 struct udp_arq_config
 {
-    // The selective-ack bitmap (wire::udp_ack::bitmap_bits) names only that many holes above
-    // the cumulative edge; holes beyond a window LARGER than bitmap_bits fall back to
-    // per-segment RTO-driven retransmit (idempotent at the receiver).
+    // The selective-ack bitmap names only bitmap_bits holes above the cumulative edge; holes beyond a larger window
+    // fall back to per-segment RTO-driven retransmit (idempotent at the receiver).
     std::size_t window{512};                    // in-flight segment bound (<= 2^15)
     std::chrono::milliseconds initial_rto{200}; // before any RTT sample
     std::chrono::milliseconds min_rto{50};
@@ -56,8 +54,7 @@ public:
         window_full
     };
 
-    // CONTRACT: both ends start at the same initial_seq, so the cumulative-ack edge is
-    // meaningful from the first segment.
+    // CONTRACT: both ends start at the same initial_seq, so the cumulative-ack edge holds from the first segment.
     explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {}, std::uint16_t initial_seq = 0)
             : m_executor(executor)
             , m_cfg(cfg)
@@ -75,8 +72,6 @@ public:
                 {
                     if(m_on_deliver_seq)
                         m_on_deliver_seq(seq, fragmented, bytes);
-                    if(m_on_deliver)
-                        m_on_deliver(bytes);
                 });
     }
 
@@ -91,11 +86,6 @@ public:
     void on_send_ack(plexus::detail::move_only_function<void(const wire::udp_ack &)> cb)
     {
         m_on_send_ack = std::move(cb);
-    }
-
-    void on_deliver(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
-    {
-        m_on_deliver = std::move(cb);
     }
 
     void on_deliver_seq(plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> cb)
@@ -144,7 +134,6 @@ public:
     void on_ack(const wire::udp_ack &ack)
     {
         slide_to(static_cast<std::uint16_t>(ack.cumulative + 1));
-        // The bitmap names holes above the cumulative edge: offset i -> seq (cumulative + 2 + i).
         for(std::size_t i = 0; i < wire::udp_ack::bitmap_bits; ++i)
         {
             if(!ack.hole_received(i))
@@ -228,8 +217,7 @@ private:
             m_on_window_advance();
     }
 
-    // A selectively-acked hole above the base: cancel its retransmit without advancing the
-    // base (the gap below it is still unacked).
+    // A selectively-acked hole above the base: cancel its retransmit; the gap below it keeps the base.
     void ack_hole(std::uint16_t seq)
     {
         const auto rel = static_cast<std::uint16_t>(seq - m_base);
@@ -283,7 +271,6 @@ private:
     bool m_dead{false};
     plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> m_on_transmit;
     plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_deliver;
     plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver_seq;
     plexus::detail::move_only_function<void()> m_on_exhausted;
     plexus::detail::move_only_function<void()> m_on_window_advance;

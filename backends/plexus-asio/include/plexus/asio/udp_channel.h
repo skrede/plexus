@@ -21,6 +21,7 @@
 #include "plexus/datagram/detail/udp_backpressure_queue.h"
 #include "plexus/asio/detail/udp_channel_io.h"
 #include "plexus/asio/detail/udp_channel_post.h"
+#include "plexus/asio/detail/udp_channel_lifecycle.h"
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -93,23 +94,12 @@ public:
     udp_channel(udp_channel &&)                 = delete;
     udp_channel &operator=(udp_channel &&)      = delete;
 
-    // Never posts on_closed (a this-capturing post could outlive the channel); close() does. The
-    // ARQ retransmit timers are canceled FIRST so a timer firing after the channel dies is a
-    // canceled no-op.
-    //
     // LIFETIME: every inbound datagram posts a this-capturing delivery through post_on_data, so the
     // owner MUST drain/quiesce the executor before destroying the channel — the dtor cannot cancel
     // an already-posted handler (only the timers).
     ~udp_channel()
     {
-        m_open = false;
-        if(m_reassembler)
-            m_reassembler->cancel();
-        if(m_arq)
-            m_arq->cancel();
-        // Erase the transport demux ref BEFORE this object dies.
-        if(m_on_teardown_cb)
-            m_on_teardown_cb();
+        detail::udp_destroy(*this);
     }
 
     // A reliable_datagram-mode channel dispatches to the in-order ARQ; a best_effort-mode channel
@@ -133,10 +123,7 @@ public:
 
     void close()
     {
-        if(!m_open)
-            return;
-        m_open = false;
-        detail::udp_post_on_closed(*this);
+        detail::udp_close(*this);
     }
 
     // The scheme reflects the channel's mode: a best_effort channel reports "udp", a
@@ -279,6 +266,10 @@ private:
     friend void detail::post_on_data_owned(Ch &, wire::shared_bytes);
     template<typename Ch>
     friend void detail::udp_post_on_closed(Ch &);
+    template<typename Ch>
+    friend void detail::udp_close(Ch &);
+    template<typename Ch>
+    friend void detail::udp_destroy(Ch &);
     template<typename Ch>
     friend void detail::ensure_reassembler(Ch &);
     template<typename Ch>
