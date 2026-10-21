@@ -1249,6 +1249,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_serial_resync TEST_PREFIX "integration.")
     endif()
 
+    # A serial channel retired with a verified frame queued or its read pending, over an openpty pair: nothing reaches
+    # the consumer after close and the channel is erased once, after its read and posts drained. POSIX-only (openpty).
+    if(NOT WIN32)
+    add_executable(test_serial_retire_drain test_serial_retire_drain.cpp)
+    target_link_libraries(test_serial_retire_drain PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    target_include_directories(test_serial_retire_drain PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_serial_retire_drain TEST_PREFIX "integration.")
+    endif()
+
     # The control-plane acceptance gate over the openpty serial link: a consumer node enumerates a
     # serial-attached origin THROUGH a relay end-to-end, host-side, before hardware. The origin's
     # declaration folds over the real serial wire into the relay's topic table; the relay lifts the
