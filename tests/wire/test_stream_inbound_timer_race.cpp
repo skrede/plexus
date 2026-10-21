@@ -137,3 +137,26 @@ TEST_CASE("wire stream_inbound timer race: a genuinely elapsed no-progress deadl
     f.ex.run_posted();
     REQUIRE(f.c.closes == 1);
 }
+
+TEST_CASE("wire stream_inbound timer race: an expiry queued before shutdown settles the pending wait when it runs "
+          "and closes nothing",
+          "[wire][stream_inbound][race]")
+{
+    auto whole = encode_complete(k_payload);
+    std::span<const std::byte> all{whole};
+
+    race_fixture f;
+    std::int32_t settled = 0;
+    f.stream.pending().on_settled([&settled] { ++settled; });
+
+    f.feed_header(all);
+    f.timer().manufacture_expiry();
+    f.stream.shutdown();
+    REQUIRE(settled == 0);
+    REQUIRE(f.stream.pending().count() == 1);
+
+    f.ex.run_posted();
+    REQUIRE(settled == 1);
+    REQUIRE(f.stream.pending().count() == 0);
+    REQUIRE(f.c.closes == 0);
+}

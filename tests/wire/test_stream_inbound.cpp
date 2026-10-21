@@ -172,3 +172,27 @@ TEST_CASE("wire stream_inbound: a normal back-to-back complete-frame stream rais
         REQUIRE(f.c.closes == 0);
     }
 }
+
+TEST_CASE("wire stream_inbound: shutdown settles the pending wait once and arms nothing after it", "[wire][stream_inbound]")
+{
+    manual_clock::reset();
+    fixture f;
+    std::int32_t settled = 0;
+    f.stream.pending().on_settled([&settled] { ++settled; });
+
+    auto frame = encode_complete(64);
+    f.feed(std::span<const std::byte>{frame}.subspan(0, header_size));
+    REQUIRE(f.stream.pending().count() == 1);
+
+    f.stream.shutdown();
+    REQUIRE(settled == 1);
+    REQUIRE(f.stream.pending().count() == 0);
+
+    // A live stream re-arms when the next frame starts; a shut-down one stays unarmed.
+    f.feed(std::span<const std::byte>{frame}.subspan(header_size));
+    f.feed(encode_header(make_header(64)));
+    f.advance(std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor) * 4);
+    REQUIRE(f.stream.pending().count() == 0);
+    REQUIRE(settled == 1);
+    REQUIRE(f.c.closes == 0);
+}
