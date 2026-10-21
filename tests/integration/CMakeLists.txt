@@ -1163,6 +1163,24 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_transport_dial_unix TEST_PREFIX "integration.")
 
+    # A dial still connecting, or an accept completed but not yet handled, when its transport closes: the dial
+    # reports one aborted failure and the accepted socket is dropped. TCP here, AF_UNIX off Windows, TLS with crypto.
+    add_executable(test_transport_dial_cancel test_transport_dial_cancel.cpp)
+    target_link_libraries(test_transport_dial_cancel PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    if(NOT WIN32)
+        target_sources(test_transport_dial_cancel PRIVATE test_transport_dial_cancel_unix.cpp)
+    endif()
+    if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+        target_sources(test_transport_dial_cancel PRIVATE test_transport_dial_cancel_tls.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_transport_dial_cancel PRIVATE plexus::crypto)
+    endif()
+    catch_discover_tests(test_transport_dial_cancel TEST_PREFIX "integration.")
+
     # The AF_UNIX capability gate — the ONE unix leg that builds on Windows too (NOT
     # NOT-WIN32-excluded): an in-process listener+client round-trip over a real local
     # stream socket proves AF_UNIX delivers bytes both ways, and the platform-divergent
