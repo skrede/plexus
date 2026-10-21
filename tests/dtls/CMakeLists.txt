@@ -119,3 +119,15 @@ target_link_libraries(test_dtls_transport_ceiling PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_dtls_transport_ceiling TEST_PREFIX "dtls.")
+
+# Retire-then-drain over a handshaken DTLS channel: closing detaches the consumer, a peer-closed channel is still
+# erased when retired, and on_closed follows the channel's last post and timer wait.
+add_executable(test_dtls_retire_drain test_dtls_retire_drain.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_dtls_retire_drain PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+
+target_include_directories(test_dtls_retire_drain PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+catch_discover_tests(test_dtls_retire_drain TEST_PREFIX "dtls.")
