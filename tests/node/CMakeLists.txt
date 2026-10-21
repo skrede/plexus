@@ -336,6 +336,15 @@ target_link_libraries(test_node_hang_up PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_hang_up TEST_PREFIX "node.")
 
+# A closed node reports once, after its last posted edge, timer wait and pending call, that nothing of it is left to run.
+add_executable(test_node_close_quiescence test_node_close_quiescence.cpp)
+target_link_libraries(test_node_close_quiescence PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_node_close_quiescence TEST_PREFIX "node.")
+
 # The dispatch re-entrancy contract: a callback that subscribes a new endpoint (forcing the
 # subscription table to grow) or drops its own handle mid-fan is safe — delivery fans from a frozen
 # view and defers the edit to the outermost fan's exit. asan/ubsan is the load-bearing gate.
@@ -409,4 +418,16 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::discovery
         Catch2::Catch2WithMain)
     catch_discover_tests(test_node_native_discovery TEST_PREFIX "node.")
+
+    # A TCP node closed and destroyed inside its own on_closed while its peer keeps running on the same io_context;
+    # under AddressSanitizer nothing of the destroyed node may run after it.
+    add_executable(test_node_close_asio test_node_close_asio.cpp)
+    target_link_libraries(test_node_close_asio PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::inproc
+        plexus::testing
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_node_close_asio TEST_PREFIX "node.")
 endif()
