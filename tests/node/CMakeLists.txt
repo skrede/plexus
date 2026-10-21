@@ -317,6 +317,16 @@ target_link_libraries(test_self_loopback_lifetime PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_self_loopback_lifetime TEST_PREFIX "node.")
 
+# Closing a node: its sessions drop at the peer, nothing redials, its discovery stops once, and a composed node leaves
+# no callback on its members.
+add_executable(test_node_close test_node_close.cpp)
+target_link_libraries(test_node_close PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_node_close TEST_PREFIX "node.")
+
 # The dispatch re-entrancy contract: a callback that subscribes a new endpoint (forcing the
 # subscription table to grow) or drops its own handle mid-fan is safe — delivery fans from a frozen
 # view and defers the edit to the outermost fan's exit. asan/ubsan is the load-bearing gate.
