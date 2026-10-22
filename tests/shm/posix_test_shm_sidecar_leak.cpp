@@ -9,7 +9,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <string>
+#include <cstddef>
+#include <filesystem>
+
+#include <unistd.h>
 
 namespace {
 
@@ -21,6 +26,7 @@ using plexus::testing::ring_view;
 using plexus::testing::ring_holder;
 using plexus::testing::lifetime_fqn;
 using plexus::testing::canonical_of;
+using plexus::testing::sidecar_file;
 using plexus::testing::k_sidecar_host;
 using plexus::testing::sidecar_present;
 
@@ -29,6 +35,16 @@ using plexus::testing::sidecar_present;
 // locks carry them, the retirer's hold refuses it the creator slot.
 constexpr acquire_result k_newcomer_result = k_sidecar_host ? acquire_result::created : acquire_result::failed;
 constexpr acquire_bound k_newcomer_bound   = k_sidecar_host ? acquire_bound::none : acquire_bound::creator_alive;
+
+#if defined(__APPLE__)
+std::filesystem::path confstr_dir(int which)
+{
+    std::array<char, 1024> dir{};
+    const std::size_t counted = ::confstr(which, dir.data(), dir.size());
+    REQUIRE((counted > 1 && counted <= dir.size()));
+    return std::filesystem::path(dir.data());
+}
+#endif
 
 }
 
@@ -53,5 +69,26 @@ TEST_CASE("sidecar_leak a newcomer that finds a retiring ring's sidecar deleted 
     retirer.control.release_all_slots();
     retirer.unmap();
     CHECK_FALSE(retirer.named());
+    CHECK_FALSE(sidecar_present(canonical));
+}
+
+TEST_CASE("sidecar_leak a held ring keeps its sidecar lock file in the per-user cache directory and removes it at retire", "[shm][sidecar_leak]")
+{
+    wake_bus bus;
+    ring_view view{lifetime_fqn("sidecar_dir")};
+    const std::string canonical = canonical_of(view.name);
+    {
+        ring_holder producer{bus, view.fqn};
+        REQUIRE(producer.acquire(ring_role::producer) == acquire_result::created);
+        CHECK(sidecar_present(canonical) == k_sidecar_host);
+#if defined(__APPLE__)
+        const std::filesystem::path file = sidecar_file(canonical);
+        CHECK(std::filesystem::equivalent(file.parent_path(), confstr_dir(_CS_DARWIN_USER_CACHE_DIR)));
+        CHECK_FALSE(std::filesystem::exists(confstr_dir(_CS_DARWIN_USER_TEMP_DIR) / file.filename()));
+#endif
+        producer.release(ring_role::producer);
+    }
+
+    CHECK_FALSE(view.named());
     CHECK_FALSE(sidecar_present(canonical));
 }

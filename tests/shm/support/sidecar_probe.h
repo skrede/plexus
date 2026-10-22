@@ -26,7 +26,7 @@ inline constexpr bool k_sidecar_host = true;
 inline std::filesystem::path sidecar_file(const std::string &canonical)
 {
     std::array<char, 1024> dir{};
-    const std::size_t counted = ::confstr(_CS_DARWIN_USER_TEMP_DIR, dir.data(), dir.size());
+    const std::size_t counted = ::confstr(_CS_DARWIN_USER_CACHE_DIR, dir.data(), dir.size());
     REQUIRE((counted > 1 && counted <= dir.size()));
     return std::filesystem::path(dir.data()) / (canonical.substr(1) + ".lk");
 }

@@ -19,11 +19,14 @@ using plexus::shm::slot_hold;
 
 constexpr std::uint32_t k_sidecar_attempts = 4;
 
-// The sidecar lives under the per-user directory confstr names, not $TMPDIR, which the environment can redirect.
+// The sidecar lives in the per-user cache directory, which only a safe boot clears: $TMPDIR can be redirected, and the
+// confstr man page lets the system remove a temporary-directory file not accessed for three days, which a lock file never
+// is, even while held. A crash-left sidecar of a name no one acquires again stays until that safe boot, and a reboot
+// ends every region it could guard.
 bool sidecar_path(const std::string &canonical, std::array<char, 1024> &path) noexcept
 {
 #if defined(__APPLE__)
-    const std::size_t counted = ::confstr(_CS_DARWIN_USER_TEMP_DIR, path.data(), path.size());
+    const std::size_t counted = ::confstr(_CS_DARWIN_USER_CACHE_DIR, path.data(), path.size());
     if(counted < 2 || counted > path.size())
         return false;
     std::size_t used = counted - 1;
