@@ -35,7 +35,7 @@ jobs:
           linux_gcc='{"id":"linux-gcc","os":"ubuntu-24.04"}'
           linux_clang='{"id":"linux-clang","os":"ubuntu-24.04","cc":"clang-18","cxx":"clang++-18"}'
           linux_all="$linux_gcc,$linux_clang,$linux_uring"
-          cross='{"id":"mac-appleclang","os":"macos-15"},{"id":"mac-brewclang","os":"macos-15"},{"id":"win-msvc","os":"windows-2022","cc":"cl","cxx":"cl"},{"id":"win-clangcl","os":"windows-2022","cc":"clang-cl","cxx":"clang-cl"}'
+          cross='{"id":"mac-appleclang","os":"macos-15"},{"id":"mac-brewclang","os":"macos-15"},{"id":"win-msvc","os":"windows-2022","cc":"cl","cxx":"cl"},{"id":"win-clangcl","os":"windows-2022","cc":"clang-cl","cxx":"clang-cl"},{"id":"win-msvc-asan","os":"windows-2022","cc":"cl","cxx":"cl","asan":true}'
 
           event='${{ github.event_name }}'
           ref='${{ github.ref }}'
@@ -62,6 +62,7 @@ jobs:
     needs: select
     name: ${{ matrix.id }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.asan == true }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
@@ -144,7 +145,7 @@ jobs:
             "${EXTRA[@]}"
 
       - name: configure
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !matrix.asan
         shell: bash
         run: |
           cmake -S . -B build -G Ninja \
@@ -155,8 +156,32 @@ jobs:
             -DPLEXUS_BUILD_TESTS=ON -DPLEXUS_BUILD_EXAMPLES=ON \
             -DPLEXUS_BUILD_BENCHMARKS=OFF -DPLEXUS_BUILD_FUZZ_TESTS=OFF
 
+      # The Windows half of the retire-then-drain proof: IOCP completes a canceled operation after close returns,
+      # so only there can a channel freed before its drain be caught. CXXFLAGS keeps CMake's own MSVC defaults
+      # (/EHsc) beside the sanitizer, RelWithDebInfo keeps /RTC off, and the sanitizer cannot link incrementally.
+      - name: configure (MSVC AddressSanitizer)
+        if: matrix.asan
+        shell: bash
+        run: |
+          CFLAGS=/fsanitize=address CXXFLAGS=/fsanitize=address cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER="${{ matrix.cc }}" -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" \
+            -DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO="/debug /INCREMENTAL:NO" \
+            -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
+            -DPLEXUS_ENABLE_CRYPTO_BACKEND=OFF \
+            -DPLEXUS_BUILD_TESTS=ON -DPLEXUS_BUILD_EXAMPLES=ON \
+            -DPLEXUS_BUILD_BENCHMARKS=OFF -DPLEXUS_BUILD_FUZZ_TESTS=OFF
+
       - name: build
+        if: ${{ !matrix.asan }}
         run: cmake --build build --parallel 4
+
+      - name: build (MSVC AddressSanitizer)
+        if: matrix.asan
+        run: >-
+          cmake --build build --parallel 4 --target
+          test_stream_retire_drain test_udp_retire_drain test_udp_server_retire_drain test_transport_dial_cancel
+          test_unclaimed_retire_stream test_unclaimed_retire_wrap test_node_close_asio
 
       # The real-multicast-loopback discovery tests cannot run on the GitHub macOS or Windows runners:
       # macOS 15 blocks multicast for the unprivileged runner process (Local Network Privacy;
@@ -168,8 +193,15 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: test (macOS/Windows exclude live-multicast)
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' && !matrix.asan
         run: ctest --test-dir build --output-on-failure --label-exclude live-multicast
+
+      # Every unbuilt test executable leaves a <target>_NOT_BUILT placeholder test, which the selector would match.
+      - name: test (MSVC AddressSanitizer)
+        if: matrix.asan
+        run: >-
+          ctest --test-dir build --output-on-failure --no-tests=error
+          -R "retire_drain|transport_dial_cancel|unclaimed_retire|node_close" -E "_NOT_BUILT"
 
   # Coverage is informational (see codecov.yml) — a single gcc leg is enough signal. Skipped on
   # milestone pushes to keep WIP feedback fast; runs on develop, master, PRs, and dispatch.
