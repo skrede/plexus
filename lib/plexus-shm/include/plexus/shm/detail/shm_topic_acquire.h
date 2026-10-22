@@ -62,9 +62,9 @@ shm::acquire_result topic_acquire(Registry &r, const shm_topic_key &k, shm::ring
     const shm::acquire_result verdict = topic_open_ring(r, *e, k, role, max_payload, mode, consumer_capacity);
     if(verdict == shm::acquire_result::failed)
         return shm::acquire_result::failed;
-    if(const shm::acquire_failure bound = topic_bind(r, *e, k, role, verdict); bound.bound != shm::acquire_bound::none)
+    if(const shm::acquire_failure bound = topic_bind(r, *e, role, verdict); bound.bound != shm::acquire_bound::none)
     {
-        ring_lifetime::close(*e);
+        ring_lifetime::close(r.m_broker, *e);
         r.m_last_failure = bound;
         return shm::acquire_result::failed;
     }
@@ -85,7 +85,7 @@ void topic_release(Registry &r, const shm_topic_key &k, shm::ring_role role)
     e.drop(role);
     if(e.producers == 0 && e.consumers == 0)
     {
-        ring_lifetime::close(e);
+        ring_lifetime::close(r.m_broker, e);
         r.m_entries.erase(it);
         return;
     }

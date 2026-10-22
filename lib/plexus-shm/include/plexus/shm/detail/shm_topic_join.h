@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_JOIN_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_JOIN_H
 
+#include "plexus/shm/detail/shm_ring_names.h"
 #include "plexus/shm/detail/shm_ring_lifetime.h"
 
 #include "plexus/shm/loan_status.h"
@@ -25,6 +26,13 @@ template<typename Broker, typename Entry>
 shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &slab_name, const shm::ring_geometry &geom, const node_id &publisher,
                                std::uint64_t consumer_capacity)
 {
+    // Only a holder of the creator slot moves the magic off 0, and every name removal follows a retired stamp, so 0 read
+    // under the creator slot proves the control name still maps this region.
+    if(ring_names::magic_of(e.control.bytes()) != 0)
+    {
+        failure = shm::acquire_failure{shm::acquire_bound::transient_join};
+        return shm::acquire_result::failed;
+    }
     const std::uint64_t ask = shm::slab_region_bytes(geom.cell_count, geom.slot_capacity);
     if(const shm::region_status cs = broker.create(slab_name, ask, shm::create_options{.unlink_stale_on_create = true}, e.slab); cs != shm::region_status::ok)
     {
@@ -51,7 +59,7 @@ shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, En
     };
     if(const shm::region_status cs = broker.attach(ctrl_name, e.control); cs != shm::region_status::ok)
         return fail(cs == shm::region_status::not_found ? shm::acquire_bound::not_found : shm::acquire_bound::os_allocator, cs);
-    if(ring_lifetime::magic_of(e.control.bytes()) == shm::k_ring_retired)
+    if(ring_names::magic_of(e.control.bytes()) == shm::k_ring_retired)
     {
         ring_lifetime::remove_retired(broker, e, ctrl_name);
         return fail(shm::acquire_bound::transient_join);

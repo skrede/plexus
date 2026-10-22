@@ -3,7 +3,7 @@
 #include "support/minter_entry.h"
 #include "support/sidecar_probe.h"
 
-#include "plexus/shm/detail/shm_ring_lifetime.h"
+#include "plexus/shm/detail/shm_ring_names.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_header.h"
@@ -32,7 +32,7 @@ using plexus::testing::minter_entry;
 using plexus::testing::native_broker;
 using plexus::testing::create_control;
 using plexus::testing::release_minter;
-using plexus::shm::detail::ring_lifetime;
+using plexus::shm::detail::ring_names;
 using values = std::vector<std::uint32_t>;
 
 // Where a sidecar lock file carries the slots, the adopter's new region shares the path's sidecar, so its creator lock
@@ -43,7 +43,7 @@ constexpr acquire_bound k_minter_bound = plexus::testing::k_sidecar_host ? acqui
 
 // The producer's mint, driven step by step: its exclusive create of the control region, then a second producer's whole
 // acquire, then the first one's creator-slot take and slab mint.
-TEST_CASE("mint_takeover a minter whose unstamped ring an adopter recreated leaves the adopter's ring whole", "[shm][mint_takeover][!shouldfail]")
+TEST_CASE("mint_takeover a minter whose unstamped ring an adopter recreated leaves the adopter's ring whole", "[shm][mint_takeover]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("mint_takeover")};
@@ -68,8 +68,7 @@ TEST_CASE("mint_takeover a minter whose unstamped ring an adopter recreated leav
 }
 
 // The take falls between the adopter's release of the retired region's creator slot and its take on the new region.
-TEST_CASE("mint_takeover a minter that takes its creator slot after an adopter retired its region and removed its name declines before making a slab",
-          "[shm][mint_takeover][!shouldfail]")
+TEST_CASE("mint_takeover a minter that takes its creator slot after an adopter retired its region and removed its name declines before making a slab", "[shm][mint_takeover]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("mint_late_take")};
@@ -81,13 +80,13 @@ TEST_CASE("mint_takeover a minter that takes its creator slot after an adopter r
     acquire_failure failure{};
     CHECK(mint_held(broker, minter, view.name, failure) == acquire_result::failed);
     CHECK(failure.bound == acquire_bound::transient_join);
-    CHECK(ring_lifetime::magic_of(minter.control.bytes()) == plexus::shm::k_ring_retired);
+    CHECK(ring_names::magic_of(minter.control.bytes()) == plexus::shm::k_ring_retired);
     release_minter(minter);
     plexus::testing::engage_afresh(bus, view);
 }
 
 // The control name is removed from outside the protocol, which leaves the first holder as the takeover would.
-TEST_CASE("mint_takeover a holder whose control name another producer created anew closes without removing that producer's names", "[shm][mint_takeover][!shouldfail]")
+TEST_CASE("mint_takeover a holder whose control name another producer created anew closes without removing that producer's names", "[shm][mint_takeover]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("mint_close")};

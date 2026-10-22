@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_RING_ADOPTION_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_RING_ADOPTION_H
 
+#include "plexus/shm/detail/shm_ring_names.h"
 #include "plexus/shm/detail/shm_topic_join.h"
 #include "plexus/shm/detail/shm_ring_lifetime.h"
 
@@ -68,7 +69,7 @@ private:
     {
         if(const region_status as = r.m_broker.attach(ctrl_name, e.control); as != region_status::ok)
             return fail(r, acquire_failure{as == region_status::not_found ? acquire_bound::transient_join : acquire_bound::os_allocator, 0, 0, as});
-        if(!ours(ring_lifetime::magic_of(e.control.bytes())))
+        if(!ours(ring_names::magic_of(e.control.bytes())))
             return fail(r, acquire_failure{acquire_bound::incompatible});
         if(const acquire_bound held = ring_lifetime::take_creator(e); held != acquire_bound::none)
             return fail(r, acquire_failure{held});
@@ -84,7 +85,7 @@ private:
     template<typename Registry, typename Entry>
     static acquire_result adopt_held(Registry &r, Entry &e, const std::string &ctrl_name, const ring_geometry &geom, const node_id &publisher, std::uint64_t capacity)
     {
-        const std::uint64_t magic = ring_lifetime::magic_of(e.control.bytes());
+        const std::uint64_t magic = ring_names::magic_of(e.control.bytes());
         if(magic == k_ring_retired)
             return reclaim_retired(r, e, ctrl_name, geom, publisher, capacity);
         if(magic == 0)
@@ -150,7 +151,7 @@ private:
     static void wake(Registry &r, Entry &e, const std::string &ctrl_name)
     {
         std::optional<typename Entry::notifier_type> waker;
-        r.m_bind_notifier(waker, *ring_lifetime::header_of(e.control.bytes()), ctrl_name);
+        r.m_bind_notifier(waker, *ring_names::header_of(e.control.bytes()), ctrl_name);
         if(waker)
             waker->signal();
     }

@@ -19,7 +19,6 @@
 #include "plexus/io/same_host_geometry.h"
 
 #include <atomic>
-#include <string>
 #include <cstdint>
 #include <optional>
 #include <algorithm>
@@ -43,15 +42,15 @@ template<typename Registry, typename Entry>
 shm::acquire_result topic_open_ring(Registry &r, Entry &e, const shm_topic_key &key, shm::ring_role role, std::uint32_t max_payload, io::ring_geometry_mode mode,
                                     std::uint32_t consumer_capacity)
 {
-    const std::string ctrl_name = shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns);
+    e.ctrl_name = shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns);
     if(role == shm::ring_role::consumer)
-        return topic_join(r.m_broker, r.m_last_failure, e, ctrl_name, ctrl_name + ".s", key.publisher);
+        return topic_join(r.m_broker, r.m_last_failure, e, e.ctrl_name, e.ctrl_name + ".s", key.publisher);
     const std::optional<std::uint32_t> want = max_payload == 0 ? std::nullopt : std::optional<std::uint32_t>{max_payload};
     const std::uint64_t capacity            = consumer_capacity == 0 ? shm::k_max_consumers : consumer_capacity;
     const shm::ring_geometry geom           = shm::ring_geometry_for(want, mode, consumer_capacity);
     if(!topic_within_ceiling(geom, r.m_max_ring_slab_bytes, r.m_last_failure))
         return shm::acquire_result::failed;
-    return ring_adoption::open_producer(r, e, ctrl_name, geom, key.publisher, capacity);
+    return ring_adoption::open_producer(r, e, e.ctrl_name, geom, key.publisher, capacity);
 }
 
 template<typename Report>
@@ -166,9 +165,9 @@ shm::acquire_failure topic_engage_consumer(Entry &e, Report &report, bool held)
 // The channel must be built AFTER the ring is bound. Only a consuming role registers the cursor and arms; the armed drain
 // is the one drainer of that cursor, since a second would steal its messages.
 template<typename Registry, typename Entry>
-shm::acquire_failure topic_bind(Registry &r, Entry &e, const shm_topic_key &key, shm::ring_role role, shm::acquire_result verdict)
+shm::acquire_failure topic_bind(Registry &r, Entry &e, shm::ring_role role, shm::acquire_result verdict)
 {
-    r.m_bind_notifier(e.notify, e.ring.header(), shm::region_name_for(key.fqn, key.publisher, r.m_universe, key.direction, r.m_region_ns));
+    r.m_bind_notifier(e.notify, e.ring.header(), e.ctrl_name);
     e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
     e.channel->bind_cursor_liveness([&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); });
     e.verdict = verdict;

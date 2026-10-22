@@ -2,7 +2,7 @@
 #include "fuzz_region.h"
 #include "fuzz_ring_driver.h"
 
-#include "plexus/shm/detail/shm_ring_lifetime.h"
+#include "plexus/shm/detail/shm_ring_names.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_header.h"
@@ -20,7 +20,7 @@ namespace {
 
 using namespace plexus::shm;
 using plexus::node_id;
-using lifetime = plexus::shm::detail::ring_lifetime;
+using names = plexus::shm::detail::ring_names;
 
 constexpr std::size_t k_max_control_bytes = 64 * 1024;
 constexpr std::size_t k_max_slab_bytes    = 1024 * 1024;
@@ -30,7 +30,7 @@ void attach_and_drive(fuzz_input &in, fuzz_region &control, fuzz_region &slab, n
 {
     if(flip)
         publisher[0] ^= std::byte{1};
-    fuzz_consume(lifetime::magic_of(control.bytes()));
+    fuzz_consume(names::magic_of(control.bytes()));
     broadcast_ring ring;
     const loan_status attached = broadcast_ring::attach(control.bytes(), slab.bytes(), publisher, ring);
     fuzz_consume(attached);

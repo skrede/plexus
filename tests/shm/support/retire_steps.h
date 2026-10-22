@@ -4,7 +4,7 @@
 #include "support/bus_notifier.h"
 #include "support/lifetime_rig.h"
 
-#include "plexus/shm/detail/shm_ring_lifetime.h"
+#include "plexus/shm/detail/shm_ring_names.h"
 
 #include "plexus/shm/ring_header.h"
 #include "plexus/shm/slot_liveness.h"
@@ -50,7 +50,7 @@ inline std::uint64_t named_identity(ring_view &view)
 {
     native_broker::region_handle probe;
     REQUIRE(view.broker.attach(view.name, probe) == shm::region_status::ok);
-    return shm::detail::ring_lifetime::identity_of(probe.bytes());
+    return shm::detail::ring_names::identity_of(probe.bytes());
 }
 
 }

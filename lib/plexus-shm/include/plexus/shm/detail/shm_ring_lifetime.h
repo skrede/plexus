@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_RING_LIFETIME_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_RING_LIFETIME_H
 
+#include "plexus/shm/detail/shm_ring_names.h"
+
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_header.h"
@@ -8,25 +10,21 @@
 #include "plexus/shm/slot_liveness.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_acquire_result.h"
-#include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/io/upgrade_channel.h"
 
-#include <new>
-#include <span>
 #include <atomic>
 #include <memory>
 #include <string>
-#include <cstddef>
 #include <cstdint>
 
 namespace plexus::shm::detail {
 
 // A producer holds the creator slot before it stamps or adopts a ring. A name is removed only by the creator slot's
-// holder right after it stores k_ring_retired over the stamp it found, so the name still belongs to that ring, or by an
-// acquirer that holds every slot of a retired ring once a fresh attach of the name reads that ring's identity. The last
-// local holder retires the ring only once it holds every slot in one step, and a joiner re-reads the magic after taking
-// its own slot.
+// holder right after it stores k_ring_retired over the stamp it found, so the name still belongs to that ring, or by a
+// holder of every slot of a retired ring once a fresh attach of the name reads that ring's identity. The last local
+// holder retires the ring only once it holds every slot in one step and removes its names only under that proof, and a
+// joiner or a returning producer re-reads the magic after taking its own slot.
 struct ring_lifetime
 {
     static bool retired(broadcast_ring &ring) noexcept
@@ -35,15 +33,15 @@ struct ring_lifetime
     }
 
     // The last local holder's teardown: the consumer side first, then the ring is retired if no holder is left anywhere.
-    template<typename Entry>
-    static void close(Entry &e)
+    template<typename Broker, typename Entry>
+    static void close(Broker &broker, Entry &e)
     {
         e.teardown();
         drop_creator(e);
         if(e.control.hold_all_slots() != slot_hold::held)
             return;
         if(stamp_retired(e, k_ring_magic))
-            unlink(e);
+            ring_names::remove_names(broker, e, e.ctrl_name);
         e.control.release_all_slots();
     }
 
@@ -69,53 +67,32 @@ struct ring_lifetime
         loss->report(arm_status::exhausted);
     }
 
-    // A producer that returns to an entry its consumers kept takes the creator slot again.
+    // A producer that returns to an entry its consumers kept takes the creator slot again. Only a holder of the creator
+    // slot or of every slot moves the magic off k_ring_magic, so the magic read under the slot shows the ring still live.
     template<typename Entry>
     static acquire_bound retake_creator(Entry &e)
     {
         if(e.creator)
             return acquire_bound::none;
-        const acquire_bound held = take_creator(e);
-        if(held == acquire_bound::none)
-            repair(e.ring);
-        return held;
-    }
-
-    // Null for a mapping too small to hold a ring header.
-    static control_header_t *header_of(std::span<std::byte> control) noexcept
-    {
-        if(control.size() < sizeof(control_header_t))
-            return nullptr;
-        return std::launder(reinterpret_cast<control_header_t *>(control.data()));
-    }
-
-    // A mapping too small for a header reads as a magic no ring carries.
-    static std::uint64_t magic_of(std::span<std::byte> control) noexcept
-    {
-        const control_header_t *header = header_of(control);
-        return header == nullptr ? ~std::uint64_t{0} : header->magic.load(std::memory_order_acquire);
-    }
-
-    // A mapping too small for a header reads as a ring without an identity.
-    static std::uint64_t identity_of(std::span<std::byte> control) noexcept
-    {
-        const control_header_t *header = header_of(control);
-        return header == nullptr ? 0 : header->identity.load(std::memory_order_relaxed);
+        if(const acquire_bound held = take_creator(e); held != acquire_bound::none)
+            return held;
+        if(ring_names::magic_of(e.control.bytes()) != k_ring_magic)
+        {
+            drop_creator(e);
+            return acquire_bound::transient_join;
+        }
+        repair(e.ring);
+        return acquire_bound::none;
     }
 
     // Removes the names of a retired ring whose holder died before removing them. Holding every slot shuts out every other
-    // remover, and the fresh attach proves the name still maps this ring rather than a successor.
+    // remover.
     template<typename Broker, typename Entry>
     static bool remove_retired(Broker &broker, Entry &e, const std::string &ctrl_name)
     {
         if(e.control.hold_all_slots() != slot_hold::held)
             return false;
-        const bool same = names_ring(broker, ctrl_name, identity_of(e.control.bytes()));
-        if(same)
-        {
-            broker.attach(ctrl_name + ".s", e.slab);
-            unlink(e);
-        }
+        const bool same = ring_names::remove_names(broker, e, ctrl_name);
         e.control.release_all_slots();
         e.creator = false;
         return same;
@@ -124,7 +101,7 @@ struct ring_lifetime
     template<typename Entry>
     static bool stamp_retired(Entry &e, std::uint64_t found) noexcept
     {
-        control_header_t *header = header_of(e.control.bytes());
+        control_header_t *header = ring_names::header_of(e.control.bytes());
         return header != nullptr && header->magic.compare_exchange_strong(found, k_ring_retired, std::memory_order_release, std::memory_order_relaxed);
     }
 
@@ -135,14 +112,6 @@ struct ring_lifetime
     {
         e.slab.unlink_name();
         e.control.unlink_name();
-    }
-
-    // A ring without an identity names no ring provably.
-    template<typename Broker>
-    static bool names_ring(Broker &broker, const std::string &ctrl_name, std::uint64_t identity)
-    {
-        typename Broker::region_handle fresh;
-        return identity != 0 && broker.attach(ctrl_name, fresh) == region_status::ok && identity_of(fresh.bytes()) == identity;
     }
 
     template<typename Entry>

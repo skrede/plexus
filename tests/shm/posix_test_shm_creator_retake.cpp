@@ -2,6 +2,7 @@
 #include "support/lifetime_rig.h"
 #include "support/minter_entry.h"
 
+#include "plexus/shm/detail/shm_ring_names.h"
 #include "plexus/shm/detail/shm_ring_lifetime.h"
 
 #include "plexus/shm/ring_header.h"
@@ -20,13 +21,14 @@ using plexus::testing::lifetime_fqn;
 using plexus::testing::minter_entry;
 using plexus::testing::native_broker;
 using plexus::testing::release_minter;
+using plexus::shm::detail::ring_names;
 using plexus::shm::detail::ring_lifetime;
 
 }
 
 // The entry keeps its handles once its last producer left, as a consumer still reading keeps it; the retire falls
 // between topic_rejoin's retired check and its retake of the creator slot.
-TEST_CASE("creator_retake a producer returning to a ring another producer retired meanwhile declines the creator slot", "[shm][creator_retake][!shouldfail]")
+TEST_CASE("creator_retake a producer returning to a ring another producer retired meanwhile declines the creator slot", "[shm][creator_retake]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("creator_retake")};
@@ -40,7 +42,7 @@ TEST_CASE("creator_retake a producer returning to a ring another producer retire
 
     CHECK(ring_lifetime::retake_creator(kept) == acquire_bound::transient_join);
     CHECK_FALSE(kept.creator);
-    CHECK(ring_lifetime::magic_of(kept.control.bytes()) == plexus::shm::k_ring_retired);
+    CHECK(ring_names::magic_of(kept.control.bytes()) == plexus::shm::k_ring_retired);
     release_minter(kept);
     plexus::testing::engage_afresh(bus, view);
 }

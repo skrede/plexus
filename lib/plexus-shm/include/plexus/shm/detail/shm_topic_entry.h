@@ -68,6 +68,7 @@ struct shm_topic_entry
             : mapping(std::make_shared<ring_mapping_of<handle_type>>())
             , control(mapping->control)
             , slab(mapping->slab)
+            , ctrl_name()
             , ring()
             , notify()
             , channel()
@@ -83,6 +84,7 @@ struct shm_topic_entry
     std::shared_ptr<ring_mapping_of<handle_type>> mapping;
     handle_type &control;
     handle_type &slab;
+    std::string ctrl_name;
     broadcast_ring ring;
     std::optional<Notifier> notify;
     std::optional<shm_channel<Notifier>> channel;

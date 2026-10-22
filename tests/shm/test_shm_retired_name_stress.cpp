@@ -3,7 +3,7 @@
 #include "support/region_names.h"
 #include "support/sidecar_probe.h"
 
-#include "plexus/shm/detail/shm_ring_lifetime.h"
+#include "plexus/shm/detail/shm_ring_names.h"
 
 #include "plexus/shm/shm_acquire_result.h"
 #include "plexus/shm/region_broker_concept.h"
@@ -13,6 +13,7 @@
 #include <array>
 #include <string>
 #include <thread>
+#include <cstddef>
 #include <cstdint>
 
 namespace {
@@ -35,7 +36,7 @@ struct tally
 bool names_held_ring(native_broker &broker, const std::string &name, const ring_holder &holder)
 {
     native_broker::region_handle fresh;
-    return broker.attach(name, fresh) == plexus::shm::region_status::ok && plexus::shm::detail::ring_lifetime::identity_of(fresh.bytes()) == holder.bound_identity();
+    return broker.attach(name, fresh) == plexus::shm::region_status::ok && plexus::shm::detail::ring_names::identity_of(fresh.bytes()) == holder.bound_identity();
 }
 
 // One registry of its own in one role, retiring the ring whenever its release leaves no holder, while the other registry
@@ -58,23 +59,43 @@ tally churn(const std::string &fqn, const std::string &name, ring_role role)
     return counted;
 }
 
+template<std::size_t N>
+std::array<tally, N> churn_together(const ring_view &view, const std::array<ring_role, N> &roles)
+{
+    std::array<tally, N> counted{};
+    std::array<std::thread, N> threads;
+    for(std::size_t i = 0; i < N; ++i)
+        threads[i] = std::thread([&counted, &view, &roles, i] { counted[i] = churn(view.fqn, view.name, roles[i]); });
+    for(std::thread &thread : threads)
+        thread.join();
+    return counted;
 }
 
-// Probabilistic: the interleavings are the scheduler's, so a pass shows only that none of these rounds broke the rule. One
-// producer, since two producers minting one name concurrently race in the mint itself, outside this rule.
+}
+
+// Probabilistic: the interleavings are the scheduler's, so a pass shows only that none of these rounds broke the rule.
 TEST_CASE("retired_name_identity a publisher and a reader retiring and acquiring one name always find it naming the ring they hold", "[shm][retired_name_identity][probabilistic]")
 {
     ring_view view{plexus::testing::lifetime_fqn("retired_churn")};
-    std::array<tally, 2> counted{};
-    std::thread first([&] { counted[0] = churn(view.fqn, view.name, ring_role::producer); });
-    std::thread second([&] { counted[1] = churn(view.fqn, view.name, ring_role::consumer); });
-    first.join();
-    second.join();
+    const std::array<tally, 2> counted = churn_together(view, std::array{ring_role::producer, ring_role::consumer});
 
     CHECK(counted[0].acquired > 0);
     CHECK(counted[1].acquired > 0);
     CHECK(counted[0].mismatched == 0);
     CHECK(counted[1].mismatched == 0);
+    CHECK_FALSE(view.named());
+    CHECK_FALSE(plexus::testing::sidecar_present(plexus::testing::canonical_of(view.name)));
+}
+
+TEST_CASE("retired_name_identity two publishers and a reader retiring and acquiring one name always find it naming the ring they hold", "[shm][retired_name_identity][probabilistic]")
+{
+    ring_view view{plexus::testing::lifetime_fqn("retired_churn_two")};
+    const std::array<tally, 3> counted = churn_together(view, std::array{ring_role::producer, ring_role::producer, ring_role::consumer});
+
+    CHECK(counted[0].acquired > 0);
+    CHECK(counted[1].acquired > 0);
+    for(const tally &one : counted)
+        CHECK(one.mismatched == 0);
     CHECK_FALSE(view.named());
     CHECK_FALSE(plexus::testing::sidecar_present(plexus::testing::canonical_of(view.name)));
 }

@@ -81,7 +81,7 @@ public:
     ~shm_topic_registry()
     {
         for(auto &[k, e] : m_entries)
-            detail::ring_lifetime::close(*e);
+            detail::ring_lifetime::close(m_broker, *e);
     }
 
     // role is the holder's use of the ring: only a consuming role takes a cursor and arms, and it never creates the ring
@@ -179,7 +179,7 @@ private:
     friend ::plexus::shm::acquire_result detail::topic_open_ring(R &, E &, const detail::shm_topic_key &, ::plexus::shm::ring_role, std::uint32_t, ::plexus::io::ring_geometry_mode,
                                                                  std::uint32_t);
     template<typename R, typename E>
-    friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, const detail::shm_topic_key &, ::plexus::shm::ring_role, ::plexus::shm::acquire_result);
+    friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, ::plexus::shm::ring_role, ::plexus::shm::acquire_result);
 };
 
 }
