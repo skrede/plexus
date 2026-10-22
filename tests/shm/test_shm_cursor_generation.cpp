@@ -12,6 +12,12 @@ namespace {
 constexpr std::uint64_t k_cells = 4;
 constexpr std::uint64_t k_slot  = 8;
 
+// The waiting word's cross-process encoding, stated apart from the ring so the cases pin it.
+constexpr std::uint64_t waiting_word(std::uint32_t generation) noexcept
+{
+    return (std::uint64_t{1} << 63) | generation;
+}
+
 struct generation_ring
 {
     generation_ring()
@@ -53,6 +59,22 @@ TEST_CASE("cursor_generation a slot released and re-claimed is not placed by the
     CHECK(*current != *released);
     CHECK_FALSE(g.ring.place_cursor(0, *released, 3));
     CHECK(g.position(0) == k_cursor_idle);
+}
+
+TEST_CASE("cursor_generation a placement naming a released claim leaves the slot's new claim waiting for its own placement", "[shm][cursor_generation][!shouldfail]")
+{
+    generation_ring g;
+    const std::optional<std::uint32_t> released = g.ring.claim_cursor(0);
+    REQUIRE(released);
+    g.ring.unregister_cursor(0);
+    const std::optional<std::uint32_t> current = g.ring.claim_cursor(0);
+    REQUIRE(current);
+    CHECK(*current == *released + 1);
+
+    CHECK_FALSE(g.ring.place_cursor(0, *released, 3));
+    CHECK(g.position(0) == waiting_word(*current));
+    CHECK(g.ring.place_cursor(0, *current, 5));
+    CHECK(g.position(0) == 5);
 }
 
 TEST_CASE("cursor_generation a placement naming a waiting reader's slot with a foreign generation is refused", "[shm][cursor_generation]")
