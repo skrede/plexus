@@ -3,6 +3,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/mux_selection.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 
@@ -11,8 +12,8 @@
 #include <memory>
 #include <cstddef>
 #include <utility>
-#include <type_traits>
 #include <string_view>
+#include <type_traits>
 
 namespace plexus::io::detail {
 
