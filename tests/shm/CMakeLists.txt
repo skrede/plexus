@@ -257,11 +257,11 @@ if(NOT WIN32)
     catch_discover_tests(test_shm_region_broker TEST_PREFIX "shm.")
 endif()
 
-# The POSIX region broker, Linux-only /dev/shm-view behaviors: the 0600 owner-only mode, the
-# name contract (only unlink_name removes it), and unlink_stale_on_create reclaiming an orphan -- each verified
-# by stat()/access()-ing the object under /dev/shm, the tmpfs view of POSIX shm that exists only
-# on Linux. macOS shm_open objects are not path-visible, so those broker guarantees are proven
-# there by the cross-process shm proofs instead; the target is excluded on macOS and Windows.
+# The POSIX region broker, Linux-only /dev/shm-view behaviors: the 0600 owner-only mode and the
+# name contract (only unlink_name removes it) -- each verified by stat()/access()-ing the
+# object under /dev/shm, the tmpfs view of POSIX shm that exists only on Linux. macOS shm_open
+# objects are not path-visible, so those broker guarantees are proven there by the
+# cross-process shm proofs instead; the target is excluded on macOS and Windows.
 if(NOT WIN32 AND NOT APPLE)
     add_executable(linux_test_shm_region_broker linux_test_shm_region_broker.cpp)
 

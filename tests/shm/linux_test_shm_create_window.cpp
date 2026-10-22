@@ -53,7 +53,7 @@ void deliver_seven(ring_holder &producer, ring_holder &reader, ring_view &view)
 }
 
 // The minter's create waits in its page reservation while a second producer acquires the name.
-TEST_CASE("create_window a create whose page reservation fails while a producer acquires the name leaves that producer's ring reachable", "[shm][create_window][!shouldfail]")
+TEST_CASE("create_window a create whose page reservation fails while a producer acquires the name leaves that producer's ring reachable", "[shm][create_window]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("create_window.reserve")};
@@ -78,7 +78,7 @@ TEST_CASE("create_window a create whose page reservation fails while a producer 
 }
 
 // The minter's create waits in its mapping, after sizing, while a second producer adopts and recreates the name.
-TEST_CASE("create_window a create whose mapping fails after another producer recreated the name leaves that producer's ring whole", "[shm][create_window][!shouldfail]")
+TEST_CASE("create_window a create whose mapping fails after another producer recreated the name leaves that producer's ring whole", "[shm][create_window]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("create_window.map")};

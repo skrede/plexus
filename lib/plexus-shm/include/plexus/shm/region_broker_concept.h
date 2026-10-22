@@ -33,13 +33,11 @@ enum class region_status : std::uint8_t
     no_space,
 };
 
-// unlink_stale_on_create removes a name left behind before the create, for a name no live holder can still use; a ring
-// is reclaimed only through its creator slot. The 0600 owner-only perms default keeps a region attachable ONLY by the
-// same uid (the access-control floor).
+// A create never removes a name; a name left behind is removed only by the ring protocol, through a handle. The 0600
+// owner-only perms default keeps a region attachable ONLY by the same uid (the access-control floor).
 struct create_options
 {
-    bool unlink_stale_on_create = false;
-    std::uint32_t perms         = 0600;
+    std::uint32_t perms = 0600;
 };
 
 // The region create/attach seam, defined in core so no core translation unit pulls a

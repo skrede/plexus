@@ -138,7 +138,7 @@ plexus::shm::region_status win_shm_region_broker::finish_attach_map(void *mappin
     return plexus::shm::region_status::ok;
 }
 
-plexus::shm::region_status win_shm_region_broker::create(std::string_view name, std::size_t bytes, const plexus::shm::create_options &opts, region_handle &out)
+plexus::shm::region_status win_shm_region_broker::create(std::string_view name, std::size_t bytes, const plexus::shm::create_options &, region_handle &out)
 {
     out = region_handle{};
 
@@ -150,9 +150,6 @@ plexus::shm::region_status win_shm_region_broker::create(std::string_view name, 
     std::string canonical;
     if(const auto status = sanitize_region_name(name, canonical); status != shm_error::ok)
         return to_status(status);
-
-    // Named mappings are refcounted and auto-free on last-handle-close, so there is no orphan to reclaim.
-    (void)opts.unlink_stale_on_create;
 
     const std::wstring wname = widen(canonical);
     detail::win_owner_only_security security;

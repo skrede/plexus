@@ -19,9 +19,31 @@
 
 namespace plexus::shm::detail {
 
+// Its proof is topic_mint's magic re-check under the creator slot, which only that slot's holder may pass, not the
+// fresh-attach identity proof every remover in ring_names takes.
+template<typename Broker>
+bool remove_leftover_slab(Broker &broker, const std::string &slab_name)
+{
+    typename Broker::region_handle leftover;
+    if(broker.attach(slab_name, leftover) != shm::region_status::ok)
+        return false;
+    leftover.unlink_name();
+    return true;
+}
+
+// Under the creator slot topic_mint's re-check proved, a slab already under the name is a leftover, replaced once.
+template<typename Broker, typename Entry>
+shm::region_status topic_create_slab(Broker &broker, Entry &e, const std::string &slab_name, std::uint64_t ask)
+{
+    const shm::region_status cs = broker.create(slab_name, ask, shm::create_options{}, e.slab);
+    if(cs != shm::region_status::already_exists || !remove_leftover_slab(broker, slab_name))
+        return cs;
+    return broker.create(slab_name, ask, shm::create_options{}, e.slab);
+}
+
 // The creator path, under the creator slot of a control region it just created: a slab left behind under the name is
-// replaced and a fresh ring stamped. The OS-allocator leg of the fail-closed gate names the OS bound on a slab-create
-// failure.
+// replaced and a fresh ring stamped. A slab name it cannot replace is a transient join; the OS-allocator leg of the
+// fail-closed gate names the OS bound on any other slab-create failure.
 template<typename Broker, typename Entry>
 shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &slab_name, const shm::ring_geometry &geom, const node_id &publisher,
                                std::uint64_t consumer_capacity)
@@ -34,9 +56,10 @@ shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, En
         return shm::acquire_result::failed;
     }
     const std::uint64_t ask = shm::slab_region_bytes(geom.cell_count, geom.slot_capacity);
-    if(const shm::region_status cs = broker.create(slab_name, ask, shm::create_options{.unlink_stale_on_create = true}, e.slab); cs != shm::region_status::ok)
+    if(const shm::region_status cs = topic_create_slab(broker, e, slab_name, ask); cs != shm::region_status::ok)
     {
-        failure = shm::acquire_failure{shm::acquire_bound::os_allocator, ask, 0, cs};
+        const bool taken = cs == shm::region_status::already_exists;
+        failure          = shm::acquire_failure{taken ? shm::acquire_bound::transient_join : shm::acquire_bound::os_allocator, ask, 0, cs};
         return shm::acquire_result::failed;
     }
     if(shm::broadcast_ring::create(e.control.bytes(), e.slab.bytes(), geom.cell_count, geom.slot_capacity, publisher, e.ring, consumer_capacity) != shm::loan_status::ok)

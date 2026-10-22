@@ -47,8 +47,8 @@ public:
     {
         plexus::native::shm_region_broker broker;
         plexus::native::shm_region_handle region;
-        const plexus::shm::create_options options{.unlink_stale_on_create = true, .perms = 0600};
-        if(broker.create(name, sizeof(Block), options, region) != plexus::shm::region_status::ok)
+        broker.unlink(name);
+        if(broker.create(name, sizeof(Block), plexus::shm::create_options{}, region) != plexus::shm::region_status::ok)
             return std::nullopt;
         ::new(static_cast<void *>(region.bytes().data())) Block{};
         return xproc_shared(std::move(region), true);

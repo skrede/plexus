@@ -22,12 +22,11 @@
 #include <sys/stat.h>
 
 // The Linux-only region-broker behaviors that verify the broker THROUGH the /dev/shm tmpfs
-// view of POSIX shm: the 0600 owner-only mode of a minted region, the name contract (no
-// release removes the name; unlink_name does, under a live mapping), and unlink_stale_on_create
-// reclaiming a pre-existing orphan. These stat()/access() the object at /dev/shm/plexus.<name>,
-// which exists only on Linux -- macOS shm_open objects are not path-visible, so the same
-// broker guarantees are proven there by the cross-process shm proofs instead. The portable
-// negative-path cases live in test_shm_region_broker.cpp.
+// view of POSIX shm: the 0600 owner-only mode of a minted region and the name contract (no
+// release removes the name; unlink_name does, under a live mapping). These stat()/access()
+// the object at /dev/shm/plexus.<name>, which exists only on Linux -- macOS shm_open objects
+// are not path-visible, so the same broker guarantees are proven there by the cross-process
+// shm proofs instead. The portable negative-path cases live in test_shm_region_broker.cpp.
 
 using plexus::native::posix_shm_region_broker;
 using plexus::native::region_handle;
@@ -119,38 +118,6 @@ TEST_CASE("shm.region_broker creates a 0600 region, attaches it, and keeps the n
     survivor.unlink_name();
     REQUIRE_FALSE(exists(name));
     REQUIRE(survivor.bytes()[0] == std::byte{0xAB});
-}
-
-TEST_CASE("shm.region_broker unlink_stale_on_create reclaims a pre-existing orphan", "[shm][region_broker]")
-{
-    posix_shm_region_broker broker;
-    const std::string name = unique_name("stale");
-
-    // Plant a stale orphan: an exclusive create that we deliberately leak (the fd
-    // closes but the name persists -- a crashed creator's footprint).
-    const std::string canonical = std::string("/plexus.") + name;
-    const int orphan            = ::shm_open(canonical.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600);
-    REQUIRE(orphan >= 0);
-    ::close(orphan);
-    REQUIRE(exists(name));
-
-    // A plain create collides with the orphan.
-    {
-        region_handle h;
-        REQUIRE(broker.create(name, 4096, pio::create_options{}, h) == pio::region_status::already_exists);
-    }
-
-    // With unlink_stale_on_create the broker reclaims the orphan and creates fresh.
-    {
-        region_handle h;
-        pio::create_options opts;
-        opts.unlink_stale_on_create = true;
-        REQUIRE(broker.create(name, 4096, opts, h) == pio::region_status::ok);
-        REQUIRE(h.valid());
-    }
-
-    REQUIRE(exists(name));
-    REQUIRE(broker.unlink(name) == pio::region_status::ok);
 }
 
 TEST_CASE("shm.region_broker opens created and attached regions close-on-exec", "[shm][region_broker]")

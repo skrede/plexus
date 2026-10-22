@@ -30,8 +30,7 @@ public:
     win_shm_region_broker &operator=(win_shm_region_broker &&)      = delete;
 
     // Named file mappings are refcounted and auto-freed on last-handle-close, so
-    // the returned handle only unmaps + closes; opts.unlink_stale_on_create is a
-    // no-op (there is no /dev/shm-style orphan to reclaim).
+    // the returned handle only unmaps + closes.
     plexus::shm::region_status create(std::string_view name, std::size_t bytes, const plexus::shm::create_options &opts, region_handle &out);
 
     // Attach is the trust boundary: it consults the attach policy after name

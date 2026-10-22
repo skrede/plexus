@@ -149,9 +149,8 @@ TEST_CASE("seams: a stub notifier satisfies notifier and carries a move-only dra
     REQUIRE_FALSE(n.m_drain);
 }
 
-TEST_CASE("seams: create_options default to owner-only perms and no stale reclaim", "[shm][seams]")
+TEST_CASE("seams: create_options default to owner-only perms", "[shm][seams]")
 {
     const create_options opts{};
     REQUIRE(opts.perms == 0600);
-    REQUIRE_FALSE(opts.unlink_stale_on_create);
 }

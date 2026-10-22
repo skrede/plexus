@@ -30,7 +30,6 @@ public:
     posix_shm_region_broker &operator=(posix_shm_region_broker &&)      = delete;
 
     // On ok, `out` maps the new region; the name stays until something unlinks it.
-    // opts.unlink_stale_on_create removes a name left behind before the create once.
     plexus::shm::region_status create(std::string_view name, std::size_t bytes, const plexus::shm::create_options &opts, region_handle &out);
 
     // The returned handle munmaps on release but never unlinks. Attach is the
@@ -45,8 +44,9 @@ public:
     void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy);
 
 private:
-    // finish_create closes the fd AND unlinks the half-created region on failure;
-    // finish_attach never unlinks.
+    // finish_create closes the fd on failure and removes the name only when the sizing failed, while the object is still
+    // zero length; a mapping failure leaves the name. finish_attach never unlinks, and attaches a zero-length object
+    // without a mapping.
     static plexus::shm::region_status finish_create(int fd, std::size_t length, std::string canonical, region_handle &out);
     static plexus::shm::region_status finish_attach(int fd, std::string canonical, region_handle &out);
 
