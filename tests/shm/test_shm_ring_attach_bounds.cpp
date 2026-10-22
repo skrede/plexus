@@ -106,3 +106,12 @@ TEST_CASE("ring_attach_bounds a ring another publisher owns is rejected", "[shm]
     REQUIRE(broadcast_ring::attach(r.control.span(), r.slab.span(), publisher(2), attacher) == loan_status::rejected);
     REQUIRE(broadcast_ring::attach(r.control.span(), r.slab.span(), publisher(1), attacher) == loan_status::ok);
 }
+
+TEST_CASE("ring_attach_bounds a slab another ring stamped is rejected", "[shm][ring_attach_bounds][!shouldfail]")
+{
+    created_ring first{0, 0};
+    created_ring second{0, 0};
+    broadcast_ring attacher;
+    CHECK(broadcast_ring::attach(first.control.span(), second.slab.span(), publisher(1), attacher) == loan_status::rejected);
+    CHECK(broadcast_ring::attach(first.control.span(), first.slab.span(), publisher(1), attacher) == loan_status::ok);
+}

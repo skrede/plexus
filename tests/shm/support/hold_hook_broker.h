@@ -8,6 +8,7 @@
 
 #include <span>
 #include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -87,12 +88,20 @@ public:
 
     hold_hook_broker()
             : m_inner()
+            , m_failing()
+            , m_failure(shm::region_status::ok)
             , m_hook(std::make_shared<hold_hook>())
     {
     }
 
     shm::region_status create(std::string_view name, std::size_t bytes, const shm::create_options &opts, region_handle &out)
     {
+        if(!m_failing.empty() && name == m_failing)
+        {
+            m_failing.clear();
+            out = region_handle{};
+            return m_failure;
+        }
         typename Inner::region_handle inner;
         const shm::region_status status = m_inner.create(name, bytes, opts, inner);
         out                             = region_handle{std::move(inner), m_hook};
@@ -117,8 +126,17 @@ public:
         *m_hook = std::move(hook);
     }
 
+    // The next create of exactly this name fails with this status and never reaches the wrapped broker.
+    void fail_next_create(std::string name, shm::region_status status)
+    {
+        m_failing = std::move(name);
+        m_failure = status;
+    }
+
 private:
     Inner m_inner;
+    std::string m_failing;
+    shm::region_status m_failure;
     std::shared_ptr<hold_hook> m_hook;
 };
 

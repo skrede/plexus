@@ -2,6 +2,7 @@
 #include "support/lifetime_rig.h"
 #include "support/minter_entry.h"
 #include "support/sidecar_probe.h"
+#include "support/hold_hook_broker.h"
 
 #include "plexus/shm/detail/shm_ring_names.h"
 
@@ -33,11 +34,15 @@ using plexus::testing::native_broker;
 using plexus::testing::create_control;
 using plexus::testing::release_minter;
 using plexus::shm::detail::ring_names;
-using values = std::vector<std::uint32_t>;
+using values        = std::vector<std::uint32_t>;
+using hooked_holder = plexus::testing::basic_ring_holder<plexus::testing::hold_hook_broker<native_broker>>;
 
 // Where a sidecar lock file carries the slots, the adopter's new region shares the path's sidecar, so its creator lock
 // refuses the minter the slot; where the region's own locks carry them, the minter takes the retired region's slot.
 constexpr acquire_bound k_minter_bound = plexus::testing::k_sidecar_host ? acquire_bound::creator_alive : acquire_bound::transient_join;
+
+// Where a sidecar lock file carries the slots, the successor's creator lock refuses the late take before any slab create.
+constexpr acquire_bound k_failed_mint_bound = plexus::testing::k_sidecar_host ? acquire_bound::creator_alive : acquire_bound::os_allocator;
 
 }
 
@@ -104,4 +109,33 @@ TEST_CASE("mint_takeover a holder whose control name another producer created an
     CHECK(view.named());
     reader.release(ring_role::consumer);
     second.release(ring_role::producer);
+}
+
+// The control name is removed from outside the protocol, and another producer mints, between the minter's exclusive
+// create and its creator-slot take; the slab create that fails is the test broker's.
+TEST_CASE("mint_takeover a minter whose control name another producer took over before its creator-slot take, and whose slab create then fails, removes nothing",
+          "[shm][mint_takeover][!shouldfail]")
+{
+    wake_bus bus;
+    ring_view view{lifetime_fqn("mint_failed")};
+    ring_holder successor{bus, view.fqn};
+    hooked_holder minter{bus, view.fqn};
+    minter.broker().fail_next_create(view.name + ".s", region_status::no_space);
+    minter.broker().before_next_hold(
+            [&view, &successor]
+            {
+                REQUIRE(view.broker.unlink(view.name) == region_status::ok);
+                REQUIRE(successor.acquire(ring_role::producer) == acquire_result::created);
+            });
+    REQUIRE(minter.acquire(ring_role::producer) == acquire_result::failed);
+    CHECK(minter.last_bound() == k_failed_mint_bound);
+    CHECK(view.named());
+
+    ring_holder reader{bus, view.fqn};
+    CHECK(reader.acquire(ring_role::consumer) == acquire_result::attached);
+    CHECK(successor.send(7) == loan_status::ok);
+    CHECK(reader.received() == values{7});
+    reader.release(ring_role::consumer);
+    successor.release(ring_role::producer);
+    CHECK_FALSE(view.named());
 }
