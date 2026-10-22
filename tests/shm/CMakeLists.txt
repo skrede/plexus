@@ -507,8 +507,8 @@ target_link_libraries(test_shm_ring_lifetime PRIVATE
 
 catch_discover_tests(test_shm_ring_lifetime TEST_PREFIX "shm.")
 
-# A newcomer that maps a ring between its retirer's sidecar lock file removal and control-name removal, over the POSIX
-# broker; only a host whose slot locks live on a sidecar can leave one behind.
+# A newcomer that finds a retiring ring's sidecar lock file deleted from outside the protocol, and where a held ring keeps
+# its sidecar (the per-user cache directory on macOS), over the POSIX broker.
 if(NOT WIN32)
     add_executable(posix_test_shm_sidecar_leak posix_test_shm_sidecar_leak.cpp)
 
@@ -544,6 +544,44 @@ if(NOT WIN32)
         Catch2::Catch2WithMain)
 
     catch_discover_tests(test_shm_retired_name_identity TEST_PREFIX "shm.")
+endif()
+
+# A minter whose unstamped region another producer recreated, and a holder whose control name now maps another ring,
+# leave that producer's ring and names whole, over the POSIX broker.
+if(NOT WIN32)
+    add_executable(posix_test_shm_mint_takeover posix_test_shm_mint_takeover.cpp)
+
+    target_include_directories(posix_test_shm_mint_takeover PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(posix_test_shm_mint_takeover PRIVATE
+        plexus::plexus
+        plexus::shm
+        plexus::native
+        plexus::core
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(posix_test_shm_mint_takeover TEST_PREFIX "shm.")
+endif()
+
+# A producer returning to an entry its consumers kept declines the creator slot of a ring another producer retired
+# meanwhile, over the POSIX broker.
+if(NOT WIN32)
+    add_executable(posix_test_shm_creator_retake posix_test_shm_creator_retake.cpp)
+
+    target_include_directories(posix_test_shm_creator_retake PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(posix_test_shm_creator_retake PRIVATE
+        plexus::plexus
+        plexus::shm
+        plexus::native
+        plexus::core
+        plexus::testing
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(posix_test_shm_creator_retake TEST_PREFIX "shm.")
 endif()
 
 # A taken message or a wire view made from it, held past its ring entry's teardown, keeps that ring's mapping, over a
