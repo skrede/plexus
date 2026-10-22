@@ -51,7 +51,8 @@ public:
 
     void release_all_slots() noexcept;
 
-    // The sidecar lock file goes before the name, so a newcomer that creates the name afresh never loses its own.
+    // The name goes before its guard: the sidecar lock file is removed after the name, while its lock is still held, so no
+    // other remover can act on the name from a lock file that is gone.
     void unlink_name() noexcept;
 
 private:

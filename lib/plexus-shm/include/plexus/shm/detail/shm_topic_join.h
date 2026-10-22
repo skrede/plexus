@@ -1,7 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_JOIN_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_JOIN_H
 
+#include "plexus/shm/detail/shm_ring_lifetime.h"
+
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_header.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/broadcast_ring.h"
@@ -35,7 +38,8 @@ shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, En
 
 // The consumer path: maps the publisher's regions and re-reads the geometry from the control header. A slab missing
 // beside a live control region, or a header not stamped yet, is a creator still minting, and a retired header a ring
-// whose names are going: both a transient join. A header another publisher owns is incompatible. A missing control
+// whose names are going: both a transient join. A retired ring whose holder died before removing its names is removed
+// on the way, once the name is proven to map it. A header another publisher owns is incompatible. A missing control
 // region is an absent ring.
 template<typename Broker, typename Entry>
 shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, Entry &e, const std::string &ctrl_name, const std::string &slab_name, const node_id &publisher)
@@ -47,6 +51,11 @@ shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, En
     };
     if(const shm::region_status cs = broker.attach(ctrl_name, e.control); cs != shm::region_status::ok)
         return fail(cs == shm::region_status::not_found ? shm::acquire_bound::not_found : shm::acquire_bound::os_allocator, cs);
+    if(ring_lifetime::magic_of(e.control.bytes()) == shm::k_ring_retired)
+    {
+        ring_lifetime::remove_retired(broker, e, ctrl_name);
+        return fail(shm::acquire_bound::transient_join);
+    }
     if(const shm::region_status ss = broker.attach(slab_name, e.slab); ss != shm::region_status::ok)
         return fail(ss == shm::region_status::not_found ? shm::acquire_bound::transient_join : shm::acquire_bound::os_allocator, ss);
     switch(shm::broadcast_ring::attach(e.control.bytes(), e.slab.bytes(), publisher, e.ring))

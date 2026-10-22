@@ -47,10 +47,15 @@ public:
     basic_ring_holder(wake_bus &bus, std::string fqn)
             : m_broker()
             , m_fqn(std::move(fqn))
+            , m_identity(0)
             , m_received()
             , m_reasons()
             , m_reg(m_broker, io::reliability::reliable, io::congestion::block,
-                    [&bus](std::optional<bus_notifier> &slot, shm::control_header_t &, std::string_view) { slot.emplace(bus); })
+                    [this, &bus](std::optional<bus_notifier> &slot, shm::control_header_t &header, std::string_view)
+                    {
+                        m_identity = header.identity.load(std::memory_order_relaxed);
+                        slot.emplace(bus);
+                    })
     {
         m_reg.on_fallback([this](io::fallback_reason reason) { m_reasons.push_back(reason); });
     }
@@ -98,9 +103,17 @@ public:
         return m_broker;
     }
 
+    // The identity of the ring a notifier was last bound to, which is the acquired ring's: a recreate wakes the ring it
+    // retires before it binds the one it mints.
+    std::uint64_t bound_identity() const noexcept
+    {
+        return m_identity;
+    }
+
 private:
     Broker m_broker;
     std::string m_fqn;
+    std::uint64_t m_identity;
     std::vector<std::uint32_t> m_received;
     std::vector<io::fallback_reason> m_reasons;
     shm::shm_topic_registry<Broker, bus_notifier> m_reg;

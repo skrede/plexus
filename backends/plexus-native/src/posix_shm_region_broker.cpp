@@ -139,9 +139,11 @@ plexus::shm::region_status posix_shm_region_broker::unlink(std::string_view name
     std::string canonical;
     if(const auto status = detail::sanitize_region_name(name, canonical); status != shm_error::ok)
         return detail::to_status(status);
+    const int removed = ::shm_unlink(canonical.c_str());
+    const int error   = errno;
     detail::unlink_sidecar(canonical);
-    if(::shm_unlink(canonical.c_str()) != 0)
-        return detail::to_status(detail::map_errno(errno));
+    if(removed != 0)
+        return detail::to_status(detail::map_errno(error));
     return plexus::shm::region_status::ok;
 }
 

@@ -153,6 +153,7 @@ TEST_CASE("ring_lifetime a joiner meets a ring its last holder is retiring as tr
     REQUIRE(view.named());
     view.control.release_slot(plexus::shm::cursor_slot(0));
     REQUIRE(view.control.hold_all_slots() == plexus::shm::slot_hold::held);
+    view.ring.header().magic.store(plexus::shm::k_ring_retired, std::memory_order_release);
 
     ring_holder newcomer{bus, view.fqn};
     ring_holder reader{bus, view.fqn};
@@ -161,16 +162,16 @@ TEST_CASE("ring_lifetime a joiner meets a ring its last holder is retiring as tr
     REQUIRE(reader.acquire(ring_role::consumer) == acquire_result::failed);
     CHECK(reader.last_bound() == acquire_bound::transient_join);
 
-    view.ring.header().magic.store(plexus::shm::k_ring_retired, std::memory_order_release);
+    view.slab.unlink_name();
+    view.control.unlink_name();
     view.control.release_all_slots();
+#if defined(_WIN32)
+    // A Windows section keeps its name until its last view closes, so a joiner before the retirer's unmap meets it retired.
     REQUIRE(newcomer.acquire(ring_role::producer) == acquire_result::failed);
     CHECK(newcomer.last_bound() == acquire_bound::transient_join);
     REQUIRE(reader.acquire(ring_role::consumer) == acquire_result::failed);
     CHECK(reader.last_bound() == acquire_bound::transient_join);
-
-    view.slab.unlink_name();
-    view.control.unlink_name();
-    // A Windows section keeps its name until its last view closes, so the retiring holder's last-out ends with its unmap.
+#endif
     view.unmap();
     REQUIRE(newcomer.acquire(ring_role::producer) == acquire_result::created);
     newcomer.release(ring_role::producer);

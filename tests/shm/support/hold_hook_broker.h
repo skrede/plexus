@@ -17,8 +17,8 @@ namespace plexus::testing {
 
 using hold_hook = plexus::detail::move_only_function<void()>;
 
-// A handle of the wrapped broker that runs the broker's pending hook, once, just before its next slot hold, the way a
-// peer acting between a joiner's attach and its hold would.
+// A handle of the wrapped broker that runs the broker's pending hook, once, just before its next slot hold or hold of
+// every slot, the way a peer acting between a joiner's attach and its hold would.
 template<typename Inner>
 class hooked_handle
 {
@@ -59,6 +59,8 @@ public:
 
     shm::slot_hold hold_all_slots()
     {
+        if(m_hook && *m_hook)
+            std::exchange(*m_hook, nullptr)();
         return m_inner.hold_all_slots();
     }
 

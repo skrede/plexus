@@ -526,10 +526,11 @@ if(NOT WIN32)
     catch_discover_tests(posix_test_shm_sidecar_leak TEST_PREFIX "shm.")
 endif()
 
-# A retired ring name a holder killed before removing it left behind, and a successor's ring under the same name, over
-# the POSIX broker; on Windows a name ends with its last handle, so no name outlives its holders.
+# A retired ring name a holder killed before removing it left behind, a successor's ring under the same name, and the
+# order every remover keeps, over the POSIX broker; on Windows a name ends with its last handle, so no name outlives its
+# holders.
 if(NOT WIN32)
-    add_executable(test_shm_retired_name_identity test_shm_retired_name_identity.cpp)
+    add_executable(test_shm_retired_name_identity test_shm_retired_name_identity.cpp test_shm_retired_name_order.cpp test_shm_retired_name_stress.cpp)
 
     target_include_directories(test_shm_retired_name_identity PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})

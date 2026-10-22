@@ -113,9 +113,9 @@ void region_handle::unlink_name() noexcept
 {
     if(m_name.empty())
         return;
+    ::shm_unlink(m_name.c_str());
     if(m_sidecar.fd >= 0)
         detail::unlink_sidecar(m_name);
-    ::shm_unlink(m_name.c_str());
 }
 
 }

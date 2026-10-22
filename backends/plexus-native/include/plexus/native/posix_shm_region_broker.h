@@ -38,7 +38,7 @@ public:
     // before opening; a false result returns denied.
     plexus::shm::region_status attach(std::string_view name, region_handle &out);
 
-    // Removes the object a bare name maps to, and its sidecar lock file where the host uses one; handles already mapped
+    // Removes the object a bare name maps to, then its sidecar lock file where the host uses one; handles already mapped
     // stay valid.
     plexus::shm::region_status unlink(std::string_view name);
 

@@ -8,6 +8,7 @@
 #include "plexus/shm/slot_liveness.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_acquire_result.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/io/upgrade_channel.h"
 
@@ -15,13 +16,15 @@
 #include <span>
 #include <atomic>
 #include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 
 namespace plexus::shm::detail {
 
 // A producer holds the creator slot before it stamps or adopts a ring. A name is removed only by the creator slot's
-// holder right after it stores k_ring_retired over the stamp it found, so the name still belongs to that ring. The last
+// holder right after it stores k_ring_retired over the stamp it found, so the name still belongs to that ring, or by an
+// acquirer that holds every slot of a retired ring once a fresh attach of the name reads that ring's identity. The last
 // local holder retires the ring only once it holds every slot in one step, and a joiner re-reads the magic after taking
 // its own slot.
 struct ring_lifetime
@@ -93,6 +96,31 @@ struct ring_lifetime
         return header == nullptr ? ~std::uint64_t{0} : header->magic.load(std::memory_order_acquire);
     }
 
+    // A mapping too small for a header reads as a ring without an identity.
+    static std::uint64_t identity_of(std::span<std::byte> control) noexcept
+    {
+        const control_header_t *header = header_of(control);
+        return header == nullptr ? 0 : header->identity.load(std::memory_order_relaxed);
+    }
+
+    // Removes the names of a retired ring whose holder died before removing them. Holding every slot shuts out every other
+    // remover, and the fresh attach proves the name still maps this ring rather than a successor.
+    template<typename Broker, typename Entry>
+    static bool remove_retired(Broker &broker, Entry &e, const std::string &ctrl_name)
+    {
+        if(e.control.hold_all_slots() != slot_hold::held)
+            return false;
+        const bool same = names_ring(broker, ctrl_name, identity_of(e.control.bytes()));
+        if(same)
+        {
+            broker.attach(ctrl_name + ".s", e.slab);
+            unlink(e);
+        }
+        e.control.release_all_slots();
+        e.creator = false;
+        return same;
+    }
+
     template<typename Entry>
     static bool stamp_retired(Entry &e, std::uint64_t found) noexcept
     {
@@ -107,6 +135,14 @@ struct ring_lifetime
     {
         e.slab.unlink_name();
         e.control.unlink_name();
+    }
+
+    // A ring without an identity names no ring provably.
+    template<typename Broker>
+    static bool names_ring(Broker &broker, const std::string &ctrl_name, std::uint64_t identity)
+    {
+        typename Broker::region_handle fresh;
+        return identity != 0 && broker.attach(ctrl_name, fresh) == region_status::ok && identity_of(fresh.bytes()) == identity;
     }
 
     template<typename Entry>

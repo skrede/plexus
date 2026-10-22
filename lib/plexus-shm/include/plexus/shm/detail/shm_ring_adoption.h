@@ -86,7 +86,7 @@ private:
     {
         const std::uint64_t magic = ring_lifetime::magic_of(e.control.bytes());
         if(magic == k_ring_retired)
-            return fail(r, acquire_failure{acquire_bound::transient_join});
+            return reclaim_retired(r, e, ctrl_name, geom, publisher, capacity);
         if(magic == 0)
             return recreate(r, e, ctrl_name, geom, publisher, capacity, 0);
         if(magic != k_ring_magic)
@@ -121,13 +121,29 @@ private:
             return fail(r, acquire_failure{acquire_bound::transient_join});
         wake(r, e, ctrl_name);
         ring_lifetime::unlink(e);
+        return remint(r, e, ctrl_name, geom, publisher, capacity, acquire_bound::incompatible);
+    }
+
+    // A retired ring whose holder died before removing its names is removed once the name is proven to map it, and a ring
+    // is minted afresh in its place. A name the platform still keeps is a holder on its way out.
+    template<typename Registry, typename Entry>
+    static acquire_result reclaim_retired(Registry &r, Entry &e, const std::string &ctrl_name, const ring_geometry &geom, const node_id &publisher, std::uint64_t capacity)
+    {
+        if(!ring_lifetime::remove_retired(r.m_broker, e, ctrl_name))
+            return fail(r, acquire_failure{acquire_bound::transient_join});
+        return remint(r, e, ctrl_name, geom, publisher, capacity, acquire_bound::transient_join);
+    }
+
+    template<typename Registry, typename Entry>
+    static acquire_result remint(Registry &r, Entry &e, const std::string &ctrl_name, const ring_geometry &geom, const node_id &publisher, std::uint64_t capacity, acquire_bound kept)
+    {
         ring_lifetime::drop_creator(e);
         e.slab                 = typename Entry::handle_type{};
         e.control              = typename Entry::handle_type{};
         const region_status cs = r.m_broker.create(ctrl_name, control_region_bytes(geom.cell_count), create_options{}, e.control);
         if(cs == region_status::ok)
             return mint(r, e, ctrl_name, geom, publisher, capacity);
-        return fail(r, acquire_failure{cs == region_status::already_exists ? acquire_bound::incompatible : acquire_bound::os_allocator, 0, 0, cs});
+        return fail(r, acquire_failure{cs == region_status::already_exists ? kept : acquire_bound::os_allocator, 0, 0, cs});
     }
 
     template<typename Registry, typename Entry>
