@@ -39,19 +39,21 @@ inline std::uint32_t cursor_scan_bound(const control_header_t &h) noexcept
 // can move it, so the reclaimer's liveness probe and its clearing stores cannot land on a newcomer's cursor.
 inline constexpr std::uint32_t k_cursor_reclaiming = 2;
 
-// The active word of a cursor whose claim is advancing its generation: a placement accepts only the claimed word, which
-// the claim stores with release after the generation, so a placer that reads it reads that claim's generation.
+// The active word of a cursor whose claim is advancing its generation: while active reads it, no release or reclaim acts
+// on the cursor, so a release's idle store always follows the claim's waiting word.
 inline constexpr std::uint32_t k_cursor_claiming = 3;
 
-// Claims cursor `index` (it starts at k_cursor_idle, not gating) and returns the claim's generation; nullopt when another
-// consumer has it.
+// Claims cursor `index` and returns the claim's generation; nullopt when another consumer has it. The cursor starts at
+// the claim's waiting word and gates nothing until it is placed or published.
 inline std::optional<std::uint32_t> claim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index) noexcept
 {
     std::uint32_t expected = 0;
     if(!cursor_in_range(consumer_capacity, index) || !h.cursors[index].active.compare_exchange_strong(expected, k_cursor_claiming, std::memory_order_acq_rel))
         return std::nullopt;
-    h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
     const std::uint32_t generation = h.cursors[index].generation.fetch_add(1, std::memory_order_relaxed) + 1;
+    // The waiting word carries the generation just advanced, and it lands before active 1, so a release's idle store
+    // can only follow it.
+    h.cursors[index].position.store(cursor_waiting(generation), std::memory_order_release);
     h.cursors[index].active.store(1, std::memory_order_release);
     raise_high_water(h, index + 1);
     return generation;
@@ -99,17 +101,14 @@ bool reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::u
     return true;
 }
 
-// Places a claimed reader that has not read yet at position; one already placed or reading keeps its position. False
-// when the cursor is not claimed under generation.
+// Places claim generation's waiting reader at position; false when the slot does not hold that waiting word. A release
+// or re-claim replaces the word, so a stale placement's swap fails.
 inline bool place_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, std::uint32_t generation, std::uint64_t position) noexcept
 {
-    if(!cursor_in_range(consumer_capacity, index) || h.cursors[index].active.load(std::memory_order_acquire) != 1)
+    if(!cursor_in_range(consumer_capacity, index))
         return false;
-    if(h.cursors[index].generation.load(std::memory_order_relaxed) != generation)
-        return false;
-    std::uint64_t idle = k_cursor_idle;
-    h.cursors[index].position.compare_exchange_strong(idle, position, std::memory_order_acq_rel);
-    return true;
+    std::uint64_t waiting = cursor_waiting(generation);
+    return h.cursors[index].position.compare_exchange_strong(waiting, position, std::memory_order_acq_rel);
 }
 
 // Released so the producer's reclamation gate observes it.
@@ -120,7 +119,7 @@ inline void publish_cursor(control_header_t &h, std::uint64_t consumer_capacity,
     h.cursors[index].position.store(position, std::memory_order_release);
 }
 
-// The slowest registered (non-idle) consumer cursor position, or k_cursor_idle
+// The slowest registered consumer cursor that holds a read position, or k_cursor_idle
 // when none is gating. It is the producer back-pressure progress signal: this
 // value advances exactly when the lagging consumer that holds the reliable gate
 // closed drains a slot, so a blocking producer can tell a live-but-slow consumer
@@ -134,13 +133,13 @@ inline std::uint64_t slowest_consumer_position(const control_header_t &h) noexce
         if(h.cursors[i].active.load(std::memory_order_acquire) == 0)
             continue;
         const std::uint64_t cur = h.cursors[i].position.load(std::memory_order_acquire);
-        if(cur != k_cursor_idle && cur < slowest)
+        if(cursor_holds_position(cur) && cur < slowest)
             slowest = cur;
     }
     return slowest;
 }
 
-// True when every registered, non-idle cursor has consumed the occupant the
+// True when every registered cursor that holds a read position has consumed the occupant the
 // claim at `position` would overwrite (the one at position - cell_count).
 inline bool consumers_passed(const control_header_t &h, std::uint64_t cell_count, std::uint64_t position) noexcept
 {
@@ -153,7 +152,7 @@ inline bool consumers_passed(const control_header_t &h, std::uint64_t cell_count
         if(h.cursors[i].active.load(std::memory_order_acquire) == 0)
             continue;
         const std::uint64_t cur = h.cursors[i].position.load(std::memory_order_acquire);
-        if(cur != k_cursor_idle && cur <= occupant)
+        if(cursor_holds_position(cur) && cur <= occupant)
             return false; // a registered consumer has not consumed the occupant yet
     }
     return true;

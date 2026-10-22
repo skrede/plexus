@@ -38,9 +38,22 @@ inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'36'00ull; // "
 // The retired stamp: the ring's names are being removed, so a joiner must not adopt it.
 inline constexpr std::uint64_t k_ring_retired = 0x50'4c'58'52'45'54'49'52ull; // "PLXRETIR"
 
-// The cursor position of a slot registered but not yet gating: a fresh cursor does not hold back
-// reclamation until it reads its first slot.
+// The cursor word of a slot that no claim holds.
 inline constexpr std::uint64_t k_cursor_idle = UINT64_MAX;
+
+// A cursor word with this bit set holds no read position; a read position counts messages and stays far below it.
+inline constexpr std::uint64_t k_cursor_unplaced = std::uint64_t{1} << 63;
+
+// The word of a claim not yet placed or read, which a placement swaps for its position.
+constexpr std::uint64_t cursor_waiting(std::uint32_t generation) noexcept
+{
+    return k_cursor_unplaced | generation;
+}
+
+constexpr bool cursor_holds_position(std::uint64_t word) noexcept
+{
+    return (word & k_cursor_unplaced) == 0;
+}
 
 // The 3-state encoding of each cursor slot's park word (a SEPARATE atom from
 // notify_generation: the generation says WHAT to drain, the park word says WHETHER
@@ -62,11 +75,12 @@ inline constexpr std::uint32_t k_park_notified = 2;
 
 // One broadcast consumer's read cursor, on its own cache line so a consumer
 // advancing its cursor does not thrash the line of an adjacent consumer or the
-// producer's enqueue counter. `position` is a 64-bit monotonically-advancing
-// index, mirroring the sequence width. `active` marks a registered slot.
+// producer's enqueue counter. `position` holds the read position, or, with bit 63
+// set, none: k_cursor_idle for a free slot, or the waiting word of a claim not yet
+// placed. A placement swaps exactly its claim's waiting word, so a released or
+// re-claimed slot is not placed for its new holder. `active` marks a registered slot.
 // `waiter_tag` names the waiter's own doorbell where the platform wakes through
-// a named kernel object instead of a futex. `generation` advances on every claim:
-// a placement names the claim it answers, so a re-claimed slot is not placed for its new holder.
+// a named kernel object instead of a futex. `generation` advances on every claim.
 struct alignas(k_cache_line) cursor_t
 {
     std::atomic<std::uint64_t> position;
@@ -167,7 +181,8 @@ static_assert(offsetof(control_header_t, park) == k_cache_line * 4 + k_max_consu
 static_assert(offsetof(control_header_t, identity) == offsetof(control_header_t, publisher) + sizeof(node_id), "the ring identity must follow the publisher id");
 static_assert(offsetof(control_header_t, identity) + sizeof(std::uint64_t) <= offsetof(control_header_t, cursors), "the config block must end before the cursor array");
 static_assert(k_max_consumers <= 32, "a 32-bit parked-slot mask must cover every cursor");
-static_assert(k_cursor_idle == UINT64_MAX, "an idle (registered-but-not-gating) cursor must read as the max sentinel");
+static_assert(k_cursor_idle == UINT64_MAX, "a free cursor must read as the max sentinel the slowest-cursor scan starts from");
+static_assert(!cursor_holds_position(k_cursor_idle) && cursor_waiting(UINT32_MAX) < k_cursor_idle, "a free cursor must hold no position and differ from every waiting word");
 
 }
 

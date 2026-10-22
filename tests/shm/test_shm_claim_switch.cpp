@@ -108,7 +108,7 @@ arrival_log numbered(std::uint32_t from, std::uint32_t to)
 
 }
 
-TEST_CASE("claim_switch a second session holding a claim another session placed switches without placing it again", "[shm][claim_switch][!shouldfail]")
+TEST_CASE("claim_switch a second session holding a claim another session placed switches without placing it again", "[shm][claim_switch]")
 {
     placing_publisher p;
     p.subscribe("peer-a", reader_claim{3, 7});
@@ -121,7 +121,7 @@ TEST_CASE("claim_switch a second session holding a claim another session placed 
     CHECK(p.wire_log.empty());
 }
 
-TEST_CASE("claim_switch a session that readies a claim already placed switches on its first publish", "[shm][claim_switch][!shouldfail]")
+TEST_CASE("claim_switch a session that readies a claim already placed switches on its first publish", "[shm][claim_switch]")
 {
     placing_publisher p;
     p.subscribe("peer-a", reader_claim{3, 7});

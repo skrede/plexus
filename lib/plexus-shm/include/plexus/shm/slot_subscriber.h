@@ -84,7 +84,7 @@ public:
     // overwritten jumps to the producer's tail.
     void resume() noexcept
     {
-        if(const std::uint64_t placed = m_ring.header().cursors[m_cursor_index].position.load(std::memory_order_acquire); placed != k_cursor_idle)
+        if(const std::uint64_t placed = m_ring.header().cursors[m_cursor_index].position.load(std::memory_order_acquire); cursor_holds_position(placed))
             m_cursor = placed;
         m_ring.publish_cursor(m_cursor_index, m_cursor);
     }

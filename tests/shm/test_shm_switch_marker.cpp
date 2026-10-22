@@ -28,7 +28,7 @@
 #include <string_view>
 
 using plexus::shm::loan_status;
-using plexus::shm::k_cursor_idle;
+using plexus::shm::cursor_holds_position;
 using plexus::testing::settle;
 using plexus::testing::index_of;
 using plexus::testing::step_both;
@@ -116,7 +116,7 @@ TEST_CASE("switch_marker a receive companion takes nothing and gates nothing bef
     for(std::uint32_t index = 0; index < written; ++index)
         REQUIRE(lane.publish(index) == loan_status::ok);
     lane.pump();
-    CHECK(lane.reader_position() == k_cursor_idle);
+    CHECK_FALSE(cursor_holds_position(lane.reader_position()));
 
     REQUIRE(lane.place());
     lane.publish(written);

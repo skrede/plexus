@@ -29,7 +29,7 @@ std::unique_ptr<typename Member::channel_type> companion_send(Member &m, const s
 }
 
 // The reader in the claimed slot gates the node's send ring for fqn from its newest message on; false when that ring is
-// gone or the slot is not claimed under that claim's generation.
+// gone or the slot does not hold that claim's reader waiting for its placement.
 template<typename Member>
 bool companion_place(Member &m, const std::string &fqn, io::reader_claim reader)
 {

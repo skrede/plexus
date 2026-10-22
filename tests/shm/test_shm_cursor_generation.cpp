@@ -47,21 +47,7 @@ std::uint64_t identity_of_fresh_ring(backing_region &control, backing_region &sl
 
 }
 
-TEST_CASE("cursor_generation a slot released and re-claimed is not placed by the previous claim's generation", "[shm][cursor_generation]")
-{
-    generation_ring g;
-    const std::optional<std::uint32_t> released = g.ring.claim_cursor(0);
-    REQUIRE(released);
-    g.ring.unregister_cursor(0);
-    const std::optional<std::uint32_t> current = g.ring.claim_cursor(0);
-    REQUIRE(current);
-
-    CHECK(*current != *released);
-    CHECK_FALSE(g.ring.place_cursor(0, *released, 3));
-    CHECK(g.position(0) == k_cursor_idle);
-}
-
-TEST_CASE("cursor_generation a placement naming a released claim leaves the slot's new claim waiting for its own placement", "[shm][cursor_generation][!shouldfail]")
+TEST_CASE("cursor_generation a placement naming a released claim leaves the slot's new claim waiting for its own placement", "[shm][cursor_generation]")
 {
     generation_ring g;
     const std::optional<std::uint32_t> released = g.ring.claim_cursor(0);
@@ -85,7 +71,7 @@ TEST_CASE("cursor_generation a placement naming a waiting reader's slot with a f
 
     CHECK_FALSE(g.ring.place_cursor(1, *waiting + 1, 3));
     CHECK_FALSE(g.ring.place_cursor(1, *waiting - 1, 3));
-    CHECK(g.position(1) == k_cursor_idle);
+    CHECK(g.position(1) == waiting_word(*waiting));
 }
 
 TEST_CASE("cursor_generation the current claim's generation places the reader", "[shm][cursor_generation]")

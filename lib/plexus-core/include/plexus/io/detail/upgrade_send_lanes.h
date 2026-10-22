@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_UPGRADE_SEND_LANES_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_UPGRADE_SEND_LANES_H
 
+#include "plexus/io/detail/lane_holders.h"
+
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/companion_event.h"
 #include "plexus/io/demand_transition.h"
@@ -18,14 +20,6 @@
 
 // Inside plexus::io::detail, plexus::detail must be fully qualified — io::detail shadows it.
 namespace plexus::io::detail {
-
-// A co-host peer the publisher offered its lane to; the lane carries its messages only once it answered ready.
-struct lane_holder
-{
-    std::string node_name;
-    reader_claim reader;
-    bool ready;
-};
 
 // A publisher's one lane for a topic: one channel over its own ring, which every holder reads, so one publish writes it
 // once. It lives while an offered peer or the node's own subscriber holds it. fits(bytes) is the minting medium's route
@@ -55,12 +49,6 @@ template<typename Channel>
 const send_lane<Channel> *find_send_lane(const send_lanes<Channel> &lanes, std::string_view fqn)
 {
     return find_send_lane(const_cast<send_lanes<Channel> &>(lanes), fqn);
-}
-
-inline lane_holder *find_holder(std::vector<lane_holder> &holders, std::string_view node_name)
-{
-    const auto it = std::ranges::find(holders, node_name, &lane_holder::node_name);
-    return it == holders.end() ? nullptr : &*it;
 }
 
 template<typename Channel>
@@ -123,7 +111,7 @@ struct upgrade_send_lanes
         if(lane == nullptr)
             return reason;
         if(find_holder(lane->holders, node_name) == nullptr)
-            lane->holders.push_back({.node_name = std::string{node_name}, .reader = k_no_reader, .ready = false});
+            lane->holders.push_back({.node_name = std::string{node_name}, .reader = k_no_reader, .ready = false, .placed = false});
         return fallback_reason::none;
     }
 

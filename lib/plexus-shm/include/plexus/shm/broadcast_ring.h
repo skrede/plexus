@@ -21,11 +21,12 @@ namespace plexus::shm {
 
 // Lock-free, cross-process, offset-based MPMC broadcast ring: the Vyukov bounded MPMC queue over DESCRIPTOR cells (slab
 // offset, length and sequence; the payload lives in a fixed-stride slab keyed 1:1 to the cells) plus Disruptor gating:
-// every subscriber has its own read cursor in the header's fixed-bound array, and a k_cursor_idle cursor does not gate.
-// reliable blocks a cell until take_refcount==0 AND the slowest gating cursor is past it (a bounded spin, no kernel
-// object); best-effort overwrites latest but SKIPS pinned cells. CRASH STANCE (crash-SAFE, NOT crash-LIVE): no
-// cross-process lock is held, so a dying process never corrupts the ring, but a producer dying between its enqueue CAS
-// and sequence release leaves a never-advancing cell, and a consumer dying inside a take() leaves take_refcount>0.
+// every subscriber has its own read cursor in the header's fixed-bound array, and a cursor that holds no read position
+// does not gate. reliable blocks a cell until take_refcount==0 AND the slowest gating cursor is past it (a bounded
+// spin, no kernel object); best-effort overwrites latest but SKIPS pinned cells. CRASH STANCE (crash-SAFE, NOT
+// crash-LIVE): no cross-process lock is held, so a dying process never corrupts the ring, but a producer dying between
+// its enqueue CAS and sequence release leaves a never-advancing cell, and a consumer dying inside a take() leaves
+// take_refcount>0.
 class broadcast_ring
 {
 public:

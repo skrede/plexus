@@ -144,6 +144,7 @@ struct upgrade_lanes
         {
             holder->ready  = true;
             holder->reader = reader;
+            holder->placed = false;
             return;
         }
         upgrade_send_lanes::leave(c, node_name, fqn);

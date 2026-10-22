@@ -86,7 +86,7 @@ public:
     bool place(std::string_view fqn, reader_claim reader)
     {
         detail::send_lane<Channel> *lane = detail::find_send_lane(m_send, fqn);
-        return lane != nullptr && (!lane->place || (reader != k_no_reader && lane->place(reader)));
+        return lane != nullptr && (!lane->place || detail::place_claim(lane->holders, lane->place, reader));
     }
 
     // A publisher's marker resumes the receive lane it names from the first sequence it routes over it.
