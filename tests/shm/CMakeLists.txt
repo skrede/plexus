@@ -1156,6 +1156,19 @@ target_link_libraries(test_shm_write_once PRIVATE
 
 catch_discover_tests(test_shm_write_once TEST_PREFIX "shm.")
 
+# Two sessions of one peer can hold one reader claim; the claim is placed once and both switch to the lane.
+add_executable(test_shm_claim_switch test_shm_claim_switch.cpp)
+
+target_include_directories(test_shm_claim_switch PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_link_libraries(test_shm_claim_switch PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_shm_claim_switch TEST_PREFIX "shm.")
+
 # The bilateral, consumer-sovereign upgrade via demand-driven convergence (xproc):
 # two real processes each decide INDEPENDENTLY whether to attempt the shared-memory
 # acquire from their OWN dispatch hint (no hint on the wire), converge on the same
