@@ -288,6 +288,26 @@ if(NOT WIN32 AND NOT APPLE)
     catch_discover_tests(linux_test_shm_slot_lock TEST_PREFIX "shm.")
 endif()
 
+# A create that fails after its exclusive open, paused in the syscall by a seccomp user notification while another
+# producer acquires the name, leaves that producer's ring reachable; seccomp user notification is Linux-only.
+if(NOT WIN32 AND NOT APPLE)
+    add_executable(linux_test_shm_create_window linux_test_shm_create_window.cpp)
+
+    target_include_directories(linux_test_shm_create_window PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(linux_test_shm_create_window PRIVATE
+        plexus::plexus
+        plexus::shm
+        plexus::native
+        plexus::core
+        plexus::testing
+        Threads::Threads
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(linux_test_shm_create_window TEST_PREFIX "shm.")
+endif()
+
 # The cross-process futex notifier: the wake crosses address spaces (the
 # no-PRIVATE-flag proof, a forked producer waking a forked consumer on a shared
 # MAP_SHARED word) and the drain-before-wait protocol delivers an interleaved
@@ -1257,23 +1277,19 @@ if(NOT WIN32 AND NOT APPLE)
     catch_discover_tests(test_shm_large_message TEST_PREFIX "shm.")
 endif()
 
-# The crashed-creator orphan-reclaim proof (xproc): a child creates a region that
-# is not a ring, stamps a sentinel, and _exits WITHOUT unlinking, leaving an orphan
-# in /dev/shm; the parent's create with unlink_stale_on_create reclaims the orphan
-# and mints a FRESH (zero-filled) region, proving the orphan's stale bytes do not
-# leak through. Looped N>=100. Links
-# plexus::native for the compiled broker (shm_open/ftruncate/shm_unlink).
-# A custom main() runs the re-exec child dispatcher BEFORE the Catch2 session, so
-# it links the main-less Catch2 target and pulls plexus::testing for the portable
-# process-id / shared-object-name helper the re-exec harness routes through.
+# A crashed minter's leftovers give way to the next producer (xproc): a re-exec'd child leaves an unstamped control region
+# with its slab, with a slab name never sized, or a slab alone, and exits without releasing. A custom main() runs the
+# child dispatcher before the Catch2 session, so it links the main-less Catch2.
 add_executable(test_shm_stale_reclaim test_shm_stale_reclaim.cpp)
 
 target_include_directories(test_shm_stale_reclaim PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(test_shm_stale_reclaim PRIVATE
+    plexus::plexus
     plexus::shm
     plexus::native
+    plexus::core
     plexus::testing
     Catch2::Catch2)
 

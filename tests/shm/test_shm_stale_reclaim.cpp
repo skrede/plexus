@@ -1,8 +1,11 @@
-#include "plexus/native/shm_region_broker.h"
-
-#include "plexus/shm/region_broker_concept.h"
-
+#include "support/bus_notifier.h"
+#include "support/lifetime_rig.h"
+#include "support/minter_entry.h"
 #include "support/xproc_child_main.h"
+
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -10,131 +13,110 @@
 #include <string>
 #include <vector>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
-#include <cstring>
 
-// The crashed-creator orphan-reclaim proof for a region that is not a ring (a ring
-// is reclaimed only through its creator slot): a child CREATES a named region,
-// stamps a sentinel byte pattern into it, and _Exits WITHOUT releasing, leaving its
-// name in /dev/shm. The parent then proves the orphan is real (a plain create
-// returns already_exists) and that a create with unlink_stale_on_create RECLAIMS
-// the orphan and mints a FRESH region: the new region is the parent's (ftruncate
-// zero-fills it, so the orphan's stale sentinel does not leak through). Looped
-// N>=100. The child is a RE-EXEC'd process that re-opens the region BY NAME (the
-// name arrives by argv), not a fork inheriting the parent's address space.
+#if !defined(_WIN32)
+    #include "support/sidecar_probe.h"
 
-namespace pio = plexus::shm;
-using plexus::native::shm_region_broker;
-using plexus::native::shm_region_handle;
+    #include <fcntl.h>
+
+    #include <sys/mman.h>
+#endif
+
+// A re-exec'd child leaves what a creator killed in the middle of a mint leaves and exits without releasing anything;
+// the next producer must still mint the ring, and a reader must receive from it. On Windows a name dies with its last
+// handle, so nothing is left there to give way.
 
 namespace {
 
-// A distinguishable byte the crashed creator stamps across the orphan region;
-// a non-zero pattern so a fresh (zero-filled) reclaim is unambiguous.
-constexpr std::byte k_stale_byte{0xABu};
-constexpr std::size_t k_region_bytes = 4096;
+namespace pio = plexus::shm;
+using plexus::testing::wake_bus;
+using plexus::testing::ring_view;
+using plexus::testing::lifetime_fqn;
+using plexus::testing::native_broker;
 
-// Stamp the whole mapped region with the stale sentinel.
-void stamp_stale(const shm_region_handle &h)
+constexpr int k_rounds = 100;
+
+bool create_region(native_broker &broker, const std::string &name, std::size_t bytes, native_broker::region_handle &out)
 {
-    const auto bytes = h.bytes();
-    std::memset(bytes.data(), static_cast<int>(k_stale_byte), bytes.size());
+    return broker.create(name, bytes, pio::create_options{}, out) == pio::region_status::ok;
 }
 
-// True iff every byte of the mapped region is zero (a fresh ftruncate'd region).
-bool all_zero(const shm_region_handle &h)
+#if !defined(_WIN32)
+// A minter killed between its slab's exclusive open and its sizing.
+bool open_unsized(const std::vector<std::string> &args)
 {
-    const auto bytes = h.bytes();
-    for(const std::byte b : bytes)
-        if(b != std::byte{0})
-            return false;
-    return true;
+    return args.size() > 2 && ::shm_open(args[2].c_str(), O_CREAT | O_EXCL | O_RDWR, 0600) >= 0;
 }
-
-// The crashed-creator child routine, dispatched in the re-exec'd process by key.
-bool stale_reclaim_creator(const std::vector<std::string> &args)
+#else
+bool open_unsized(const std::vector<std::string> &)
 {
-    if(args.empty())
-        return false;
+    return false;
+}
+#endif
 
-    shm_region_broker broker;
-    shm_region_handle orphan;
-    if(broker.create(args.front(), k_region_bytes, pio::create_options{}, orphan) != pio::region_status::ok)
+// The leftover kind comes first: "ring" leaves a control region and its slab, "unsized" a control region and a slab name
+// never sized, "slab" a slab alone. The control name comes second.
+bool leave_leftover(const std::vector<std::string> &args)
+{
+    if(args.size() < 2)
         return false;
-    stamp_stale(orphan);
+    const pio::ring_geometry geom = plexus::testing::minter_geometry();
+    native_broker broker;
+    native_broker::region_handle control;
+    native_broker::region_handle slab;
+    if(args[0] != "slab" && !create_region(broker, args[1], pio::control_region_bytes(geom.cell_count), control))
+        return false;
+    const std::size_t slab_bytes = pio::slab_region_bytes(geom.cell_count, geom.slot_capacity);
+    const bool left              = args[0] == "unsized" ? open_unsized(args) : create_region(broker, args[1] + ".s", slab_bytes, slab);
+    if(!left)
+        return false;
     std::_Exit(0);
 }
 
-[[maybe_unused]] const bool s_stale_reclaim_registered = plexus::testing::register_xproc_child("shm.stale_reclaim.creator", &stale_reclaim_creator);
+[[maybe_unused]] const bool s_leftover_registered = plexus::testing::register_xproc_child("shm.stale_reclaim.leftover", &leave_leftover);
+
+void reclaim_each_round(ring_view &view, std::vector<std::string> args)
+{
+    wake_bus bus;
+    for(int round = 0; round < k_rounds; ++round)
+    {
+        const auto outcome = plexus::testing::run_xproc("shm.stale_reclaim.leftover", args,
+                                                        [&]
+                                                        {
+                                                            plexus::testing::engage_afresh(bus, view);
+                                                            return true;
+                                                        });
+        REQUIRE(outcome.child_succeeded);
+        REQUIRE(outcome.parent_succeeded);
+    }
+}
 
 }
 
-TEST_CASE("shm.stale_reclaim a crashed creator's orphan is reclaimed by unlink_stale_on_create", "[shm][stale_reclaim]")
+TEST_CASE("shm.stale_reclaim an unstamped control region and its slab give way to the next producer", "[shm][stale_reclaim]")
 {
-    // A region name unique to this process so concurrent ctest shards never
-    // collide. The bare logical name; the broker prepends its canonical prefix.
-    const std::string name = "stale.reclaim." + std::to_string(plexus::testing::process_id());
+    ring_view view{lifetime_fqn("stale_reclaim.ring")};
+    reclaim_each_round(view, {"ring", view.name});
+}
 
-    for(int iter = 0; iter < 100; ++iter)
-    {
-        // CHILD (re-exec'd, re-opens by name): create + stamp + orphan. PARENT
-        // (after the child exits): prove the orphan is real, then reclaim a fresh
-        // zero-filled region under the same name.
-        const auto outcome = plexus::testing::run_xproc(
-                "shm.stale_reclaim.creator",
-                {name},
-                [&]() -> bool
-                {
-                    shm_region_broker broker;
-
-#if defined(_WIN32)
-                    // Windows named file-mappings are reference-counted and freed on
-                    // last-handle-close: when the child _Exits, its mapping vanishes, so NO
-                    // orphan persists for the parent to find. A plain create therefore mints a
-                    // FRESH region (ok, not already_exists) -- there is no crash-orphan to
-                    // reclaim, which is the safer last-handle-close model, not a defect.
-                    shm_region_handle fresh;
-                    if(broker.create(name, k_region_bytes, pio::create_options{}, fresh) != pio::region_status::ok)
-                        return false;
-
-                    // The fresh region is zero-filled: the child's stale sentinel did not
-                    // survive its exit (the backing mapping was torn down with the handle).
-                    if(!all_zero(fresh))
-                        return false;
-
-                    return true;
-#else
-                    // The orphan must be present: a plain create (no reclaim flag) finds
-                    // the child's live region and returns already_exists, never ok.
-                    {
-                        shm_region_handle probe;
-                        if(broker.create(name, k_region_bytes, pio::create_options{}, probe) != pio::region_status::already_exists)
-                            return false;
-                    }
-
-                    // Reclaim: create WITH unlink_stale_on_create unlinks the orphan and
-                    // mints a fresh region under the same name.
-                    shm_region_handle fresh;
-                    if(broker.create(name, k_region_bytes, pio::create_options{.unlink_stale_on_create = true}, fresh) != pio::region_status::ok)
-                        return false;
-
-                    // The fresh region is the PARENT's: ftruncate zero-fills it, so the
-                    // orphan's stale sentinel did not leak through into the new mapping.
-                    const bool fresh_zeroed = all_zero(fresh);
-                    fresh.unlink_name();
-                    return fresh_zeroed;
+#if !defined(_WIN32)
+TEST_CASE("shm.stale_reclaim an unstamped control region and a slab never sized give way to the next producer", "[shm][stale_reclaim]")
+{
+    ring_view view{lifetime_fqn("stale_reclaim.unsized")};
+    reclaim_each_round(view, {"unsized", view.name, plexus::testing::canonical_of(view.name + ".s")});
+}
 #endif
-                });
 
-        REQUIRE(outcome.child_succeeded);  // the crashed-creator child stamped + orphaned
-        REQUIRE(outcome.parent_succeeded); // the parent reclaimed a fresh, zero-filled region
-    }
+TEST_CASE("shm.stale_reclaim a slab left without its control region gives way to the next producer", "[shm][stale_reclaim]")
+{
+    ring_view view{lifetime_fqn("stale_reclaim.slab")};
+    reclaim_each_round(view, {"slab", view.name});
 }
 
 int main(int argc, char **argv)
 {
     plexus::testing::xproc_capture_argv(argc, argv);
-    plexus::testing::xproc_child_main(argc, argv); // _Exits when re-exec'd as the child role
+    plexus::testing::xproc_child_main(argc, argv);
     return Catch::Session().run(argc, argv);
 }
