@@ -1,17 +1,21 @@
-#include "plexus/native/posix_shm_region_broker.h"
+#include "support/posted_queue.h"
+#include "support/region_names.h"
+#include "support/noop_notifier.h"
+
 #include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_selection.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/notifier_concept.h"
 
-#include "plexus/io/message_forwarder.h"
-#include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/byte_channel.h"
+#include "plexus/io/message_forwarder.h"
 #include "plexus/io/same_host_geometry.h"
 
 #include "plexus/inproc/inproc_timer.h"
@@ -19,25 +23,23 @@
 
 #include "plexus/policy.h"
 #include "plexus/topic_qos.h"
+
 #include "plexus/detail/compat.h"
 
 #include "plexus/testing/platform.h"
 
-#include "support/posted_queue.h"
-#include "support/region_names.h"
-#include "support/noop_notifier.h"
-
 #include <catch2/catch_test_macros.hpp>
 
+#include <span>
 #include <atomic>
+#include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <optional>
-#include <span>
-#include <string>
-#include <vector>
+#include <algorithm>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -148,15 +150,7 @@ public:
 
     std::size_t count(medium m) const
     {
-        std::size_t n = 0;
-        for(medium c : m_carried)
-            if(c == m)
-                ++n;
-        return n;
-    }
-    std::size_t total() const
-    {
-        return m_carried.size();
+        return static_cast<std::size_t>(std::ranges::count(m_carried, m));
     }
     std::size_t last_len() const
     {
@@ -202,6 +196,19 @@ struct tap_policy
 static_assert(plexus::Policy<tap_policy>, "tap_policy must satisfy Policy");
 
 using forwarder = plexus::io::message_forwarder<tap_policy>;
+
+// The companion-route hook: consult route_message_medium against the member's resolved {mode, cap}. shm -> the
+// SHM-companion tap (it forwards into the ring); otherwise the forwarder keeps the message on the wire sub.channel.
+// The wire stays the recorded channel; the ring is an additive consult.
+void route_companion_by_geometry(forwarder &fwd, member_t &member, tap_channel &shm_tap)
+{
+    fwd.on_companion_route(
+            [&member, &shm_tap](std::string_view, std::string_view route_fqn, std::size_t bytes)
+            {
+                const auto g = member.resolved_geometry_for(std::string{route_fqn});
+                return plexus::io::lane_route<tap_channel>{&shm_tap, pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm, plexus::io::k_no_reader};
+            });
+}
 
 struct coord
 {
@@ -320,17 +327,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     forwarder fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
 
-    // The companion-route hook: consult route_message_medium against the member's
-    // resolved {mode, cap}. shm -> the SHM-companion tap (it forwards into the ring),
-    // stream -> nullptr (the forwarder keeps the message on the wire sub.channel). This
-    // is the recommended reversible default from the plan: the wire stays the recorded
-    // channel, the ring is an additive consult.
-    fwd.on_companion_route(
-            [&](std::string_view, std::string_view route_fqn, std::size_t bytes)
-            {
-                const auto g = member.resolved_geometry_for(std::string{route_fqn});
-                return plexus::io::lane_route<tap_channel>{&shm_tap, pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm, plexus::io::k_no_reader};
-            });
+    route_companion_by_geometry(fwd, member, shm_tap);
 
     forwarder::peer p{wire_tap, "peer-node"};
     fwd.attach_for_fanout(p, fqn);
@@ -444,12 +441,7 @@ TEST_CASE("shm.wire_fallback a payload whose FRAME overflows the slot rides the 
     plexus::log::null_logger sink;
     forwarder fwd{sink};
     fwd.declare(fqn, plexus::topic_qos{.reliability = plexus::io::reliability::reliable});
-    fwd.on_companion_route(
-            [&](std::string_view, std::string_view route_fqn, std::size_t bytes)
-            {
-                const auto g = member.resolved_geometry_for(std::string{route_fqn});
-                return plexus::io::lane_route<tap_channel>{&shm_tap, pio::route_message_medium(g.mode, bytes, g.slot_capacity) == pio::same_host_medium::shm, plexus::io::k_no_reader};
-            });
+    route_companion_by_geometry(fwd, member, shm_tap);
 
     forwarder::peer p{wire_tap, "peer-node"};
     fwd.attach_for_fanout(p, fqn);

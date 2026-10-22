@@ -2,8 +2,8 @@
 #define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_DELAYING_BROKER_H
 
 #include "always_live_slots.h"
+#include "heap_region_store.h"
 
-#include "plexus/shm/ring_layout.h"
 #include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/detail/compat.h"
@@ -13,36 +13,13 @@
 #include <chrono>
 #include <memory>
 #include <string>
-#include <vector>
 #include <cstddef>
-#include <cstdint>
 #include <utility>
 #include <string_view>
 
 namespace plexus::testing {
 
-// An in-memory region that outlives the handles mapping it; its creator's handle clears live on release.
-struct delaying_region
-{
-    explicit delaying_region(std::size_t region_bytes)
-            : live(true)
-            , size(region_bytes)
-            , storage(region_bytes + ::plexus::shm::k_cache_line, std::byte{})
-    {
-    }
-
-    std::span<std::byte> bytes() noexcept
-    {
-        const auto raw     = reinterpret_cast<std::uintptr_t>(storage.data());
-        const auto aligned = (raw + ::plexus::shm::k_cache_line - 1) & ~static_cast<std::uintptr_t>(::plexus::shm::k_cache_line - 1);
-        return {storage.data() + (aligned - raw), size};
-    }
-
-    bool live;
-    std::size_t size;
-    std::vector<std::byte> storage;
-};
-
+// Its creator's handle clears the region's live flag on release.
 class delaying_handle : public always_live_slots
 {
 public:
@@ -51,7 +28,7 @@ public:
     {
     }
 
-    delaying_handle(std::shared_ptr<delaying_region> region, bool owns) noexcept
+    delaying_handle(std::shared_ptr<heap_region> region, bool owns) noexcept
             : m_owns(owns)
             , m_region(std::move(region))
     {
@@ -86,7 +63,7 @@ public:
 
 private:
     bool m_owns;
-    std::shared_ptr<delaying_region> m_region;
+    std::shared_ptr<heap_region> m_region;
 
     void release() noexcept
     {
@@ -110,7 +87,7 @@ public:
         const std::string key{name};
         if(auto it = m_regions.find(key); it != m_regions.end() && it->second->live)
             return ::plexus::shm::region_status::already_exists;
-        auto region = std::make_shared<delaying_region>(bytes);
+        auto region = std::make_shared<heap_region>(bytes);
         m_regions.insert_or_assign(key, region);
         out = delaying_handle{std::move(region), true};
         return ::plexus::shm::region_status::ok;
@@ -146,7 +123,7 @@ public:
 
 private:
     std::map<std::string, clock::time_point> m_withheld;
-    std::map<std::string, std::shared_ptr<delaying_region>> m_regions;
+    std::map<std::string, std::shared_ptr<heap_region>> m_regions;
 
     bool withheld(const std::string &name) const
     {

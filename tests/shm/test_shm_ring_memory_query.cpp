@@ -1,26 +1,26 @@
+#include "support/noop_notifier.h"
+#include "support/always_live_slots.h"
+#include "support/heap_region_store.h"
+
 #include "plexus/shm/loan_status.h"
-#include "plexus/shm/region_broker_concept.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_topic_registry.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 
 #include "plexus/detail/compat.h"
 
-#include "support/noop_notifier.h"
-#include "support/always_live_slots.h"
-
 #include <catch2/catch_test_macros.hpp>
 
-#include <cstddef>
-#include <cstdint>
-#include <map>
-#include <memory>
 #include <span>
+#include <memory>
 #include <string>
 #include <vector>
+#include <cstddef>
+#include <cstdint>
 
 // ring_memory_for is the cost a consumer queries BEFORE it declares a ring, so it must equal two things
 // byte-for-byte: the layout helpers' sum for the geometry ring_geometry_for yields, and the bytes the registry
@@ -38,32 +38,10 @@ constexpr std::size_t k_mib = 1024 * 1024;
 // A recording broker over heap-backed regions that captures the byte size of every create request, so a test can
 // compare ring_memory_for against what the registry actually asks the allocator for. The control region and the slab
 // region are both recorded; the slab is the one ring_memory_for's slab term must match.
-struct recording_store
+struct recording_store : plexus::testing::heap_region_store
 {
-    struct region
-    {
-        std::vector<std::byte> storage;
-        std::byte *base  = nullptr;
-        std::size_t size = 0;
-        bool live        = false;
-    };
-
-    std::map<std::string, std::shared_ptr<region>> regions;
     std::vector<std::size_t> slab_requests;
     std::size_t last_total = 0;
-
-    std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
-    {
-        auto r = std::make_shared<region>();
-        r->storage.assign(bytes + k_cache_line, std::byte{});
-        auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
-        auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
-        r->base       = reinterpret_cast<std::byte *>(algn);
-        r->size       = bytes;
-        r->live       = true;
-        regions[name] = r;
-        return r;
-    }
 };
 
 class recording_handle : public plexus::testing::always_live_slots
@@ -109,7 +87,7 @@ public:
 
     std::span<std::byte> bytes() const
     {
-        return {m_region->base, m_region->size};
+        return m_region->bytes();
     }
 
 private:

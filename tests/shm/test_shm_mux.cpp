@@ -1,39 +1,36 @@
-#include "plexus/shm/region_broker_concept.h"
-#include "plexus/shm/ring_layout.h"
+#include "support/posted_queue.h"
+#include "support/noop_notifier.h"
+#include "support/always_live_slots.h"
+#include "support/heap_region_store.h"
+#include "support/local_stream_member.h"
+
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/shm_slot_owner.h"
+#include "plexus/shm/region_broker_concept.h"
 
-#include "plexus/io/byte_channel.h"
 #include "plexus/io/endpoint.h"
-#include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/byte_channel.h"
+#include "plexus/io/upgrade_capability.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
-#include "plexus/io/upgrade_capability.h"
+
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/scheduler_key.h"
-#include "plexus/wire/close_cause.h"
+
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
 
-#include "support/posted_queue.h"
-#include "support/noop_notifier.h"
-#include "support/always_live_slots.h"
-
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
-#include <map>
-#include <memory>
 #include <span>
+#include <memory>
 #include <string>
-#include <string_view>
 #include <vector>
+#include <cstddef>
+#include <string_view>
 
 // The shared-memory member joins the multiplexer as the SECOND same-host (local-tier) member alongside a stream member,
 // so the local tier resolves to >1 candidate and the preference hook becomes load-bearing. This oracle proves: (1) the
@@ -47,35 +44,10 @@ namespace pio = plexus::io;
 
 namespace {
 
-// A heap-backed shared region store + the stub broker over it (the single-process
-// stand-in for /dev/shm the registry oracle uses), extended with a fail switch: when
-// armed, every create/attach returns failed, forcing the member's acquire to fail (the
+// The heap region store + the stub broker over it (the single-process stand-in for /dev/shm the registry oracle uses),
+// extended with a fail switch: when armed, every create/attach returns failed, forcing the member's acquire to fail (the
 // fallback path the preference hook must take).
-struct region_store
-{
-    struct region
-    {
-        std::vector<std::byte> storage;
-        std::byte *base  = nullptr;
-        std::size_t size = 0;
-        bool live        = false;
-    };
-
-    std::map<std::string, std::shared_ptr<region>> regions;
-
-    std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
-    {
-        auto r = std::make_shared<region>();
-        r->storage.assign(bytes + k_cache_line, std::byte{});
-        auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
-        auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
-        r->base       = reinterpret_cast<std::byte *>(algn);
-        r->size       = bytes;
-        r->live       = true;
-        regions[name] = r;
-        return r;
-    }
-};
+using region_store = plexus::testing::heap_region_store;
 
 class stub_handle : public plexus::testing::always_live_slots
 {
@@ -92,7 +64,7 @@ public:
 
     std::span<std::byte> bytes() const
     {
-        return {m_region->base, m_region->size};
+        return m_region->bytes();
     }
 
 private:
@@ -163,85 +135,14 @@ static_assert(pio::upgradeable<shm_member>,
               "shm member must satisfy the generic upgrade capability - it is the reference "
               "plug-in for the same-medium upgrade probe");
 
-// A dummy local-tier stream member (the AF_UNIX stand-in): it serves "shm" too so the two
-// members are BOTH candidates for the same dialed endpoint (the multi-candidate-per-tier
-// case the hook decides). It records whether the mux routed the dial to it.
-struct dummy_stream_channel
-{
-    pio::endpoint ep;
-    std::uint64_t key = plexus::io::detail::next_scheduler_key();
-    void send(std::span<const std::byte>)
-    {
-    }
-    void close()
-    {
-    }
-    pio::endpoint remote_endpoint() const
-    {
-        return ep;
-    }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
-    {
-    }
-    void on_closed(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void on_error(plexus::detail::move_only_function<void(pio::io_error)>)
-    {
-    }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
-    {
-    }
-    std::size_t backpressured() const noexcept
-    {
-        return 0;
-    }
-    std::uint64_t scheduler_key() const noexcept
-    {
-        return key;
-    }
-};
-
-struct dummy_stream_member
-{
-    using channel_type = dummy_stream_channel;
-    static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr pio::transport_kind mux_tier = pio::transport_kind::local;
-
-    bool dialed = false;
-
-    void listen(const pio::endpoint &)
-    {
-    }
-    void dial(const pio::endpoint &)
-    {
-        dialed = true;
-    }
-    void close()
-    {
-    }
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>)>)
-    {
-    }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<dummy_stream_channel>, const pio::endpoint &)>)
-    {
-    }
-    void on_dial_failed(plexus::detail::move_only_function<void(const pio::endpoint &, pio::io_error)>)
-    {
-    }
-    void on_error(plexus::detail::move_only_function<void(pio::io_error)>)
-    {
-    }
-};
-
 // The negative pin: a wire-only member (no acquire probe) does NOT satisfy the capability, so
 // the concept is not vacuously true.
-static_assert(!pio::upgradeable<dummy_stream_member>, "a member without the acquire probe must not satisfy the upgrade capability");
+static_assert(!pio::upgradeable<plexus::testing::local_stream_member>, "a member without the acquire probe must not satisfy the upgrade capability");
 
 // The composition: the SHM member FIRST (the preference hook scans for its ring-acquire
 // probe), the stream member second (the fallback). Both serve the local tier + "shm", so a
 // same-host dial resolves to both candidates and the hook decides.
-using mux_t = pio::multiplexing_transport<shm_member, dummy_stream_member>;
+using mux_t = pio::multiplexing_transport<shm_member, plexus::testing::local_stream_member>;
 
 }
 
@@ -256,7 +157,7 @@ TEST_CASE("shm.mux the preference hook routes a same-host dial to the SHM member
         plexus::testing::posted_queue posted;
         shm_member shm{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
 
-        dummy_stream_member stream;
+        plexus::testing::local_stream_member stream;
         mux_t mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
 
         // The mux wraps each member's dialed channel into a polymorphic_byte_channel and
@@ -290,7 +191,7 @@ TEST_CASE("shm.mux the SAME dial falls back to the stream member when the ring a
         plexus::testing::posted_queue posted;
         shm_member shm{broker, posted.post(), plexus::io::reliability::reliable, plexus::io::congestion::block};
 
-        dummy_stream_member stream;
+        plexus::testing::local_stream_member stream;
         mux_t mux{shm, stream, {}, prefer_upgradeable_hook(shm)};
 
         std::string dialed_scheme;

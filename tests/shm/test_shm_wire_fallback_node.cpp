@@ -1,39 +1,32 @@
+#include "support/posted_queue.h"
+#include "support/noop_notifier.h"
+#include "support/local_stream_member.h"
+
 #include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/notifier_concept.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/same_host_geometry.h"
-#include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 #include "plexus/io/polymorphic_byte_channel.h"
-#include "plexus/io/detail/scheduler_key.h"
-#include "plexus/wire/close_cause.h"
-
-#include "plexus/detail/compat.h"
 
 #include "plexus/testing/platform.h"
 
-#include "support/posted_queue.h"
-#include "support/noop_notifier.h"
-
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
+#include <span>
 #include <atomic>
+#include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <memory>
-#include <span>
-#include <string>
-#include <string_view>
-#include <vector>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -78,85 +71,10 @@ static_assert(pio::notifier<spin_notifier>, "spin_notifier must satisfy the noti
 
 using member_t = pio::shm_mux_member<posix_shm_region_broker, spin_notifier>;
 
-// A co-tier stream channel + member serving the SAME "shm" scheme as the shm member, so a
-// same-host dial resolves to BOTH candidates and the preference hook's runtime choice is
-// observable — exactly the multi-candidate-per-tier shape the production hook decides
-// (mirrors the stream fallback the all-backends composition carries alongside shared
-// memory). It records whether the mux routed the dial to it.
-struct stream_channel
-{
-    endpoint ep;
-    std::uint64_t key = plexus::io::detail::next_scheduler_key();
-    void send(std::span<const std::byte>)
-    {
-    }
-    void close()
-    {
-    }
-    endpoint remote_endpoint() const
-    {
-        return ep;
-    }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
-    {
-    }
-    void on_closed(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void on_error(plexus::detail::move_only_function<void(pcore::io_error)>)
-    {
-    }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
-    {
-    }
-    std::size_t backpressured() const noexcept
-    {
-        return 0;
-    }
-    std::uint64_t scheduler_key() const noexcept
-    {
-        return key;
-    }
-};
-
-static_assert(pcore::byte_channel<stream_channel>, "stream_channel must satisfy byte_channel");
-
-struct stream_member
-{
-    using channel_type = stream_channel;
-    static constexpr std::array<std::string_view, 1> mux_schemes{"shm"};
-    static constexpr pcore::transport_kind mux_tier = pcore::transport_kind::local;
-
-    bool dialed = false;
-
-    void listen(const endpoint &)
-    {
-    }
-    void dial(const endpoint &)
-    {
-        dialed = true;
-    }
-    void close()
-    {
-    }
-    void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<stream_channel>)>)
-    {
-    }
-    void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<stream_channel>, const endpoint &)>)
-    {
-    }
-    void on_dial_failed(plexus::detail::move_only_function<void(const endpoint &, pcore::io_error)>)
-    {
-    }
-    void on_error(plexus::detail::move_only_function<void(pcore::io_error)>)
-    {
-    }
-};
-
 // The composition the node builds for a shm-bearing pack: the shm member FIRST (the
 // preference hook scans for its local_fast_eligible flag), the stream member second (the
 // fallback). The node installs prefer_upgradeable_hook(shm) over exactly this shape.
-using mux_t = pcore::multiplexing_transport<member_t, stream_member>;
+using mux_t = pcore::multiplexing_transport<member_t, plexus::testing::local_stream_member>;
 
 // Resolve which member a same-host "shm" dial routed to, with the topic provisioned by the
 // SAME verb the node declare path calls (set_topic_geometry). "shm" => the shm member
@@ -168,7 +86,7 @@ std::string route_for_mode(const std::string &fqn, pcore::ring_geometry_mode mod
     member_t member{broker, posted.post(), pcore::reliability::reliable, pcore::congestion::block};
     member.set_topic_geometry(fqn, 4 * k_kib, pcore::same_host_geometry{2u, mode});
 
-    stream_member stream;
+    plexus::testing::local_stream_member stream;
     mux_t mux{member, stream, {}, plexus::shm::prefer_upgradeable_hook(member)};
 
     std::string dialed_scheme;

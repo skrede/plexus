@@ -1,29 +1,28 @@
+#include "support/posted_queue.h"
+#include "support/noop_notifier.h"
+#include "support/always_live_slots.h"
+#include "support/heap_region_store.h"
+
 #include "plexus/shm/loan_status.h"
-#include "plexus/shm/region_broker_concept.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
-#include "plexus/shm/shm_mux_member.h"
+#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_selection.h"
+#include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/shm_topic_registry.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 
 #include "plexus/detail/compat.h"
 
-#include "support/posted_queue.h"
-#include "support/noop_notifier.h"
-#include "support/always_live_slots.h"
-
 #include <catch2/catch_test_macros.hpp>
 
+#include <span>
+#include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
-#include <map>
-#include <memory>
-#include <span>
-#include <string>
-#include <vector>
 
 // Two guarantees. (1) The safe-defaults regression: an unset/small declaration keeps the
 // byte-identical historical default ring (cell_count 256, slot 4096), so raising the
@@ -40,34 +39,12 @@ namespace {
 
 constexpr std::size_t k_mib = 1024 * 1024;
 
-// A heap-backed region store + broker (the create/attach seam) shared by the fail-closed legs. The OS-allocation-failed
-// leg flips fail_slab_create so the slab create returns region_status::failed, modeling an allocator that cannot map
-// the region the ceiling admitted.
-struct region_store
+// The heap region store + broker (the create/attach seam) shared by the fail-closed legs. The OS-allocation-failed leg
+// flips fail_slab_create so the slab create returns region_status::failed, modeling an allocator that cannot map the
+// region the ceiling admitted.
+struct region_store : plexus::testing::heap_region_store
 {
-    struct region
-    {
-        std::vector<std::byte> storage;
-        std::byte *base  = nullptr;
-        std::size_t size = 0;
-        bool live        = false;
-    };
-
-    std::map<std::string, std::shared_ptr<region>> regions;
     bool fail_slab_create = false;
-
-    std::shared_ptr<region> make(const std::string &name, std::size_t bytes)
-    {
-        auto r = std::make_shared<region>();
-        r->storage.assign(bytes + k_cache_line, std::byte{});
-        auto raw      = reinterpret_cast<std::uintptr_t>(r->storage.data());
-        auto algn     = (raw + k_cache_line - 1) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
-        r->base       = reinterpret_cast<std::byte *>(algn);
-        r->size       = bytes;
-        r->live       = true;
-        regions[name] = r;
-        return r;
-    }
 };
 
 class stub_handle : public plexus::testing::always_live_slots
@@ -113,7 +90,7 @@ public:
 
     std::span<std::byte> bytes() const
     {
-        return {m_region->base, m_region->size};
+        return m_region->bytes();
     }
 
 private:

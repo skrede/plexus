@@ -1,10 +1,14 @@
-#include "plexus/native/futex_notifier_primitive.h"
-#include "plexus/native/posix_shm_region_broker.h"
-#include "plexus/native/region_handle.h"
+#include "support/posted_queue.h"
+#include "support/region_names.h"
+#include "support/noop_notifier.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry.h"
+#include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
+#include "plexus/native/futex_notifier_primitive.h"
+
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_topic_registry.h"
@@ -18,23 +22,19 @@
 
 #include "plexus/testing/platform.h"
 
-#include "support/posted_queue.h"
-#include "support/region_names.h"
-#include "support/noop_notifier.h"
-
-#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_template_test_macros.hpp>
 
+#include <span>
 #include <atomic>
+#include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <optional>
-#include <span>
-#include <string>
 #include <string_view>
-#include <vector>
 #include <type_traits>
 
 #include <unistd.h>
@@ -100,7 +100,6 @@ struct coord
 {
     std::atomic<std::uint32_t> publisher_ready{0};
     std::atomic<std::uint32_t> subscriber_armed{0};
-    std::atomic<std::uint32_t> subscriber_done{0};
     std::atomic<std::uint32_t> bytes_ok{0};
 };
 
@@ -188,7 +187,6 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, plexu
         const bool ok = subscribe_and_check(fqn, c, payload);
         c->bytes_ok.store(ok ? 1u : 0u, std::memory_order_release);
         c->subscriber_armed.store(1, std::memory_order_release);
-        c->subscriber_done.store(1, std::memory_order_release);
         ::_exit(ok ? 0 : 1);
     }
 
@@ -217,30 +215,19 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, plexu
     member.on_accepted([&](std::unique_ptr<channel_t> ch) { channel = std::move(ch); });
     member.listen(endpoint{"shm", fqn});
 
-    if(!channel)
-    {
-        // The acquire failed closed (the probe-higher reliable leg): unblock the child and
-        // report the no-send verdict. The child never sees publisher_ready, so it exits.
-        int status = 0;
-        c->publisher_ready.store(1, std::memory_order_release); // let the child attach+exit
-        while(::waitpid(pid, &status, 0) < 0)
-            ;
-        ::munmap(c, sizeof(coord));
-        return false;
-    }
-
+    // A failed-closed acquire (the probe-higher reliable leg) sends nothing: the released child finds no ring to attach
+    // and exits, and the verdict is false.
     c->publisher_ready.store(1, std::memory_order_release);
-    while(c->subscriber_armed.load(std::memory_order_acquire) == 0)
-        ;
-
-    channel->send(std::span<const std::byte>{payload.data(), payload.size()});
-
-    while(c->subscriber_done.load(std::memory_order_acquire) == 0)
-        ;
+    if(channel)
+    {
+        while(c->subscriber_armed.load(std::memory_order_acquire) == 0)
+            ;
+        channel->send(std::span<const std::byte>{payload.data(), payload.size()});
+    }
     int status = 0;
     while(::waitpid(pid, &status, 0) < 0)
         ;
-    const bool ok = WIFEXITED(status) && WEXITSTATUS(status) == 0 && c->bytes_ok.load(std::memory_order_acquire) == 1u;
+    const bool ok = channel && WIFEXITED(status) && WEXITSTATUS(status) == 0 && c->bytes_ok.load(std::memory_order_acquire) == 1u;
     ::munmap(c, sizeof(coord));
     return ok;
 }
@@ -248,7 +235,6 @@ bool live_mux_roundtrip(const std::string &fqn, std::size_t payload_bytes, plexu
 // Whether the live mux member can mint the ring for (payload, mode, capacity) at all —
 // the fail-closed probe. Drives the member's acquire path; no fork. Returns true iff a
 // channel was handed up (the ring acquired), and the registry's bound diagnostic.
-template<typename Notifier>
 struct acquire_probe
 {
     bool channel_minted      = false;
@@ -256,7 +242,7 @@ struct acquire_probe
 };
 
 template<typename Notifier>
-acquire_probe<Notifier> probe_acquire(const std::string &fqn, std::size_t payload_bytes, plexus::io::ring_geometry_mode mode, std::uint32_t capacity)
+acquire_probe probe_acquire(const std::string &fqn, std::size_t payload_bytes, plexus::io::ring_geometry_mode mode, std::uint32_t capacity)
 {
     using member_t  = pio::shm_mux_member<posix_shm_region_broker, Notifier>;
     using channel_t = typename member_t::channel_type;
@@ -270,7 +256,7 @@ acquire_probe<Notifier> probe_acquire(const std::string &fqn, std::size_t payloa
     member.on_dialed([&](std::unique_ptr<channel_t> ch, const endpoint &) { channel = std::move(ch); });
     member.dial(endpoint{"shm", fqn});
 
-    acquire_probe<Notifier> r;
+    acquire_probe r;
     r.channel_minted = static_cast<bool>(channel);
     r.bound          = member.registry().last_acquire_failure().bound;
     return r;
@@ -309,7 +295,7 @@ TEMPLATE_TEST_CASE("shm.large_message probe-higher: reliable fails closed above 
     // (depth == capacity: 17 MiB * 16 = 272 MiB < 512 MiB) and round-trips.
     const std::string base = "topic.probe." + std::to_string(plexus::testing::process_id());
 
-    const acquire_probe<TestType> reliable = probe_acquire<TestType>(base + ".reliable", 17 * k_mib, plexus::io::ring_geometry_mode::reliable_preserving, /*capacity=*/16u);
+    const acquire_probe reliable = probe_acquire<TestType>(base + ".reliable", 17 * k_mib, plexus::io::ring_geometry_mode::reliable_preserving, /*capacity=*/16u);
     REQUIRE_FALSE(reliable.channel_minted);                      // fail-closed, no ring
     REQUIRE(reliable.bound == pio::acquire_bound::slab_ceiling); // the CEILING bound, not OS
 

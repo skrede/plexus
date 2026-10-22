@@ -16,31 +16,31 @@
 // The scaffold (manual_clock/manual_policy, k_seed/k_long_timeout, the discovery
 // stub, the two_node rendezvous + drive/advance idiom) mirrors the routing oracle.
 
-#include "plexus/io/known_peers.h"
-#include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
-#include "plexus/io/peer_session_registry.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/known_peers.h"
 #include "plexus/io/reliability.h"
-#include "plexus/io/detail/drop_event.h"
-
+#include "plexus/io/handshake_fsm.h"
+#include "plexus/io/routing_engine.h"
+#include "plexus/io/reconnect_config.h"
+#include "plexus/io/peer_session_registry.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_layout.h"
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/shm_topic_registry.h"
 #include "plexus/shm/region_broker_concept.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
 
@@ -74,6 +74,12 @@ using plexus::inproc::inproc_transport;
 using plexus::io::endpoint;
 using plexus::io::handshake_fsm_config;
 using plexus::io::reconnect_config;
+using plexus::shm::shm_channel;
+using plexus::shm::loan_status;
+using plexus::shm::broadcast_ring;
+using plexus::shm::slab_region_bytes;
+using plexus::shm::shm_topic_registry;
+using plexus::shm::control_region_bytes;
 
 namespace {
 
@@ -81,10 +87,10 @@ namespace {
 // Policy — identical in shape to the routing oracle's manual_clock.
 struct manual_clock
 {
-    using duration                  = std::chrono::nanoseconds;
-    using rep                       = duration::rep;
-    using period                    = duration::period;
-    using time_point                = std::chrono::time_point<manual_clock>;
+    using duration                                   = std::chrono::nanoseconds;
+    using rep                                        = duration::rep;
+    using period                                     = duration::period;
+    using time_point                                 = std::chrono::time_point<manual_clock>;
     [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};
@@ -339,6 +345,56 @@ public:
 };
 
 static_assert(plexus::shm::region_broker<stub_broker>);
+
+using shm_bytes = plexus::shm::shm_byte_channel<stub_broker, null_notifier>;
+
+// A ring whose every cell a held reader cursor pins, so the next best_effort + drop_newest claim finds no recyclable
+// cell. release() unpins it; it must run before the channels over the ring are destroyed.
+class pinned_ring
+{
+public:
+    pinned_ring()
+            : m_slab(slab_region_bytes(k_cells, k_slot))
+            , m_reader(0)
+            , m_control(control_region_bytes(k_cells))
+            , m_ring()
+    {
+        REQUIRE(broadcast_ring::create(m_control.span(), m_slab.span(), k_cells, k_slot, plexus::node_id{}, m_ring) == loan_status::ok);
+        REQUIRE(m_ring.register_cursor(m_reader));
+        std::uint64_t cursor = m_ring.tail_position();
+        for(std::uint64_t i = 0; i < k_cells; ++i)
+        {
+            broadcast_ring::claim_result claim;
+            REQUIRE(m_ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
+            const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
+            std::memcpy(claim.slab.data(), &v, sizeof(v));
+            REQUIRE(m_ring.commit(claim.position, sizeof(v)) == loan_status::ok);
+            REQUIRE(m_ring.pin_if_current(cursor) == true);
+            ++cursor;
+        }
+    }
+
+    broadcast_ring &ring() noexcept
+    {
+        return m_ring;
+    }
+
+    void release()
+    {
+        for(std::uint64_t i = 0; i < k_cells; ++i)
+            m_ring.refcount_at(i).fetch_sub(1);
+        m_ring.unregister_cursor(m_reader);
+    }
+
+private:
+    static constexpr std::uint64_t k_cells = 16;
+    static constexpr std::uint64_t k_slot  = 64;
+
+    backing_region m_slab;
+    std::uint32_t m_reader;
+    backing_region m_control;
+    broadcast_ring m_ring;
+};
 
 }
 
@@ -683,23 +739,9 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
           "an installed observer",
           "[integration][drop_seam][shm][congested]")
 {
-    using plexus::shm::broadcast_ring;
-    using plexus::shm::loan_status;
-    using plexus::shm::shm_channel;
-    using shm_bytes = plexus::shm::shm_byte_channel<stub_broker, null_notifier>;
-    using plexus::shm::shm_topic_registry;
-    using plexus::shm::control_region_bytes;
-    using plexus::shm::slab_region_bytes;
-
-    constexpr std::uint64_t cells = 16;
-    constexpr std::uint64_t slot  = 64;
-
     for(int loop = 0; loop < 4; ++loop)
     {
-        backing_region control{control_region_bytes(cells)};
-        backing_region slab{slab_region_bytes(cells, slot)};
-        broadcast_ring ring;
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, plexus::node_id{}, ring) == loan_status::ok);
+        pinned_ring pinned;
         null_notifier notify;
         recording_drop_observer observer;
 
@@ -708,27 +750,13 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         // the shm congestion drop edge posts into the observer). The byte_channel wraps the
         // channel and owns the on_drop edge; the registry is borrowed only for its dtor
         // release, which is a no-op for this hand-built (never-acquired) ring.
-        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        shm_channel<null_notifier> channel(pinned.ring(), notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
         stub_broker broker;
         shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
         plexus::testing::posted_queue posted;
         plexus::shm::post_fn post = posted.post();
         shm_bytes bytechan(registry, post, channel, "shm-topic", plexus::node_id{}, plexus::io::endpoint{"shm", "shm-topic"}, plexus::shm::ring_role::producer);
         bytechan.on_drop([&](const plexus::io::detail::drop_event &ev) { observer.on_drop(ev); });
-
-        std::uint32_t idx = 0;
-        REQUIRE(ring.register_cursor(idx));
-        std::uint64_t cursor = ring.tail_position();
-        for(std::uint64_t i = 0; i < cells; ++i)
-        {
-            broadcast_ring::claim_result claim;
-            REQUIRE(ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
-            const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
-            std::memcpy(claim.slab.data(), &v, sizeof(v));
-            REQUIRE(ring.commit(claim.position, sizeof(v)) == loan_status::ok);
-            REQUIRE(ring.pin_if_current(cursor) == true);
-            ++cursor;
-        }
 
         std::uint32_t payload = 0xFEEDFACEu;
         std::byte bytes[sizeof(payload)];
@@ -740,9 +768,7 @@ TEST_CASE("inproc drop seam: a congested shm send surfaces the congestion verdic
         REQUIRE(observer.any());
         REQUIRE(observer.seen.front() == plexus::io::detail::drop_cause::blocked);
 
-        for(std::uint64_t i = 0; i < cells; ++i)
-            ring.refcount_at(i).fetch_sub(1);
-        ring.unregister_cursor(idx);
+        pinned.release();
     }
 }
 
@@ -750,17 +776,6 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
           "ERASED production binding and the posted fan-out",
           "[integration][drop_seam][shm][congested][production]")
 {
-    using plexus::shm::broadcast_ring;
-    using plexus::shm::loan_status;
-    using plexus::shm::shm_channel;
-    using shm_bytes = plexus::shm::shm_byte_channel<stub_broker, null_notifier>;
-    using plexus::shm::shm_topic_registry;
-    using plexus::shm::control_region_bytes;
-    using plexus::shm::slab_region_bytes;
-
-    constexpr std::uint64_t cells = 16;
-    constexpr std::uint64_t slot  = 64;
-
     for(int loop = 0; loop < 4; ++loop)
     {
         manual_clock::reset();
@@ -778,13 +793,10 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         recording_drop_observer observer;
         eng.add_observer(observer);
 
-        backing_region control{control_region_bytes(cells)};
-        backing_region slab{slab_region_bytes(cells, slot)};
-        broadcast_ring ring;
-        REQUIRE(broadcast_ring::create(control.span(), slab.span(), cells, slot, plexus::node_id{}, ring) == loan_status::ok);
+        pinned_ring pinned;
         null_notifier notify;
 
-        shm_channel<null_notifier> channel(ring, notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
+        shm_channel<null_notifier> channel(pinned.ring(), notify, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
         stub_broker broker;
         shm_topic_registry<stub_broker, null_notifier> registry(broker, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
@@ -797,20 +809,6 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         plexus::io::polymorphic_byte_channel erased(std::make_unique<plexus::io::channel_adapter<shm_bytes>>(std::move(concrete)));
         erased.on_drop(eng.drop_sink());
 
-        std::uint32_t idx = 0;
-        REQUIRE(ring.register_cursor(idx));
-        std::uint64_t cursor = ring.tail_position();
-        for(std::uint64_t i = 0; i < cells; ++i)
-        {
-            broadcast_ring::claim_result claim;
-            REQUIRE(ring.claim_with_policy(sizeof(std::uint32_t), plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest, claim) == loan_status::ok);
-            const std::uint32_t v = 0xBEEF0000u | static_cast<std::uint32_t>(i);
-            std::memcpy(claim.slab.data(), &v, sizeof(v));
-            REQUIRE(ring.commit(claim.position, sizeof(v)) == loan_status::ok);
-            REQUIRE(ring.pin_if_current(cursor) == true);
-            ++cursor;
-        }
-
         std::uint32_t payload = 0xFEEDFACEu;
         std::byte bytes[sizeof(payload)];
         std::memcpy(bytes, &payload, sizeof(payload));
@@ -822,8 +820,6 @@ TEST_CASE("inproc drop seam: a congested shm send reaches an engine-installed ob
         REQUIRE(observer.any());
         REQUIRE(observer.seen.front() == plexus::io::detail::drop_cause::blocked);
 
-        for(std::uint64_t i = 0; i < cells; ++i)
-            ring.refcount_at(i).fetch_sub(1);
-        ring.unregister_cursor(idx);
+        pinned.release();
     }
 }
