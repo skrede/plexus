@@ -33,7 +33,7 @@ inline constexpr std::size_t k_max_consumers = 16;
 // Magic + version word stamped by the creator into the control header and
 // re-validated by an attacher before it trusts any other header field. A
 // mismatch means the region is foreign or a layout-incompatible build.
-inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'36'00ull; // "PLXRNG6\0"
+inline constexpr std::uint64_t k_ring_magic = 0x50'4c'58'52'4e'47'37'00ull; // "PLXRNG7\0"
 
 // The retired stamp: the ring's names are being removed, so a joiner must not adopt it.
 inline constexpr std::uint64_t k_ring_retired = 0x50'4c'58'52'45'54'49'52ull; // "PLXRETIR"

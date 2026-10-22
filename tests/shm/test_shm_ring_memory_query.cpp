@@ -192,19 +192,18 @@ TEST_CASE("shm.ring_memory_query ring_memory_for equals the layout helpers for a
 
 TEST_CASE("shm.ring_memory_query the 16 MiB reliable_preserving cost at C=16 is the depth-32 figure", "[shm][ring_memory_query]")
 {
-    // The expensive corner: a 16 MiB payload at the full 16-consumer capacity is a
-    // depth-32 ring (next power of two STRICTLY above 16, never depth-17). slab = 32 *
-    // round_up_8(16 MiB) = 512 MiB; control = 1344 + 32*64 = 3392 bytes. This pins the
-    // corrected math so a future depth-17 (or deep-tier) regression is caught.
+    // A 16 MiB payload at the full 16-consumer capacity is a depth-32 ring (never depth-17), whose 512 MiB slot area the
+    // default ceiling admits.
     const std::uint32_t payload = static_cast<std::uint32_t>(16 * k_mib);
     const ring_geometry g       = ring_geometry_for(payload, ring_geometry_mode::reliable_preserving, 16u);
     REQUIRE(g.cell_count == 32u);
     REQUIRE(g.slot_capacity == 16 * k_mib);
+    REQUIRE(slab_payload_bytes(g.cell_count, g.slot_capacity) == static_cast<std::size_t>(512) * k_mib);
 
-    const std::size_t slab = slab_region_bytes(g.cell_count, g.slot_capacity);
-    REQUIRE(slab == static_cast<std::size_t>(512) * k_mib);
-
-    const std::size_t expected = control_region_bytes(g.cell_count) + slab; // 512 MiB + 3392 bytes
+    acquire_failure failure{};
+    CHECK(detail::topic_within_ceiling(g, k_max_ring_slab_bytes, failure));
+    CHECK(failure.ask_bytes == 0);
+    const std::size_t expected = control_region_bytes(g.cell_count) + slab_region_bytes(g.cell_count, g.slot_capacity);
     REQUIRE(ring_memory_for(payload, ring_geometry_mode::reliable_preserving, 16u) == expected);
 }
 

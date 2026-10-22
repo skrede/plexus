@@ -11,6 +11,7 @@
 
 #include "plexus/node_id.h"
 
+#include <new>
 #include <span>
 #include <cstddef>
 #include <cstdint>
@@ -40,7 +41,16 @@ void attach_and_drive(fuzz_input &in, fuzz_region &control, fuzz_region &slab, n
     driver.run();
 }
 
-// The control region takes the size the image records, as the slab does, so a consistent header is reachable.
+void stamp_slab(fuzz_region &slab, std::uint64_t identity)
+{
+    if(slab.bytes().size() < sizeof(slab_header_t))
+        return;
+    auto *header = ::new(slab.bytes().data()) slab_header_t{};
+    header->identity.store(identity, std::memory_order_relaxed);
+}
+
+// The control region takes the size the image records, as the slab does, and the slab the image's identity unless the
+// mode asks for another ring's slab, so a consistent pair is reachable.
 void fuzz_raw(fuzz_input &in, std::uint8_t mode)
 {
     const auto image         = in.take(static_cast<std::size_t>(in.uint(2)));
@@ -50,6 +60,8 @@ void fuzz_raw(fuzz_input &in, std::uint8_t mode)
         return;
     fuzz_region control{image, static_cast<std::size_t>(control_bytes <= k_max_control_bytes ? control_bytes : image.size())};
     fuzz_region slab{static_cast<std::size_t>(slab_bytes)};
+    if((mode & 4) == 0)
+        stamp_slab(slab, image_field<std::uint64_t>(image, offsetof(control_header_t, identity)));
     attach_and_drive(in, control, slab, image_field<node_id>(image, offsetof(control_header_t, publisher)), (mode & 2) != 0);
 }
 

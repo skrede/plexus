@@ -25,7 +25,7 @@ void fill_header(control_header_t &h, std::uint64_t cells, std::uint64_t slot)
     h.slot_capacity     = slot;
     h.consumer_capacity = k_max_consumers;
     h.control_bytes     = control_region_bytes(cells);
-    h.slab_bytes        = cells * round_up_8(slot);
+    h.slab_bytes        = slab_region_bytes(cells, slot);
     h.publisher         = publisher(1);
 }
 
@@ -107,7 +107,7 @@ TEST_CASE("ring_attach_bounds a ring another publisher owns is rejected", "[shm]
     REQUIRE(broadcast_ring::attach(r.control.span(), r.slab.span(), publisher(1), attacher) == loan_status::ok);
 }
 
-TEST_CASE("ring_attach_bounds a slab another ring stamped is rejected", "[shm][ring_attach_bounds][!shouldfail]")
+TEST_CASE("ring_attach_bounds a slab another ring stamped is rejected", "[shm][ring_attach_bounds]")
 {
     created_ring first{0, 0};
     created_ring second{0, 0};

@@ -25,7 +25,7 @@ loan_status attach_stamped(std::uint64_t magic)
 
 }
 
-TEST_CASE("ring_magic a region stamped with the previous layout magic fails closed", "[shm][ring_magic][!shouldfail]")
+TEST_CASE("ring_magic a region stamped with the previous layout magic fails closed", "[shm][ring_magic]")
 {
     REQUIRE(attach_stamped(k_previous_ring_magic) == loan_status::rejected);
 }

@@ -26,10 +26,10 @@
 namespace plexus::shm::detail {
 
 // Rejects an over-ceiling ring before any region is minted (a pure query, no broker touch),
-// so an oversize declaration never orphans the control region.
+// so an oversize declaration never orphans the control region. The ceiling bounds the slot area, not the slab header.
 inline bool topic_within_ceiling(const shm::ring_geometry &geom, std::uint64_t max_ring_slab_bytes, shm::acquire_failure &failure)
 {
-    const std::uint64_t ask = shm::slab_region_bytes(geom.cell_count, geom.slot_capacity);
+    const std::uint64_t ask = shm::slab_payload_bytes(geom.cell_count, geom.slot_capacity);
     if(ask <= max_ring_slab_bytes)
         return true;
     failure = shm::acquire_failure{shm::acquire_bound::slab_ceiling, ask, max_ring_slab_bytes, shm::region_status::ok};

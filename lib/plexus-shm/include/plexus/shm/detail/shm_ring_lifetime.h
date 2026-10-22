@@ -5,6 +5,7 @@
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_attach.h"
 #include "plexus/shm/ring_header.h"
 #include "plexus/shm/waiter_loss.h"
 #include "plexus/shm/slot_liveness.h"
@@ -20,11 +21,10 @@
 
 namespace plexus::shm::detail {
 
-// A producer holds the creator slot before it stamps or adopts a ring. A name is removed only by the creator slot's
-// holder right after it stores k_ring_retired over the stamp it found, so the name still belongs to that ring, or by a
-// holder of every slot of a retired ring once a fresh attach of the name reads that ring's identity. The last local
-// holder retires the ring only once it holds every slot in one step and removes its names only under that proof, and a
-// joiner or a returning producer re-reads the magic after taking its own slot.
+// A producer holds the creator slot before it stamps or adopts a ring. A name is removed only by a holder of a retired
+// ring's creator slot or of every slot, once a fresh attach of the name reads that ring's identity; a holder that
+// retires a ring it never stamped first gives it one. The last local holder retires the ring only once it holds every
+// slot in one step, and a joiner or a returning producer re-reads the magic after taking its own slot.
 struct ring_lifetime
 {
     static bool retired(broadcast_ring &ring) noexcept
@@ -98,20 +98,23 @@ struct ring_lifetime
         return same;
     }
 
+    // A ring retired before its stamp is first given an identity, which the release on the retired stamp publishes.
     template<typename Entry>
-    static bool stamp_retired(Entry &e, std::uint64_t found) noexcept
+    static bool stamp_retired(Entry &e, std::uint64_t found)
     {
         control_header_t *header = ring_names::header_of(e.control.bytes());
-        return header != nullptr && header->magic.compare_exchange_strong(found, k_ring_retired, std::memory_order_release, std::memory_order_relaxed);
+        if(header == nullptr)
+            return false;
+        if(found == 0)
+            give_identity(*header);
+        return header->magic.compare_exchange_strong(found, k_ring_retired, std::memory_order_release, std::memory_order_relaxed);
     }
 
-    // The slab's name goes first: once the control name is gone a newcomer may create both afresh, and this ring must not
-    // remove the newcomer's slab.
-    template<typename Entry>
-    static void unlink(Entry &e)
+    static void give_identity(control_header_t &header)
     {
-        e.slab.unlink_name();
-        e.control.unlink_name();
+        std::uint64_t none = 0;
+        if(header.magic.load(std::memory_order_acquire) == 0 && header.identity.load(std::memory_order_relaxed) == 0)
+            header.identity.compare_exchange_strong(none, draw_ring_identity(), std::memory_order_relaxed);
     }
 
     template<typename Entry>

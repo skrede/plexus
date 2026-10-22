@@ -51,7 +51,7 @@ private:
         return acquire_result::failed;
     }
 
-    // A mint that fails after its fresh create retires the name it created.
+    // A mint that fails after its fresh create retires its region, and removes the names only while they still map it.
     template<typename Registry, typename Entry>
     static acquire_result mint(Registry &r, Entry &e, const std::string &ctrl_name, const ring_geometry &geom, const node_id &publisher, std::uint64_t capacity)
     {
@@ -59,7 +59,7 @@ private:
             return fail(r, acquire_failure{held});
         const acquire_result minted = topic_mint(r.m_broker, r.m_last_failure, e, ctrl_name + ".s", geom, publisher, capacity);
         if(minted == acquire_result::failed && ring_lifetime::stamp_retired(e, 0))
-            ring_lifetime::unlink(e);
+            ring_names::remove_names(r.m_broker, e, ctrl_name);
         return minted;
     }
 
@@ -113,15 +113,17 @@ private:
         return h.cell_count == geom.cell_count && h.slot_capacity == geom.slot_capacity && h.consumer_capacity == capacity ? fit::same : fit::other_geometry;
     }
 
-    // Readers still attached learn of the retire from their next wake. A name the platform keeps while another holder maps
-    // it cannot be created afresh, so the pair is incompatible until that holder leaves.
+    // Readers still attached learn of the retire from their next wake. A name that no longer maps the retired ring is
+    // another ring's. A name the platform keeps while another holder maps it cannot be created afresh, so the pair is
+    // incompatible until that holder leaves.
     template<typename Registry, typename Entry>
     static acquire_result recreate(Registry &r, Entry &e, const std::string &ctrl_name, const ring_geometry &geom, const node_id &publisher, std::uint64_t capacity, std::uint64_t found)
     {
         if(!ring_lifetime::stamp_retired(e, found))
             return fail(r, acquire_failure{acquire_bound::transient_join});
         wake(r, e, ctrl_name);
-        ring_lifetime::unlink(e);
+        if(!ring_names::remove_names(r.m_broker, e, ctrl_name))
+            return fail(r, acquire_failure{acquire_bound::transient_join});
         return remint(r, e, ctrl_name, geom, publisher, capacity, acquire_bound::incompatible);
     }
 

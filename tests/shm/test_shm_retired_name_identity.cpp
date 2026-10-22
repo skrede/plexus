@@ -136,7 +136,7 @@ TEST_CASE("retired_name_identity of two acquirers of a crash-left name one remov
 }
 
 TEST_CASE("retired_name_identity a retirer killed after it retired a ring it never stamped and before it removed the name leaves a name the next acquire clears",
-          "[shm][retired_name_identity][!shouldfail]")
+          "[shm][retired_name_identity]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("retired_unstamped")};
@@ -161,7 +161,7 @@ TEST_CASE("retired_name_identity a retirer killed after it retired a ring it nev
 // The dead minter created the control region and left before its creator-slot take; the name is removed from outside
 // the protocol, and another producer mints, between the adopter's attach and its take.
 TEST_CASE("retired_name_identity an adopter whose dead minter's name another producer took over before its creator-slot take removes nothing",
-          "[shm][retired_name_identity][!shouldfail]")
+          "[shm][retired_name_identity]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("retired_adopter")};

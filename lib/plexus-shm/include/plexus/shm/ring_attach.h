@@ -84,7 +84,7 @@ inline loan_status header_admits(const control_header_t &h, std::size_t control_
         return loan_status::rejected;
     if(h.control_bytes != control_size || h.slab_bytes != slab_size)
         return loan_status::rejected;
-    if(h.control_bytes < control_region_bytes(h.cell_count) || h.slab_bytes < h.cell_count * round_up_8(h.slot_capacity))
+    if(h.control_bytes < control_region_bytes(h.cell_count) || h.slab_bytes < slab_region_bytes(h.cell_count, h.slot_capacity))
         return loan_status::rejected;
     return h.publisher == publisher ? loan_status::ok : loan_status::rejected;
 }
@@ -94,7 +94,7 @@ void bind_ring(Ring &out, std::span<std::byte> control, std::span<std::byte> sla
                std::uint64_t mask, std::uint64_t consumer_capacity) noexcept
 {
     out.m_control           = control;
-    out.m_slab              = slab;
+    out.m_slab              = slab.subspan(sizeof(slab_header_t));
     out.m_header            = header;
     out.m_cells             = cells;
     out.m_cell_count        = cell_count;
@@ -118,7 +118,9 @@ loan_status ring_create(std::span<std::byte> control, std::span<std::byte> slab,
 
     control_header_t *header = init_header(control, slab, cell_count, slot_capacity, consumer_capacity, publisher);
     cell_t *cells            = init_cells(control, cell_count);
-    // Stamped last with release, so a joiner whose acquire load sees the stamp sees every field and cell above.
+    auto *slab_header        = ::new(slab.data()) slab_header_t{};
+    slab_header->identity.store(header->identity.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    // Stamped last with release, so a joiner whose acquire load sees the stamp sees every field, cell and the slab's identity.
     header->magic.store(k_ring_magic, std::memory_order_release);
 
     bind_ring(out, control, slab, header, cells, cell_count, slot_capacity, cell_count - 1, consumer_capacity);
@@ -144,6 +146,9 @@ loan_status ring_attach(std::span<std::byte> control, std::span<std::byte> slab,
         return loan_status::rejected;
     if(const loan_status admitted = header_admits(*header, control.size(), slab.size(), publisher); admitted != loan_status::ok)
         return admitted;
+    // This check is what keeps a reader from pairing one ring's control region with another ring's slab.
+    if(slab_identity_of(slab) != header->identity.load(std::memory_order_relaxed))
+        return loan_status::rejected;
 
     auto *cells = std::launder(reinterpret_cast<cell_t *>(control.data() + sizeof(control_header_t)));
     bind_ring(out, control, slab, header, cells, header->cell_count, header->slot_capacity, header->mask, header->consumer_capacity);

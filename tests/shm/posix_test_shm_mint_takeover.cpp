@@ -114,7 +114,7 @@ TEST_CASE("mint_takeover a holder whose control name another producer created an
 // The control name is removed from outside the protocol, and another producer mints, between the minter's exclusive
 // create and its creator-slot take; the slab create that fails is the test broker's.
 TEST_CASE("mint_takeover a minter whose control name another producer took over before its creator-slot take, and whose slab create then fails, removes nothing",
-          "[shm][mint_takeover][!shouldfail]")
+          "[shm][mint_takeover]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("mint_failed")};
