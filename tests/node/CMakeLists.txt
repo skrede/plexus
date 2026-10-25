@@ -180,6 +180,22 @@ target_link_libraries(test_typed_codec_concepts PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_codec_concepts TEST_PREFIX "node.")
 
+# Each endpoint over a codec without a type identity must fail to compile. The ctest builds the
+# excluded target and passes on the diagnostic, not on the build's exit code; RUN_SERIAL keeps the
+# nested build in this tree from racing another.
+foreach(_endpoint publisher subscriber value_logger)
+    add_executable(codec_identity_fail_${_endpoint} EXCLUDE_FROM_ALL codec_identity_fail_${_endpoint}.cpp)
+    target_link_libraries(codec_identity_fail_${_endpoint} PRIVATE
+        plexus::plexus
+        plexus::inproc
+        plexus::discovery)
+    add_test(NAME node.codec_identity_fail_${_endpoint}
+        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target codec_identity_fail_${_endpoint} --config $<CONFIG>)
+    set_tests_properties(node.codec_identity_fail_${_endpoint} PROPERTIES
+        PASS_REGULAR_EXPRESSION "plexus: a typed endpoint needs a type identity"
+        RUN_SERIAL TRUE)
+endforeach()
+
 # The late-joiner gate: a peer that joins after the demand is in place exchanges data with
 # no user action on join timing, looped over both join orders, every iteration asserted.
 add_executable(test_late_join test_late_join.cpp)
