@@ -6,28 +6,19 @@
 #include "plexus/inproc/inproc_executor.h"
 
 #include "plexus/policy.h"
-#include "plexus/detail/compat.h"
+#include "plexus/executor_verbs.h"
 
 #include <chrono>
 #include <memory>
-#include <utility>
 
 namespace plexus::inproc {
 
-// The deterministic inproc Policy: the step-executor (by reference), the inproc byte_channel, the
-// virtual-clock timer, and the shared_ptr<const void> byte_owner the receive seam binds wire_bytes
-// views to. post() forwards onto the executor.
-struct inproc_policy
+// The deterministic inproc Policy; the receive seam binds wire_bytes views to its byte_owner.
+struct inproc_policy : plexus::executor_verbs<inproc_executor<>>
 {
-    using executor_type     = inproc_executor<> &;
     using byte_channel_type = inproc_channel<>;
     using timer_type        = inproc_timer<>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 }

@@ -3,29 +3,19 @@
 
 #include "plexus/asio/asio_timer.h"
 #include "plexus/asio/unix_channel.h"
+#include "plexus/asio/io_context_verbs.h"
 
 #include "plexus/policy.h"
-#include "plexus/detail/compat.h"
-
-#include <asio/post.hpp>
-#include <asio/io_context.hpp>
 
 #include <memory>
-#include <utility>
 
 namespace plexus::asio {
 
-struct unix_policy
+struct unix_policy : io_context_verbs
 {
-    using executor_type     = ::asio::io_context &;
     using byte_channel_type = unix_channel;
     using timer_type        = asio_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ::asio::post(ex, std::move(fn));
-    }
 };
 
 }

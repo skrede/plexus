@@ -12,6 +12,7 @@
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/close_notification.h"
 #include "plexus/policy.h"
+#include "plexus/executor_verbs.h"
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -175,21 +176,12 @@ private:
     }
 };
 
-// The deterministic test Policy: reuses the inproc step-executor and virtual-clock
-// timer (this is a DRY consolidation, not a new mechanism) and binds the recording
-// mock as its byte_channel. The static_assert is the compile-time gate proving the
-// substrate satisfies the seam.
-struct mock_policy
+// The deterministic test Policy: the inproc step-executor and virtual-clock timer over the recording mock_channel.
+struct mock_policy : plexus::executor_verbs<plexus::inproc::inproc_executor<test_clock>>
 {
-    using executor_type     = plexus::inproc::inproc_executor<test_clock> &;
     using byte_channel_type = mock_channel<test_clock>;
     using timer_type        = plexus::inproc::inproc_timer<test_clock>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 }
