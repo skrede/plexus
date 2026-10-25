@@ -46,19 +46,22 @@ class value_logger
 public:
     using value_type = typename Codec::value_type;
 
+    static_assert(typed_codec<Codec>,
+                  "plexus: a value_logger needs a codec satisfying typed_codec "
+                  "(value_type; encode(const value_type&) -> wire_bytes<>; "
+                  "decode(span, value_type&) -> expected<void, error_code>).");
+    static_assert(identity_bearing<Codec>,
+                  "plexus: a typed endpoint needs a type identity — give the value_logger's codec a "
+                  "type_info() -> type_identity member, or wrap it in plexus::with_identity.");
+    static_assert(loggable_value<Projection, value_type>,
+                  "plexus: a value_logger needs the value type to either supply a "
+                  "value_projection (column names + emit_fields/emit_json) or be "
+                  "streamable to an ostream (the operator<< text floor).");
+
     template<typename Policy, typename... NodeTs>
     value_logger(node<Policy, NodeTs...> &n, std::string_view fqn, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
             : m_state(std::make_unique<state>(std::move(codec), std::move(projection), opts.format, opts.out))
     {
-        static_assert(typed_codec<Codec>,
-                      "plexus: a value_logger needs a codec satisfying typed_codec "
-                      "(value_type; encode(const value_type&) -> wire_bytes<>; "
-                      "decode(span, value_type&) -> expected<void, error_code>).");
-        static_assert(loggable_value<Projection, value_type>,
-                      "plexus: a value_logger needs the value type to either supply a "
-                      "value_projection (column names + emit_fields/emit_json) or be "
-                      "streamable to an ostream (the operator<< text floor).");
-
         const auto identity    = resolve_identity(m_state->codec, opts.type_id);
         io::subscriber_qos qos = opts.qos;
         qos.posture            = opts.posture;

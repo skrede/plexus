@@ -42,36 +42,16 @@ concept identity_bearing = requires(const C &c) {
     { c.type_info() } -> std::convertible_to<type_identity>;
 };
 
-// An explicit type_identity argument always wins; otherwise an identity_bearing codec
-// supplies it. There is no typeid / RTTI fallback — an unresolved identity is a compile error.
+// An explicit override wins; otherwise the codec supplies its own identity. There is no typeid / RTTI
+// fallback: a codec without an identity is a compile error.
 template<typename Codec>
-constexpr type_identity resolve_identity(const Codec &, type_identity explicit_identity)
-{
-    return explicit_identity;
-}
-
-template<typename Codec>
-constexpr type_identity resolve_identity(const Codec &codec)
+constexpr type_identity resolve_identity(const Codec &codec, std::optional<type_identity> override_identity)
 {
     static_assert(identity_bearing<Codec>,
-                  "plexus: a typed endpoint needs a type identity — either pass an "
-                  "explicit type_identity argument, or give the codec a "
-                  "type_info() -> type_identity member. There is no typeid fallback.");
-    if constexpr(identity_bearing<Codec>)
-        return codec.type_info();
-    else
-        return {};
-}
-
-// A non-identity-bearing codec instantiates only the explicit path, so its empty-optional case
-// never compiles the (ill-formed) type_info read.
-template<typename Codec>
-constexpr type_identity resolve_identity(const Codec &codec, std::optional<type_identity> explicit_identity)
-{
-    if constexpr(identity_bearing<Codec>)
-        return explicit_identity ? *explicit_identity : codec.type_info();
-    else
-        return resolve_identity(codec, explicit_identity.value());
+                  "plexus: a typed endpoint needs a type identity — give the codec a "
+                  "type_info() -> type_identity member, or wrap it in plexus::with_identity. "
+                  "There is no typeid fallback.");
+    return override_identity ? *override_identity : codec.type_info();
 }
 
 }

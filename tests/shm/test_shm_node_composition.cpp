@@ -8,6 +8,7 @@
 #include "plexus/expected.h"
 #include "plexus/publisher.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -94,6 +95,10 @@ struct probe_codec
     plexus::expected<void, std::error_code> decode(std::span<const std::byte>, int &) const
     {
         return {};
+    }
+    plexus::type_identity type_info() const
+    {
+        return {0x9B0BEu, "probe"};
     }
 };
 

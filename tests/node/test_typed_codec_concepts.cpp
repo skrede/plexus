@@ -1,13 +1,10 @@
-// The injected-codec concept vocabulary, verified at compile time and runtime: a minimal
-// hand-rolled codec satisfies typed_codec; adding a type_info() member makes it
-// identity_bearing; resolve_identity prefers an explicit argument over the codec's
-// type_info, and resolves a non-identity-bearing codec only through an explicit argument.
-// The no-identity compile-error path is documented via the trait value
-// (!identity_bearing<plain_codec>) — a negative-compile harness is not worth the build
-// machinery. The codecs are hand-rolled here; plexus never names a serializer library.
+// The injected-codec concept vocabulary: a hand-rolled codec satisfies typed_codec, a type_info() member makes it
+// identity_bearing, and resolve_identity prefers an explicit override over the codec's own. The codecs are hand-rolled
+// here; plexus never names a serializer library.
 
 #include "plexus/expected.h"
 #include "plexus/typed_codec.h"
+#include "plexus/with_identity.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -64,9 +61,7 @@ struct identified_codec
 static_assert(plexus::typed_codec<plain_codec>, "a minimal encode/decode codec satisfies typed_codec");
 static_assert(plexus::typed_codec<identified_codec>, "adding type_info does not break typed_codec");
 
-static_assert(!plexus::identity_bearing<plain_codec>,
-              "a codec without type_info is not identity_bearing (the no-identity path is a "
-              "compile error only without an explicit argument)");
+static_assert(!plexus::identity_bearing<plain_codec>, "a codec without type_info is not identity_bearing");
 static_assert(plexus::identity_bearing<identified_codec>, "a codec with type_info() -> type_identity is identity_bearing");
 
 }
@@ -85,9 +80,9 @@ TEST_CASE("resolve_identity prefers an explicit argument over the codec's type_i
     REQUIRE(resolved.type_id == 0x1234u);
 }
 
-TEST_CASE("resolve_identity resolves a non-identity-bearing codec through an explicit argument", "[node][typed][concepts]")
+TEST_CASE("resolve_identity resolves a codec adapted by with_identity to the identity it was given", "[node][typed][concepts]")
 {
-    plain_codec codec;
-    const auto resolved = plexus::resolve_identity(codec, plexus::type_identity{0x5678u, "explicit"});
+    plexus::with_identity codec{plain_codec{}, plexus::type_identity{0x5678u, "adapted"}};
+    const auto resolved = plexus::resolve_identity(codec, std::nullopt);
     REQUIRE(resolved.type_id == 0x5678u);
 }

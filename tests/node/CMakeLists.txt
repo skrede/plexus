@@ -180,6 +180,14 @@ target_link_libraries(test_typed_codec_concepts PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_typed_codec_concepts TEST_PREFIX "node.")
 
+add_executable(test_with_identity test_with_identity.cpp)
+target_link_libraries(test_with_identity PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_with_identity TEST_PREFIX "node.")
+
 # Each endpoint over a codec without a type identity must fail to compile. The ctest builds the
 # excluded target and passes on the diagnostic, not on the build's exit code; RUN_SERIAL keeps the
 # nested build in this tree from racing another.

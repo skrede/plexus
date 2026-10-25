@@ -17,7 +17,8 @@ enum class log_format
     text
 };
 
-// out is the only required field (a reference has no default) and must outlive the handle.
+// out is the only required field (a reference has no default) and must outlive the handle. type_id
+// overrides the identity of a codec that carries one; absent, the codec's own is used.
 struct value_logger_options
 {
     std::ostream &out;

@@ -30,8 +30,9 @@ template<typename Codec>
 class subscriber;
 
 // posture is the typed attach gate (lenient attaches to an untyped producer; strict refuses).
-// on_decode_failure absent is drop+count+warn, present hands the raw bytes + errc. An explicit
-// type_id overrides the codec's own; capture absent falls back to the node-level recording_qos.
+// on_decode_failure absent is drop+count+warn, present hands the raw bytes + errc. type_id
+// overrides the identity of a codec that carries one, absent uses the codec's own; capture absent
+// falls back to the node-level recording_qos.
 struct typed_subscriber_options
 {
     io::subscriber_qos qos{};
@@ -116,6 +117,9 @@ public:
                       "plexus: a typed subscriber needs a codec satisfying typed_codec "
                       "(value_type; encode(const value_type&) -> wire_bytes<>; "
                       "decode(span, value_type&) -> expected<void, error_code>).");
+        static_assert(identity_bearing<Codec>,
+                      "plexus: a typed endpoint needs a type identity — give the subscriber's codec a "
+                      "type_info() -> type_identity member, or wrap it in plexus::with_identity.");
 
         const auto identity    = resolve_identity(m_state->codec, opts.type_id);
         io::subscriber_qos qos = opts.qos;

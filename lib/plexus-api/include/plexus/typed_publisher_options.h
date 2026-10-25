@@ -12,8 +12,9 @@
 
 namespace plexus {
 
-// An explicit type_id overrides the codec's own. capture and geometry are optional because absence is meaningful:
-// unset falls back to the node-level (capture) or transport-level (geometry) default, present overrides per topic.
+// type_id overrides the identity of a codec that carries one; absent, the codec's own is declared. capture and
+// geometry are optional because absence is meaningful: unset falls back to the node-level (capture) or
+// transport-level (geometry) default, present overrides per topic.
 struct typed_publisher_options
 {
     topic_qos qos{};
