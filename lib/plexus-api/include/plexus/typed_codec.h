@@ -44,13 +44,9 @@ concept identity_bearing = requires(const C &c) {
 
 // An explicit override wins; otherwise the codec supplies its own identity. There is no typeid / RTTI
 // fallback: a codec without an identity is a compile error.
-template<typename Codec>
+template<identity_bearing Codec>
 constexpr type_identity resolve_identity(const Codec &codec, std::optional<type_identity> override_identity)
 {
-    static_assert(identity_bearing<Codec>,
-                  "plexus: a typed endpoint needs a type identity — give the codec a "
-                  "type_info() -> type_identity member, or wrap it in plexus::with_identity. "
-                  "There is no typeid fallback.");
     return override_identity ? *override_identity : codec.type_info();
 }
 

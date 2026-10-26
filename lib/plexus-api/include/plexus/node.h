@@ -696,6 +696,7 @@ private:
         s.retire_procedure  = [](void *ctx, std::string_view fqn) { detail::retire_procedure_seam(affine(ctx, "retire_procedure"), fqn); };
         s.call              = [](void *ctx, std::string_view fqn, std::span<const std::byte> param, io::on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
         { detail::call_seam(affine(ctx, "call"), fqn, param, std::move(on_reply), deadline); };
+        s.affine = [](void *ctx, const char *member) { affine(ctx, member); };
         return s;
     }
 

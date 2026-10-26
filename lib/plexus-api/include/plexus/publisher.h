@@ -79,6 +79,14 @@ class publisher
 public:
     using value_type = typename Codec::value_type;
 
+    static_assert(typed_codec<Codec>,
+                  "plexus: a typed publisher needs a codec satisfying typed_codec "
+                  "(value_type; encode(const value_type&) -> wire_bytes<>; "
+                  "decode(span, value_type&) -> expected<void, error_code>).");
+    static_assert(identity_bearing<Codec>,
+                  "plexus: a typed endpoint needs a type identity — give the publisher's codec a "
+                  "type_info() -> type_identity member, or wrap it in plexus::with_identity.");
+
     template<typename Policy, typename... NodeTs>
     publisher(node<Policy, NodeTs...> &n, std::string_view fqn, const typed_publisher_options &opts = {}, Codec codec = {})
             : m_seam(n.endpoint_seam_for())
@@ -87,13 +95,6 @@ public:
             , m_identity(resolve_identity(m_codec, opts.type_id))
             , m_pool(opts.pool_depth)
     {
-        static_assert(typed_codec<Codec>,
-                      "plexus: a typed publisher needs a codec satisfying typed_codec "
-                      "(value_type; encode(const value_type&) -> wire_bytes<>; "
-                      "decode(span, value_type&) -> expected<void, error_code>).");
-        static_assert(identity_bearing<Codec>,
-                      "plexus: a typed endpoint needs a type identity — give the publisher's codec a "
-                      "type_info() -> type_identity member, or wrap it in plexus::with_identity.");
         m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity, m_identity.type_id, m_identity.type_name, m_identity.schema_hint, opts.geometry,
                                  opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
     }

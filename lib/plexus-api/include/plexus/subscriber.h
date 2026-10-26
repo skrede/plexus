@@ -17,6 +17,7 @@
 #include <span>
 #include <memory>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <optional>
 #include <functional>
@@ -103,6 +104,14 @@ public:
     using typed_callback = plexus::detail::move_only_function<void(const value_type &, const io::message_info &)>;
     using state          = plexus::detail::subscriber_state<Codec, value_type, typed_callback>;
 
+    static_assert(typed_codec<Codec>,
+                  "plexus: a typed subscriber needs a codec satisfying typed_codec "
+                  "(value_type; encode(const value_type&) -> wire_bytes<>; "
+                  "decode(span, value_type&) -> expected<void, error_code>).");
+    static_assert(identity_bearing<Codec>,
+                  "plexus: a typed endpoint needs a type identity — give the subscriber's codec a "
+                  "type_info() -> type_identity member, or wrap it in plexus::with_identity.");
+
     template<typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, Cb cb)
             : subscriber(n, fqn, typed_subscriber_options{}, std::move(cb), Codec{})
@@ -111,37 +120,23 @@ public:
 
     template<typename Policy, typename... NodeTs, typename Cb>
     subscriber(node<Policy, NodeTs...> &n, std::string_view fqn, const typed_subscriber_options &opts, Cb cb, Codec codec = {})
-            : m_state(std::make_unique<state>(std::move(codec), plexus::detail::adapt_typed_callback<value_type>(std::move(cb)), opts.on_decode_failure))
+            : m_seam(n.endpoint_seam_for())
+            , m_state(std::make_unique<state>(std::move(codec), plexus::detail::adapt_typed_callback<value_type>(std::move(cb)), opts.on_decode_failure))
+            , m_rid(enroll<Cb>(m_seam, fqn, opts, *m_state))
     {
-        static_assert(typed_codec<Codec>,
-                      "plexus: a typed subscriber needs a codec satisfying typed_codec "
-                      "(value_type; encode(const value_type&) -> wire_bytes<>; "
-                      "decode(span, value_type&) -> expected<void, error_code>).");
-        static_assert(identity_bearing<Codec>,
-                      "plexus: a typed endpoint needs a type identity — give the subscriber's codec a "
-                      "type_info() -> type_identity member, or wrap it in plexus::with_identity.");
-
-        const auto identity    = resolve_identity(m_state->codec, opts.type_id);
-        io::subscriber_qos qos = opts.qos;
-        qos.posture            = opts.posture;
-        // wants_message_info is carried on the LOCAL qos only, never the subscribe wire region.
-        qos.wants_message_info = std::is_invocable_v<Cb &, const value_type &, const io::message_info &> && opts.qos.wants_message_info;
-
-        io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto rid         = plexus::detail::register_typed(seam, fqn, qos, m_state.get(), identity, &io::detail::type_key<value_type>,
-                                                                opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
-        m_retire               = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // Inbound frames whose decode failed — dropped, never a partial T.
     std::size_t decode_failed() const noexcept
     {
+        m_seam.affine(m_seam.ctx, "decode_failed");
         return m_state->decode_failed;
     }
 
     subscriber(subscriber &&other) noexcept
-            : m_state(std::move(other.m_state))
-            , m_retire(std::exchange(other.m_retire, nullptr))
+            : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
+            , m_state(std::move(other.m_state))
+            , m_rid(other.m_rid)
     {
     }
 
@@ -151,13 +146,25 @@ public:
 
     ~subscriber()
     {
-        if(m_retire != nullptr)
-            m_retire();
+        if(m_seam.ctx != nullptr)
+            m_seam.retire_subscriber(m_seam.ctx, m_rid);
     }
 
 private:
+    io::endpoint_seam m_seam;
     std::unique_ptr<state> m_state;
-    plexus::detail::move_only_function<void()> m_retire;
+    std::uint64_t m_rid;
+
+    template<typename Cb>
+    static std::uint64_t enroll(const io::endpoint_seam &seam, std::string_view fqn, const typed_subscriber_options &opts, state &st)
+    {
+        const auto identity    = resolve_identity(st.codec, opts.type_id);
+        io::subscriber_qos qos = opts.qos;
+        qos.posture            = opts.posture;
+        // wants_message_info is carried on the LOCAL qos only, never the subscribe wire region.
+        qos.wants_message_info = std::is_invocable_v<Cb &, const value_type &, const io::message_info &> && opts.qos.wants_message_info;
+        return plexus::detail::register_typed(seam, fqn, qos, &st, identity, &io::detail::type_key<value_type>, opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
+    }
 };
 
 }

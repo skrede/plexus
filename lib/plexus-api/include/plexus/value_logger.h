@@ -13,12 +13,11 @@
 #include "plexus/value_logger_options.h"
 #include "plexus/detail/value_logger_project.h"
 
-#include "plexus/detail/compat.h"
-
 #include <span>
 #include <memory>
 #include <string>
 #include <cstddef>
+#include <cstdint>
 #include <ostream>
 #include <utility>
 #include <string_view>
@@ -39,7 +38,7 @@ struct no_projection
 //
 // LIFETIME: a value_logger must NOT outlive its node nor the ostream it writes to (both are
 // borrowed). The decode + format state lives in a heap block the handle owns; the node's stored
-// adapter references it by raw pointer and is retired before the block is freed.
+// adapters reference it and are retired before the block is freed.
 template<typename Codec, typename Projection>
 class value_logger
 {
@@ -60,33 +59,23 @@ public:
 
     template<typename Policy, typename... NodeTs>
     value_logger(node<Policy, NodeTs...> &n, std::string_view fqn, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
-            : m_state(std::make_unique<state>(std::move(codec), std::move(projection), opts.format, opts.out))
+            : m_seam(n.endpoint_seam_for())
+            , m_state(std::make_unique<state>(std::move(codec), std::move(projection), opts.format, opts.out))
+            , m_rid(enroll(m_seam, fqn, opts, *m_state))
     {
-        const auto identity    = resolve_identity(m_state->codec, opts.type_id);
-        io::subscriber_qos qos = opts.qos;
-        qos.posture            = opts.posture;
-        qos.wants_message_info = true;
-
-        state *st          = m_state.get();
-        auto bytes_adapter = [st](std::span<const std::byte> bytes, const io::message_info &info) { st->on_bytes(bytes, info); };
-
-        io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info) { st->on_object(carrier, info); };
-
-        io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto rid         = seam.register_subscriber(seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id, identity.type_name, &io::detail::type_key<value_type>,
-                                                          std::move(dispatch), std::nullopt);
-        m_retire               = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // Inbound frames whose decode failed — dropped, never a partial line.
     std::size_t decode_failed() const noexcept
     {
+        m_seam.affine(m_seam.ctx, "decode_failed");
         return m_state->decode_failed;
     }
 
     value_logger(value_logger &&other) noexcept
-            : m_state(std::move(other.m_state))
-            , m_retire(std::exchange(other.m_retire, nullptr))
+            : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
+            , m_state(std::move(other.m_state))
+            , m_rid(other.m_rid)
     {
     }
 
@@ -96,8 +85,8 @@ public:
 
     ~value_logger()
     {
-        if(m_retire != nullptr)
-            m_retire();
+        if(m_seam.ctx != nullptr)
+            m_seam.retire_subscriber(m_seam.ctx, m_rid);
     }
 
 private:
@@ -150,8 +139,22 @@ private:
         }
     };
 
+    io::endpoint_seam m_seam;
     std::unique_ptr<state> m_state;
-    plexus::detail::move_only_function<void()> m_retire;
+    std::uint64_t m_rid;
+
+    static std::uint64_t enroll(const io::endpoint_seam &seam, std::string_view fqn, const value_logger_options &opts, state &st)
+    {
+        const auto identity    = resolve_identity(st.codec, opts.type_id);
+        io::subscriber_qos qos = opts.qos;
+        qos.posture            = opts.posture;
+        qos.wants_message_info = true;
+
+        auto bytes_adapter           = [&st](std::span<const std::byte> bytes, const io::message_info &info) { st.on_bytes(bytes, info); };
+        io::object_dispatch dispatch = [&st](const io::object_carrier &carrier, const io::message_info &info) { st.on_object(carrier, info); };
+        return seam.register_subscriber(seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id, identity.type_name, &io::detail::type_key<value_type>, std::move(dispatch),
+                                        std::nullopt);
+    }
 };
 
 }

@@ -71,11 +71,12 @@ struct object_entry
 };
 
 // The type-erased outbound-verb seam: a POD of one function pointer per outbound endpoint
-// verb plus the node ctx they recover. Filled by the node at endpoint construction
-// (endpoint_seam_for); each fn-ptr is a captureless static trampoline forwarding to a
-// private node member. The handles cross exactly one indirect call per outbound verb; the
-// inbound delivery path never touches this seam. ctx is a detail-only void* recovered
-// solely inside the trampolines — it is never a public handle signature.
+// verb, one for the node's thread check that a handle's own accessors run, and the node ctx
+// they recover. Filled by the node at endpoint construction (endpoint_seam_for); each fn-ptr
+// is a captureless static trampoline forwarding to a private node member. The handles cross
+// exactly one indirect call per outbound verb; the inbound delivery path never touches this
+// seam. ctx is a detail-only void* recovered solely inside the trampolines — it is never a
+// public handle signature.
 struct endpoint_seam
 {
     void *ctx;
@@ -94,6 +95,8 @@ struct endpoint_seam
     void (*retire_procedure)(void *ctx, std::string_view fqn);
 
     void (*call)(void *ctx, std::string_view fqn, std::span<const std::byte> param, on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline);
+
+    void (*affine)(void *ctx, const char *member);
 };
 
 }

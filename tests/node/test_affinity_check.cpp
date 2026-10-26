@@ -168,12 +168,12 @@ TEST_CASE("affinity_check foreign_recorder_preamble aborts with a message naming
     require_trip("foreign_recorder_preamble", "recorder::preamble");
 }
 
-TEST_CASE("affinity_check foreign_subscriber_decode_failed aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_subscriber_decode_failed aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_subscriber_decode_failed", "decode_failed");
 }
 
-TEST_CASE("affinity_check foreign_value_logger_decode_failed aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_value_logger_decode_failed aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_value_logger_decode_failed", "decode_failed");
 }
