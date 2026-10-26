@@ -1,23 +1,20 @@
 #ifndef HPP_GUARD_PLEXUS_DETAIL_AFFINITY_CHECK_H
 #define HPP_GUARD_PLEXUS_DETAIL_AFFINITY_CHECK_H
 
-#include <cstdio>
-#include <cstdlib>
+#include "plexus/detail/fail_closed.h"
+
 #include <functional>
 #include <type_traits>
 
 namespace plexus::detail {
 
-// A call off the driving thread is a bug in the caller, not a condition to recover from, so the check aborts rather
-// than going through fail_closed.
 #if defined(PLEXUS_AFFINITY_CHECKS)
 template<typename Policy>
 void check_affinity(typename Policy::executor_type ex, const char *member) noexcept
 {
     if(Policy::running_in_this_thread(ex))
         return;
-    std::fprintf(stderr, "plexus: %s called off the node's executor thread\n", member);
-    std::abort();
+    affinity_trip(member);
 }
 #else
 template<typename Policy>
