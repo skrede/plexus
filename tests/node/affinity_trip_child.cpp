@@ -137,6 +137,8 @@ role_outcome run_role(std::string_view role)
         outcome = plexus::testing::run_handover_role(role);
     if(outcome == role_outcome::unknown)
         outcome = plexus::testing::run_freertos_role(role);
+    if(outcome == role_outcome::unknown)
+        outcome = plexus::testing::run_endpoint_role(role);
     return outcome;
 }
 

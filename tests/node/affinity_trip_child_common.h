@@ -28,6 +28,7 @@
 #include <thread>
 #include <cstddef>
 #include <cstdint>
+#include <string_view>
 
 namespace plexus::testing {
 
@@ -120,6 +121,7 @@ struct inproc_rig
     std::thread stepper;
 };
 
+role_outcome run_endpoint_role(std::string_view role);
 }
 
 #endif
