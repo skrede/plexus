@@ -1,3 +1,4 @@
+#include "affinity_roles.h"
 #include "affinity_trip_child_common.h"
 
 #include "plexus/publisher.h"
@@ -22,6 +23,7 @@
 using plexus::testing::asio_rig;
 using plexus::testing::on_driver;
 using plexus::testing::inproc_rig;
+using plexus::testing::role_outcome;
 using plexus::testing::read_participants;
 
 namespace {
@@ -108,7 +110,7 @@ void via_post()
     exercise_through_post(inproc.host.node());
 }
 
-bool run_role(std::string_view role)
+role_outcome run_misuse(std::string_view role)
 {
     if(role == "foreign_publish")
         foreign_publish();
@@ -121,8 +123,23 @@ bool run_role(std::string_view role)
     else if(role == "inproc_foreign")
         inproc_foreign();
     else
-        return false;
-    return true;
+        return role_outcome::unknown;
+    return role_outcome::not_tripped;
+}
+
+role_outcome run_role(std::string_view role)
+{
+    if(role == "via_post")
+    {
+        via_post();
+        return role_outcome::ok;
+    }
+    role_outcome outcome = run_misuse(role);
+    if(outcome == role_outcome::unknown)
+        outcome = plexus::testing::run_handover_role(role);
+    if(outcome == role_outcome::unknown)
+        outcome = plexus::testing::run_freertos_role(role);
+    return outcome;
 }
 
 }
@@ -137,15 +154,9 @@ int main(int argc, char **argv)
     const rlimit no_core{0, 0};
     setrlimit(RLIMIT_CORE, &no_core);
 #endif
-    const std::string_view role = argc > 1 ? argv[1] : "";
-    if(role == "via_post")
-    {
-        via_post();
-        std::puts("affinity-ok");
-        return 0;
-    }
-    if(!run_role(role))
+    const role_outcome outcome = run_role(argc > 1 ? argv[1] : "");
+    if(outcome == role_outcome::unknown)
         return 2;
-    std::puts("affinity-not-tripped");
+    std::puts(outcome == role_outcome::ok ? "affinity-ok" : "affinity-not-tripped");
     return 0;
 }

@@ -83,6 +83,9 @@ public:
     {
         return false;
     }
+    void release_driver() noexcept
+    {
+    }
     bool pump()
     {
         if(m_queue.empty())

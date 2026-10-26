@@ -52,6 +52,11 @@ public:
         return m_affinity.observe(self, inside(self));
     }
 
+    void release() noexcept
+    {
+        m_affinity.release();
+    }
+
 private:
     std::atomic<Id> m_inside;
     executor_affinity<Id> m_affinity;

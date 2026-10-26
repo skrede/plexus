@@ -36,6 +36,7 @@ concept Policy =
             P::post_from_thread(ex, std::move(fn));
             { P::running_in_this_thread(ex) } -> std::same_as<bool>;
             { P::inside_executor(ex) } -> std::same_as<bool>;
+            P::release_driver(ex);
         };
 
 }

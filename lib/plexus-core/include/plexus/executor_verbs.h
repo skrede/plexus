@@ -32,6 +32,11 @@ struct executor_verbs
     {
         return ex.inside_executor();
     }
+
+    static void release_driver(executor_type ex)
+    {
+        ex.release_driver();
+    }
 };
 
 }

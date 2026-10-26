@@ -9,6 +9,7 @@
 #include "plexus/typed_codec.h"
 #include "plexus/loopback_node.h"
 #include "plexus/node_options.h"
+#include "plexus/executor_verbs.h"
 
 #include "plexus/io/message_info.h"
 #include "plexus/io/process_loopback_channel.h"
@@ -34,17 +35,11 @@ namespace self_loopback {
 
 // The pure intra-node Policy: a single transport binds the loopback channel concretely, so a
 // same-node typed publish delivers by address with the codec's encode never invoked.
-struct intra_policy
+struct intra_policy : plexus::executor_verbs<plexus::inproc::inproc_executor<>>
 {
-    using executor_type     = plexus::inproc::inproc_executor<> &;
     using byte_channel_type = plexus::io::process_loopback_channel<intra_policy>;
     using timer_type        = plexus::inproc::inproc_timer<>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 // A timestamp-carrying typed value plus a codec whose encode count is shared, so the bench

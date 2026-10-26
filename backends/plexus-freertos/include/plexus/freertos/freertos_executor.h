@@ -94,6 +94,11 @@ public:
         return m_driver.inside(xTaskGetCurrentTaskHandle());
     }
 
+    void release_driver() noexcept
+    {
+        m_driver.release();
+    }
+
     // The watchdog-safe idle: yield the core until a cross-context post arrives OR the interval
     // elapses, running a post that wakes it. Blocking on the queue (not an unconditional delay) is
     // what lets an RX-task delivery reach the engine immediately instead of waiting out the park —

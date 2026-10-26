@@ -46,6 +46,11 @@ struct wire_capturing_policy
     {
         return Inner::inside_executor(ex);
     }
+
+    static void release_driver(executor_type ex)
+    {
+        Inner::release_driver(ex);
+    }
 };
 
 // Drives a borrowed Inner transport and, at the on_dialed / on_accepted mint point, MOVES the

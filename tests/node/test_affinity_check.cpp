@@ -47,6 +47,15 @@ void require_trip(const std::string &role, const std::string &member)
     CHECK(result.err.find("plexus: " + member + " called off the node's executor thread") != std::string::npos);
 }
 
+void require_ok(const std::string &role)
+{
+    const child_result result = run_child(role);
+    INFO("stdout: " << result.out << "\nstderr: " << result.err);
+    CHECK(result.status == 0);
+    CHECK(result.out.find("affinity-ok") != std::string::npos);
+    CHECK(result.err.find("called off the node's executor thread") == std::string::npos);
+}
+
 }
 
 TEST_CASE("affinity_check foreign_publish aborts with a message naming the member", "[node]")
@@ -74,11 +83,37 @@ TEST_CASE("affinity_check inproc_foreign aborts with a message naming the member
     require_trip("inproc_foreign", "participants");
 }
 
-TEST_CASE("affinity_check the same calls through plexus::post do not trip", "[node]")
+TEST_CASE("affinity_check via_post the same calls through plexus::post do not trip", "[node]")
 {
-    const child_result result = run_child("via_post");
-    INFO("stdout: " << result.out << "\nstderr: " << result.err);
-    CHECK(result.status == 0);
-    CHECK(result.out.find("affinity-ok") != std::string::npos);
-    CHECK(result.err.find("called off the node's executor thread") == std::string::npos);
+    require_ok("via_post");
+}
+
+TEST_CASE("affinity_check foreign_release aborts with a message naming the member", "[node]")
+{
+    require_trip("foreign_release", "release_driver");
+}
+
+TEST_CASE("affinity_check asio_teardown_unreleased aborts when the owner tears down a handle the joined driver still claims", "[node]")
+{
+    require_trip("asio_teardown_unreleased", "retire_subscriber");
+}
+
+TEST_CASE("affinity_check asio_release_teardown lets the owner tear down a handle after the driver released and was joined", "[node]")
+{
+    require_ok("asio_release_teardown");
+}
+
+TEST_CASE("affinity_check inproc_teardown_unreleased aborts when the owner tears down a handle the joined driver still claims", "[node]")
+{
+    require_trip("inproc_teardown_unreleased", "retire_subscriber");
+}
+
+TEST_CASE("affinity_check inproc_release_teardown lets the owner tear down a handle after the driver released and was joined", "[node]")
+{
+    require_ok("inproc_release_teardown");
+}
+
+TEST_CASE("affinity_check freertos_release_teardown lets the owner tear down a handle after the driver released and was joined", "[node]")
+{
+    require_ok("freertos_release_teardown");
 }

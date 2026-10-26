@@ -56,6 +56,10 @@ public:
         return false;
     }
 
+    void release_driver() noexcept
+    {
+    }
+
     void run_posted()
     {
         while(!m_queue.empty())

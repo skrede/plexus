@@ -66,6 +66,11 @@ public:
         return m_driver.inside(std::this_thread::get_id());
     }
 
+    void release_driver() noexcept
+    {
+        m_driver.release();
+    }
+
     bool step()
     {
         const detail::driver_record<std::thread::id>::step_scope scope(m_driver, std::this_thread::get_id());

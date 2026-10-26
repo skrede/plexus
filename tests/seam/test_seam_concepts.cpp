@@ -104,6 +104,10 @@ struct fake_policy
     {
         return false;
     }
+
+    static void release_driver(executor_type) noexcept
+    {
+    }
 };
 
 static_assert(plexus::io::byte_channel<fake_channel>, "fake_channel must satisfy byte_channel");

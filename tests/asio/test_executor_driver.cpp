@@ -68,6 +68,23 @@ TEST_CASE("executor_driver hands over from the setup thread to the thread that r
     CHECK_FALSE(verbs::running_in_this_thread(io));
 }
 
+TEST_CASE("executor_driver release lets the next caller of the io_context bind", "[asio][executor_driver]")
+{
+    ::asio::io_context io;
+    std::atomic<bool> runner_drives{false};
+    ::asio::post(io,
+                 [&]
+                 {
+                     runner_drives = verbs::running_in_this_thread(io);
+                     verbs::release_driver(io);
+                 });
+    std::thread runner{[&] { io.run(); }};
+    runner.join();
+
+    CHECK(runner_drives);
+    CHECK(verbs::running_in_this_thread(io));
+}
+
 TEST_CASE("executor_driver rejects a second thread running the same io_context inside a handler", "[asio][executor_driver]")
 {
     ::asio::io_context io;

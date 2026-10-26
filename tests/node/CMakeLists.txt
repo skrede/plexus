@@ -477,11 +477,14 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # Each misuse runs in a child process that defines the check itself, so the abort is exercised on every platform
     # and build type; the test reads the child's exit status and the message it wrote.
-    add_executable(affinity_trip_child affinity_trip_child.cpp)
+    # The FreeRTOS roles sit in their own translation unit so the host shim's global names never meet asio's.
+    add_executable(affinity_trip_child affinity_trip_child.cpp affinity_handover_roles.cpp affinity_freertos_roles.cpp)
+    target_include_directories(affinity_trip_child PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
     target_link_libraries(affinity_trip_child PRIVATE
         plexus::plexus
         plexus::asio
         plexus::inproc
+        plexus::freertos
         plexus::discovery)
     target_compile_definitions(affinity_trip_child PRIVATE PLEXUS_AFFINITY_CHECKS)
 

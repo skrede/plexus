@@ -27,6 +27,11 @@ public:
         return m_affinity.observe(self, inside_handler);
     }
 
+    void release() noexcept
+    {
+        m_affinity.release();
+    }
+
 private:
     plexus::detail::executor_affinity<std::thread::id> m_affinity;
 

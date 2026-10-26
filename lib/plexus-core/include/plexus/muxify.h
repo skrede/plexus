@@ -40,6 +40,11 @@ struct muxify
     {
         return P::inside_executor(ex);
     }
+
+    static void release_driver(executor_type ex)
+    {
+        P::release_driver(ex);
+    }
 };
 
 }

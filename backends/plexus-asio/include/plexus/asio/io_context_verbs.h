@@ -39,6 +39,11 @@ struct io_context_verbs
     {
         return ex.get_executor().running_in_this_thread();
     }
+
+    static void release_driver(executor_type ex)
+    {
+        ::asio::use_service<detail::executor_driver>(ex).release();
+    }
 };
 
 }

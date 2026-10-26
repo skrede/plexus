@@ -32,7 +32,8 @@ set(PLEXUS_IO_TESTS
     test_channel_graveyard
     test_slot_rebuild_sequencing
     test_registry_retire
-    test_executor_affinity)
+    test_executor_affinity
+    test_driver_record)
 
 # The peer-liveliness arbiter oracle: its fusion-matrix and precedence/hysteresis scenario
 # clusters compile into the one target so catch_discover_tests enumerates the identical set.

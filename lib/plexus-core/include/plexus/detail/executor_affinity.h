@@ -9,8 +9,9 @@ namespace plexus::detail {
 
 // Learns which thread drives an executor. The first observation binds its caller; the first observation made inside
 // one of the executor's handlers confirms that thread as the driver, handing over from a setup thread once; after that
-// every other thread, a second concurrent runner included, is not the driver. Gap: a worker whose call is the very
-// first observation stays the driver until a handler observation hands over. A default-constructed Id means unbound.
+// every other thread, a second concurrent runner included, is not the driver until release returns the record to
+// unbound. Gap: a worker whose call is the very first observation stays the driver until a handler observation hands
+// over. A default-constructed Id means unbound.
 template<typename Id>
     requires std::is_trivially_copyable_v<Id> && std::equality_comparable<Id>
 class executor_affinity
@@ -32,6 +33,12 @@ public:
         const Id bound       = claim(m_bound, self);
         const Id handed_over = m_confirmed.load(std::memory_order_acquire);
         return (handed_over != Id{} ? handed_over : bound) == self;
+    }
+
+    void release() noexcept
+    {
+        m_confirmed.store(Id{}, std::memory_order_release);
+        m_bound.store(Id{}, std::memory_order_release);
     }
 
 private:

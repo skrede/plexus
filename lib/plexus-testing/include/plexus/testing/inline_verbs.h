@@ -31,6 +31,10 @@ struct inline_verbs
     {
         return false;
     }
+
+    static void release_driver(executor_type) noexcept
+    {
+    }
 };
 
 }

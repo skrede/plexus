@@ -89,6 +89,15 @@ TEST_CASE("executor_affinity leaves a first-observing worker bound until a handl
     CHECK_FALSE(record.observe(worker, k_outside));
 }
 
+TEST_CASE("executor_affinity release returns a confirmed record to unbound", "[io][executor_affinity]")
+{
+    affinity record;
+    REQUIRE(record.observe(k_runner, k_inside));
+    record.release();
+    CHECK(record.observe(k_other, k_outside));
+    CHECK_FALSE(record.observe(k_runner, k_outside));
+}
+
 TEST_CASE("executor_affinity binds exactly one of two racing first observers", "[io][executor_affinity]")
 {
     constexpr std::uint32_t trials = 500;

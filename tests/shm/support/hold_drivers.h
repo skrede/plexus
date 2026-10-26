@@ -4,6 +4,8 @@
 #include "support/co_host_node.h"
 #include "support/hold_topology.h"
 
+#include "plexus/post.h"
+
 #include <asio/post.hpp>
 #include <asio/io_context.hpp>
 #include <asio/executor_work_guard.hpp>
@@ -16,7 +18,7 @@
 
 namespace plexus::testing {
 
-// Runs one node's io_context on its own thread for as long as it lives.
+// Runs one node's io_context on its own thread for as long as it lives, and hands the node back once the context stops.
 class context_thread
 {
 public:
@@ -28,6 +30,7 @@ public:
                       {
                           node.io.restart();
                           node.io.run();
+                          plexus::release_driver(node.node);
                       })
     {
     }
@@ -71,8 +74,8 @@ std::invoke_result_t<Fn &> read_on(::asio::io_context &io, Fn fn)
     return value;
 }
 
-// The setup thread hands each node to its own thread once, and the node stays there to the end: its handle retires on
-// that thread before the thread stops, since a node's handles belong to the thread that drives it.
+// The setup thread drove each node during setup, so it releases the node before handing it to its own thread; after
+// the threads join, the topology's handles are destroyed on the setup thread.
 class hold_drivers
 {
 public:
@@ -87,26 +90,19 @@ public:
     hold_drivers(const hold_drivers &)            = delete;
     hold_drivers &operator=(const hold_drivers &) = delete;
 
-    ~hold_drivers()
-    {
-        retire(m_publisher, m_topology.publisher, m_topology.pub);
-        retire(m_reader, m_topology.reader, m_topology.reader_sub);
-        retire(m_newcomer, m_topology.newcomer, m_topology.newcomer_sub);
-    }
-
     void drive_publisher()
     {
-        m_publisher.emplace(m_topology.publisher);
+        hand_over(m_publisher, m_topology.publisher);
     }
 
     void drive_reader()
     {
-        m_reader.emplace(m_topology.reader);
+        hand_over(m_reader, m_topology.reader);
     }
 
     void drive_newcomer()
     {
-        m_newcomer.emplace(m_topology.newcomer);
+        hand_over(m_newcomer, m_topology.newcomer);
     }
 
 private:
@@ -115,13 +111,10 @@ private:
     std::optional<context_thread> m_newcomer;
     std::optional<context_thread> m_publisher;
 
-    template<typename Handle>
-    static void retire(const std::optional<context_thread> &driver, co_host_node &node, std::optional<Handle> &handle)
+    static void hand_over(std::optional<context_thread> &driver, co_host_node &node)
     {
-        if(driver)
-            run_on(node.io, [&handle] { handle.reset(); });
-        else
-            handle.reset();
+        plexus::release_driver(node.node);
+        driver.emplace(node);
     }
 };
 
