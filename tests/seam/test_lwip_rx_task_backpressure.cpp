@@ -74,7 +74,7 @@ struct full_queue_rig
             , ctx{receiver, ex}
     {
         for(std::uint32_t i = 0; i < freertos_executor::k_queue_depth; ++i)
-            REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&count_up, &filled}));
+            REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&count_up, &filled}, 0));
     }
 
     std::uint32_t filled;
@@ -89,7 +89,7 @@ const std::vector<std::byte> k_payload{std::byte{0xDE}, std::byte{0xAD}, std::by
 
 }
 
-TEST_CASE("lwip rx task waits for queue room and delivers the feed once the executor drains", "[seam][!shouldfail]")
+TEST_CASE("lwip rx task waits for queue room and delivers the feed once the executor drains", "[seam]")
 {
     full_queue_rig rig;
     std::vector<std::byte> received;
@@ -112,7 +112,7 @@ TEST_CASE("lwip rx task waits for queue room and delivers the feed once the exec
     CHECK(acquirable_slots(rig.receiver) == lwip_channel::k_rx_slots);
 }
 
-TEST_CASE("a closed channel releases an RX task waiting for queue room", "[seam][!shouldfail]")
+TEST_CASE("a closed channel releases an RX task waiting for queue room", "[seam]")
 {
     full_queue_rig rig;
     std::int32_t deliveries = 0;

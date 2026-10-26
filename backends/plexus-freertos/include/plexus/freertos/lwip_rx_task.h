@@ -12,8 +12,8 @@ namespace plexus::freertos {
 
 namespace detail {
 
-// The spawned RX task owns this context for the channel's lifetime (the loop never returns until a
-// hard drop), so the borrowed channel and executor it points at must outlive it — the caller's
+// The spawned RX task owns this context for the channel's lifetime (the loop runs until the channel
+// closes), so the borrowed channel and executor it points at must outlive it — the caller's
 // contract, mirroring run_task_ctx. The RX task's sole verbs are recv + post_from_task; it touches
 // no engine state, so the engine stays single-threaded on the executor task.
 template<plexus::stream::stream_socket S>
@@ -23,20 +23,36 @@ struct lwip_rx_ctx
     freertos_executor &executor;
 };
 
+// portMAX_DELAY waits indefinitely only with INCLUDE_vTaskSuspend; where it can elapse the post is
+// retried while the channel is open, and once the channel has closed the slot goes back to the pool.
+template<plexus::stream::stream_socket S>
+void post_feed(lwip_rx_ctx<S> &ctx, typename lwip_channel<S>::rx_slot &slot)
+{
+    const posted_work feed{&lwip_channel<S>::invoke_feed, &slot};
+    while(!ctx.executor.post_from_task(feed, portMAX_DELAY))
+    {
+        if(ctx.channel.closed())
+        {
+            ctx.channel.release_rx_slot(slot);
+            return;
+        }
+    }
+}
+
 // Acquire a free pool slot (parking until one frees), recv into it, and post the feed across to the
-// executor task; a recv of 0 with the socket still open is EWOULDBLOCK on a non-blocking host build
-// (the on-target socket is blocking, so the task parks in recv). On a recv of 0 the slot is released
-// — the bounded drop, never a heap grow. Returns false once the hard-drop seam fired so the loop
-// exits and the engine re-dials on its own reconnect timer (the RX task never re-dials).
+// executor task, parking on a full queue until the executor drains room: on a stream the TCP window
+// closes while the task waits, so no byte is lost. A recv of 0 with the socket still open is
+// EWOULDBLOCK on a non-blocking host build (the on-target socket is blocking, so the task parks in
+// recv) and releases the slot. Returns false once the channel has closed so the loop exits and the
+// engine re-dials on its own reconnect timer (the RX task never re-dials).
 template<plexus::stream::stream_socket S>
 bool lwip_rx_step(lwip_rx_ctx<S> &ctx)
 {
     auto *slot = ctx.channel.acquire_rx_slot(portMAX_DELAY);
     if(!slot)
         return true;
-    const std::size_t n = ctx.channel.recv_into_slot(*slot);
-    if(n > 0)
-        ctx.executor.post_from_task(posted_work{&lwip_channel<S>::invoke_feed, slot});
+    if(ctx.channel.recv_into_slot(*slot) > 0)
+        post_feed(ctx, *slot);
     else
         ctx.channel.release_rx_slot(*slot);
     return !ctx.channel.closed();

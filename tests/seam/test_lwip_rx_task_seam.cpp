@@ -46,7 +46,8 @@ lwip_channel make_channel(host_tcp_socket socket, plexus::freertos::freertos_exe
 }
 
 // One RX-context turn: acquire a free pool slot, recv into it, and post the feed across to the
-// executor task — the exact steps the spawned RX task runs on-target, driven inline off-target.
+// executor task — the steps the spawned RX task runs on-target, driven inline off-target. The queue
+// never fills here, so the post takes a zero wait and must be taken.
 bool rx_turn(lwip_channel &channel, plexus::freertos::freertos_executor &ex)
 {
     auto *slot = channel.acquire_rx_slot(0);
@@ -54,7 +55,7 @@ bool rx_turn(lwip_channel &channel, plexus::freertos::freertos_executor &ex)
         return false;
     const std::size_t n = channel.recv_into_slot(*slot);
     if(n > 0)
-        REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::invoke_feed, slot}));
+        REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::invoke_feed, slot}, 0));
     else
         channel.release_rx_slot(*slot);
     return n > 0;

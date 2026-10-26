@@ -64,19 +64,19 @@ public:
 
     // The one cross-context-safe ingress: a second task hands work to the cooperative
     // loop through the FreeRTOS queue (never the non-thread-safe m_posted deque),
-    // carrying a caller-owned POD by value — no executor-side allocation. A zero wait
-    // means a producing transport task never parks on a full queue; a full queue
-    // returns false (the work was NOT enqueued) and the producer keeps and releases
-    // its own slot — a bounded, measurable drop, not corruption. An ISR producer, if
-    // one ever lands, gets its own re-introduced ISR verb at that time.
-    bool post_from_task(posted_work w) noexcept
+    // carrying a caller-owned POD by value — no executor-side allocation. The caller
+    // states whether it may park: a zero wait never parks, and a full queue returns
+    // false (the work was NOT enqueued, the producer keeps its slot); a task that may
+    // park passes a wait and blocks until the executor drains room or the wait elapses.
+    // An ISR producer, if one ever lands, gets its own ISR verb.
+    bool post_from_task(posted_work w, TickType_t wait) noexcept
     {
-        return xQueueSend(m_queue, &w, 0) == pdTRUE;
+        return xQueueSend(m_queue, &w, wait) == pdTRUE;
     }
 
     bool post_from_thread(plexus::detail::move_only_function<void()> fn)
     {
-        return m_ingress.post(std::move(fn), [this](posted_work w) { return post_from_task(w); });
+        return m_ingress.post(std::move(fn), [this](posted_work w) { return post_from_task(w, 0); });
     }
 
     std::uint32_t ingress_dropped() const noexcept

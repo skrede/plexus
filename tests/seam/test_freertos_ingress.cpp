@@ -100,8 +100,8 @@ TEST_CASE("freertos_ingress a full queue frees the slot and counts a drop", "[se
     freertos_executor ex;
     std::uint32_t task_ran = 0;
     for(std::uint32_t i = 0; i < k_depth; ++i)
-        REQUIRE(ex.post_from_task(posted_work{&count_up, &task_ran}));
-    REQUIRE_FALSE(ex.post_from_task(posted_work{&count_up, &task_ran}));
+        REQUIRE(ex.post_from_task(posted_work{&count_up, &task_ran}, 0));
+    REQUIRE_FALSE(ex.post_from_task(posted_work{&count_up, &task_ran}, 0));
 
     std::uint32_t ran = 0;
     REQUIRE_FALSE(ex.post_from_thread([&ran] { ++ran; }));
