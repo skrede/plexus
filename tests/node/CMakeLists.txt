@@ -475,6 +475,17 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_post_from_thread TEST_PREFIX "node.")
 
+    # A FreeRTOS-executor node whose ingress slot pool is full refuses a cross-thread post; the timeout bounds a
+    # blocking helper that would otherwise wait forever on the refused work.
+    add_executable(test_post_refused test_post_refused.cpp)
+    target_include_directories(test_post_refused PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_link_libraries(test_post_refused PRIVATE
+        plexus::plexus
+        plexus::freertos
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_post_refused TEST_PREFIX "node." PROPERTIES TIMEOUT 60)
+
     # Each misuse runs in a child process that defines the check itself, so the abort is exercised on every platform
     # and build type; the test reads the child's exit status and the message it wrote.
     # The FreeRTOS roles sit in their own translation unit so the host shim's global names never meet asio's.
