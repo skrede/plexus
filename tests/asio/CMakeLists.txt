@@ -15,6 +15,13 @@ target_link_libraries(test_asio_policy PRIVATE
 
 catch_discover_tests(test_asio_policy TEST_PREFIX "asio.")
 
+# The per-io_context driver record behind the asio affinity verbs, exercised with real threads.
+add_executable(test_executor_driver test_executor_driver.cpp)
+target_link_libraries(test_executor_driver PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_executor_driver TEST_PREFIX "asio.")
+
 # The stream read-buffer tunability oracle: a value-level check of the per-read buffer
 # sizing (the 64 KiB default, a custom override, the degenerate-size floor). Header-only
 # inside plexus::asio (no socket); the `asio.` ctest prefix selects it.
