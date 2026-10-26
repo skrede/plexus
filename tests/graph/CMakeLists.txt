@@ -105,13 +105,13 @@ catch_discover_tests(test_graph_truncate TEST_PREFIX "graph.")
 # universe drop, which lives on the asio multicast path — it links plexus::asio + default_discovery
 # for real loopback multicast, not the inproc static-discovery path (which has no universe compare).
 if(PLEXUS_ENABLE_ASIO_BACKEND)
-    add_executable(test_graph_foreign_thread test_graph_foreign_thread.cpp)
+    add_executable(test_graph_foreign_thread test_graph_foreign_thread.cpp test_graph_blocking_helper_rejected.cpp)
     target_link_libraries(test_graph_foreign_thread PRIVATE
         plexus::plexus
         plexus::asio
         plexus::discovery
         Catch2::Catch2WithMain)
-    catch_discover_tests(test_graph_foreign_thread TEST_PREFIX "graph.")
+    catch_discover_tests(test_graph_foreign_thread TEST_PREFIX "graph." PROPERTIES TIMEOUT 60)
 
     add_executable(test_graph_two_universe test_graph_two_universe.cpp)
     target_link_libraries(test_graph_two_universe PRIVATE
