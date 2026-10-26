@@ -6,6 +6,8 @@
 
 #include "plexus/match/key_pattern.h"
 
+#include "plexus/node_id.h"
+
 #include <span>
 #include <cstddef>
 #include <optional>
@@ -40,6 +42,22 @@ graph::snapshot_result sweep_topics(const Table &table, std::span<graph::topic_r
             return;
         }
         out[filled++] = rec;
+    });
+    return graph::snapshot_result{filled, truncated};
+}
+
+template<typename Known>
+graph::snapshot_result sweep_participants(const Known &known, std::span<graph::participant_record> out)
+{
+    std::size_t filled    = 0;
+    bool        truncated = false;
+    known.for_each_candidate([&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &origin) {
+        if(filled == out.size())
+        {
+            truncated = true;
+            return;
+        }
+        out[filled++] = graph::participant_record{id, reach, origin};
     });
     return graph::snapshot_result{filled, truncated};
 }

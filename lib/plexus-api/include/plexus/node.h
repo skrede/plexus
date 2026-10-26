@@ -53,6 +53,7 @@
 #include "plexus/detail/function_traits.h"
 #include "plexus/detail/node_self_route.h"
 #include "plexus/detail/call_origination.h"
+#include "plexus/detail/node_relay_posture.h"
 #include "plexus/detail/node_subscriptions.h"
 #include "plexus/detail/node_discovery_glue.h"
 #include "plexus/detail/node_upgrade_wiring.h"
@@ -143,18 +144,6 @@ class caller;
 
 template<typename Sig = void, template<typename> class CReq = no_codec, template<typename> class CRes = CReq>
 class procedure;
-
-// A node's cooperative relay posture, as disclosed by self_check(). offering_relay is a compile-time
-// property of the profile — a node not spelled relay<> resolves the structurally-absent emitter twin
-// and never offers, so the count of origins it relays is meaningful only when offering. declining is
-// a cooperative request to peers not to relay for this node, never a security boundary.
-struct relay_posture
-{
-    bool        offering_relay;
-    std::size_t reported_origins;
-    std::size_t routes_via_relays;
-    bool        declining;
-};
 
 // LIFETIME: the node BORROWS its executor, discovery, and transport leaves, which MUST outlive it, and OWNS only the
 // engine and (for >1 transport) the multiplexing glue. Its posts and waits capture `this`, so it is non-copyable and
@@ -351,17 +340,7 @@ public:
     // never abort, never evict (reject-and-count at the span boundary).
     graph::snapshot_result participants(std::span<graph::participant_record> out) const
     {
-        std::size_t filled    = 0;
-        bool        truncated = false;
-        m_engine.known().for_each_candidate([&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &origin) {
-            if(filled == out.size())
-            {
-                truncated = true;
-                return;
-            }
-            out[filled++] = graph::participant_record{id, reach, origin};
-        });
-        return graph::snapshot_result{filled, truncated};
+        return detail::sweep_participants(m_engine.known(), out);
     }
 
     // Executor-affine: call only on the owning executor. Non-blocking; sweeps engine state with no
@@ -372,8 +351,8 @@ public:
     // reaches the leaf image.
     relay_posture self_check() const
     {
-        const relay_posture posture = compute_relay_posture();
-        disclose_relay_posture_once(posture);
+        const relay_posture posture = detail::compute_relay_posture(*this);
+        detail::disclose_relay_posture_once(*this, posture);
         return posture;
     }
 
@@ -705,52 +684,6 @@ private:
             return m_glue;
     }
 
-    relay_posture compute_relay_posture() const
-    {
-        relay_posture posture{};
-        if constexpr(!std::is_same_v<typename engine_type::peer_report_emitter_type, io::null_peer_report_emitter>)
-        {
-            posture.offering_relay   = true;
-            posture.reported_origins = m_engine.reported_origin_count();
-        }
-        posture.routes_via_relays = count_routes_via_relays();
-        posture.declining         = m_engine.route_opts().usage == io::route_usage::never;
-        return posture;
-    }
-
-    std::size_t count_routes_via_relays() const
-    {
-        std::size_t via = 0;
-        m_engine.known().for_each_candidate([&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &) {
-            if(reach.via.has_value() && id != m_id)
-                ++via;
-        });
-        return via;
-    }
-
-    void disclose_relay_posture_once(const relay_posture &posture) const
-    {
-        if(m_relay_posture_warned)
-            return;
-        if(!posture.offering_relay && posture.routes_via_relays < k_relay_routes_disclosure_threshold && !posture.declining)
-            return;
-        m_logger.warn(relay_posture_line(posture));
-        m_relay_posture_warned = true;
-    }
-
-    static std::string_view relay_posture_line(const relay_posture &posture) noexcept
-    {
-        if(posture.offering_relay)
-            return "plexus: node offers a cooperative relay path for its reported origins (self_check)";
-        if(posture.declining)
-            return "plexus: node cooperatively declines relayed use — a request to peers, not a security boundary (self_check)";
-        return "plexus: node reaches one or more destinations via a relay (self_check)";
-    }
-
-    // The route count at which a leaf's via-relay reach is first disclosed: a value of 1
-    // discloses any relayed reach.
-    static constexpr std::size_t k_relay_routes_disclosure_threshold = 1;
-
     plexus::node_id m_id;
     executor_type m_executor;
     discovery::discovery &m_disc;
@@ -846,6 +779,12 @@ private:
     friend void detail::close_self_route(N &);
     template<typename N>
     friend void detail::notify_node_closed(N &);
+    template<typename N>
+    friend std::size_t detail::count_routes_via_relays(const N &);
+    template<typename N>
+    friend relay_posture detail::compute_relay_posture(const N &);
+    template<typename N>
+    friend void detail::disclose_relay_posture_once(const N &, const relay_posture &);
 };
 
 // Transitional: every existing plexus::node<...> spelling migrates onto basic_node through this
