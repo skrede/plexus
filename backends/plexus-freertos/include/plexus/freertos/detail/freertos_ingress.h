@@ -13,7 +13,8 @@
 namespace plexus::freertos::detail {
 
 // Adapts a callable into the caller-owned posted_work the kernel queue carries, through a fixed pool of Depth slots. A
-// post that finds no free slot, or whose send fails, is a drop counted in dropped(): never an allocation, never a block.
+// post that finds no free slot, or whose send fails, returns false and is counted in dropped(): never an allocation,
+// never a block.
 template<std::uint32_t Depth>
 class freertos_ingress
 {
@@ -34,20 +35,20 @@ public:
     freertos_ingress &operator=(const freertos_ingress &) = delete;
 
     template<typename Send>
-    void post(plexus::detail::move_only_function<void()> fn, Send send)
+    bool post(plexus::detail::move_only_function<void()> fn, Send send)
     {
         slot *const claimed = claim();
         if(claimed == nullptr)
         {
             count_drop();
-            return;
+            return false;
         }
         claimed->fn = std::move(fn);
-        if(!send(posted_work{&run, claimed}))
-        {
-            release(*claimed);
-            count_drop();
-        }
+        if(send(posted_work{&run, claimed}))
+            return true;
+        release(*claimed);
+        count_drop();
+        return false;
     }
 
     std::uint32_t dropped() const noexcept

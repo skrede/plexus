@@ -91,8 +91,9 @@ struct fake_policy
     {
     }
 
-    static void post_from_thread(executor_type, move_only_function<void()>)
+    static bool post_from_thread(executor_type, move_only_function<void()>)
     {
+        return false;
     }
 
     static bool running_in_this_thread(executor_type) noexcept

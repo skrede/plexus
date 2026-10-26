@@ -51,9 +51,10 @@ public:
         m_posted.push_back(std::move(fn));
     }
 
-    void post_from_thread(detail::move_only_function<void()> fn)
+    bool post_from_thread(detail::move_only_function<void()> fn)
     {
         m_ingress.push(std::move(fn));
+        return true;
     }
 
     bool running_in_this_thread() noexcept

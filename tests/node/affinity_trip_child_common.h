@@ -1,8 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_NODE_AFFINITY_TRIP_CHILD_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_NODE_AFFINITY_TRIP_CHILD_COMMON_H
 
+#include "affinity_roles.h"
+
 #include "plexus/node.h"
-#include "plexus/post.h"
 #include "plexus/node_options.h"
 #include "plexus/loopback_node.h"
 #include "plexus/executor_verbs.h"
@@ -51,7 +52,7 @@ template<typename Node, typename Fn>
 void on_driver(Node &node, Fn fn)
 {
     std::atomic<bool> done{false};
-    plexus::post(node,
+    post_or_exit(node,
                  [&]
                  {
                      fn();

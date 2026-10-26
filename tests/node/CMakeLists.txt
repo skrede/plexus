@@ -477,10 +477,13 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # A FreeRTOS-executor node whose ingress slot pool is full refuses a cross-thread post; the timeout bounds a
     # blocking helper that would otherwise wait forever on the refused work.
-    add_executable(test_post_refused test_post_refused.cpp)
+    # The asio and inproc cases sit in their own translation unit so the host shim's global names never meet asio's.
+    add_executable(test_post_refused test_post_refused.cpp test_post_refused_hosts.cpp)
     target_include_directories(test_post_refused PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
     target_link_libraries(test_post_refused PRIVATE
         plexus::plexus
+        plexus::asio
+        plexus::inproc
         plexus::freertos
         plexus::discovery
         Catch2::Catch2WithMain)

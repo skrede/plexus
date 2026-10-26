@@ -143,11 +143,13 @@ TEST_CASE("executor_driver post_from_thread runs the work on the thread running 
     std::atomic<std::thread::id> ran_on;
     std::thread runner{[&] { io.run(); }};
     const std::thread::id runner_id = runner.get_id();
+    bool accepted                   = false;
 
-    std::thread foreign{[&] { verbs::post_from_thread(io, [&] { ran_on = std::this_thread::get_id(); }); }};
+    std::thread foreign{[&] { accepted = verbs::post_from_thread(io, [&] { ran_on = std::this_thread::get_id(); }); }};
     foreign.join();
     guard.reset();
     runner.join();
 
+    CHECK(accepted);
     CHECK(ran_on.load() == runner_id);
 }

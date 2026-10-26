@@ -17,9 +17,10 @@ struct inline_verbs
         fn();
     }
 
-    static void post_from_thread(executor_type, plexus::detail::move_only_function<void()> fn)
+    static bool post_from_thread(executor_type, plexus::detail::move_only_function<void()> fn)
     {
         fn();
+        return true;
     }
 
     static bool running_in_this_thread(executor_type) noexcept

@@ -18,9 +18,9 @@ struct executor_verbs
         ex.post(std::move(fn));
     }
 
-    static void post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    static bool post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
-        ex.post_from_thread(std::move(fn));
+        return ex.post_from_thread(std::move(fn));
     }
 
     static bool running_in_this_thread(executor_type ex)

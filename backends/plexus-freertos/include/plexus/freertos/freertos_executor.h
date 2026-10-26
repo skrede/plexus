@@ -29,8 +29,8 @@ class freertos_timer;
 // blocks. The block-with-timeout that yields to the idle task — the discipline that
 // keeps the task watchdog fed — lives in the super-loop driver, not here; a spin or
 // busy-wait here would starve the idle task and trip the watchdog reset.
-// A task that does not pump hands work over through post_from_thread; ingress_dropped() counts
-// the posts a full slot pool or a full queue turned away.
+// A task that does not pump hands work over through post_from_thread, which returns false for a
+// post a full slot pool or a full queue turned away; ingress_dropped() counts those posts.
 class freertos_executor
 {
     using pump_scope = plexus::detail::driver_record<TaskHandle_t>::step_scope;
@@ -74,9 +74,9 @@ public:
         return xQueueSend(m_queue, &w, 0) == pdTRUE;
     }
 
-    void post_from_thread(plexus::detail::move_only_function<void()> fn)
+    bool post_from_thread(plexus::detail::move_only_function<void()> fn)
     {
-        m_ingress.post(std::move(fn), [this](posted_work w) { return post_from_task(w); });
+        return m_ingress.post(std::move(fn), [this](posted_work w) { return post_from_task(w); });
     }
 
     std::uint32_t ingress_dropped() const noexcept

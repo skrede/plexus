@@ -24,9 +24,10 @@ struct io_context_verbs
     }
 
     // asio::post is safe from any thread, so the cross-thread ingress is the same queue.
-    static void post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    static bool post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
         ::asio::post(ex, std::move(fn));
+        return true;
     }
 
     static bool running_in_this_thread(executor_type ex)

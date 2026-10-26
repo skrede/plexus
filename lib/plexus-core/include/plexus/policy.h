@@ -33,7 +33,7 @@ concept Policy =
         } && io::byte_channel<typename P::byte_channel_type> && timer<typename P::timer_type> && std::constructible_from<typename P::timer_type, typename P::executor_type> &&
         std::constructible_from<typename P::timer_type, typename P::executor_type, std::error_code &> && requires(typename P::executor_type ex, detail::move_only_function<void()> fn) {
             P::post(ex, std::move(fn));
-            P::post_from_thread(ex, std::move(fn));
+            { P::post_from_thread(ex, std::move(fn)) } -> std::same_as<bool>;
             { P::running_in_this_thread(ex) } -> std::same_as<bool>;
             { P::inside_executor(ex) } -> std::same_as<bool>;
             P::release_driver(ex);

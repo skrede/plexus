@@ -55,10 +55,12 @@ TEST_CASE("inproc_ingress work posted from another thread runs at the next step 
     inproc_bus<> bus;
     inproc_executor<> ex{bus};
     std::thread::id ran_on{};
+    bool accepted = false;
 
-    std::thread foreign([&] { ex.post_from_thread([&] { ran_on = std::this_thread::get_id(); }); });
+    std::thread foreign([&] { accepted = ex.post_from_thread([&] { ran_on = std::this_thread::get_id(); }); });
     foreign.join();
 
+    REQUIRE(accepted);
     REQUIRE(ran_on == std::thread::id{});
     REQUIRE(ex.step());
     REQUIRE(ran_on == std::this_thread::get_id());
@@ -102,11 +104,13 @@ TEST_CASE("inproc_ingress an inproc node receives a publish posted through plexu
                                  received.store(true, std::memory_order_release);
                              }};
     ex.drain();
+    bool accepted = false;
 
-    std::thread foreign([&] { plexus::post(host.node(), [&] { pub.publish(std::array<std::byte, 1>{std::byte{0x2A}}); }); });
+    std::thread foreign([&] { accepted = plexus::post(host.node(), [&] { pub.publish(std::array<std::byte, 1>{std::byte{0x2A}}); }); });
     step_until(ex, received);
     foreign.join();
 
+    REQUIRE(accepted);
     REQUIRE(received.load(std::memory_order_acquire));
     REQUIRE(received_on == std::this_thread::get_id());
 }

@@ -34,6 +34,7 @@
 #include <thread>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <optional>
 
 namespace {
@@ -59,6 +60,7 @@ struct tally
     std::atomic<bool> finished{false};
     std::atomic<std::uint32_t> done{0};
     std::atomic<std::uint32_t> on_driver{0};
+    std::atomic<std::uint32_t> refused{0};
 };
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -77,11 +79,18 @@ void exercise(Node &node, std::optional<plexus::publisher<>> &pub)
     plexus::subscriber<> transient{node, "post/topic", [](std::span<const std::byte>) {}};
 }
 
+template<typename Node, typename Fn>
+void post_counted(Node &node, tally &counts, Fn fn)
+{
+    if(!plexus::post(node, std::move(fn)))
+        counts.refused.fetch_add(1, std::memory_order_relaxed);
+}
+
 template<typename Node, typename Inside>
 void post_rounds(Node &node, std::optional<plexus::publisher<>> &pub, tally &counts, Inside inside)
 {
     for(std::uint32_t i = 0; i < k_rounds; ++i)
-        plexus::post(node,
+        post_counted(node, counts,
                      [&node, &pub, &counts, inside]
                      {
                          exercise(node, pub);
@@ -134,7 +143,7 @@ void seed_churn(::asio::io_context &io, asio_node &node, std::optional<plexus::p
 void post_rounds_then_stop(::asio::io_context &io, asio_node &node, std::optional<plexus::publisher<>> &pub, tally &counts)
 {
     post_rounds(node, pub, counts, [&io] { return plexus::asio::asio_policy::inside_executor(io); });
-    plexus::post(node,
+    post_counted(node, counts,
                  [&io, &pub]
                  {
                      pub.reset();
@@ -160,6 +169,7 @@ TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handl
     foreign.join();
     executor.join();
 
+    REQUIRE(counts.refused.load() == 0);
     REQUIRE(counts.done.load() == k_rounds);
     REQUIRE(counts.on_driver.load() == k_rounds);
 }
@@ -178,11 +188,12 @@ TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handl
             [&]
             {
                 post_rounds(host.node(), pub, counts, [&ex] { return ex.inside_executor(); });
-                plexus::post(host.node(), [&counts] { counts.finished.store(true, std::memory_order_release); });
+                post_counted(host.node(), counts, [&counts] { counts.finished.store(true, std::memory_order_release); });
             });
     foreign.join();
     stepper.join();
 
+    REQUIRE(counts.refused.load() == 0);
     REQUIRE(counts.done.load() == k_rounds);
     REQUIRE(counts.on_driver.load() == k_rounds);
 }

@@ -50,7 +50,7 @@ void inproc_teardown(bool release)
     plexus::subscriber<> sub{host.node(), "affinity/topic", [](std::span<const std::byte>) {}};
     std::thread driver{[&]
                        {
-                           plexus::post(host.node(), [&] { read_participants(host.node()); });
+                           post_or_exit(host.node(), [&] { read_participants(host.node()); });
                            ex.drain();
                            if(release)
                                plexus::release_driver(host.node());

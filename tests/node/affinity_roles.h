@@ -9,9 +9,12 @@
 #include <span>
 #include <array>
 #include <atomic>
+#include <cstdio>
 #include <thread>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <utility>
 #include <optional>
 #include <string_view>
 
@@ -25,6 +28,16 @@ enum class role_outcome : std::uint8_t
 };
 
 inline constexpr std::array<std::byte, 2> k_payload{std::byte{0x0A}, std::byte{0xFF}};
+
+// A refused post would leave the role waiting on work that never runs, so the child says so and exits 3.
+template<typename Node, typename Fn>
+void post_or_exit(Node &node, Fn fn)
+{
+    if(plexus::post(node, std::move(fn)))
+        return;
+    std::fputs("affinity-post-refused\n", stderr);
+    std::exit(3);
+}
 
 template<typename Node>
 void read_participants(Node &node)
@@ -55,7 +68,7 @@ template<typename Node, typename Step>
 void step_after_claimed(Node &node, Step step)
 {
     std::atomic<bool> ran{false};
-    plexus::post(node,
+    post_or_exit(node,
                  [&]
                  {
                      read_participants(node);

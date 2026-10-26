@@ -32,9 +32,9 @@ struct wire_capturing_policy
         Inner::post(ex, std::move(fn));
     }
 
-    static void post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    static bool post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
     {
-        Inner::post_from_thread(ex, std::move(fn));
+        return Inner::post_from_thread(ex, std::move(fn));
     }
 
     static bool running_in_this_thread(executor_type ex)
