@@ -73,7 +73,9 @@ public:
 
     bool step()
     {
-        const detail::driver_record<std::thread::id>::step_scope scope(m_driver, std::this_thread::get_id());
+        const std::thread::id self = std::this_thread::get_id();
+        const detail::driver_record<std::thread::id>::step_scope scope(m_driver, self);
+        m_driver.claim_step(self, "step");
         m_ingress.drain_into(m_posted);
         if(m_head < m_posted.size())
             return run_next_posted();

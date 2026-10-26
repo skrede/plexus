@@ -4,6 +4,7 @@
 #include "plexus/node_id.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/affinity_check.h"
 #include "plexus/detail/node_discovery_glue.h"
 
 #include "plexus/io/endpoint.h"
@@ -11,6 +12,7 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/observation_events.h"
 
 #include <span>
 #include <string>
@@ -58,6 +60,14 @@ struct peer_watch : io::observer
     {
         note_known_peer(owner, id);
         fan_demands_to(owner, id);
+    }
+
+    // The constructor posts the node's creation edge, so the thread that first runs the executor claims it here even
+    // when no callback ever touches the node.
+    void on_participant(const io::participant_event &ev) override
+    {
+        if(ev.edge == io::participant_edge::created)
+            check_affinity<typename Node::policy_type>(owner.executor(), "created edge");
     }
 };
 

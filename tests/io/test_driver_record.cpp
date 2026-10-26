@@ -41,7 +41,7 @@ TEST_CASE("driver_record a nested step on the same thread keeps it inside until 
     CHECK_FALSE(record.inside(k_driver));
 }
 
-TEST_CASE("driver_record overlapping steps leave no stale record when the first stepper leaves first", "[io][driver_record][!shouldfail]")
+TEST_CASE("driver_record overlapping steps leave no stale record when the first stepper leaves first", "[io][driver_record]")
 {
     record_type record;
     std::optional<record_type::step_scope> first;

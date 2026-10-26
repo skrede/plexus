@@ -50,7 +50,6 @@ struct hold_topology
             , publisher("publisher", 0x61, region, small_socket_buffers())
             , reader("reader", 0x62, region)
             , newcomer("newcomer", 0x63, region, small_socket_buffers())
-            , newcomer_id(newcomer.node.id())
             , reader_tally(total, measured_from)
             , newcomer_tally(total, measured_from)
             , drops(fqn)
@@ -84,7 +83,7 @@ struct hold_topology
         publisher.node.router().registry().for_each_connected(
                 [&](const plexus::node_id &, auto &session)
                 {
-                    if(session.peer_identity() == newcomer_id)
+                    if(session.peer_identity() == newcomer.node.id())
                         backlog = session.msg_peer().channel.backpressured();
                 });
         return backlog;
@@ -95,7 +94,6 @@ struct hold_topology
     co_host_node publisher;
     co_host_node reader;
     co_host_node newcomer;
-    plexus::node_id newcomer_id;
     hold_tally reader_tally;
     hold_tally newcomer_tally;
     topic_drops drops;

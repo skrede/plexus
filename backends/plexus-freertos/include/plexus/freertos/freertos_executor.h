@@ -110,14 +110,18 @@ public:
         posted_work w{};
         if(xQueueReceive(m_queue, &w, pdMS_TO_TICKS(static_cast<std::uint32_t>(interval.count()))) == pdTRUE)
         {
-            const pump_scope scope(m_driver, xTaskGetCurrentTaskHandle());
+            const TaskHandle_t self = xTaskGetCurrentTaskHandle();
+            const pump_scope scope(m_driver, self);
+            m_driver.claim_step(self, "pump");
             w.invoke(w.ctx);
         }
     }
 
     bool pump()
     {
-        const pump_scope scope(m_driver, xTaskGetCurrentTaskHandle());
+        const TaskHandle_t self = xTaskGetCurrentTaskHandle();
+        const pump_scope scope(m_driver, self);
+        m_driver.claim_step(self, "pump");
         if(!m_posted.empty())
         {
             auto fn = std::move(m_posted.front());

@@ -151,11 +151,11 @@ class procedure;
 // engine and (for >1 transport) the multiplexing glue. Its posts and waits capture `this`, so it is non-copyable and
 // non-movable. A closed node may be destroyed inside or after its on_closed while the executor keeps running; a node
 // never closed is destroyed only with its executor not run again.
-// THREADING: one thread drives the executor, and every member and every handle operation runs on it. The first call
-// binds its caller until a thread running the executor claims the node, once; any other thread hands work in through
-// plexus::post, and executor() is the one member safe from any thread. Construction and destruction are exempt, so an
-// owner may build and drain the node on a setup thread. PLEXUS_AFFINITY_CHECKS (on in Debug) aborts a call from any
-// other thread; a worker whose call precedes every call made inside a handler is not caught.
+// THREADING: one thread drives the executor and makes every member and handle call; other threads hand work in through
+// plexus::post, and executor() and id() are safe from any thread. The first call binds its caller; the driver claims the
+// executor on its first step or handler (the node's creation post is one) and holds it until plexus::release_driver, its
+// last act, and then the next caller binds. Construction and destruction are exempt. PLEXUS_AFFINITY_CHECKS (on in
+// Debug) aborts a call from any other thread, a second driver included; a call made before the driver's claim is not.
 template<typename Profile, typename... Transports>
     requires detail::target_profile<Profile> && (sizeof...(Transports) >= 1) &&
         (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, typename detail::profile_traits<Profile>::policy> : (io::mux_member<Transports> && ...))
@@ -327,7 +327,6 @@ public:
 
     const plexus::node_id &id() const noexcept
     {
-        affine("id");
         return m_id;
     }
 

@@ -118,27 +118,27 @@ TEST_CASE("affinity_check freertos_release_teardown lets the owner tear down a h
     require_ok("freertos_release_teardown");
 }
 
-TEST_CASE("affinity_check inproc_pump_handover lets a thread that drains the executor claim it from the setup thread", "[node][!shouldfail]")
+TEST_CASE("affinity_check inproc_pump_handover lets a thread that drains the executor claim it from the setup thread", "[node]")
 {
     require_ok("inproc_pump_handover");
 }
 
-TEST_CASE("affinity_check asio_poll_handover lets a thread that polls the io_context claim it from the setup thread", "[node][!shouldfail]")
+TEST_CASE("affinity_check asio_poll_handover lets a thread that polls the io_context claim it from the setup thread", "[node]")
 {
     require_ok("asio_poll_handover");
 }
 
-TEST_CASE("affinity_check inproc_second_stepper aborts when a second thread steps an executor the first still claims", "[node][!shouldfail]")
+TEST_CASE("affinity_check inproc_second_stepper aborts when a second thread steps an executor the first still claims", "[node]")
 {
     require_trip("inproc_second_stepper", "step");
 }
 
-TEST_CASE("affinity_check freertos_pump_handover lets a task that pumps the executor claim it from the setup task", "[node][!shouldfail]")
+TEST_CASE("affinity_check freertos_pump_handover lets a task that pumps the executor claim it from the setup task", "[node]")
 {
     require_ok("freertos_pump_handover");
 }
 
-TEST_CASE("affinity_check freertos_second_pumper aborts when a second task pumps an executor the first still claims", "[node][!shouldfail]")
+TEST_CASE("affinity_check freertos_second_pumper aborts when a second task pumps an executor the first still claims", "[node]")
 {
     require_trip("freertos_second_pumper", "pump");
 }
