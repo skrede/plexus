@@ -73,8 +73,9 @@ public:
         io::object_dispatch dispatch = [st](const io::object_carrier &carrier, const io::message_info &info) { st->on_object(carrier, info); };
 
         io::endpoint_seam seam = n.endpoint_seam_for();
-        const auto rid = seam.register_subscriber(seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id, identity.type_name, &io::detail::type_key<value_type>, std::move(dispatch), std::nullopt);
-        m_retire       = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
+        const auto rid         = seam.register_subscriber(seam.ctx, fqn, qos, std::move(bytes_adapter), identity.type_id, identity.type_name, &io::detail::type_key<value_type>,
+                                                          std::move(dispatch), std::nullopt);
+        m_retire               = [seam, rid] { seam.retire_subscriber(seam.ctx, rid); };
     }
 
     // Inbound frames whose decode failed — dropped, never a partial line.

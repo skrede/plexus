@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_DETAIL_TOPIC_SWEEP_H
-#define HPP_GUARD_PLEXUS_DETAIL_TOPIC_SWEEP_H
+#ifndef HPP_GUARD_PLEXUS_DETAIL_GRAPH_SWEEP_H
+#define HPP_GUARD_PLEXUS_DETAIL_GRAPH_SWEEP_H
 
 #include "plexus/graph/topic_record.h"
 #include "plexus/graph/participant_record.h"

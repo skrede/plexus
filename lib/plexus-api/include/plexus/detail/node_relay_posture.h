@@ -7,26 +7,13 @@
 #include "plexus/graph/participant_record.h"
 
 #include "plexus/node_id.h"
+#include "plexus/relay_posture.h"
 
 #include <cstddef>
 #include <type_traits>
 #include <string_view>
 
-namespace plexus {
-
-// A node's cooperative relay posture, as disclosed by self_check(). offering_relay is a compile-time
-// property of the profile — a node not spelled relay<> resolves the structurally-absent emitter twin
-// and never offers, so the count of origins it relays is meaningful only when offering. declining is
-// a cooperative request to peers not to relay for this node, never a security boundary.
-struct relay_posture
-{
-    bool        offering_relay;
-    std::size_t reported_origins;
-    std::size_t routes_via_relays;
-    bool        declining;
-};
-
-namespace detail {
+namespace plexus::detail {
 
 // The route count at which a leaf's via-relay reach is first disclosed: a value of 1
 // discloses any relayed reach.
@@ -75,8 +62,6 @@ void disclose_relay_posture_once(const Node &n, const relay_posture &posture)
         return;
     n.m_logger.warn(relay_posture_line(posture));
     n.m_relay_posture_warned = true;
-}
-
 }
 
 }

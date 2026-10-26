@@ -27,7 +27,7 @@
 
 #include "plexus/wire/topic_declaration.h"
 
-#include "plexus/detail/topic_sweep.h"
+#include "plexus/detail/graph_sweep.h"
 
 #include <span>
 #include <array>

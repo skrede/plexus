@@ -3,6 +3,7 @@
 
 #include "plexus/recorder.h"
 #include "plexus/node_options.h"
+#include "plexus/relay_posture.h"
 #include "plexus/target_profile.h"
 #include "plexus/graph_change_handle.h"
 #include "plexus/typed_publisher_options.h"
@@ -44,7 +45,7 @@
 #include "plexus/detail/compat.h"
 #include "plexus/detail/node_close.h"
 #include "plexus/detail/fail_closed.h"
-#include "plexus/detail/topic_sweep.h"
+#include "plexus/detail/graph_sweep.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_identity.h"
 #include "plexus/detail/affinity_check.h"
