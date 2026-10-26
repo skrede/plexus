@@ -115,6 +115,7 @@ public:
     // pre_buffer mode: freeze the held window (alloc-free). A no-op in continuous mode.
     void trigger() noexcept
     {
+        detail::check_affinity<Policy>(m_executor, "recorder::trigger");
         if(auto *p = std::get_if<io::recording::pre_buffer_controller>(&m_block->machinery))
         {
             p->trigger();
@@ -124,6 +125,7 @@ public:
 
     std::uint64_t captured_span() const noexcept
     {
+        detail::check_affinity<Policy>(m_executor, "recorder::captured_span");
         if(const auto *p = std::get_if<io::recording::pre_buffer_controller>(&m_block->machinery))
             return p->captured_span();
         return 0;
@@ -132,11 +134,13 @@ public:
     // Drive one bounded cooperative drain batch; returns true while work remains.
     bool pump()
     {
+        detail::check_affinity<Policy>(m_executor, "recorder::pump");
         return m_block->pump();
     }
 
     void flush()
     {
+        detail::check_affinity<Policy>(m_executor, "recorder::flush");
         m_block->flush();
     }
 
@@ -144,6 +148,7 @@ public:
     // segment. Empty in pre_buffer mode (no once-at-open preamble).
     std::span<const std::byte> preamble() const
     {
+        detail::check_affinity<Policy>(m_executor, "recorder::preamble");
         if(const auto *f = std::get_if<io::recording::flat_recorder>(&m_block->machinery))
             return f->preamble();
         return {};

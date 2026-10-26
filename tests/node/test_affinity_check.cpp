@@ -143,27 +143,27 @@ TEST_CASE("affinity_check freertos_second_pumper aborts when a second task pumps
     require_trip("freertos_second_pumper", "pump");
 }
 
-TEST_CASE("affinity_check foreign_recorder_pump aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_recorder_pump aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_recorder_pump", "recorder::pump");
 }
 
-TEST_CASE("affinity_check foreign_recorder_flush aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_recorder_flush aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_recorder_flush", "recorder::flush");
 }
 
-TEST_CASE("affinity_check foreign_recorder_trigger aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_recorder_trigger aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_recorder_trigger", "recorder::trigger");
 }
 
-TEST_CASE("affinity_check foreign_recorder_captured_span aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_recorder_captured_span aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_recorder_captured_span", "recorder::captured_span");
 }
 
-TEST_CASE("affinity_check foreign_recorder_preamble aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_recorder_preamble aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_recorder_preamble", "recorder::preamble");
 }
