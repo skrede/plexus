@@ -21,6 +21,17 @@ if(NOT _rc EQUAL 0)
     message(FATAL_ERROR "install failed (${_rc}):\n${_out}")
 endif()
 
+file(GLOB_RECURSE _targets_file "${_prefix}/plexusTargets.cmake")
+if(NOT _targets_file)
+    message(FATAL_ERROR "the install wrote no plexusTargets.cmake under ${_prefix}")
+endif()
+file(READ "${_targets_file}" _targets_text)
+string(FIND "${_targets_text}" "$<CONFIG:Debug>" _per_config)
+if(_per_config EQUAL -1)
+    message(FATAL_ERROR "the exported plexus::core decides PLEXUS_AFFINITY_CHECKS at the producer's configure time "
+                        "instead of in the consumer's configuration (${_targets_file})")
+endif()
+
 # Forward the parent's exact toolchain so the nested configure matches this build rather
 # than cmake's platform default (a multi-config Visual Studio generator on Windows, which
 # neither matches this single-config Ninja + cl build nor inherits the vcvars environment).
