@@ -1,0 +1,84 @@
+#include "plexus/testing/platform.h"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <string>
+#include <cstdlib>
+#include <fstream>
+#include <iterator>
+#include <filesystem>
+
+namespace {
+
+struct child_result
+{
+    int status;
+    std::string out;
+    std::string err;
+};
+
+std::string read_file(const std::filesystem::path &path)
+{
+    std::ifstream in{path};
+    return std::string{std::istreambuf_iterator<char>{in}, std::istreambuf_iterator<char>{}};
+}
+
+// cmd.exe strips the outermost pair of quotes from a command that holds more than two, so Windows wraps it once more.
+child_result run_child(const std::string &role)
+{
+    const std::filesystem::path dir = plexus::testing::make_temp_dir("plexus-affinity-");
+    const std::filesystem::path out = dir / "stdout.txt";
+    const std::filesystem::path err = dir / "stderr.txt";
+    std::string command             = "\"" + std::string{PLEXUS_AFFINITY_TRIP_CHILD} + "\" " + role + " > \"" + out.string() + "\" 2> \"" + err.string() + "\"";
+#if defined(_WIN32)
+    command = "\"" + command + "\"";
+#endif
+    const int status = std::system(command.c_str());
+    child_result result{status, read_file(out), read_file(err)};
+    std::filesystem::remove_all(dir);
+    return result;
+}
+
+void require_trip(const std::string &role, const std::string &member)
+{
+    const child_result result = run_child(role);
+    INFO("stdout: " << result.out << "\nstderr: " << result.err);
+    CHECK(result.status != 0);
+    CHECK(result.err.find("plexus: " + member + " called off the node's executor thread") != std::string::npos);
+}
+
+}
+
+TEST_CASE("affinity_check foreign_publish aborts with a message naming the member", "[node][!shouldfail]")
+{
+    require_trip("foreign_publish", "publish");
+}
+
+TEST_CASE("affinity_check foreign_member aborts with a message naming the member", "[node][!shouldfail]")
+{
+    require_trip("foreign_member", "participants");
+}
+
+TEST_CASE("affinity_check second_runner aborts with a message naming the member", "[node][!shouldfail]")
+{
+    require_trip("second_runner", "participants");
+}
+
+TEST_CASE("affinity_check foreign_handle_destroy aborts with a message naming the member", "[node][!shouldfail]")
+{
+    require_trip("foreign_handle_destroy", "retire_subscriber");
+}
+
+TEST_CASE("affinity_check inproc_foreign aborts with a message naming the member", "[node][!shouldfail]")
+{
+    require_trip("inproc_foreign", "participants");
+}
+
+TEST_CASE("affinity_check the same calls through plexus::post do not trip", "[node]")
+{
+    const child_result result = run_child("via_post");
+    INFO("stdout: " << result.out << "\nstderr: " << result.err);
+    CHECK(result.status == 0);
+    CHECK(result.out.find("affinity-ok") != std::string::npos);
+    CHECK(result.err.find("called off the node's executor thread") == std::string::npos);
+}

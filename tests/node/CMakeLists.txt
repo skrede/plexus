@@ -474,4 +474,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::discovery
         Catch2::Catch2WithMain)
     catch_discover_tests(test_post_from_thread TEST_PREFIX "node.")
+
+    # Each misuse runs in a child process that defines the check itself, so the abort is exercised on every platform
+    # and build type; the test reads the child's exit status and the message it wrote.
+    add_executable(affinity_trip_child affinity_trip_child.cpp)
+    target_link_libraries(affinity_trip_child PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::inproc
+        plexus::discovery)
+    target_compile_definitions(affinity_trip_child PRIVATE PLEXUS_AFFINITY_CHECKS)
+
+    add_executable(test_affinity_check test_affinity_check.cpp)
+    target_link_libraries(test_affinity_check PRIVATE
+        plexus::testing
+        Catch2::Catch2WithMain)
+    target_compile_definitions(test_affinity_check PRIVATE PLEXUS_AFFINITY_TRIP_CHILD="$<TARGET_FILE:affinity_trip_child>")
+    add_dependencies(test_affinity_check affinity_trip_child)
+    catch_discover_tests(test_affinity_check TEST_PREFIX "node.")
 endif()
