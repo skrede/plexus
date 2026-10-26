@@ -24,6 +24,7 @@
 #include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/policy.h"
+#include "plexus/executor_verbs.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -66,17 +67,11 @@ struct manual_clock
     }
 };
 
-struct manual_policy
+struct manual_policy : plexus::executor_verbs<inproc_executor<manual_clock>>
 {
-    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
     using timer_type        = inproc_timer<manual_clock>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<manual_policy>);

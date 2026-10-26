@@ -33,6 +33,8 @@
 #include "plexus/io/io_error.h"
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #ifdef PLEXUS_HAVE_ASIO_MUX
@@ -135,17 +137,11 @@ struct tagged_timer
     }
 };
 
-struct tagged_policy
+struct tagged_policy : plexus::testing::inline_verbs<tagged_executor &>
 {
-    using executor_type     = tagged_executor &;
     using byte_channel_type = tagged_channel;
     using timer_type        = tagged_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
 };
 
 static_assert(plexus::Policy<tagged_policy>);

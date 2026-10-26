@@ -12,6 +12,7 @@
 #include "plexus/io/transport_selector.h"
 
 #include "plexus/policy.h"
+#include "plexus/executor_verbs.h"
 #include "plexus/detail/compat.h"
 
 #include "driver/uart.h"
@@ -26,19 +27,12 @@
 namespace example {
 
 // The serial-cell Policy triple: identical to the freertos policy except byte_channel_type binds
-// to the real uart_channel. Fully-qualify plexus::detail:: below — an io/host-shim detail namespace
-// is in scope and would shadow the bare detail:: lookup (the move_only_function shadowing pitfall).
-struct bench_uart_policy
+// to the real uart_channel.
+struct bench_uart_policy : plexus::executor_verbs<plexus::freertos::freertos_executor>
 {
-    using executor_type     = plexus::freertos::freertos_executor &;
     using byte_channel_type = plexus::freertos::uart_channel;
     using timer_type        = plexus::freertos::freertos_timer;
     using byte_owner        = plexus::freertos::mcu_byte_owner;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<bench_uart_policy>, "bench_uart_policy must satisfy Policy");

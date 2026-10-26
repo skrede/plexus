@@ -2,6 +2,8 @@
 
 #include "plexus/inproc/inproc_timer.h"
 
+#include "plexus/executor_verbs.h"
+
 using namespace procedure_forwarder_fixture;
 
 namespace {
@@ -36,17 +38,11 @@ struct manual_clock
 // The manual-clock inproc Policy: the same substrate as inproc_policy, but every
 // piece (executor, channel, timer) is instantiated on manual_clock so the
 // forwarder's per-call timer fires off the advance-able clock.
-struct manual_policy
+struct manual_policy : plexus::executor_verbs<plexus::inproc::inproc_executor<manual_clock>>
 {
-    using executor_type     = plexus::inproc::inproc_executor<manual_clock> &;
     using byte_channel_type = plexus::inproc::inproc_channel<manual_clock>;
     using timer_type        = plexus::inproc::inproc_timer<manual_clock>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<manual_policy>);

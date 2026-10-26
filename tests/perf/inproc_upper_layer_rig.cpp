@@ -29,6 +29,7 @@
 #include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/policy.h"
+#include "plexus/executor_verbs.h"
 
 #include <span>
 #include <chrono>
@@ -56,17 +57,11 @@ using clock_t_ = std::chrono::steady_clock;
 // a real (steady) clock so the rig drives a genuine publish cadence, not virtual
 // time. byte_owner is the default shared owner — the same handle the production
 // asio policy selects, so the codec/forwarder allocation behavior matches.
-struct rig_policy
+struct rig_policy : plexus::executor_verbs<inproc_executor<clock_t_>>
 {
-    using executor_type     = inproc_executor<clock_t_> &;
     using byte_channel_type = inproc_channel<clock_t_>;
     using timer_type        = inproc_timer<clock_t_>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<rig_policy>);

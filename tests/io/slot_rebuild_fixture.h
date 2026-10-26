@@ -19,6 +19,8 @@
 
 #include "support/race_timer.h"
 
+#include "plexus/executor_verbs.h"
+
 #include <deque>
 #include <chrono>
 #include <memory>
@@ -27,17 +29,11 @@
 
 namespace plexus::testing {
 
-struct race_policy
+struct race_policy : plexus::executor_verbs<race_executor>
 {
-    using executor_type     = race_executor &;
     using byte_channel_type = slot_channel;
     using timer_type        = race_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 struct dial_transport

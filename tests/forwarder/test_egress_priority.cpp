@@ -20,6 +20,8 @@
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -172,17 +174,11 @@ struct stall_timer
     }
 };
 
-struct stall_policy
+struct stall_policy : plexus::testing::inline_verbs<stall_executor &>
 {
-    using executor_type     = stall_executor &;
     using byte_channel_type = stall_channel;
     using timer_type        = stall_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type, detail::move_only_function<void()> fn)
-    {
-        fn();
-    } // synchronous
 };
 
 static_assert(plexus::Policy<stall_policy>);
@@ -262,17 +258,11 @@ struct capped_channel
     capped_state *m_st{nullptr};
 };
 
-struct capped_policy
+struct capped_policy : plexus::testing::inline_verbs<stall_executor &>
 {
-    using executor_type     = stall_executor &;
     using byte_channel_type = capped_channel;
     using timer_type        = stall_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type, detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
 };
 
 static_assert(plexus::Policy<capped_policy>);
@@ -495,16 +485,11 @@ TEST_CASE("egress_priority: the MUX/ERASED path bands - realtime leaves before a
     // A Policy whose byte_channel is the type-erased polymorphic_byte_channel, mirroring
     // the production mux config; the erased member is a stall_channel exposing the
     // controllable backpressured() the test drives.
-    struct erased_policy
+    struct erased_policy : plexus::testing::inline_verbs<stall_executor &>
     {
-        using executor_type     = stall_executor &;
         using byte_channel_type = pio::polymorphic_byte_channel;
         using timer_type        = stall_timer;
         using byte_owner        = std::shared_ptr<const void>;
-        static void post(executor_type, detail::move_only_function<void()> fn)
-        {
-            fn();
-        }
     };
     static_assert(plexus::Policy<erased_policy>);
     using erased_forwarder = io::message_forwarder<erased_policy>;

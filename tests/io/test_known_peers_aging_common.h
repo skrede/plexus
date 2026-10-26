@@ -23,6 +23,7 @@
 #include "plexus/testing/test_clock.h"
 
 #include "plexus/policy.h"
+#include "plexus/executor_verbs.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -43,17 +44,11 @@ using plexus::inproc::inproc_channel;
 using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_transport;
 
-struct clock_policy
+struct clock_policy : plexus::executor_verbs<inproc_executor<test_clock>>
 {
-    using executor_type     = inproc_executor<test_clock> &;
     using byte_channel_type = inproc_channel<test_clock>;
     using timer_type        = inproc_timer<test_clock>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<clock_policy>);

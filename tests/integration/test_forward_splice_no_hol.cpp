@@ -30,6 +30,8 @@
 
 #include "plexus/node_id.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -123,13 +125,11 @@ struct stall_timer
     void cancel() {}
 };
 
-struct stall_policy
+struct stall_policy : plexus::testing::inline_verbs<stall_executor &>
 {
-    using executor_type     = stall_executor &;
     using byte_channel_type = stall_channel;
     using timer_type        = stall_timer;
     using byte_owner        = std::shared_ptr<const void>;
-    static void post(executor_type, detail::move_only_function<void()> fn) { fn(); }
 };
 
 static_assert(plexus::Policy<stall_policy>);

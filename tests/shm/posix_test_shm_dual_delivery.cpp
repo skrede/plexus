@@ -16,10 +16,9 @@
 #include "plexus/io/reliability.h"
 #include "plexus/wire_bytes.h"
 
-#include "plexus/detail/compat.h"
+#include "plexus/asio/io_context_verbs.h"
 
 #include <asio/io_context.hpp>
-#include <asio/post.hpp>
 #include <asio/read.hpp>
 #include <asio/write.hpp>
 #include <asio/ip/tcp.hpp>
@@ -35,7 +34,6 @@
 #include <span>
 #include <string>
 #include <thread>
-#include <utility>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -56,13 +54,8 @@ using plexus::native::region_handle;
 
 namespace {
 
-struct test_policy
+struct test_policy : plexus::asio::io_context_verbs
 {
-    using executor_type = ::asio::io_context &;
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ::asio::post(ex, std::move(fn));
-    }
 };
 
 struct coord

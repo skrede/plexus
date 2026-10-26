@@ -29,8 +29,11 @@
 #include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/policy.h"
+#include "plexus/executor_verbs.h"
 
 #include "support/alloc_counter.h"
+
+#include "plexus/testing/inline_verbs.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -78,17 +81,11 @@ struct manual_clock
     }
 };
 
-struct manual_policy
+struct manual_policy : plexus::executor_verbs<inproc_executor<manual_clock>>
 {
-    using executor_type     = inproc_executor<manual_clock> &;
     using byte_channel_type = inproc_channel<manual_clock>;
     using timer_type        = inproc_timer<manual_clock>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<manual_policy>);
@@ -160,16 +157,11 @@ struct sink_timer
     }
 };
 
-struct sink_policy
+struct sink_policy : plexus::testing::inline_verbs<sink_executor &>
 {
-    using executor_type     = sink_executor &;
     using byte_channel_type = sink_channel;
     using timer_type        = sink_timer;
     using byte_owner        = std::shared_ptr<const void>;
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
 };
 
 static_assert(plexus::Policy<sink_policy>);

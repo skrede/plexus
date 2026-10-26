@@ -1,5 +1,7 @@
 #include "test_latch_replay_inproc_common.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 #include <catch2/catch_test_macros.hpp>
 
 using namespace latch_replay_fixture;
@@ -148,17 +150,11 @@ struct sink_timer
     }
 };
 
-struct sink_policy
+struct sink_policy : plexus::testing::inline_verbs<sink_executor &>
 {
-    using executor_type     = sink_executor &;
     using byte_channel_type = sink_channel;
     using timer_type        = sink_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
 };
 
 static_assert(plexus::Policy<sink_policy>);

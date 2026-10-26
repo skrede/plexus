@@ -16,8 +16,9 @@
 #include "plexus/io/reliability.h"
 #include "plexus/wire_bytes.h"
 
+#include "plexus/asio/io_context_verbs.h"
+
 #include <asio/io_context.hpp>
-#include <asio/post.hpp>
 
 #include "plexus/testing/platform.h"
 
@@ -29,7 +30,6 @@
 #include <cstring>
 #include <span>
 #include <string>
-#include <utility>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -49,18 +49,11 @@ using plexus::native::region_handle;
 
 namespace {
 
-// A minimal Policy bundle for the bridge: it needs ONLY the executor_type (the
-// user-owned io_context reference) + the static post() forwarding onto it. The
-// bridge posts the drain via Policy::post -- the on_data-posted model, no
+// A minimal Policy bundle for the bridge: it needs ONLY the io_context executor verbs.
+// The bridge posts the drain via Policy::post -- the on_data-posted model, no
 // serialized executor wrapper.
-struct test_policy
+struct test_policy : plexus::asio::io_context_verbs
 {
-    using executor_type = ::asio::io_context &;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ::asio::post(ex, std::move(fn));
-    }
 };
 
 struct coord

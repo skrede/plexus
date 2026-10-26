@@ -12,6 +12,8 @@
 
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 #include <span>
 #include <chrono>
 #include <memory>
@@ -66,16 +68,10 @@ struct sink_timer
     plexus::detail::move_only_function<void(std::error_code)> m_cb;
 };
 
-struct sink_policy
+struct sink_policy : plexus::testing::inline_verbs<sink_executor &>
 {
-    using executor_type = sink_executor &;
-    using timer_type    = sink_timer;
-    using byte_owner    = std::shared_ptr<const void>;
-
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
+    using timer_type = sink_timer;
+    using byte_owner = std::shared_ptr<const void>;
 };
 
 // A non-allocating datagram_socket: send_multicast records the emitted bytes into a reused buffer

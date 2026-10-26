@@ -7,6 +7,7 @@
 #include "plexus/wire_bytes.h"
 #include "plexus/loopback_node.h"
 #include "plexus/node_options.h"
+#include "plexus/executor_verbs.h"
 
 #include "plexus/io/process_loopback_channel.h"
 
@@ -35,17 +36,11 @@ using plexus::discovery::static_discovery;
 // The pure intra-node Policy: the loopback channel IS its byte_channel_type, so a single-transport
 // node binds it concretely (zero erasure, the typed fast path engages). The step-executor and
 // virtual-clock timer are reused from inproc (a DRY consolidation, not a new mechanism).
-struct loopback_policy
+struct loopback_policy : plexus::executor_verbs<inproc_executor<>>
 {
-    using executor_type     = inproc_executor<> &;
     using byte_channel_type = plexus::io::process_loopback_channel<loopback_policy>;
     using timer_type        = inproc_timer<>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<loopback_policy>);

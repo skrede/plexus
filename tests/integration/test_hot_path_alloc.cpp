@@ -12,6 +12,8 @@
 
 #include "support/alloc_counter.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 // The asio/crypto backend headers pull in <asio/...> whose own code references the
 // UNQUALIFIED name `asio`; they MUST precede `using namespace plexus;` below, because that
 // using-directive makes plexus::asio visible and an unqualified `asio` then resolves
@@ -123,17 +125,11 @@ struct sink_timer
     }
 };
 
-struct sink_policy
+struct sink_policy : plexus::testing::inline_verbs<sink_executor &>
 {
-    using executor_type     = sink_executor &;
     using byte_channel_type = sink_channel;
     using timer_type        = sink_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type, detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
 };
 
 static_assert(plexus::Policy<sink_policy>);
@@ -191,17 +187,11 @@ struct banding_sink_channel
     std::size_t sends{0};
 };
 
-struct banding_sink_policy
+struct banding_sink_policy : plexus::testing::inline_verbs<sink_executor &>
 {
-    using executor_type     = sink_executor &;
     using byte_channel_type = banding_sink_channel;
     using timer_type        = sink_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type, detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
 };
 
 static_assert(plexus::Policy<banding_sink_policy>);

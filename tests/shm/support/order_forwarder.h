@@ -16,6 +16,8 @@
 #include "plexus/policy.h"
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 #include <span>
 #include <chrono>
 #include <memory>
@@ -172,17 +174,11 @@ struct order_timer
     }
 };
 
-struct order_policy
+struct order_policy : plexus::testing::inline_verbs<order_executor &>
 {
-    using executor_type     = order_executor &;
     using byte_channel_type = order_channel;
     using timer_type        = order_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
 };
 
 static_assert(plexus::Policy<order_policy>);

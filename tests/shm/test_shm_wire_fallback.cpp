@@ -23,6 +23,7 @@
 
 #include "plexus/policy.h"
 #include "plexus/topic_qos.h"
+#include "plexus/executor_verbs.h"
 
 #include "plexus/detail/compat.h"
 
@@ -180,17 +181,11 @@ static_assert(plexus::io::byte_channel<tap_channel>, "tap_channel must satisfy b
 
 // A test Policy binding the tap as the byte_channel, reusing the deterministic inproc
 // executor/timer substrate the forwarder needs for its egress scheduler.
-struct tap_policy
+struct tap_policy : plexus::executor_verbs<plexus::inproc::inproc_executor<>>
 {
-    using executor_type     = plexus::inproc::inproc_executor<> &;
     using byte_channel_type = tap_channel;
     using timer_type        = plexus::inproc::inproc_timer<>;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 static_assert(plexus::Policy<tap_policy>, "tap_policy must satisfy Policy");

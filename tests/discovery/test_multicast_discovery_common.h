@@ -9,6 +9,8 @@
 #include "plexus/stream/datagram_socket.h"
 #include "plexus/detail/compat.h"
 
+#include "plexus/testing/inline_verbs.h"
+
 #include <span>
 #include <string>
 #include <vector>
@@ -106,15 +108,9 @@ public:
     }
 };
 
-struct fake_policy
+struct fake_policy : plexus::testing::inline_verbs<int &>
 {
-    using executor_type = int &;
-    using timer_type    = fake_timer;
-
-    static void post(executor_type, plexus::detail::move_only_function<void()> fn)
-    {
-        fn();
-    }
+    using timer_type = fake_timer;
 };
 
 static_assert(plexus::stream::datagram_socket<fake_datagram_socket>);

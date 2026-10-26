@@ -19,6 +19,7 @@
 
 #include "plexus/policy.h"
 #include "plexus/node_id.h"
+#include "plexus/executor_verbs.h"
 
 #include "plexus/wire/close_cause.h"
 
@@ -121,18 +122,12 @@ private:
 };
 
 // The UART Policy: the step-executor by reference, the no-op channel, the inert timer, the
-// shared_ptr byte_owner. post() forwards onto the executor.
-struct uart_policy
+// shared_ptr byte_owner.
+struct uart_policy : plexus::executor_verbs<uart_executor>
 {
-    using executor_type     = uart_executor &;
     using byte_channel_type = uart_channel;
     using timer_type        = uart_timer;
     using byte_owner        = std::shared_ptr<const void>;
-
-    static void post(executor_type ex, plexus::detail::move_only_function<void()> fn)
-    {
-        ex.post(std::move(fn));
-    }
 };
 
 // The single non-shm transport leaf: a serial connector whose verbs are inert.
