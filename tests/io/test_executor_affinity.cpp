@@ -91,8 +91,8 @@ TEST_CASE("executor_affinity leaves a first-observing worker bound until a handl
 
 TEST_CASE("executor_affinity binds exactly one of two racing first observers", "[io][executor_affinity]")
 {
-    constexpr int trials = 500;
-    for(int trial = 0; trial < trials; ++trial)
+    constexpr std::uint32_t trials = 500;
+    for(std::uint32_t trial = 0; trial < trials; ++trial)
     {
         const std::array<bool, 2> driver = race_first_observations(k_outside);
         REQUIRE(driver[0] != driver[1]);
@@ -101,8 +101,8 @@ TEST_CASE("executor_affinity binds exactly one of two racing first observers", "
 
 TEST_CASE("executor_affinity confirms exactly one of two racing in-handler observers", "[io][executor_affinity]")
 {
-    constexpr int trials = 500;
-    for(int trial = 0; trial < trials; ++trial)
+    constexpr std::uint32_t trials = 500;
+    for(std::uint32_t trial = 0; trial < trials; ++trial)
     {
         const std::array<bool, 2> driver = race_first_observations(k_inside);
         REQUIRE(driver[0] != driver[1]);

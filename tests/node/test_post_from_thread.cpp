@@ -51,14 +51,14 @@ struct loopback_policy : plexus::executor_verbs<inproc_executor<>>
 
 static_assert(plexus::Policy<loopback_policy>);
 
-constexpr int k_rounds = 500;
+constexpr std::uint32_t k_rounds = 500;
 constexpr std::array<std::byte, 2> k_payload{std::byte{0x0B}, std::byte{0xAD}};
 
 struct tally
 {
-    std::atomic<int> done{0};
-    std::atomic<int> on_driver{0};
     std::atomic<bool> finished{false};
+    std::atomic<std::uint32_t> done{0};
+    std::atomic<std::uint32_t> on_driver{0};
 };
 
 plexus::node_id make_id(std::uint8_t seed)
@@ -80,7 +80,7 @@ void exercise(Node &node, std::optional<plexus::publisher<>> &pub)
 template<typename Node, typename Inside>
 void post_rounds(Node &node, std::optional<plexus::publisher<>> &pub, tally &counts, Inside inside)
 {
-    for(int i = 0; i < k_rounds; ++i)
+    for(std::uint32_t i = 0; i < k_rounds; ++i)
         plexus::post(node,
                      [&node, &pub, &counts, inside]
                      {
@@ -120,6 +120,28 @@ struct asio_churn
     }
 };
 
+// Queued before any thread starts, so the publisher exists before the first foreign round runs.
+void seed_churn(::asio::io_context &io, asio_node &node, std::optional<plexus::publisher<>> &pub)
+{
+    ::asio::post(io,
+                 [&io, &node, &pub]
+                 {
+                     pub.emplace(node, "post/topic");
+                     asio_churn{io, pub}();
+                 });
+}
+
+void post_rounds_then_stop(::asio::io_context &io, asio_node &node, std::optional<plexus::publisher<>> &pub, tally &counts)
+{
+    post_rounds(node, pub, counts, [&io] { return plexus::asio::asio_policy::inside_executor(io); });
+    plexus::post(node,
+                 [&io, &pub]
+                 {
+                     pub.reset();
+                     io.stop();
+                 });
+}
+
 }
 
 TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handle lifetimes run on the asio executor thread race-free", "[node]")
@@ -132,24 +154,9 @@ TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handl
     tally counts;
     auto guard = ::asio::make_work_guard(io);
 
-    ::asio::post(io,
-                 [&]
-                 {
-                     pub.emplace(node, "post/topic");
-                     asio_churn{io, pub}();
-                 });
+    seed_churn(io, node, pub);
     std::thread executor([&] { io.run(); });
-    std::thread foreign(
-            [&]
-            {
-                post_rounds(node, pub, counts, [&io] { return plexus::asio::asio_policy::inside_executor(io); });
-                plexus::post(node,
-                             [&]
-                             {
-                                 pub.reset();
-                                 io.stop();
-                             });
-            });
+    std::thread foreign([&] { post_rounds_then_stop(io, node, pub, counts); });
     foreign.join();
     executor.join();
 

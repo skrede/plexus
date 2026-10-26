@@ -25,7 +25,8 @@ class inproc_timer;
 // false only at quiescence; drain() steps to quiescence. Timers are checked only once the ready
 // work is exhausted (the asio reactor discipline), so the steady delivery loop pays no clock read
 // per step. Routing every byte delivery through step() is what makes inproc delivery posted-only.
-// Work from another thread enters through post_from_thread and runs at the head of a later step.
+// Work from another thread enters through post_from_thread; a later step appends it behind the
+// work already posted.
 template<typename Clock = std::chrono::steady_clock>
 class inproc_executor
 {
