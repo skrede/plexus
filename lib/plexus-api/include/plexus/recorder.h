@@ -18,6 +18,7 @@
 #include "plexus/wire/frame_codec.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/affinity_check.h"
 #include "plexus/node_id.h"
 
 #include <span>
@@ -29,8 +30,6 @@
 #include <optional>
 #include <utility>
 #include <algorithm>
-#include <functional>
-#include <type_traits>
 
 namespace plexus {
 
@@ -59,6 +58,7 @@ public:
             , m_block(std::make_shared<block>(sink, opts, io::recording::flat_recorder::clock_fn{[] { return wire::now_timestamp_ns(); }}, preamble_scratch_bytes(opts.schemas)))
             , m_sink(make_sink(opts))
     {
+        detail::check_affinity<Policy>(executor, "recorder");
         if(opts.mode == recording_mode::pre_buffer && opts.on_anomaly)
             pre().on_anomaly(std::move(*opts.on_anomaly));
         if(opts.mode == recording_mode::continuous)
@@ -97,6 +97,7 @@ public:
     {
         if(m_engine == nullptr)
             return;
+        detail::check_affinity<Policy>(m_executor, "~recorder");
 #if defined(__cpp_exceptions)
         try
         {
@@ -207,12 +208,8 @@ private:
         return std::max(k_default_scratch, need);
     }
 
-    // The block-held rearm closure OWNS the executor, so a move of the recorder cannot leave it
-    // aliasing a destroyed member: a reference executor_type (every in-tree Policy) is held as a
-    // reference_wrapper bound to the long-lived executor; a by-value executor_type is held as its
-    // own copy. Either form is copyable, so the re-posted drain task carries it forward.
-    using held_executor = std::conditional_t<std::is_reference_v<typename Engine::executor_type>,
-                                             std::reference_wrapper<std::remove_reference_t<typename Engine::executor_type>>, typename Engine::executor_type>;
+    // The block-held rearm closure owns the executor, so a move of the recorder cannot leave it aliasing a destroyed member.
+    using held_executor = detail::held_executor<typename Engine::executor_type>;
 
     static void post_drain(const std::shared_ptr<block> &blk, held_executor exec)
     {

@@ -14,6 +14,8 @@ target_link_libraries(plexus-core INTERFACE plexus::wire)
 
 target_compile_features(plexus-core INTERFACE cxx_std_20)
 
+target_compile_definitions(plexus-core INTERFACE $<$<BOOL:${PLEXUS_AFFINITY_CHECKS}>:PLEXUS_AFFINITY_CHECKS>)
+
 include(GNUInstallDirs)
 install(TARGETS plexus-core EXPORT plexusTargets)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

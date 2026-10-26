@@ -2,8 +2,6 @@
 #include "support/hold_tally.h"
 #include "support/hold_topology.h"
 
-#include "plexus/io/upgrade_channel.h"
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -12,16 +10,16 @@
 #include <vector>
 #include <cstdio>
 #include <cstdint>
-#include <numeric>
-#include <algorithm>
 
+using plexus::testing::measure;
 using plexus::testing::ring_probe;
 using plexus::testing::percentile;
+using plexus::testing::run_result;
 using plexus::testing::hold_now_ns;
 using plexus::testing::publish_run;
+using plexus::testing::hold_drivers;
 using plexus::testing::hold_topology;
 using plexus::testing::engage_reader;
-using plexus::testing::context_thread;
 using plexus::testing::publish_paced;
 using plexus::testing::attach_newcomer;
 using plexus::testing::await_publishes;
@@ -36,33 +34,9 @@ constexpr std::uint32_t k_fill     = 200;
 constexpr std::uint32_t k_measured = 1024;
 constexpr std::uint32_t k_total    = k_fill + k_measured;
 
-struct run_result
-{
-    std::uint32_t attempted;
-    std::uint32_t would_block;
-    std::int64_t publish_total_ns;
-    std::int64_t publish_max_ns;
-    std::uint64_t newcomer_fallbacks;
-    std::int64_t hold_ns;
-};
-
 long long us(std::int64_t ns)
 {
     return static_cast<long long>(ns / 1000);
-}
-
-// A ring write the producer could not make is a publish that surfaced would_block; a run stopped at its deadline did
-// not attempt the rest. A warm-up frame still in the lane's bands can reach the ring after the run begins.
-run_result measure(hold_topology &t, ring_probe &probe, const publish_run &run, std::uint32_t direct, std::uint64_t tail_before)
-{
-    const plexus::io::fallback_counts fallbacks = t.newcomer.node.same_host_fallbacks();
-    const auto attempted                        = static_cast<std::uint32_t>(direct + run.durations.size());
-    return {.attempted          = attempted,
-            .would_block        = attempted - std::min(attempted, static_cast<std::uint32_t>(probe.tail() - tail_before)),
-            .publish_total_ns   = std::accumulate(run.durations.begin(), run.durations.end(), std::int64_t{0}),
-            .publish_max_ns     = run.durations.empty() ? 0 : std::ranges::max(run.durations),
-            .newcomer_fallbacks = std::accumulate(fallbacks.begin(), fallbacks.end(), std::uint64_t{0}),
-            .hold_ns            = 0};
 }
 
 void report(const char *arm, std::chrono::nanoseconds interval, hold_topology &t, const run_result &r)
@@ -113,17 +87,20 @@ void run_backed_up(std::chrono::nanoseconds interval)
     for(std::uint32_t index = 0; index < k_fill; ++index)
         t.publish(index);
     publish_run run;
+    run_result r{};
     {
-        context_thread publisher{t.publisher};
-        context_thread reader{t.reader};
+        hold_drivers drivers{t};
+        drivers.drive_publisher();
+        drivers.drive_reader();
         std::this_thread::sleep_for(50ms);
         REQUIRE(backlog_on_publisher(t) > 0);
         publish_paced(t, run, k_fill, k_measured, interval);
         finish_publishes(probe, run, k_measured, cursor);
+        r = measure(probe, run, k_fill, tail_before);
+        drivers.drive_newcomer();
+        settle_newcomer(t);
+        r.newcomer_fallbacks = plexus::testing::newcomer_fallbacks(t);
     }
-    run_result r = measure(t, probe, run, k_fill, tail_before);
-    settle_newcomer(t);
-    r.newcomer_fallbacks = measure(t, probe, run, k_fill, tail_before).newcomer_fallbacks;
     report("backed_up", interval, t, r);
     require_counts(t, r);
 }
@@ -149,20 +126,23 @@ void run_control(std::chrono::nanoseconds interval)
     const std::uint32_t cursor      = probe.cursor_besides({reader_cursor});
     const std::uint64_t tail_before = probe.tail();
     publish_run run;
+    run_result r{};
     std::atomic<bool> stop{false};
     std::int64_t hold_ns = -1;
     {
         std::thread watcher{[&] { hold_ns = watch_hold(probe, cursor, attached_ns, stop); }};
-        context_thread newcomer{t.newcomer};
-        context_thread publisher{t.publisher};
-        context_thread reader{t.reader};
+        hold_drivers drivers{t};
+        drivers.drive_newcomer();
+        drivers.drive_publisher();
+        drivers.drive_reader();
         publish_paced(t, run, 0, k_total, interval);
         finish_publishes(probe, run, k_total, cursor);
         stop.store(true);
         watcher.join();
+        r                    = measure(probe, run, 0, tail_before);
+        r.newcomer_fallbacks = plexus::testing::newcomer_fallbacks(t);
+        settle_newcomer(t);
     }
-    run_result r = measure(t, probe, run, 0, tail_before);
-    settle_newcomer(t);
     r.hold_ns = hold_ns;
     report("control", interval, t, r);
     require_counts(t, r);

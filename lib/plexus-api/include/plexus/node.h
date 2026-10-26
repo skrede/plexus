@@ -47,6 +47,7 @@
 #include "plexus/detail/topic_sweep.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_identity.h"
+#include "plexus/detail/affinity_check.h"
 #include "plexus/detail/node_internals.h"
 #include "plexus/detail/node_rpc_seams.h"
 #include "plexus/detail/node_same_host.h"
@@ -149,6 +150,11 @@ class procedure;
 // engine and (for >1 transport) the multiplexing glue. Its posts and waits capture `this`, so it is non-copyable and
 // non-movable. A closed node may be destroyed inside or after its on_closed while the executor keeps running; a node
 // never closed is destroyed only with its executor not run again.
+// THREADING: one thread drives the executor, and every member and every handle operation runs on it. The first call
+// binds its caller until a thread running the executor claims the node, once; any other thread hands work in through
+// plexus::post, and executor() is the one member safe from any thread. Construction and destruction are exempt, so an
+// owner may build and drain the node on a setup thread. PLEXUS_AFFINITY_CHECKS (on in Debug) aborts a call from any
+// other thread; a worker whose call precedes every call made inside a handler is not caught.
 template<typename Profile, typename... Transports>
     requires detail::target_profile<Profile> && (sizeof...(Transports) >= 1) &&
         (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, typename detail::profile_traits<Profile>::policy> : (io::mux_member<Transports> && ...))
@@ -274,12 +280,14 @@ public:
     // without arming a redial. on_closed then fires once, posted, after the last of them has completed.
     void close()
     {
+        affine("close");
         detail::close_node(*this);
     }
 
     // A handler installed after the node settled is posted when installed; a delivered notification never repeats.
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
+        affine("on_closed");
         m_close_notification.install(std::move(cb));
         detail::notify_node_closed(*this);
     }
@@ -289,6 +297,7 @@ public:
     // engine but advertises no port key.
     void listen(const io::endpoint &ep)
     {
+        affine("listen");
         m_engine.listen(ep);
         if(const auto port = plexus::detail::port_of(ep.address))
         {
@@ -303,6 +312,7 @@ public:
     // and nothing else. The peer's real id arrives in the handshake.
     void dial(const io::endpoint &ep)
     {
+        affine("dial");
         m_engine.dial(ep);
     }
 
@@ -310,24 +320,29 @@ public:
     // re-adds it.
     void hang_up(const io::endpoint &ep)
     {
+        affine("hang_up");
         m_engine.hang_up(ep);
     }
 
     const plexus::node_id &id() const noexcept
     {
+        affine("id");
         return m_id;
     }
 
     engine_type &router() noexcept
     {
+        affine("router");
         return m_engine;
     }
     const engine_type &router() const noexcept
     {
+        affine("router");
         return m_engine;
     }
     io::message_forwarder<engine_policy> &message_forwarder() noexcept
     {
+        affine("message_forwarder");
         return m_engine.messages();
     }
     executor_type executor() const noexcept
@@ -335,34 +350,33 @@ public:
         return m_executor;
     }
 
-    // Executor-affine: call only on the owning executor. Sweeps the awareness table with no lock
-    // and no allocation, filling out to capacity and reporting overflow as a count plus a flag —
-    // never abort, never evict (reject-and-count at the span boundary).
+    // Sweeps the awareness table with no lock and no allocation, filling out to capacity and reporting overflow as a
+    // count plus a flag — never abort, never evict (reject-and-count at the span boundary).
     graph::snapshot_result participants(std::span<graph::participant_record> out) const
     {
+        affine("participants");
         return detail::sweep_participants(m_engine.known(), out);
     }
 
-    // Executor-affine: call only on the owning executor. Non-blocking; sweeps engine state with no
-    // lock and no allocation (the participants() shape) and discloses the posture through the logger
-    // at least once so relay involvement is never silent (the default_discovery::self_check()
-    // warn-once precedent). offering_relay is decided at COMPILE time off the emitter twin: a node not
-    // spelled relay<> instantiates none of the offering-query branch, so no emitter-query symbol
-    // reaches the leaf image.
+    // Non-blocking; sweeps engine state with no lock and no allocation (the participants() shape) and discloses the
+    // posture through the logger at least once so relay involvement is never silent (the default_discovery::self_check()
+    // warn-once precedent). offering_relay is decided at COMPILE time off the emitter twin: a node not spelled relay<>
+    // instantiates none of the offering-query branch, so no emitter-query symbol reaches the leaf image.
     relay_posture self_check() const
     {
+        affine("self_check");
         const relay_posture posture = detail::compute_relay_posture(*this);
         detail::disclose_relay_posture_once(*this, posture);
         return posture;
     }
 
-    // Executor-affine: call only on the owning executor. One record per (participant, topic, role)
-    // edge, so a topic with both a publisher and a subscriber yields both — these edges are the
-    // substrate the counts and by-node views reduce over, which is why neither keeps an index of
-    // its own. A filter admits only the topics its keyset intersects.
+    // One record per (participant, topic, role) edge, so a topic with both a publisher and a subscriber yields both —
+    // these edges are the substrate the counts and by-node views reduce over, which is why neither keeps an index of its
+    // own. A filter admits only the topics its keyset intersects.
     graph::snapshot_result topics(std::span<graph::topic_record> out,
                                   const std::optional<match::key_pattern> &filter = std::nullopt) const
     {
+        affine("topics");
         return detail::sweep_topics(m_engine.topic_table(), out,
                                     [&](const graph::topic_record &rec) { return detail::topic_in(rec.name, filter); });
     }
@@ -378,32 +392,37 @@ public:
     template<typename Cb>
     graph_change_handle on_graph_change(Cb cb)
     {
+        affine("on_graph_change");
         if constexpr(std::is_invocable_v<Cb &, const graph::graph_change &>)
-            return graph_change_handle{m_engine, {}, std::move(cb)};
+            return graph_change_handle{m_engine, m_executor, {}, std::move(cb)};
         else
-            return graph_change_handle{m_engine, std::move(cb)};
+            return graph_change_handle{m_engine, m_executor, std::move(cb)};
     }
 
-    // Executor-affine. Counted over the same edges topics() enumerates: a maintained counter would
-    // be a second truth to keep coherent with the table.
+    // Counted over the same edges topics() enumerates: a maintained counter would be a second truth to keep coherent
+    // with the table.
     std::size_t count_publishers(std::string_view topic) const
     {
+        affine("count_publishers");
         return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::publisher);
     }
 
     std::size_t count_subscribers(std::string_view topic) const
     {
+        affine("count_subscribers");
         return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::subscriber);
     }
 
-    // Executor-affine. The same edges keyed by participant rather than by topic.
+    // The same edges keyed by participant rather than by topic.
     graph::snapshot_result topics_published_by(const plexus::node_id &node, std::span<graph::topic_record> out) const
     {
+        affine("topics_published_by");
         return topics_of(node, graph::topic_role::publisher, out);
     }
 
     graph::snapshot_result topics_subscribed_by(const plexus::node_id &node, std::span<graph::topic_record> out) const
     {
+        affine("topics_subscribed_by");
         return topics_of(node, graph::topic_role::subscriber, out);
     }
 
@@ -411,11 +430,13 @@ public:
     // type past the per-topic cap. Edges refused outright for want of room.
     std::size_t topic_truncations() const noexcept
     {
+        affine("topic_truncations");
         return m_engine.topic_table().truncations();
     }
 
     std::size_t topics_dropped() const noexcept
     {
+        affine("topics_dropped");
         return m_engine.topic_table().dropped();
     }
 
@@ -423,12 +444,14 @@ public:
     // pair keeps the wire.
     io::fallback_counts same_host_fallbacks() const noexcept
     {
+        affine("same_host_fallbacks");
         return m_engine.same_host_fallbacks();
     }
 
     // Object-lane deliveries dropped at the demux on a type-witness mismatch.
     std::size_t object_dispatch_mismatch() const noexcept
     {
+        affine("object_dispatch_mismatch");
         return m_object_dispatch_mismatch;
     }
 
@@ -437,6 +460,7 @@ public:
     template<template<typename> class Family, typename Handler>
     procedure<detail::handler_signature_t<Handler>, Family> serve(std::string_view fqn, Handler handler)
     {
+        affine("serve");
         static_assert(detail::deducible_handler<Handler>,
                       "plexus: spell Sig explicitly — a generic lambda or overloaded call "
                       "operator has no single deducible signature; name the signature on the "
@@ -448,12 +472,14 @@ public:
     template<typename Sig, template<typename> class Family>
     plexus::caller<Sig, Family> caller(std::string_view fqn)
     {
+        affine("caller");
         return plexus::caller<Sig, Family>{*this, fqn};
     }
 
     template<template<typename> class Family, typename Cb>
     subscriber<Family<detail::subscriber_value_t<Cb>>> subscribe(std::string_view topic, Cb cb)
     {
+        affine("subscribe");
         static_assert(detail::deducible_handler<Cb>,
                       "plexus: spell the value type explicitly — a generic lambda or "
                       "overloaded call operator has no single deducible signature; name the "
@@ -465,12 +491,14 @@ public:
     template<typename Codec>
     publisher<Codec> advertise(std::string_view topic, const typed_publisher_options &opts = {}, Codec codec = {})
     {
+        affine("advertise");
         return publisher<Codec>{*this, topic, opts, std::move(codec)};
     }
 
     template<typename Codec, typename Projection = no_projection>
     value_logger<Codec, Projection> log(std::string_view topic, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
     {
+        affine("log");
         return value_logger<Codec, Projection>(*this, topic, opts, std::move(codec), std::move(projection));
     }
 
@@ -478,6 +506,7 @@ public:
     // teardown. The sink MUST outlive the handle; the drain rides this node's executor turns.
     recorder<engine_type, policy_type> make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
     {
+        affine("make_recorder");
         return recorder<engine_type, policy_type>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
     }
 
@@ -487,6 +516,18 @@ private:
     using peer_watch   = detail::peer_watch<basic_node>;
 
     using registration_id = std::uint64_t;
+
+    void affine(const char *member) const noexcept
+    {
+        detail::check_affinity<policy_type>(m_executor, member);
+    }
+
+    static basic_node &affine(void *ctx, const char *member) noexcept
+    {
+        basic_node &self = *static_cast<basic_node *>(ctx);
+        self.affine(member);
+        return self;
+    }
 
     graph::snapshot_result topics_of(const plexus::node_id &node, graph::topic_role role, std::span<graph::topic_record> out) const
     {
@@ -634,7 +675,7 @@ private:
             detail::sync_shm_self_carrier(*this, fqn);
     }
 
-    // Each verb is a captureless static lambda (a plain fn-ptr, zero alloc) recovering the node and
+    // Each verb is a captureless static lambda (a plain fn-ptr, zero alloc) recovering the node through affine() and
     // forwarding to the private *_seam, so the concrete Policy stays inside those bodies.
     io::endpoint_seam endpoint_seam_for() noexcept
     {
@@ -642,19 +683,19 @@ private:
         s.ctx               = this;
         s.declare_publisher = [](void *ctx, std::string_view fqn, const topic_qos &qos, bool emit, std::optional<std::uint64_t> type_id, std::string_view type_name,
                                  std::uint64_t schema_hint, std::optional<io::same_host_geometry> geometry, std::optional<io::topic_capture_rule> capture)
-        { static_cast<basic_node *>(ctx)->declare_publisher_seam(fqn, qos, emit, type_id, type_name, schema_hint, geometry, capture); };
-        s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { static_cast<basic_node *>(ctx)->m_engine.messages().publish(fqn, bytes); };
+        { affine(ctx, "declare_publisher").declare_publisher_seam(fqn, qos, emit, type_id, type_name, schema_hint, geometry, capture); };
+        s.publish        = [](void *ctx, std::string_view fqn, std::span<const std::byte> bytes) { affine(ctx, "publish").m_engine.messages().publish(fqn, bytes); };
         s.publish_object = [](void *ctx, std::string_view fqn, const io::object_carrier &carrier, io::encode_thunk encode)
-        { static_cast<basic_node *>(ctx)->m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };
+        { affine(ctx, "publish_object").m_engine.messages().publish_object(fqn, carrier, [&] { return io::invoke(encode); }); };
         s.register_subscriber = [](void *ctx, std::string_view fqn, const io::subscriber_qos &qos, io::bytes_cb cb, std::optional<std::uint64_t> type_id, std::string_view type_name,
                                    const void *native_key, io::object_dispatch dispatch, std::optional<io::topic_capture_rule> capture) -> registration_id
-        { return static_cast<basic_node *>(ctx)->register_subscriber_seam(fqn, qos, std::move(cb), type_id, type_name, object_entry{native_key, std::move(dispatch)}, capture); };
-        s.retire_subscriber = [](void *ctx, registration_id rid) { static_cast<basic_node *>(ctx)->retire_subscriber_seam(rid); };
-        s.retire_publisher  = [](void *ctx, std::string_view fqn) { static_cast<basic_node *>(ctx)->retire_publisher_seam(fqn); };
-        s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { detail::serve_procedure_seam(*static_cast<basic_node *>(ctx), fqn, std::move(handler)); };
-        s.retire_procedure  = [](void *ctx, std::string_view fqn) { detail::retire_procedure_seam(*static_cast<basic_node *>(ctx), fqn); };
+        { return affine(ctx, "register_subscriber").register_subscriber_seam(fqn, qos, std::move(cb), type_id, type_name, object_entry{native_key, std::move(dispatch)}, capture); };
+        s.retire_subscriber = [](void *ctx, registration_id rid) { affine(ctx, "retire_subscriber").retire_subscriber_seam(rid); };
+        s.retire_publisher  = [](void *ctx, std::string_view fqn) { affine(ctx, "retire_publisher").retire_publisher_seam(fqn); };
+        s.serve_procedure   = [](void *ctx, std::string_view fqn, io::handler_fn handler) { detail::serve_procedure_seam(affine(ctx, "serve_procedure"), fqn, std::move(handler)); };
+        s.retire_procedure  = [](void *ctx, std::string_view fqn) { detail::retire_procedure_seam(affine(ctx, "retire_procedure"), fqn); };
         s.call              = [](void *ctx, std::string_view fqn, std::span<const std::byte> param, io::on_reply_fn on_reply, std::optional<std::chrono::nanoseconds> deadline)
-        { detail::call_seam(*static_cast<basic_node *>(ctx), fqn, param, std::move(on_reply), deadline); };
+        { detail::call_seam(affine(ctx, "call"), fqn, param, std::move(on_reply), deadline); };
         return s;
     }
 

@@ -103,12 +103,10 @@ TEST_CASE("inproc_ingress an inproc node receives a publish posted through plexu
                              }};
     ex.drain();
 
-    std::thread stepper([&] { step_until(ex, received); });
-    const std::thread::id stepper_id = stepper.get_id();
     std::thread foreign([&] { plexus::post(host.node(), [&] { pub.publish(std::array<std::byte, 1>{std::byte{0x2A}}); }); });
+    step_until(ex, received);
     foreign.join();
-    stepper.join();
 
     REQUIRE(received.load(std::memory_order_acquire));
-    REQUIRE(received_on == stepper_id);
+    REQUIRE(received_on == std::this_thread::get_id());
 }

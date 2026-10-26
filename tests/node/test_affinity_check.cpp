@@ -49,27 +49,27 @@ void require_trip(const std::string &role, const std::string &member)
 
 }
 
-TEST_CASE("affinity_check foreign_publish aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_publish aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_publish", "publish");
 }
 
-TEST_CASE("affinity_check foreign_member aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_member aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_member", "participants");
 }
 
-TEST_CASE("affinity_check second_runner aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check second_runner aborts with a message naming the member", "[node]")
 {
     require_trip("second_runner", "participants");
 }
 
-TEST_CASE("affinity_check foreign_handle_destroy aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check foreign_handle_destroy aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_handle_destroy", "retire_subscriber");
 }
 
-TEST_CASE("affinity_check inproc_foreign aborts with a message naming the member", "[node][!shouldfail]")
+TEST_CASE("affinity_check inproc_foreign aborts with a message naming the member", "[node]")
 {
     require_trip("inproc_foreign", "participants");
 }

@@ -34,6 +34,7 @@
 #include <thread>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace {
 
@@ -68,16 +69,16 @@ plexus::node_id make_id(std::uint8_t seed)
 }
 
 template<typename Node>
-void exercise(Node &node, plexus::publisher<> &pub)
+void exercise(Node &node, std::optional<plexus::publisher<>> &pub)
 {
-    pub.publish(k_payload);
+    pub->publish(k_payload);
     std::array<plexus::graph::participant_record, 4> seen{};
     node.participants(std::span<plexus::graph::participant_record>{seen});
     plexus::subscriber<> transient{node, "post/topic", [](std::span<const std::byte>) {}};
 }
 
 template<typename Node, typename Inside>
-void post_rounds(Node &node, plexus::publisher<> &pub, tally &counts, Inside inside)
+void post_rounds(Node &node, std::optional<plexus::publisher<>> &pub, tally &counts, Inside inside)
 {
     for(int i = 0; i < k_rounds; ++i)
         plexus::post(node,
@@ -90,25 +91,31 @@ void post_rounds(Node &node, plexus::publisher<> &pub, tally &counts, Inside ins
                      });
 }
 
-// Publishes on the stepping thread between steps, so a round that ran off the driver would race it.
-void step_until_finished(inproc_executor<> &ex, plexus::publisher<> &pub, const tally &counts)
+// Publishes on the stepping thread between steps, so a round that ran off the driver would race it. The publisher lives
+// and dies on the stepping thread, the node's one driver.
+template<typename Node>
+void step_until_finished(inproc_executor<> &ex, Node &node, std::optional<plexus::publisher<>> &pub, const tally &counts)
 {
+    pub.emplace(node, "post/topic");
     while(!counts.finished.load(std::memory_order_acquire))
     {
-        pub.publish(k_payload);
+        pub->publish(k_payload);
         ex.drain();
     }
+    pub.reset();
 }
 
 // Publishes on the executor thread between posted rounds, so a round that ran off the driver would race it.
 struct asio_churn
 {
     ::asio::io_context &io;
-    plexus::publisher<> &pub;
+    std::optional<plexus::publisher<>> &pub;
 
     void operator()() const
     {
-        pub.publish(k_payload);
+        if(!pub)
+            return;
+        pub->publish(k_payload);
         ::asio::post(io, *this);
     }
 };
@@ -121,17 +128,27 @@ TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handl
     plexus::asio::asio_transport transport{io};
     plexus::discovery::static_discovery disc{{}};
     asio_node node{io, disc, make_id(0x01), transport, plexus::node_options{}};
-    plexus::publisher<> pub{node, "post/topic"};
+    std::optional<plexus::publisher<>> pub;
     tally counts;
     auto guard = ::asio::make_work_guard(io);
 
-    ::asio::post(io, asio_churn{io, pub});
+    ::asio::post(io,
+                 [&]
+                 {
+                     pub.emplace(node, "post/topic");
+                     asio_churn{io, pub}();
+                 });
     std::thread executor([&] { io.run(); });
     std::thread foreign(
             [&]
             {
                 post_rounds(node, pub, counts, [&io] { return plexus::asio::asio_policy::inside_executor(io); });
-                plexus::post(node, [&io] { io.stop(); });
+                plexus::post(node,
+                             [&]
+                             {
+                                 pub.reset();
+                                 io.stop();
+                             });
             });
     foreign.join();
     executor.join();
@@ -146,10 +163,10 @@ TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handl
     inproc_executor<> ex{bus};
     plexus::discovery::static_discovery disc{{}};
     plexus::loopback_host<loopback_policy> host{ex, disc, make_id(0x02)};
-    plexus::publisher<> pub{host.node(), "post/topic"};
+    std::optional<plexus::publisher<>> pub;
     tally counts;
 
-    std::thread stepper([&] { step_until_finished(ex, pub, counts); });
+    std::thread stepper([&] { step_until_finished(ex, host.node(), pub, counts); });
     std::thread foreign(
             [&]
             {

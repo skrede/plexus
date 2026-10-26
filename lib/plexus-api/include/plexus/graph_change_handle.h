@@ -6,6 +6,7 @@
 #include "plexus/graph/graph_change.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/affinity_check.h"
 
 #include <memory>
 #include <cstdint>
@@ -59,12 +60,16 @@ class graph_change_handle
 
 public:
     template<typename Engine>
-    graph_change_handle(Engine &engine, plexus::detail::move_only_function<void(std::uint64_t)> on_changed,
+    graph_change_handle(Engine &engine, typename Engine::executor_type executor, plexus::detail::move_only_function<void(std::uint64_t)> on_changed,
                         plexus::detail::move_only_function<void(const graph::graph_change &)> on_delta = {})
             : m_sink(std::make_unique<sink>(std::move(on_changed), std::move(on_delta)))
     {
         engine.add_observer(*m_sink);
-        m_retire = [engine_ptr = &engine, sink_ptr = m_sink.get()] { engine_ptr->remove_observer(*sink_ptr); };
+        m_retire = [engine_ptr = &engine, sink_ptr = m_sink.get(), ex = detail::held_executor<typename Engine::executor_type>(executor)]
+        {
+            detail::check_affinity<typename Engine::policy_type>(ex, "~graph_change_handle");
+            engine_ptr->remove_observer(*sink_ptr);
+        };
     }
 
     graph_change_handle(graph_change_handle &&other) noexcept

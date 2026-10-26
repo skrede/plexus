@@ -1,12 +1,7 @@
-// A recorder is move-constructed when stored in a container (the documented make_recorder ->
-// push_back idiom). The shared drain block survives the move; its rearm closure must reach a live
-// executor, never a member of the destroyed moved-from source.
-//
-// The first case drives the public API over the real node through a vector reallocation and recovers
-// the captured sample. The second instantiates the recorder with a BY-VALUE executor_type — the only
-// shape under which the pre-fix closure (which aliased &m_executor) read a freed executor after the
-// source was destroyed; every in-tree Policy uses a reference executor_type whose referent outlives
-// the handle, so this case makes the regression fail if the fix is reverted (ASan is the gate).
+// A recorder is move-constructed when stored in a container. The shared drain block survives the move, and its rearm
+// closure must reach a live executor, never a member of the destroyed moved-from source. The second case uses a
+// by-value executor_type, the one shape in which a closure aliasing the source's executor reads freed memory once the
+// source is destroyed; every in-tree Policy's executor_type is a reference (ASan is the gate).
 
 #include "plexus/recorder.h"
 #include "plexus/publisher.h"
@@ -131,6 +126,11 @@ struct value_executor_policy
     {
         ex.queue->push_back(std::move(fn));
     }
+
+    static bool running_in_this_thread(executor_type) noexcept
+    {
+        return true;
+    }
 };
 
 struct stub_messages
@@ -180,8 +180,7 @@ TEST_CASE("recorder_move: a by-value executor is owned by the drain closure acro
     {
         plexus::recorder_options ro;
         ro.mode = plexus::recording_mode::pre_buffer;
-        // Move element 0 out of a heap source, then free the heap block: a pre-fix closure captured
-        // &source->m_executor and now dangles; the fixed closure owns a copy of the handle.
+        // The heap source is freed after the move, so a closure aliasing its executor would dangle.
         auto source = std::make_unique<rec_t>(engine, value_executor{&queue}, id, sink, std::move(ro), plexus::wire_crypto_position::cleartext);
         recs.push_back(std::move(*source));
         source.reset();

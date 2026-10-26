@@ -19,6 +19,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace plexus::testing {
 
@@ -49,14 +50,18 @@ struct hold_topology
             , publisher("publisher", 0x61, region, small_socket_buffers())
             , reader("reader", 0x62, region)
             , newcomer("newcomer", 0x63, region, small_socket_buffers())
+            , newcomer_id(newcomer.node.id())
             , reader_tally(total, measured_from)
             , newcomer_tally(total, measured_from)
             , drops(fqn)
-            , pub(publisher.node, fqn, reliable_hinted_topic())
-            , reader_sub(reader.node, fqn, hinted_subscriber(), [this](std::span<const std::byte> bytes) { reader_tally.on_delivery(bytes); })
-            , newcomer_sub(newcomer.node, fqn, hinted_subscriber(), [this](std::span<const std::byte> bytes) { newcomer_tally.on_delivery(bytes); })
+            , pub()
+            , reader_sub()
+            , newcomer_sub()
             , payload()
     {
+        pub.emplace(publisher.node, fqn, reliable_hinted_topic());
+        reader_sub.emplace(reader.node, fqn, hinted_subscriber(), [this](std::span<const std::byte> bytes) { reader_tally.on_delivery(bytes); });
+        newcomer_sub.emplace(newcomer.node, fqn, hinted_subscriber(), [this](std::span<const std::byte> bytes) { newcomer_tally.on_delivery(bytes); });
         publisher.node.router().add_observer(drops);
         publisher.node.listen({"tcp", "127.0.0.1:0"});
     }
@@ -64,7 +69,7 @@ struct hold_topology
     void publish(std::uint32_t index)
     {
         write_hold_payload(payload, index, hold_now_ns());
-        pub.publish(payload);
+        pub->publish(payload);
     }
 
     void dial(co_host_node &subscriber)
@@ -79,7 +84,7 @@ struct hold_topology
         publisher.node.router().registry().for_each_connected(
                 [&](const plexus::node_id &, auto &session)
                 {
-                    if(session.peer_identity() == newcomer.node.id())
+                    if(session.peer_identity() == newcomer_id)
                         backlog = session.msg_peer().channel.backpressured();
                 });
         return backlog;
@@ -90,12 +95,13 @@ struct hold_topology
     co_host_node publisher;
     co_host_node reader;
     co_host_node newcomer;
+    plexus::node_id newcomer_id;
     hold_tally reader_tally;
     hold_tally newcomer_tally;
     topic_drops drops;
-    plexus::publisher<> pub;
-    plexus::subscriber<> reader_sub;
-    plexus::subscriber<> newcomer_sub;
+    std::optional<plexus::publisher<>> pub;
+    std::optional<plexus::subscriber<>> reader_sub;
+    std::optional<plexus::subscriber<>> newcomer_sub;
     std::vector<std::byte> payload;
 };
 

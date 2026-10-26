@@ -15,6 +15,10 @@
 #include <optional>
 #include <string_view>
 
+#if !defined(_WIN32)
+    #include <sys/resource.h>
+#endif
+
 using plexus::testing::asio_rig;
 using plexus::testing::on_driver;
 using plexus::testing::inproc_rig;
@@ -123,11 +127,15 @@ bool run_role(std::string_view role)
 
 }
 
-// A misuse that returns prints affinity-not-tripped and exits 0, which the parent test reads as the check missing.
+// A misuse that returns prints affinity-not-tripped and exits 0, which the parent test reads as the check missing. An
+// expected abort leaves no core file behind.
 int main(int argc, char **argv)
 {
 #if defined(_MSC_VER)
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#elif !defined(_WIN32)
+    const rlimit no_core{0, 0};
+    setrlimit(RLIMIT_CORE, &no_core);
 #endif
     const std::string_view role = argc > 1 ? argv[1] : "";
     if(role == "via_post")

@@ -18,6 +18,17 @@ option(PLEXUS_BUILD_PCAP_TRANSCODE "Build the host-side flat-stream to pcapng tr
 option(PLEXUS_BUILD_BENCHMARKS "Build the standalone scalability benchmarks" OFF)
 option(PLEXUS_WARNINGS_AS_ERRORS "Promote warnings to errors (the enforced gate)" ON)
 
+# A sanitizer tree forces the single-executor check on, so a cached OFF cannot hide a cross-thread call from its runs.
+set(_plexus_affinity_doc "Abort on a call into a node from a thread that does not drive its executor")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    option(PLEXUS_AFFINITY_CHECKS "${_plexus_affinity_doc}" ON)
+else()
+    option(PLEXUS_AFFINITY_CHECKS "${_plexus_affinity_doc}" OFF)
+endif()
+if(CMAKE_CXX_FLAGS MATCHES "-fsanitize=")
+    set(PLEXUS_AFFINITY_CHECKS ON CACHE BOOL "${_plexus_affinity_doc}" FORCE)
+endif()
+
 # Warn broadly on every compiled translation unit the build owns (the gated backends
 # and the test suite; the INTERFACE cores carry no TUs of their own). Applied before
 # the fragment glob so each discovered target inherits it. The warning-flag syntax is
