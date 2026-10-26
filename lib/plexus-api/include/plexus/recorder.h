@@ -4,6 +4,7 @@
 #include "plexus/recorder_options.h"
 #include "plexus/wire_capture_qos.h"
 #include "plexus/detail/recorder_drain.h"
+#include "plexus/detail/recorder_variant_sink.h"
 
 #include "plexus/io/observer.h"
 #include "plexus/io/capture_policy.h"
@@ -60,19 +61,19 @@ public:
     {
         detail::check_affinity<Policy>(executor, "recorder");
         if(opts.mode == recording_mode::pre_buffer && opts.on_anomaly)
-            pre().on_anomaly(std::move(*opts.on_anomaly));
+            m_block->pre().on_anomaly(std::move(*opts.on_anomaly));
         if(opts.mode == recording_mode::continuous)
         {
             const auto rows = schema_rows(opts.schemas);
             // The on-disk ordinals of capture_crypto_position are pinned to wire_crypto_position
             // (cleartext=0, ciphertext=1), so the cast is a forward.
-            flat().open(id, m_engine->capture().default_rule(), rows, static_cast<io::recording::capture_crypto_position>(crypto));
+            m_block->flat().open(id, m_engine->capture().default_rule(), rows, static_cast<io::recording::capture_crypto_position>(crypto));
         }
         m_block->draining = true;
         m_block->rearm    = [blk = std::weak_ptr<block>(m_block), exec = held_executor(m_executor)]
         {
             if(auto live = blk.lock())
-                post_drain(live, exec);
+                detail::post_recorder_drain<Policy>(live, exec);
         };
         m_engine->add_observer(*m_sink);
     }
@@ -136,7 +137,7 @@ public:
 
     void flush()
     {
-        std::visit([](auto &m) { m.flush(); }, m_block->machinery);
+        m_block->flush();
     }
 
     // The cached head+defs preamble the recorder wrote at open(), for a rotating sink to re-emit per
@@ -154,22 +155,7 @@ private:
     {
         m_engine->remove_observer(*m_sink);
         if(m_block)
-        {
-            m_block->draining = false;
-            while(m_block->pump())
-            {
-            }
-            std::visit([](auto &m) { m.flush(); }, m_block->machinery);
-        }
-    }
-
-    io::recording::flat_recorder &flat()
-    {
-        return std::get<io::recording::flat_recorder>(m_block->machinery);
-    }
-    io::recording::pre_buffer_controller &pre()
-    {
-        return std::get<io::recording::pre_buffer_controller>(m_block->machinery);
+            m_block->drain_to_sink();
     }
 
     // The sink stamps each sample with topic-hash -> fidelity and -> producer-type_id resolvers so
@@ -210,24 +196,6 @@ private:
 
     // The block-held rearm closure owns the executor, so a move of the recorder cannot leave it aliasing a destroyed member.
     using held_executor = detail::held_executor<typename Engine::executor_type>;
-
-    static void post_drain(const std::shared_ptr<block> &blk, held_executor exec)
-    {
-        std::weak_ptr<block> weak = blk;
-        Policy::post(exec,
-                     [weak = std::move(weak), exec]() mutable
-                     {
-                         auto live = weak.lock();
-                         if(!live || !live->draining)
-                             return;
-                         if(live->pump())
-                         {
-                             post_drain(live, exec);
-                             return;
-                         }
-                         live->armed = false;
-                     });
-    }
 
     Engine *m_engine;
     typename Engine::executor_type m_executor;
