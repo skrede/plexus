@@ -37,7 +37,7 @@ TEST_CASE("post_from_task runs caller-owned PODs in FIFO order", "[seam]")
     sentinel_ctx                        slots[3] = {{1, &ran}, {2, &ran}, {3, &ran}};
 
     for(auto &slot : slots)
-        exec.post_from_task({&append_sentinel, &slot});
+        REQUIRE(exec.post_from_task({&append_sentinel, &slot}));
     exec.drain();
 
     REQUIRE(ran == std::vector<int>{1, 2, 3});
@@ -49,7 +49,7 @@ TEST_CASE("pump services m_posted before the queued posted_work", "[seam]")
     std::vector<int>                    ran;
     sentinel_ctx                        queued{2, &ran};
 
-    exec.post_from_task({&append_sentinel, &queued});
+    REQUIRE(exec.post_from_task({&append_sentinel, &queued}));
     exec.post([&ran] { ran.push_back(1); });
     exec.drain();
 
@@ -64,7 +64,7 @@ TEST_CASE("the queue path runs the enqueued invokers without touching m_posted",
     sentinel_ctx                        slots[2] = {{7, &ran}, {9, &ran}};
 
     for(auto &slot : slots)
-        exec.post_from_task({&append_sentinel, &slot});
+        REQUIRE(exec.post_from_task({&append_sentinel, &slot}));
     exec.drain();
 
     REQUIRE(ran == std::vector<int>{7, 9});
@@ -77,7 +77,7 @@ TEST_CASE("park runs a posted work item (the wakeable-park drain)", "[seam]")
     std::vector<int>                    ran;
     sentinel_ctx                        queued{5, &ran};
 
-    exec.post_from_task({&append_sentinel, &queued});
+    REQUIRE(exec.post_from_task({&append_sentinel, &queued}));
     exec.park(std::chrono::milliseconds{1});
 
     REQUIRE(ran == std::vector<int>{5});

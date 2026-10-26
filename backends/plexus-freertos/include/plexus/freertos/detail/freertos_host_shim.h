@@ -13,10 +13,12 @@
 
     #include <deque>
     #include <mutex>
+    #include <atomic>
     #include <chrono>
     #include <vector>
-    #include <cstring>
     #include <cstdint>
+    #include <cstring>
+    #include <condition_variable>
 
 using TickType_t             = std::uint32_t;
 using BaseType_t             = int;
@@ -42,14 +44,37 @@ namespace plexus::freertos::detail {
 
 // The real kernel queue copies item_size bytes by value into a fixed number of slots and
 // is safe to use from any task; the host stand-in mirrors all three, so a widened item
-// round-trips intact, a full queue refuses a send, and a cross-thread test races nothing.
+// round-trips intact, a full queue refuses a zero-wait send and parks a waiting one, and
+// a cross-thread test races nothing.
 struct host_queue
 {
     std::uint32_t length;
     std::uint32_t item_size;
     std::mutex mutex;
+    std::condition_variable room;
     std::deque<std::vector<std::byte>> items;
 };
+
+// A host spy: how many senders are parked on a full queue right now. It is raised under the
+// queue's lock, so a test that sees it raised knows the sender is past everything it did
+// before the send.
+inline std::atomic<std::uint32_t> host_parked_senders{0};
+
+// One tick is one millisecond, as xTaskGetTickCount counts; portMAX_DELAY waits indefinitely.
+inline bool host_wait_for_room(host_queue &q, std::unique_lock<std::mutex> &lock, TickType_t wait)
+{
+    const auto has_room = [&q] { return q.items.size() < q.length; };
+    if(has_room() || wait == 0)
+        return has_room();
+    ++host_parked_senders;
+    bool got = true;
+    if(wait == portMAX_DELAY)
+        q.room.wait(lock, has_room);
+    else
+        got = q.room.wait_for(lock, std::chrono::milliseconds{wait}, has_room);
+    --host_parked_senders;
+    return got;
+}
 
 // Host threads stand in for tasks; each thread's marker address is its task handle.
 inline thread_local char host_task_marker = 0;
@@ -69,7 +94,7 @@ inline TickType_t xTaskGetTickCount() noexcept
 
 inline QueueHandle_t xQueueCreate(std::uint32_t length, std::uint32_t item_size)
 {
-    return new plexus::freertos::detail::host_queue{length, item_size, {}, {}};
+    return new plexus::freertos::detail::host_queue{length, item_size, {}, {}, {}};
 }
 
 inline void vQueueDelete(QueueHandle_t q) noexcept
@@ -79,7 +104,8 @@ inline void vQueueDelete(QueueHandle_t q) noexcept
 
 // Non-blocking host semantics: receive returns pdFALSE when the queue is empty,
 // regardless of the requested wait — the host loop never blocks (the device
-// block-with-timeout lives in the super-loop driver, not here).
+// block-with-timeout lives in the super-loop driver, not here). A receive wakes a
+// sender parked on the full queue.
 inline BaseType_t xQueueReceive(QueueHandle_t q, void *out, TickType_t /*wait*/)
 {
     if(!q)
@@ -89,15 +115,18 @@ inline BaseType_t xQueueReceive(QueueHandle_t q, void *out, TickType_t /*wait*/)
         return pdFALSE;
     std::memcpy(out, q->items.front().data(), q->item_size);
     q->items.pop_front();
+    q->room.notify_one();
     return pdTRUE;
 }
 
-inline BaseType_t xQueueSend(QueueHandle_t q, const void *item, TickType_t /*wait*/)
+// A full queue refuses a zero-wait send at once and parks any other sender until a receive
+// makes room or the wait elapses, as the kernel does.
+inline BaseType_t xQueueSend(QueueHandle_t q, const void *item, TickType_t wait)
 {
     if(!q)
         return pdFALSE;
-    const std::lock_guard<std::mutex> lock(q->mutex);
-    if(q->items.size() >= q->length)
+    std::unique_lock<std::mutex> lock(q->mutex);
+    if(!plexus::freertos::detail::host_wait_for_room(*q, lock, wait))
         return pdFALSE;
     const auto *bytes = static_cast<const std::byte *>(item);
     q->items.emplace_back(bytes, bytes + q->item_size);

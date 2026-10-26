@@ -96,6 +96,17 @@ target_link_libraries(test_lwip_rx_task_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_rx_task_seam TEST_PREFIX "seam.")
 
+# The lwIP RX step run on a thread against a full executor queue: the step waits for room and
+# delivers once the executor drains, and a channel closed meanwhile releases it.
+add_executable(test_lwip_rx_task_backpressure test_lwip_rx_task_backpressure.cpp)
+target_include_directories(test_lwip_rx_task_backpressure PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_rx_task_backpressure PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_rx_task_backpressure TEST_PREFIX "seam.")
+
 # Host-side test of the constrained-target lwIP listen/accept transport: fires
 # static_assert(transport_backend<lwip_transport<host_tcp_socket, host_tcp_listener>>) at compile
 # time, then over a REAL localhost-TCP loopback (a genuine POSIX listener test-side, no hardware and
