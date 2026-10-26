@@ -17,15 +17,11 @@
 
 #include "plexus/io/process_loopback_channel.h"
 
-#include "plexus/graph/participant_record.h"
-
 #include "plexus/discovery/static_discovery.h"
 
 #include <asio/io_context.hpp>
 #include <asio/executor_work_guard.hpp>
 
-#include <span>
-#include <array>
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -48,13 +44,6 @@ inline plexus::node_id affinity_id(std::uint8_t seed)
     plexus::node_id id{};
     id[0] = std::byte{seed};
     return id;
-}
-
-template<typename Node>
-void read_participants(Node &node)
-{
-    std::array<plexus::graph::participant_record, 4> seen{};
-    node.participants(std::span<plexus::graph::participant_record>{seen});
 }
 
 // Hands fn to the node's driver through plexus::post and waits until it has run there.

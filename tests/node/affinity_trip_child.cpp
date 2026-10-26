@@ -7,7 +7,6 @@
 #include <asio/post.hpp>
 
 #include <span>
-#include <array>
 #include <atomic>
 #include <cstdio>
 #include <thread>
@@ -21,6 +20,7 @@
 #endif
 
 using plexus::testing::asio_rig;
+using plexus::testing::k_payload;
 using plexus::testing::on_driver;
 using plexus::testing::inproc_rig;
 using plexus::testing::role_outcome;
@@ -28,14 +28,12 @@ using plexus::testing::read_participants;
 
 namespace {
 
-constexpr std::array<std::byte, 2> k_payload{std::byte{0x0A}, std::byte{0xFF}};
-
 void foreign_publish()
 {
     asio_rig rig;
-    plexus::publisher<> pub{rig.node, "affinity/topic"};
-    on_driver(rig.node, [&] { read_participants(rig.node); });
-    pub.publish(k_payload);
+    std::optional<plexus::publisher<>> pub;
+    on_driver(rig.node, [&] { pub.emplace(rig.node, "affinity/topic"); });
+    pub->publish(k_payload);
 }
 
 void foreign_member()

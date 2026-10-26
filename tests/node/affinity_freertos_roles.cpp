@@ -7,14 +7,11 @@
 #include "plexus/subscriber.h"
 #include "plexus/loopback_node.h"
 
-#include "plexus/graph/participant_record.h"
-
 #include "plexus/freertos/freertos_executor.h"
 
 #include "plexus/discovery/static_discovery.h"
 
 #include <span>
-#include <array>
 #include <thread>
 #include <cstddef>
 #include <string_view>
@@ -25,21 +22,18 @@ namespace {
 
 using freertos_host = plexus::loopback_host<freertos_loopback_policy>;
 
-void read_participants(plexus::loopback_node<freertos_loopback_policy> &node)
+plexus::node_id freertos_id()
 {
-    std::array<plexus::graph::participant_record, 4> seen{};
-    node.participants(std::span<plexus::graph::participant_record>{seen});
+    plexus::node_id id{};
+    id[0] = std::byte{0x03};
+    return id;
 }
 
-// The host shim reports one task handle for every thread, so this role proves the release reaches the FreeRTOS
-// executor's record through its policy, not that the record tells the two threads apart.
 void freertos_release_teardown()
 {
     plexus::freertos::freertos_executor ex;
     plexus::discovery::static_discovery disc{{}};
-    plexus::node_id id{};
-    id[0] = std::byte{0x03};
-    freertos_host host{ex, disc, id};
+    freertos_host host{ex, disc, freertos_id()};
     plexus::subscriber<> sub{host.node(), "affinity/topic", [](std::span<const std::byte>) {}};
     std::thread driver{[&]
                        {
@@ -50,13 +44,37 @@ void freertos_release_teardown()
     driver.join();
 }
 
+void freertos_pump_handover()
+{
+    plexus::freertos::freertos_executor ex;
+    plexus::discovery::static_discovery disc{{}};
+    freertos_host host{ex, disc, freertos_id()};
+    publish_from_driver(host.node(), [&] { ex.drain(); });
+}
+
+void freertos_second_pumper()
+{
+    plexus::freertos::freertos_executor ex;
+    plexus::discovery::static_discovery disc{{}};
+    freertos_host host{ex, disc, freertos_id()};
+    step_after_claimed(host.node(), [&] { ex.pump(); });
+}
+
 }
 
 role_outcome run_freertos_role(std::string_view role)
 {
-    if(role != "freertos_release_teardown")
+    if(role == "freertos_second_pumper")
+    {
+        freertos_second_pumper();
+        return role_outcome::not_tripped;
+    }
+    if(role == "freertos_release_teardown")
+        freertos_release_teardown();
+    else if(role == "freertos_pump_handover")
+        freertos_pump_handover();
+    else
         return role_outcome::unknown;
-    freertos_release_teardown();
     return role_outcome::ok;
 }
 
