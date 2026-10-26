@@ -1,9 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_EXECUTOR_H
 #define HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_EXECUTOR_H
 
+#include "plexus/freertos/posted_work.h"
+
+#include "plexus/freertos/detail/freertos_ingress.h"
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/driver_record.h"
 
 #include <deque>
 #include <chrono>
@@ -16,17 +20,6 @@ namespace plexus::freertos {
 
 class freertos_timer;
 
-// A unit of cross-context work carried by value through the executor queue: a
-// trivially-copyable 16-byte POD, the task-context analog of the bare pointer the
-// queue carried before. The producer owns the storage `ctx` points at; `invoke(ctx)`
-// runs the work on the executor task AND releases that storage back to the producer's
-// pool — the executor never owns or frees the bytes, so the post path allocates nothing.
-struct posted_work
-{
-    void (*invoke)(void *) noexcept;
-    void *ctx;
-};
-
 // Cooperative single-task pump-executor for the constrained-target super-loop.
 // pump() advances the system by one unit of work with a fixed priority — posted
 // callbacks, then a single queue drain, then expired timers — and returns false
@@ -36,13 +29,21 @@ struct posted_work
 // blocks. The block-with-timeout that yields to the idle task — the discipline that
 // keeps the task watchdog fed — lives in the super-loop driver, not here; a spin or
 // busy-wait here would starve the idle task and trip the watchdog reset.
+// A task that does not pump hands work over through post_from_thread; ingress_dropped() counts
+// the posts a full slot pool or a full queue turned away.
 class freertos_executor
 {
+    using pump_scope = plexus::detail::driver_record<TaskHandle_t>::step_scope;
+
 public:
     static constexpr std::uint32_t k_queue_depth = 16;
 
     freertos_executor()
             : m_queue(xQueueCreate(k_queue_depth, sizeof(posted_work)))
+            , m_timers()
+            , m_ingress()
+            , m_driver()
+            , m_posted()
     {
     }
 
@@ -65,12 +66,32 @@ public:
     // loop through the FreeRTOS queue (never the non-thread-safe m_posted deque),
     // carrying a caller-owned POD by value — no executor-side allocation. A zero wait
     // means a producing transport task never parks on a full queue; a full queue
-    // returns errQUEUE_FULL (the work was NOT enqueued) and the producer keeps and
-    // releases its own slot — a bounded, measurable drop, not corruption. An ISR
-    // producer, if one ever lands, gets its own re-introduced ISR verb at that time.
-    void post_from_task(posted_work w) noexcept
+    // returns false (the work was NOT enqueued) and the producer keeps and releases
+    // its own slot — a bounded, measurable drop, not corruption. An ISR producer, if
+    // one ever lands, gets its own re-introduced ISR verb at that time.
+    bool post_from_task(posted_work w) noexcept
     {
-        xQueueSend(m_queue, &w, 0);
+        return xQueueSend(m_queue, &w, 0) == pdTRUE;
+    }
+
+    void post_from_thread(plexus::detail::move_only_function<void()> fn)
+    {
+        m_ingress.post(std::move(fn), [this](posted_work w) { return post_from_task(w); });
+    }
+
+    std::uint32_t ingress_dropped() const noexcept
+    {
+        return m_ingress.dropped();
+    }
+
+    bool running_in_this_thread() noexcept
+    {
+        return m_driver.running_in(xTaskGetCurrentTaskHandle());
+    }
+
+    bool inside_executor() const noexcept
+    {
+        return m_driver.inside(xTaskGetCurrentTaskHandle());
     }
 
     // The watchdog-safe idle: yield the core until a cross-context post arrives OR the interval
@@ -83,11 +104,15 @@ public:
     {
         posted_work w{};
         if(xQueueReceive(m_queue, &w, pdMS_TO_TICKS(static_cast<std::uint32_t>(interval.count()))) == pdTRUE)
+        {
+            const pump_scope scope(m_driver, xTaskGetCurrentTaskHandle());
             w.invoke(w.ctx);
+        }
     }
 
     bool pump()
     {
+        const pump_scope scope(m_driver, xTaskGetCurrentTaskHandle());
         if(!m_posted.empty())
         {
             auto fn = std::move(m_posted.front());
@@ -125,6 +150,12 @@ public:
     }
 
 private:
+    QueueHandle_t m_queue;
+    std::vector<freertos_timer *> m_timers;
+    detail::freertos_ingress<k_queue_depth> m_ingress;
+    plexus::detail::driver_record<TaskHandle_t> m_driver;
+    std::deque<plexus::detail::move_only_function<void()>> m_posted;
+
     // The tick is read only here, and only when some timer could actually fire —
     // never for an armed-but-handlerless or canceled timer. The scan over the
     // (complete) timer type is out-of-line in the timer header.
@@ -132,11 +163,8 @@ private:
     {
         return xTaskGetTickCount();
     }
-    bool fire_due_timer();
 
-    QueueHandle_t                                          m_queue;
-    std::deque<plexus::detail::move_only_function<void()>> m_posted;
-    std::vector<freertos_timer *>                          m_timers;
+    bool fire_due_timer();
 };
 
 }

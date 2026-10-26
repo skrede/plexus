@@ -3,10 +3,14 @@
 
 #include "plexus/inproc/inproc_bus.h"
 
-#include "plexus/detail/compat.h"
+#include "plexus/inproc/detail/inproc_ingress.h"
 
-#include <vector>
+#include "plexus/detail/compat.h"
+#include "plexus/detail/driver_record.h"
+
 #include <chrono>
+#include <thread>
+#include <vector>
 #include <cstddef>
 #include <utility>
 #include <algorithm>
@@ -21,12 +25,18 @@ class inproc_timer;
 // false only at quiescence; drain() steps to quiescence. Timers are checked only once the ready
 // work is exhausted (the asio reactor discipline), so the steady delivery loop pays no clock read
 // per step. Routing every byte delivery through step() is what makes inproc delivery posted-only.
+// Work from another thread enters through post_from_thread and runs at the head of a later step.
 template<typename Clock = std::chrono::steady_clock>
 class inproc_executor
 {
 public:
     explicit inproc_executor(inproc_bus<Clock> &bus)
-            : m_bus(bus)
+            : m_head(0)
+            , m_bus(bus)
+            , m_ingress()
+            , m_timers()
+            , m_driver()
+            , m_posted()
     {
     }
 
@@ -40,23 +50,27 @@ public:
         m_posted.push_back(std::move(fn));
     }
 
+    void post_from_thread(detail::move_only_function<void()> fn)
+    {
+        m_ingress.push(std::move(fn));
+    }
+
+    bool running_in_this_thread() noexcept
+    {
+        return m_driver.running_in(std::this_thread::get_id());
+    }
+
+    bool inside_executor() const noexcept
+    {
+        return m_driver.inside(std::this_thread::get_id());
+    }
+
     bool step()
     {
+        const detail::driver_record<std::thread::id>::step_scope scope(m_driver, std::this_thread::get_id());
+        m_ingress.drain_into(m_posted);
         if(m_head < m_posted.size())
-        {
-            auto fn = std::move(m_posted[m_head]);
-            // Recycle the buffer the moment it drains empty rather than pop_front-ing per step: the
-            // vector keeps its capacity across the clear, so a steady post-drain loop reallocates
-            // nothing (a std::deque recenters its block map periodically, which a zero-alloc gate on
-            // any posted path would otherwise trip).
-            if(++m_head == m_posted.size())
-            {
-                m_posted.clear();
-                m_head = 0;
-            }
-            fn();
-            return true;
-        }
+            return run_next_posted();
 
         if(m_bus.deliver_one())
             return true;
@@ -88,6 +102,29 @@ public:
     }
 
 private:
+    std::size_t m_head;
+    inproc_bus<Clock> &m_bus;
+    detail::inproc_ingress m_ingress;
+    std::vector<inproc_timer<Clock> *> m_timers;
+    detail::driver_record<std::thread::id> m_driver;
+    std::vector<detail::move_only_function<void()>> m_posted;
+
+    bool run_next_posted()
+    {
+        auto fn = std::move(m_posted[m_head]);
+        // Recycle the buffer the moment it drains empty rather than pop_front-ing per step: the
+        // vector keeps its capacity across the clear, so a steady post-drain loop reallocates
+        // nothing (a std::deque recenters its block map periodically, which a zero-alloc gate on
+        // any posted path would otherwise trip).
+        if(++m_head == m_posted.size())
+        {
+            m_posted.clear();
+            m_head = 0;
+        }
+        fn();
+        return true;
+    }
+
     // The clock is read only here, and only when some timer could actually fire.
     bool fire_due_timer()
     {
@@ -100,11 +137,6 @@ private:
                 return true;
         return false;
     }
-
-    inproc_bus<Clock> &m_bus;
-    std::vector<detail::move_only_function<void()>> m_posted;
-    std::size_t m_head{0};
-    std::vector<inproc_timer<Clock> *> m_timers;
 };
 
 }

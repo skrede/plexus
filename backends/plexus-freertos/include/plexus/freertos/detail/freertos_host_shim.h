@@ -12,8 +12,9 @@
 #if !defined(ESP_PLATFORM)
 
     #include <deque>
-    #include <vector>
+    #include <mutex>
     #include <chrono>
+    #include <vector>
     #include <cstring>
     #include <cstdint>
 
@@ -39,15 +40,19 @@ constexpr TickType_t pdMS_TO_TICKS(std::uint32_t ms) noexcept
 
 namespace plexus::freertos::detail {
 
-// The real kernel queue copies item_size bytes by value; the host stand-in mirrors
-// that — it stores whole item-sized records, not a fixed pointer, so a widened item
-// (a multi-field POD) round-trips intact off-target instead of truncating to its
-// first word.
+// The real kernel queue copies item_size bytes by value into a fixed number of slots and
+// is safe to use from any task; the host stand-in mirrors all three, so a widened item
+// round-trips intact, a full queue refuses a send, and a cross-thread test races nothing.
 struct host_queue
 {
-    std::uint32_t                       item_size;
-    std::deque<std::vector<std::byte>>  items;
+    std::uint32_t length;
+    std::uint32_t item_size;
+    std::mutex mutex;
+    std::deque<std::vector<std::byte>> items;
 };
+
+// Host threads stand in for tasks; each thread's marker address is its task handle.
+inline thread_local char host_task_marker = 0;
 
 }
 
@@ -55,16 +60,16 @@ using QueueHandle_t = plexus::freertos::detail::host_queue *;
 
 inline TickType_t xTaskGetTickCount() noexcept
 {
-    using clock                           = std::chrono::steady_clock;
-    static const auto               start = clock::now();
-    const auto                      since = clock::now() - start;
-    const std::chrono::milliseconds ms    = std::chrono::duration_cast<std::chrono::milliseconds>(since);
+    using clock                        = std::chrono::steady_clock;
+    static const auto start            = clock::now();
+    const auto since                   = clock::now() - start;
+    const std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(since);
     return static_cast<TickType_t>(ms.count());
 }
 
-inline QueueHandle_t xQueueCreate(std::uint32_t /*length*/, std::uint32_t item_size)
+inline QueueHandle_t xQueueCreate(std::uint32_t length, std::uint32_t item_size)
 {
-    return new plexus::freertos::detail::host_queue{item_size, {}};
+    return new plexus::freertos::detail::host_queue{length, item_size, {}, {}};
 }
 
 inline void vQueueDelete(QueueHandle_t q) noexcept
@@ -77,7 +82,10 @@ inline void vQueueDelete(QueueHandle_t q) noexcept
 // block-with-timeout lives in the super-loop driver, not here).
 inline BaseType_t xQueueReceive(QueueHandle_t q, void *out, TickType_t /*wait*/)
 {
-    if(!q || q->items.empty())
+    if(!q)
+        return pdFALSE;
+    const std::lock_guard<std::mutex> lock(q->mutex);
+    if(q->items.empty())
         return pdFALSE;
     std::memcpy(out, q->items.front().data(), q->item_size);
     q->items.pop_front();
@@ -87,6 +95,9 @@ inline BaseType_t xQueueReceive(QueueHandle_t q, void *out, TickType_t /*wait*/)
 inline BaseType_t xQueueSend(QueueHandle_t q, const void *item, TickType_t /*wait*/)
 {
     if(!q)
+        return pdFALSE;
+    const std::lock_guard<std::mutex> lock(q->mutex);
+    if(q->items.size() >= q->length)
         return pdFALSE;
     const auto *bytes = static_cast<const std::byte *>(item);
     q->items.emplace_back(bytes, bytes + q->item_size);
@@ -100,6 +111,11 @@ inline BaseType_t xQueueSendFromISR(QueueHandle_t q, const void *item, BaseType_
     return xQueueSend(q, item, 0);
 }
 
+inline TaskHandle_t xTaskGetCurrentTaskHandle() noexcept
+{
+    return &plexus::freertos::detail::host_task_marker;
+}
+
 inline void vTaskDelay(TickType_t /*ticks*/) noexcept
 {
 }
@@ -108,8 +124,8 @@ namespace plexus::freertos::detail {
 // A host spy for the RX-task self-delete: on-target a task that returns aborts, so the trampoline calls
 // vTaskDelete(nullptr) at loop exit. Off-target it is a no-op the seam test reads to prove the trampoline
 // self-deletes rather than falling off the end.
-inline int          host_vtask_delete_calls = 0;
-inline TaskHandle_t host_vtask_delete_last  = nullptr;
+inline int host_vtask_delete_calls         = 0;
+inline TaskHandle_t host_vtask_delete_last = nullptr;
 }
 
 inline void vTaskDelete(TaskHandle_t task) noexcept

@@ -1,0 +1,164 @@
+#include "plexus/post.h"
+#include "plexus/node.h"
+#include "plexus/policy.h"
+#include "plexus/publisher.h"
+#include "plexus/subscriber.h"
+#include "plexus/node_options.h"
+#include "plexus/loopback_node.h"
+#include "plexus/executor_verbs.h"
+
+#include "plexus/asio/asio_policy.h"
+#include "plexus/asio/asio_transport.h"
+
+#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_timer.h"
+#include "plexus/inproc/inproc_channel.h"
+#include "plexus/inproc/inproc_executor.h"
+
+#include "plexus/io/process_loopback_channel.h"
+
+#include "plexus/graph/participant_record.h"
+
+#include "plexus/discovery/static_discovery.h"
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <asio/post.hpp>
+#include <asio/io_context.hpp>
+#include <asio/executor_work_guard.hpp>
+
+#include <span>
+#include <array>
+#include <atomic>
+#include <memory>
+#include <thread>
+#include <cstddef>
+#include <cstdint>
+
+namespace {
+
+using plexus::inproc::inproc_executor;
+
+using asio_node = plexus::basic_node<plexus::asio::asio_policy, plexus::asio::asio_transport>;
+
+struct loopback_policy : plexus::executor_verbs<inproc_executor<>>
+{
+    using byte_channel_type = plexus::io::process_loopback_channel<loopback_policy>;
+    using timer_type        = plexus::inproc::inproc_timer<>;
+    using byte_owner        = std::shared_ptr<const void>;
+};
+
+static_assert(plexus::Policy<loopback_policy>);
+
+constexpr int k_rounds = 500;
+constexpr std::array<std::byte, 2> k_payload{std::byte{0x0B}, std::byte{0xAD}};
+
+struct tally
+{
+    std::atomic<int> done{0};
+    std::atomic<int> on_driver{0};
+    std::atomic<bool> finished{false};
+};
+
+plexus::node_id make_id(std::uint8_t seed)
+{
+    plexus::node_id id{};
+    id[0] = std::byte{seed};
+    return id;
+}
+
+template<typename Node>
+void exercise(Node &node, plexus::publisher<> &pub)
+{
+    pub.publish(k_payload);
+    std::array<plexus::graph::participant_record, 4> seen{};
+    node.participants(std::span<plexus::graph::participant_record>{seen});
+    plexus::subscriber<> transient{node, "post/topic", [](std::span<const std::byte>) {}};
+}
+
+template<typename Node, typename Inside>
+void post_rounds(Node &node, plexus::publisher<> &pub, tally &counts, Inside inside)
+{
+    for(int i = 0; i < k_rounds; ++i)
+        plexus::post(node,
+                     [&node, &pub, &counts, inside]
+                     {
+                         exercise(node, pub);
+                         if(inside())
+                             counts.on_driver.fetch_add(1, std::memory_order_relaxed);
+                         counts.done.fetch_add(1, std::memory_order_relaxed);
+                     });
+}
+
+// Publishes on the stepping thread between steps, so a round that ran off the driver would race it.
+void step_until_finished(inproc_executor<> &ex, plexus::publisher<> &pub, const tally &counts)
+{
+    while(!counts.finished.load(std::memory_order_acquire))
+    {
+        pub.publish(k_payload);
+        ex.drain();
+    }
+}
+
+// Publishes on the executor thread between posted rounds, so a round that ran off the driver would race it.
+struct asio_churn
+{
+    ::asio::io_context &io;
+    plexus::publisher<> &pub;
+
+    void operator()() const
+    {
+        pub.publish(k_payload);
+        ::asio::post(io, *this);
+    }
+};
+
+}
+
+TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handle lifetimes run on the asio executor thread race-free", "[node]")
+{
+    ::asio::io_context io;
+    plexus::asio::asio_transport transport{io};
+    plexus::discovery::static_discovery disc{{}};
+    asio_node node{io, disc, make_id(0x01), transport, plexus::node_options{}};
+    plexus::publisher<> pub{node, "post/topic"};
+    tally counts;
+    auto guard = ::asio::make_work_guard(io);
+
+    ::asio::post(io, asio_churn{io, pub});
+    std::thread executor([&] { io.run(); });
+    std::thread foreign(
+            [&]
+            {
+                post_rounds(node, pub, counts, [&io] { return plexus::asio::asio_policy::inside_executor(io); });
+                plexus::post(node, [&io] { io.stop(); });
+            });
+    foreign.join();
+    executor.join();
+
+    REQUIRE(counts.done.load() == k_rounds);
+    REQUIRE(counts.on_driver.load() == k_rounds);
+}
+
+TEST_CASE("post_from_thread a foreign thread's posted publishes, reads and handle lifetimes run on the inproc stepping thread race-free", "[node]")
+{
+    plexus::inproc::inproc_bus<> bus;
+    inproc_executor<> ex{bus};
+    plexus::discovery::static_discovery disc{{}};
+    plexus::loopback_host<loopback_policy> host{ex, disc, make_id(0x02)};
+    plexus::publisher<> pub{host.node(), "post/topic"};
+    tally counts;
+
+    std::thread stepper([&] { step_until_finished(ex, pub, counts); });
+    std::thread foreign(
+            [&]
+            {
+                post_rounds(host.node(), pub, counts, [&ex] { return ex.inside_executor(); });
+                plexus::post(host.node(), [&counts] { counts.finished.store(true, std::memory_order_release); });
+            });
+    foreign.join();
+    stepper.join();
+
+    REQUIRE(counts.done.load() == k_rounds);
+    REQUIRE(counts.on_driver.load() == k_rounds);
+}

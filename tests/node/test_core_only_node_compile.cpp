@@ -49,28 +49,18 @@ public:
     {
         return {};
     }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)
+    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
     {
-        m_on_data_cb = std::move(cb);
     }
-    void on_closed(plexus::detail::move_only_function<void()> cb)
+    void on_closed(plexus::detail::move_only_function<void()>)
     {
-        m_on_closed_cb = std::move(cb);
     }
-    void on_error(plexus::detail::move_only_function<void(pio::io_error)> cb)
+    void on_error(plexus::detail::move_only_function<void(pio::io_error)>)
     {
-        m_on_error_cb = std::move(cb);
     }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
+    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
     {
-        m_on_protocol_close_cb = std::move(cb);
     }
-
-private:
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
-    plexus::detail::move_only_function<void()> m_on_closed_cb;
-    plexus::detail::move_only_function<void(pio::io_error)> m_on_error_cb;
-    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close_cb;
 };
 
 // A cooperative step-executor the node borrows by reference: post() queues, pump() drains one.
@@ -80,6 +70,18 @@ public:
     void post(plexus::detail::move_only_function<void()> fn)
     {
         m_queue.push_back(std::move(fn));
+    }
+    void post_from_thread(plexus::detail::move_only_function<void()> fn)
+    {
+        post(std::move(fn));
+    }
+    bool running_in_this_thread() const noexcept
+    {
+        return true;
+    }
+    bool inside_executor() const noexcept
+    {
+        return false;
     }
     bool pump()
     {

@@ -463,4 +463,15 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::discovery
         Catch2::Catch2WithMain)
     catch_discover_tests(test_node_close_asio TEST_PREFIX "node.")
+
+    # A foreign thread hands work to a node through plexus::post while the driver thread runs it, over an asio
+    # io_context and an inproc stepping thread; the TSan tree is the witness that the work never ran off the driver.
+    add_executable(test_post_from_thread test_post_from_thread.cpp)
+    target_link_libraries(test_post_from_thread PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::inproc
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_post_from_thread TEST_PREFIX "node.")
 endif()

@@ -168,6 +168,18 @@ target_link_libraries(test_freertos_executor_post PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_freertos_executor_post TEST_PREFIX "seam.")
 
+# The pooled cross-task ingress of the constrained-target executor on the host shim: work from
+# another thread runs at the next pump, a full slot pool (allocating nothing) or a full queue is a
+# counted drop, and the in-pump fact is per task. RUN_SERIAL keeps the alloc count clean.
+add_executable(test_freertos_ingress test_freertos_ingress.cpp)
+target_include_directories(test_freertos_ingress PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_freertos_ingress PRIVATE
+    plexus::core
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_freertos_ingress TEST_PREFIX "seam."
+    PROPERTIES RUN_SERIAL TRUE)
+
 # The permissive/strict reliability enforcement gate on the routing_engine subscribe
 # demand path — a deterministic inproc seam test (no backend socket). Links the inproc
 # Policy substrate for the engine harness. Registered under the `udp.` prefix so

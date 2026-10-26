@@ -90,6 +90,20 @@ struct fake_policy
     static void post(executor_type, move_only_function<void()>)
     {
     }
+
+    static void post_from_thread(executor_type, move_only_function<void()>)
+    {
+    }
+
+    static bool running_in_this_thread(executor_type) noexcept
+    {
+        return true;
+    }
+
+    static bool inside_executor(executor_type) noexcept
+    {
+        return false;
+    }
 };
 
 static_assert(plexus::io::byte_channel<fake_channel>, "fake_channel must satisfy byte_channel");

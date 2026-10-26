@@ -41,6 +41,21 @@ public:
         m_queue.push_back(std::move(fn));
     }
 
+    void post_from_thread(plexus::detail::move_only_function<void()> fn)
+    {
+        post(std::move(fn));
+    }
+
+    bool running_in_this_thread() const noexcept
+    {
+        return true;
+    }
+
+    bool inside_executor() const noexcept
+    {
+        return false;
+    }
+
     void run_posted()
     {
         while(!m_queue.empty())

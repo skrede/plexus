@@ -43,3 +43,13 @@ target_link_libraries(test_inproc_retire_quiescence PRIVATE
     plexus::inproc
     Catch2::Catch2WithMain)
 catch_discover_tests(test_inproc_retire_quiescence TEST_PREFIX "inproc.")
+
+# The cross-thread ingress of the step-executor: work posted from another thread runs at a later step on the
+# stepping thread, the in-step fact is per thread, and a foreign thread's plexus::post reaches an inproc node.
+add_executable(test_inproc_ingress test_inproc_ingress.cpp)
+target_link_libraries(test_inproc_ingress PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_inproc_ingress TEST_PREFIX "inproc.")

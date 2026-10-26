@@ -31,6 +31,21 @@ struct wire_capturing_policy
     {
         Inner::post(ex, std::move(fn));
     }
+
+    static void post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        Inner::post_from_thread(ex, std::move(fn));
+    }
+
+    static bool running_in_this_thread(executor_type ex)
+    {
+        return Inner::running_in_this_thread(ex);
+    }
+
+    static bool inside_executor(executor_type ex)
+    {
+        return Inner::inside_executor(ex);
+    }
 };
 
 // Drives a borrowed Inner transport and, at the on_dialed / on_accepted mint point, MOVES the

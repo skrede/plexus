@@ -25,6 +25,21 @@ struct muxify
     {
         P::post(ex, std::move(fn));
     }
+
+    static void post_from_thread(executor_type ex, plexus::detail::move_only_function<void()> fn)
+    {
+        P::post_from_thread(ex, std::move(fn));
+    }
+
+    static bool running_in_this_thread(executor_type ex)
+    {
+        return P::running_in_this_thread(ex);
+    }
+
+    static bool inside_executor(executor_type ex)
+    {
+        return P::inside_executor(ex);
+    }
 };
 
 }
