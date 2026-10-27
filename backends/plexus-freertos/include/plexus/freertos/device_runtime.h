@@ -30,7 +30,7 @@ struct run_options
     std::chrono::milliseconds park;
 };
 
-std::chrono::milliseconds effective_park(run_options opts) noexcept
+inline std::chrono::milliseconds effective_park(run_options opts) noexcept
 {
     return std::max(opts.park, k_min_park);
 }
