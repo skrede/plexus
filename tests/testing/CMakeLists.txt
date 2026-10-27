@@ -21,3 +21,9 @@ add_executable(test_mock_retire_quiescence test_mock_retire_quiescence.cpp)
 target_include_directories(test_mock_retire_quiescence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(test_mock_retire_quiescence PRIVATE plexus::core plexus::testing Catch2::Catch2WithMain)
 catch_discover_tests(test_mock_retire_quiescence TEST_PREFIX "testing.")
+
+# support/alloc_watch.h replaces the global operator new/delete, so its self-test is its own executable.
+add_executable(test_alloc_watch test_alloc_watch.cpp)
+target_include_directories(test_alloc_watch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_alloc_watch PRIVATE Catch2::Catch2WithMain)
+catch_discover_tests(test_alloc_watch TEST_PREFIX "testing.")
