@@ -159,14 +159,15 @@ jobs:
       # The Windows half of the retire-then-drain proof: IOCP completes a canceled operation after close returns,
       # so only there can a channel freed before its drain be caught. CXXFLAGS keeps CMake's own MSVC defaults
       # (/EHsc) beside the sanitizer, RelWithDebInfo keeps /RTC off, and the sanitizer cannot link incrementally.
+      # The flags take cl's and link's '-' prefix because Git Bash rewrites a leading '/' argument into a Windows path.
       - name: configure (MSVC AddressSanitizer)
         if: matrix.asan
         shell: bash
         run: |
-          CFLAGS=/fsanitize=address CXXFLAGS=/fsanitize=address cmake -S . -B build -G Ninja \
+          CFLAGS=-fsanitize=address CXXFLAGS=-fsanitize=address cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER="${{ matrix.cc }}" -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" \
-            -DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO="/debug /INCREMENTAL:NO" \
+            -DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO="-debug -INCREMENTAL:NO" \
             -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
             -DPLEXUS_ENABLE_CRYPTO_BACKEND=OFF -DPLEXUS_AFFINITY_CHECKS=ON \
             -DPLEXUS_BUILD_TESTS=ON -DPLEXUS_BUILD_EXAMPLES=ON \
