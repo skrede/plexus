@@ -113,7 +113,7 @@ companion trees:
 cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=all -g" \
     -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_CRYPTO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
-    -DPLEXUS_AFFINITY_CHECKS=ON
+    -DPLEXUS_AFFINITY_CHECKS=ON -DPLEXUS_BUILD_TESTS=ON
 cmake --build build-asan -j4
 ctest --test-dir build-asan -j4 --timeout 120
 ```
@@ -130,10 +130,10 @@ cross-process notifier; the transport data paths are single-io-thread by design,
 so ThreadSanitizer over them is a no-accidental-sharing assurance.
 
 ```bash
-cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g" \
     -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_CRYPTO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
-    -DPLEXUS_AFFINITY_CHECKS=ON
+    -DPLEXUS_AFFINITY_CHECKS=ON -DPLEXUS_BUILD_TESTS=ON -DPLEXUS_WARNINGS_AS_ERRORS=OFF
 cmake --build build-tsan -j4
 ctest --test-dir build-tsan -j4 --timeout 120
 ```
