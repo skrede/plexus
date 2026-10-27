@@ -99,7 +99,7 @@ TEST_CASE("lwip rx task waits for queue room and delivers the feed once the exec
     rig.sender.send(on_wire(k_payload));
 
     bool open = false;
-    std::jthread rx([&] { open = plexus::freertos::detail::lwip_rx_step(rig.ctx); });
+    std::thread rx([&] { open = plexus::freertos::detail::lwip_rx_step(rig.ctx); });
     CHECK(rx_task_parked());
     plexus::test::poll_until([&] { rig.ex.pump(); }, [&] { return !received.empty(); });
     rx.join();
@@ -121,7 +121,7 @@ TEST_CASE("a closed channel releases an RX task waiting for queue room", "[seam]
 
     std::atomic<bool> done{false};
     bool open = true;
-    std::jthread rx(
+    std::thread rx(
             [&]
             {
                 open = plexus::freertos::detail::lwip_rx_step(rig.ctx);
