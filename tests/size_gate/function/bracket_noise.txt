@@ -1,0 +1,7 @@
+/src/tests/wire/test_a.cpp:10:1: warning: function 'dummyFunction0' exceeds recommended size/complexity thresholds [readability-function-size]
+   12 |     if (c == '[')
+      |     ^
+/src/tests/wire/test_b.cpp:30:1: warning: function 'dummyFunction1' exceeds recommended size/complexity thresholds [readability-function-size]
+/src/lib/plexus-api/include/plexus/publisher.h:86:19: note: in instantiation of template class 'plexus::publisher<codec>' requested here
+   40 |     if (c == ']')
+      |     ^

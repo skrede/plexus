@@ -1,0 +1,6 @@
+   12 |     if (c == '[')
+      |     ^
+/src/backends/plexus-asio/include/plexus/asio/long_body.h:20:5: warning: function 'long_body' exceeds recommended size/complexity thresholds [readability-function-size]
+/src/tests/wire/test_b.cpp:30:1: warning: function 'dummyFunction1' exceeds recommended size/complexity thresholds [readability-function-size]
+   40 |     if (c == ']')
+      |     ^

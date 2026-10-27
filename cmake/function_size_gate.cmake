@@ -45,29 +45,35 @@ if(NOT FUNC_GATE_SCAN)
     return()
 endif()
 
-# run-clang-tidy drives the per-TU compile DB; without it the gate cannot run.
-find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)
-if(NOT RUN_CLANG_TIDY)
-    message(WARNING
-        "function size gate: run-clang-tidy not found -- the function-size + "
-        "cognitive-complexity gate is NOT active in this tree. Install LLVM's "
-        "run-clang-tidy to enforce the function ceiling at build time.")
-    return()
-endif()
+# FUNC_GATE_TIDY_LOG replays a recorded clang-tidy output instead of running it,
+# so the gate's own parsing can be tested against fixed diagnostics.
+if(FUNC_GATE_TIDY_LOG)
+    file(READ "${FUNC_GATE_TIDY_LOG}" _tidy_out)
+else()
+    # run-clang-tidy drives the per-TU compile DB; without it the gate cannot run.
+    find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)
+    if(NOT RUN_CLANG_TIDY)
+        message(WARNING
+            "function size gate: run-clang-tidy not found -- the function-size + "
+            "cognitive-complexity gate is NOT active in this tree. Install LLVM's "
+            "run-clang-tidy to enforce the function ceiling at build time.")
+        return()
+    endif()
 
-# Run advisory over the WHOLE compile DB so header-only lib bodies are reached
-# through the test TUs that instantiate them; -header-filter scopes the emitted
-# header diagnostics to the library, -checks restricts the run to the two size
-# checks so an unrelated diagnostic never enters the result.
-execute_process(
-    COMMAND ${RUN_CLANG_TIDY}
-            -p ${FUNC_GATE_BUILD_DIR}
-            -quiet
-            -checks=-*,readability-function-size,readability-function-cognitive-complexity
-            "-header-filter=.*/(lib|backends)/plexus.*"
-    OUTPUT_VARIABLE _tidy_out
-    ERROR_VARIABLE _tidy_err
-    RESULT_VARIABLE _tidy_rc)
+    # Run advisory over the WHOLE compile DB so header-only lib bodies are reached
+    # through the test TUs that instantiate them; -header-filter scopes the emitted
+    # header diagnostics to the library, -checks restricts the run to the two size
+    # checks so an unrelated diagnostic never enters the result.
+    execute_process(
+        COMMAND ${RUN_CLANG_TIDY}
+                -p ${FUNC_GATE_BUILD_DIR}
+                -quiet
+                -checks=-*,readability-function-size,readability-function-cognitive-complexity
+                "-header-filter=.*/(lib|backends)/plexus.*"
+        OUTPUT_VARIABLE _tidy_out
+        ERROR_VARIABLE _tidy_err
+        RESULT_VARIABLE _tidy_rc)
+endif()
 
 # Keep only the size/complexity warning lines that point into the library tree;
 # a test or example main-source body is out of this gate's scope.
