@@ -76,14 +76,17 @@ else()
 endif()
 
 # Keep only the size/complexity warning lines that point into the library tree;
-# a test or example main-source body is out of this gate's scope.
+# a test or example main-source body is out of this gate's scope. The warning
+# lines are matched out of the raw output rather than splitting it into a list,
+# because CMake does not split a list on ';' inside brackets, and clang-tidy's
+# quoted source lines carry unbalanced ones that would fold many lines into one.
 set(_violations "")
-string(REPLACE "\n" ";" _lines "${_tidy_out}")
-foreach(_line IN LISTS _lines)
-    if(_line MATCHES "warning:.*(readability-function-size|readability-function-cognitive-complexity)")
-        if(_line MATCHES "${FUNC_GATE_SCOPE}")
-            list(APPEND _violations "${_line}")
-        endif()
+string(REGEX MATCHALL
+    "[^\n]*warning:[^\n]*(readability-function-size|readability-function-cognitive-complexity)[^\n]*"
+    _warnings "${_tidy_out}")
+foreach(_line IN LISTS _warnings)
+    if(_line MATCHES "${FUNC_GATE_SCOPE}")
+        list(APPEND _violations "${_line}")
     endif()
 endforeach()
 list(REMOVE_DUPLICATES _violations)
