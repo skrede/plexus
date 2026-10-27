@@ -66,7 +66,7 @@ public:
     }
 
 private:
-    io::endpoint_seam m_seam{};
+    io::endpoint_seam m_seam;
     std::string m_fqn;
 };
 
@@ -94,6 +94,7 @@ public:
             , m_codec(std::move(codec))
             , m_identity(resolve_identity(m_codec, opts.type_id))
             , m_pool(opts.pool_depth)
+            , m_loan_exhausted(0)
     {
         m_seam.declare_publisher(m_seam.ctx, fqn, opts.qos, opts.emit_source_identity, m_identity.type_id, m_identity.type_name, m_identity.schema_hint, opts.geometry,
                                  opts.capture ? std::optional{opts.capture->to_rule()} : std::nullopt);
@@ -149,13 +150,13 @@ private:
     template<typename P, typename V>
     friend void detail::publish_value(P &, const V &);
 
-    io::endpoint_seam m_seam{};
+    io::endpoint_seam m_seam;
     std::string m_fqn;
     Codec m_codec;
     type_identity m_identity;
     detail::loan_pool<value_type> m_pool;
     wire_bytes<> m_scratch;
-    std::size_t m_loan_exhausted{};
+    std::size_t m_loan_exhausted;
 };
 
 }

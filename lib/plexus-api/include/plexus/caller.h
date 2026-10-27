@@ -88,7 +88,7 @@ private:
         detail::dispatch_bytes_call(m_seam, m_fqn, param, std::forward<Completion>(completion), deadline);
     }
 
-    io::endpoint_seam m_seam{};
+    io::endpoint_seam m_seam;
     std::string m_fqn;
 };
 
@@ -142,7 +142,7 @@ private:
         detail::dispatch_typed_call<Res>(m_seam, m_fqn, static_cast<std::span<const std::byte>>(encoded), m_res_codec, std::forward<Completion>(completion), deadline);
     }
 
-    io::endpoint_seam m_seam{};
+    io::endpoint_seam m_seam;
     request_codec m_req_codec;
     response_codec m_res_codec;
     std::string m_fqn;
