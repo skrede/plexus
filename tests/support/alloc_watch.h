@@ -35,6 +35,10 @@ struct alloc_watch_state
 // object they reach by name.
 inline constinit alloc_watch_state alloc_watch{};
 
+// An exact watch also accepts this much over the size, because MSVC STL's std::allocator asks operator new for a
+// 4096+ byte request plus a 2 * sizeof(void *) + 31 byte alignment header (_Allocate_manually_vector_aligned).
+constexpr std::size_t k_allocator_header_slack = 64;
+
 inline void arm_alloc_watch(std::size_t bytes, bool at_least) noexcept
 {
     alloc_watch.block.store(0);
@@ -69,7 +73,7 @@ inline void note_alloc(std::uintptr_t at, std::size_t size) noexcept
     if(at == 0 || !alloc_watch.armed.load())
         return;
     const std::size_t want = alloc_watch.bytes.load();
-    if(size != want && !(alloc_watch.at_least.load() && size > want))
+    if(size < want || (!alloc_watch.at_least.load() && size > want + k_allocator_header_slack))
         return;
     bool expected = true;
     if(alloc_watch.armed.compare_exchange_strong(expected, false))
