@@ -76,8 +76,10 @@ inline bool host_wait_for_room(host_queue &q, std::unique_lock<std::mutex> &lock
     return got;
 }
 
-// Host threads stand in for tasks; each thread's marker address is its task handle.
-inline thread_local char host_task_marker = 0;
+// Host threads stand in for tasks. A thread_local's address can pass to a later thread once its owner exits, so each
+// thread draws an id no other thread ever holds.
+inline std::atomic<std::uintptr_t> host_last_task_id{0};
+inline thread_local std::uintptr_t host_task_id = 0;
 
 }
 
@@ -142,7 +144,10 @@ inline BaseType_t xQueueSendFromISR(QueueHandle_t q, const void *item, BaseType_
 
 inline TaskHandle_t xTaskGetCurrentTaskHandle() noexcept
 {
-    return &plexus::freertos::detail::host_task_marker;
+    std::uintptr_t &id = plexus::freertos::detail::host_task_id;
+    if(id == 0)
+        id = ++plexus::freertos::detail::host_last_task_id;
+    return reinterpret_cast<TaskHandle_t>(id);
 }
 
 inline void vTaskDelay(TickType_t /*ticks*/) noexcept

@@ -1,3 +1,4 @@
+#include "floored_tcp.h"
 #include "test_stream_channel_asio_common.h"
 
 #include "support/retire_drain.h"
@@ -15,16 +16,18 @@ namespace {
 struct stalled_pair
 {
     ::asio::io_context io;
-    ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
-    ::asio::ip::tcp::socket peer{io};
-    ::asio::ip::tcp::socket client{io};
+    ::asio::ip::tcp::acceptor acc;
+    ::asio::ip::tcp::socket peer;
+    ::asio::ip::tcp::socket client;
 
     stalled_pair()
+            : io()
+            , acc(floored_tcp::loopback_acceptor(io))
+            , peer(io)
+            , client(io)
     {
-        client.connect(acc.local_endpoint());
+        floored_tcp::connect(client, acc.local_endpoint());
         acc.accept(peer);
-        client.set_option(::asio::socket_base::send_buffer_size{1024});
-        peer.set_option(::asio::socket_base::receive_buffer_size{1024});
     }
 };
 

@@ -156,3 +156,15 @@ TEST_CASE("freertos_ingress posts racing the pumping task each run on it or coun
     REQUIRE(tally.refused.load() == ex.ingress_dropped());
     REQUIRE(tally.ran + tally.refused.load() == k_racing_posts);
 }
+
+TEST_CASE("freertos_ingress a thread started after another exited is a different task", "[seam]")
+{
+    TaskHandle_t first  = nullptr;
+    TaskHandle_t second = nullptr;
+    std::thread([&first] { first = xTaskGetCurrentTaskHandle(); }).join();
+    std::thread([&second] { second = xTaskGetCurrentTaskHandle(); }).join();
+
+    REQUIRE(first != nullptr);
+    REQUIRE(second != nullptr);
+    REQUIRE(first != second);
+}

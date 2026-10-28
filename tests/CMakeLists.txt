@@ -12,14 +12,14 @@ if(PLEXUS_BUILD_FUZZ_TESTS)
 endif()
 
 if(PLEXUS_BUILD_TESTS)
-    # Catch2 v3: prefer an installed package; fall back to FetchContent. The
-    # resolved version is reported so the parity-oracle run is reproducible.
-    find_package(Catch2 3 CONFIG QUIET)
+    # Catch2 v3, installed or fetched. 3.7.1 is the first release whose catch_discover_tests
+    # sets SKIP_RETURN_CODE 4, so a binary whose every case skips reports as skipped, not failed.
+    find_package(Catch2 3.7.1 CONFIG QUIET)
     if(NOT Catch2_FOUND)
         include(FetchContent)
         FetchContent_Declare(Catch2
             GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-            GIT_TAG v3.5.2)
+            GIT_TAG v3.16.1)
         FetchContent_MakeAvailable(Catch2)
     endif()
     include(Catch)

@@ -1,3 +1,4 @@
+#include "floored_tcp.h"
 #include "test_stream_channel_asio_common.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -25,18 +26,11 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
     auto run = [](pio::congestion mode)
     {
         ::asio::io_context io;
-        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
+        ::asio::ip::tcp::acceptor acc = floored_tcp::loopback_acceptor(io);
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
-        client.connect(acc.local_endpoint());
+        floored_tcp::connect(client, acc.local_endpoint());
         acc.accept(peer); // peer adopts but NEVER reads
-
-        // Pin both kernel buffers to the floor so async_write stalls after a few KiB, not
-        // after megabytes. The kernel may round up, but to its own minimum (KiB-scale),
-        // never to the default 100s of KiB — enough headroom collapses that the 4 KiB
-        // userspace cap engages deterministically regardless of producer/drain timing.
-        client.set_option(::asio::socket_base::send_buffer_size{1024});
-        peer.set_option(::asio::socket_base::receive_buffer_size{1024});
 
         constexpr std::size_t cap = 4096;
         // Adopt the connected client end into an accept-mode channel with the small cap.

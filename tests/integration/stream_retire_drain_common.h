@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_INTEGRATION_STREAM_RETIRE_DRAIN_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_INTEGRATION_STREAM_RETIRE_DRAIN_COMMON_H
 
+#include "floored_tcp.h"
+
 #include "plexus/asio/asio_channel.h"
 #if !defined(_WIN32)
     #include "plexus/asio/unix_channel.h"
@@ -10,7 +12,6 @@
 #include "plexus/wire/frame_codec.h"
 
 #include <asio/io_context.hpp>
-#include <asio/socket_base.hpp>
 
 #include <asio/ip/tcp.hpp>
 #if !defined(_WIN32)
@@ -34,14 +35,12 @@ struct tcp_pair
 
     tcp_pair()
             : io()
-            , acc(io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0})
+            , acc(floored_tcp::loopback_acceptor(io))
             , peer(io)
             , client(io)
     {
-        client.connect(acc.local_endpoint());
+        floored_tcp::connect(client, acc.local_endpoint());
         acc.accept(peer);
-        client.set_option(::asio::socket_base::send_buffer_size{1024});
-        peer.set_option(::asio::socket_base::receive_buffer_size{1024});
     }
 };
 

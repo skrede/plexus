@@ -14,6 +14,8 @@
 // + the shallow cap), so backpressured() <= cap over a saturating loop is the bounded-
 // memory invariant. Looped in-body; the ctest invocation is re-run across process runs.
 
+#include "floored_tcp.h"
+
 #include "plexus/asio/asio_channel.h"
 #include "plexus/asio/unix_channel.h"
 
@@ -99,16 +101,11 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
     for(int loop = 0; loop < k_loops; ++loop)
     {
         ::asio::io_context io;
-        ::asio::ip::tcp::acceptor acc{io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0}};
+        ::asio::ip::tcp::acceptor acc = floored_tcp::loopback_acceptor(io);
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
-        client.connect(acc.local_endpoint());
+        floored_tcp::connect(client, acc.local_endpoint());
         acc.accept(peer); // peer adopts but NEVER reads
-
-        // Floor both kernel buffers so async_write stalls after a few KiB and a backlog
-        // accumulates in the userspace queue rather than draining into the kernel.
-        client.set_option(::asio::socket_base::send_buffer_size{1024});
-        peer.set_option(::asio::socket_base::receive_buffer_size{1024});
 
         // A clean close on a never-used channel reports zero residual (the common path).
         {
