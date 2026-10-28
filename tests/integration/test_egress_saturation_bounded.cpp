@@ -105,7 +105,7 @@ TEST_CASE("egress_saturation_bounded tcp: close() surfaces the abandoned backlog
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
         floored_tcp::connect(client, acc.local_endpoint());
-        acc.accept(peer); // peer adopts but NEVER reads
+        floored_tcp::accept(acc, peer); // peer adopts but NEVER reads
 
         // A clean close on a never-used channel reports zero residual (the common path).
         {

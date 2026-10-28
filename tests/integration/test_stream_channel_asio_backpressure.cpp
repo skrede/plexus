@@ -30,7 +30,7 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
         ::asio::ip::tcp::socket peer{io};
         ::asio::ip::tcp::socket client{io};
         floored_tcp::connect(client, acc.local_endpoint());
-        acc.accept(peer); // peer adopts but NEVER reads
+        floored_tcp::accept(acc, peer); // peer adopts but NEVER reads
 
         constexpr std::size_t cap = 4096;
         // Adopt the connected client end into an accept-mode channel with the small cap.

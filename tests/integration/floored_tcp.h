@@ -31,11 +31,19 @@ inline ::asio::ip::tcp::acceptor loopback_acceptor(::asio::io_context &io)
     return acc;
 }
 
+// macOS does not keep a floor set before the handshake, so both ends set theirs again once connected.
 inline void connect(::asio::ip::tcp::socket &client, const ::asio::ip::tcp::endpoint &to)
 {
     client.open(to.protocol());
     client.set_option(::asio::socket_base::send_buffer_size{k_send_floor});
     client.connect(to);
+    client.set_option(::asio::socket_base::send_buffer_size{k_send_floor});
+}
+
+inline void accept(::asio::ip::tcp::acceptor &acc, ::asio::ip::tcp::socket &peer)
+{
+    acc.accept(peer);
+    peer.set_option(::asio::socket_base::receive_buffer_size{k_receive_floor});
 }
 
 }

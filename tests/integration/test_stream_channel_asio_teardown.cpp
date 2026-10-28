@@ -27,7 +27,7 @@ struct stalled_pair
             , client(io)
     {
         floored_tcp::connect(client, acc.local_endpoint());
-        acc.accept(peer);
+        floored_tcp::accept(acc, peer);
     }
 };
 
