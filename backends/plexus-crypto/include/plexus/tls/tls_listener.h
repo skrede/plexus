@@ -93,7 +93,7 @@ public:
         std::error_code ec;
         (void)m_acceptor.cancel(ec);
         (void)m_acceptor.close(ec);
-        m_accepting.retire_all();
+        m_accepting.retire_accepted();
     }
 
     uint16_t port() const

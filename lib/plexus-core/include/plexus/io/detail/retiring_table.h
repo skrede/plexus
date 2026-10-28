@@ -29,9 +29,24 @@ public:
     {
         if(!channel)
             return;
-        Channel &retired = *channel;
-        m_retiring.insert_or_assign(std::addressof(retired), std::move(channel));
+        Channel &retired = park(std::move(channel));
         retired.on_closed([this, &retired] { (void)m_retiring.extract(std::addressof(retired)); });
+        retired.close();
+    }
+
+    // then runs inside the channel's own close notification, after the channel is destroyed.
+    template<typename Then>
+    void retire(std::unique_ptr<Channel> channel, Then then)
+    {
+        if(!channel)
+            return;
+        Channel &retired = park(std::move(channel));
+        retired.on_closed(
+                [this, &retired, then = std::move(then)]() mutable
+                {
+                    (void)m_retiring.extract(std::addressof(retired));
+                    then();
+                });
         retired.close();
     }
 
@@ -53,6 +68,13 @@ public:
 
 private:
     std::unordered_map<Channel *, std::unique_ptr<Channel>> m_retiring;
+
+    Channel &park(std::unique_ptr<Channel> channel)
+    {
+        Channel &retired = *channel;
+        m_retiring.insert_or_assign(std::addressof(retired), std::move(channel));
+        return retired;
+    }
 };
 
 }

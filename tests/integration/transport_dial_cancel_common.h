@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/ip/tcp.hpp>
+#include <asio/ip/udp.hpp>
 #include <asio/io_context.hpp>
 
 #include <array>
@@ -59,6 +60,40 @@ struct full_backlog
         return "127.0.0.1:" + std::to_string(acceptor.local_endpoint().port());
     }
 };
+
+// A bound UDP socket that never reads, so a dial to it sends its first handshake flight and hears nothing back.
+struct silent_udp_peer
+{
+    ::asio::ip::udp::socket socket;
+
+    explicit silent_udp_peer(::asio::io_context &io)
+            : socket(io, ::asio::ip::udp::endpoint{::asio::ip::make_address("127.0.0.1"), 0})
+    {
+    }
+
+    std::string address() const
+    {
+        return "127.0.0.1:" + std::to_string(socket.local_endpoint().port());
+    }
+
+    bool heard() const
+    {
+        std::error_code ec;
+        return socket.available(ec) > 0 && !ec;
+    }
+};
+
+template<typename Ready>
+bool run_until(::asio::io_context &io, Ready ready)
+{
+    const auto bound = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    while(!ready() && std::chrono::steady_clock::now() < bound)
+    {
+        io.restart();
+        io.run_for(std::chrono::milliseconds{5});
+    }
+    return ready();
+}
 
 template<typename Channel>
 void hold_pending(::asio::io_context &io, const outcome<Channel> &seen)

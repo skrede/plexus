@@ -52,20 +52,22 @@ TEST_CASE("pending_dial_registry fail_accepted on a miss is a no-op", "[io][pend
     REQUIRE(executor.queued() == 0);
 }
 
-TEST_CASE("pending_dial_registry retire_all retires both tables and destroys each channel only inside its own close notification", "[io][pending_dial_registry]")
+TEST_CASE("pending_dial_registry retire_all retires both tables and reports a still-pending dial aborted only after its channel is destroyed inside its own close notification",
+          "[io][pending_dial_registry]")
 {
     fifo_executor executor;
     event_log log;
+    dial_failed_sink sink = log_reports(log);
     registry reg;
     auto dialed    = make_channel(executor, log);
     auto accepted  = make_channel(executor, log);
     auto *raw_dial = dialed.get();
     auto *raw_acc  = accepted.get();
     dialed->start_operation();
-    reg.insert(raw_dial, std::move(dialed));
+    reg.insert(raw_dial, std::move(dialed), dial_target());
     reg.insert_accepted(raw_acc, std::move(accepted));
 
-    reg.retire_all();
+    reg.retire_all(sink);
     REQUIRE(reg.pending_size() == 0);
     REQUIRE(reg.accepted_size() == 0);
     REQUIRE(reg.retiring_size() == 2);
@@ -76,5 +78,27 @@ TEST_CASE("pending_dial_registry retire_all retires both tables and destroys eac
 
     executor.drain();
     REQUIRE(reg.retiring_size() == 0);
-    REQUIRE(log == event_log{"operation", "closed", "destroyed", "closed", "destroyed"});
+    REQUIRE(log == event_log{"operation", "closed", "destroyed", "closed", "destroyed", "aborted 127.0.0.1:7"});
+}
+
+TEST_CASE("pending_dial_registry retire_accepted retires only the accepted table", "[io][pending_dial_registry]")
+{
+    fifo_executor executor;
+    event_log log;
+    registry reg;
+    auto dialed    = make_channel(executor, log);
+    auto accepted  = make_channel(executor, log);
+    auto *raw_dial = dialed.get();
+    auto *raw_acc  = accepted.get();
+    reg.insert(raw_dial, std::move(dialed), dial_target());
+    reg.insert_accepted(raw_acc, std::move(accepted));
+
+    reg.retire_accepted();
+    REQUIRE(reg.pending_size() == 1);
+    REQUIRE(reg.accepted_size() == 0);
+    REQUIRE(reg.retiring_size() == 1);
+
+    executor.drain();
+    REQUIRE(log == event_log{"closed", "destroyed"});
+    REQUIRE(reg.resolve(raw_dial).get() == raw_dial);
 }

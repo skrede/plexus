@@ -113,14 +113,14 @@ public:
             return detail::tls_report_dial_fail(*this, ep, plexus::asio::detail::map_error(pec));
         auto ch   = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
-        m_pending.insert(raw, std::move(ch));
+        m_pending.insert(raw, std::move(ch), ep);
         raw->begin_op();
         raw->socket().async_connect(target, [this, ep, raw](std::error_code ec) { detail::tls_finish_connect(*this, ep, raw, ec); });
     }
 
     void close()
     {
-        m_pending.retire_all();
+        m_pending.retire_all(m_on_dial_failed_cb);
         m_listener.stop();
     }
 

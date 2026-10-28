@@ -137,13 +137,13 @@ public:
         raw->on_external_complete([this, ep, raw] { detail::resolve_dial(*this, ep, raw); });
         raw->on_error([this, ep, raw](io::io_error e) { detail::fail_dial(*this, ep, raw, e); });
 
-        m_registry.insert(raw, std::move(ch));
+        m_registry.insert(raw, std::move(ch), ep);
         raw->start_handshake();
     }
 
     void close()
     {
-        m_registry.retire_all();
+        m_registry.retire_all(m_on_dial_failed_cb);
         m_demux = plexus::asio::detail::basic_inbound_demux<dtls_channel>{};
         m_server.close();
     }

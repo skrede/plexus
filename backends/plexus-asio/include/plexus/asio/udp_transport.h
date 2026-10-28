@@ -148,13 +148,13 @@ public:
         arq.on_established([this, ep, raw] { detail::resolve_dial(*this, ep, raw); });
         arq.on_timeout([this, ep, raw] { detail::fail_dial(*this, ep, raw); });
 
-        m_dials.insert(raw, std::move(ch));
+        m_dials.insert(raw, std::move(ch), ep);
         arq.start();
     }
 
     void close()
     {
-        m_dials.retire_all();
+        m_dials.retire_all(m_on_dial_failed_cb);
         m_demux = detail::udp_inbound_demux{m_max_peers};
         m_server.close();
     }

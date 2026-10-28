@@ -59,15 +59,15 @@ void tls_run_handshake(T &t, tls_channel *raw, const io::endpoint &ep)
     raw->start_client_handshake(host, [&t, ep, raw]() mutable { tls_resolve_dial(t, ep, raw); });
 }
 
-// A connect that succeeded for a dial close() already retired is still that dial's one failure.
+// A dial close() already retired is reported by the registry when its channel settles, so its own completion stays silent.
 template<typename T>
 void tls_finish_connect(T &t, const io::endpoint &ep, tls_channel *raw, std::error_code ec)
 {
     raw->end_op();
+    if(!t.m_pending.is_pending(raw))
+        return;
     if(ec)
         return tls_fail_dial(t, ep, raw, plexus::asio::detail::map_error(ec));
-    if(!t.m_pending.is_pending(raw))
-        return tls_report_dial_fail(t, ep, io::io_error::operation_aborted);
     if(t.m_no_delay)
     {
         std::error_code nec;

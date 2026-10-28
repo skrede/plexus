@@ -1163,8 +1163,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_transport_dial_unix TEST_PREFIX "integration.")
 
-    # A dial still connecting, or an accept completed but not yet handled, when its transport closes: the dial
-    # reports one aborted failure and the accepted socket is dropped. TCP here, AF_UNIX off Windows, TLS with crypto.
+    # A dial still connecting or handshaking, or an accept completed but not yet handled, when its transport closes: the
+    # dial reports one aborted failure and the accepted socket is dropped. TCP and UDP here, AF_UNIX off Windows, TLS and
+    # DTLS with crypto.
     add_executable(test_transport_dial_cancel test_transport_dial_cancel.cpp)
     target_link_libraries(test_transport_dial_cancel PRIVATE
         plexus::core
@@ -1176,6 +1177,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     endif()
     if(PLEXUS_ENABLE_CRYPTO_BACKEND)
         target_sources(test_transport_dial_cancel PRIVATE test_transport_dial_cancel_tls.cpp
+            test_transport_dial_cancel_dtls.cpp
             $<TARGET_OBJECTS:plexus-crypto>)
         target_link_libraries(test_transport_dial_cancel PRIVATE plexus::crypto)
     endif()

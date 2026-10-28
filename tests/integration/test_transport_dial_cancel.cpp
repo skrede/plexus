@@ -1,6 +1,8 @@
 #include "transport_dial_cancel_common.h"
 
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/asio_channel.h"
+#include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
 
 #include "plexus/io/endpoint.h"
@@ -28,6 +30,26 @@ TEST_CASE("transport_dial_cancel: a TCP dial still connecting when its transport
 
     transport.dial(pio::endpoint{"tcp", peer.address()});
     hold_pending(io, seen);
+    transport.close();
+    drain(io);
+
+    CHECK(seen.dialed.empty());
+    REQUIRE(seen.failures.size() == 1);
+    CHECK(seen.failures.front() == pio::io_error::operation_aborted);
+}
+
+TEST_CASE("transport_dial_cancel: a UDP dial in its handshake when its transport closes reports one aborted failure and is never dialed", "[integration][transport][udp][dial_cancel]")
+{
+    ::asio::io_context io;
+    silent_udp_peer peer{io};
+    outcome<pasio::udp_channel> seen;
+    pasio::udp_transport transport{io};
+    seen.record(transport);
+
+    transport.dial(pio::endpoint{"udp", peer.address()});
+    REQUIRE(run_until(io, [&] { return peer.heard(); }));
+    REQUIRE(seen.failures.empty());
+    REQUIRE(seen.dialed.empty());
     transport.close();
     drain(io);
 

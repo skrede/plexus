@@ -67,14 +67,14 @@ public:
             return report_dial_fail(ep, detail::map_error(pec));
         auto ch   = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
-        m_pending.insert(raw, std::move(ch));
+        m_pending.insert(raw, std::move(ch), ep);
         raw->begin_op();
         raw->socket().async_connect(target, [this, ep, raw](std::error_code ec) { finish_dial(ep, raw, ec); });
     }
 
     void close()
     {
-        m_pending.retire_all();
+        m_pending.retire_all(m_on_dial_failed_cb);
         m_listener.stop();
     }
 
@@ -110,18 +110,18 @@ protected:
     }
 
 private:
-    // A connect that succeeded for a dial close() already retired is still that dial's one failure.
+    // A dial close() already retired is reported by the registry when its channel settles, so its own completion stays silent.
     void finish_dial(const io::endpoint &ep, Channel *raw, std::error_code ec)
     {
         raw->end_op();
+        if(!m_pending.is_pending(raw))
+            return;
         if(ec)
         {
             m_pending.fail(raw);
             return report_dial_fail(ep, detail::map_error(ec));
         }
         auto ch = m_pending.resolve(raw);
-        if(!ch)
-            return report_dial_fail(ep, io::io_error::operation_aborted);
         Traits::after_connect(*ch, m_no_delay);
         ch->start_read();
         m_pending.deliver_or_retire(m_on_dialed_cb, std::move(ch), ep);
