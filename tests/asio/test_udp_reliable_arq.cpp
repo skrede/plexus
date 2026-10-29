@@ -2,13 +2,13 @@
 // reliable payload exactly once and in publish order over a deterministically lossy/reordering/duplicating link. A
 // programmable UDP relay passes the handshake and the acks and scripts per-data-segment actions (drop / reorder /
 // duplicate), so the test controls which segments are lost or shuffled and the ARQ is what restores order.
-//
-// The scenarios use a deliberately lossy path, so each loops in-body and the ctest invocation is re-run >=3 times.
+// The scenarios use a deliberately lossy path, so each loops in-body.
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
+
 #include "plexus/datagram/detail/udp_reliable_arq.h"
 
 #include "plexus/wire/udp_ack.h"
@@ -20,6 +20,7 @@
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <array>
@@ -305,7 +306,6 @@ TEST_CASE("udp reliable_arq: out-of-order arrival behind a gap is held then rele
             sent.push_back(p);
             REQUIRE(f.dialed->send_reliable(bytes_of(p)) == pasio::udp_channel::submit_result::admitted);
         }
-        // Let 1,2,3 arrive and be buffered (HOL: nothing delivers behind the gap at 0).
         plexus::testing::pump_until(f.io, [&] { return f.link->data_seen >= 4; });
         plexus::testing::pump_until(f.io, [&] { return false; }, ms{40});
         REQUIRE(f.delivered.empty()); // HOL: gap at 0 blocks every successor

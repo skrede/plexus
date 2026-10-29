@@ -7,8 +7,8 @@
     #include "support/noop_notifier.h"
 #endif
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/asio_policy.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
 

@@ -1,8 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_UDP_CHANNEL_H
 #define HPP_GUARD_PLEXUS_ASIO_UDP_CHANNEL_H
 
-#include "plexus/asio/udp_server.h"
 #include "plexus/asio/asio_timer.h"
+#include "plexus/asio/udp_server.h"
+
+#include "plexus/asio/detail/udp_channel_io.h"
+#include "plexus/asio/detail/udp_channel_post.h"
+#include "plexus/asio/detail/udp_channel_lifecycle.h"
 
 #include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
@@ -11,33 +15,35 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
-#include "plexus/datagram/mtu_budget.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/fragmentation.h"
-#include "plexus/datagram/detail/reassembler.h"
+
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/detail/close_notification.h"
+
+#include "plexus/datagram/mtu_budget.h"
+
+#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/datagram/detail/udp_reliable_arq.h"
 #include "plexus/datagram/detail/udp_handshake_arq.h"
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 #include "plexus/datagram/detail/udp_backpressure_queue.h"
-#include "plexus/asio/detail/udp_channel_io.h"
-#include "plexus/asio/detail/udp_channel_post.h"
-#include "plexus/asio/detail/udp_channel_lifecycle.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <algorithm>
 
 namespace plexus::asio {

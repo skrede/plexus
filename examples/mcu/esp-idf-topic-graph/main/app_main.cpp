@@ -38,8 +38,8 @@
 
 #include <span>
 #include <array>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <system_error>
@@ -100,14 +100,16 @@ void plexus_task(void *)
     using namespace std::chrono_literals;
 
     plexus::freertos::freertos_executor ex;
-    example::uart_transport transport{ex}; // opens UART0 and delivers the one uart_channel
+    // Constructing the transport opens UART0 and delivers the one uart_channel.
+    example::uart_transport transport{ex};
 
     // Point-at-port discovery: the serial link is the only peer, so the table is empty.
     plexus::discovery::static_discovery disc{{}};
 
+    // The message cap is dialed small for the target.
     plexus::node_options opts;
     opts.name              = "esp32-topic-graph";
-    opts.max_message_bytes = example::k_max_payload_bytes; // dialed small for the target
+    opts.max_message_bytes = example::k_max_payload_bytes;
     opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x32C0DE;
 

@@ -4,7 +4,7 @@
 // "RX context", then ex.drain() as the executor task. It proves delivery is POSTED (on_data does NOT
 // fire until the executor drains — the key P2-vs-P1 distinction) and exactly once, with reassembly
 // across recv turns and a peer close surfaced as on_error. The pool is fixed: no per-recv allocation
-// (the asan tree is the witness). Additive to the host suite baseline.
+// (the asan tree is the witness).
 
 #include "host_tcp_socket.h" // MUST precede the freertos headers: declares the host POSIX stream_socket
 #include "host_loopback_pair.h"
@@ -13,8 +13,8 @@
 #include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/freertos_executor.h"
 
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 

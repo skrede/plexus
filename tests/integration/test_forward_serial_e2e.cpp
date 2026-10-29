@@ -4,8 +4,7 @@
 // direct origin<->consumer path. The consumer enumerates the origin from a peer_report that crossed
 // session B's wire (no hand-delivery), receives the origin's publish re-originated by the relay with the
 // origin as the delivered source, and — the request/response leg — calls the origin's procedure through
-// the relay. Killing the origin withdraws the relayed peer. Reproduced over independent cold runs, each
-// re-establishing BOTH sessions from scratch.
+// the relay. Killing the origin withdraws the relayed peer.
 
 #include "test_forward_serial_e2e_common.h"
 
@@ -14,9 +13,9 @@
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
 
-#include "plexus/io/endpoint_seam.h"
-#include "plexus/io/message_info.h"
 #include "plexus/io/observer.h"
+#include "plexus/io/message_info.h"
+#include "plexus/io/endpoint_seam.h"
 #include "plexus/io/peer_liveliness_event.h"
 
 #include "plexus/wire/rpc_status.h"

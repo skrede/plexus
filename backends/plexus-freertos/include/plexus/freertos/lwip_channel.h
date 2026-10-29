@@ -11,10 +11,11 @@
 #include "plexus/freertos/detail/lwip_channel_egress.h"
 #include "plexus/freertos/detail/lwip_channel_inbound.h"
 
-#include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
+
 #include "plexus/stream/stream_socket.h"
 #include "plexus/stream/stream_inbound.h"
 
@@ -81,7 +82,7 @@ public:
         m_on_data           = nullptr;
         m_on_error          = nullptr;
         m_on_protocol_close = nullptr;
-        // The notification does not yet wait for RX slots the receive task acquired: a feed it posted may still be queued.
+        // The notification does not wait for RX slots the receive task acquired: a feed it posted may still be queued.
         m_close.notify();
     }
     plexus::io::endpoint remote_endpoint() const
@@ -154,8 +155,7 @@ public:
     }
 
 private:
-    // The shared recv + hard-drop classification both receive paths run: a recv into the caller's
-    // buffer, returning the byte count; a closed socket fails the channel with connection_reset.
+    // The shared recv and hard-drop classification both receive paths run.
     template<typename Buffer>
     std::size_t recv_step(Buffer &buffer)
     {

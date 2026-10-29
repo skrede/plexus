@@ -54,8 +54,9 @@ TEST_CASE("asio stream channel: retiring a channel after a read-EOF fail with a 
         // stays pending (the peer never drains it).
         std::vector<std::byte> big(256u * 1024u, std::byte{0x5A});
         ch->send(big);
-        h.io.poll();                        // issue the async_write; it cannot complete
-        REQUIRE(ch->outstanding_ops() > 0); // a read and the stalled write are in flight
+        // The poll issues the async_write; a read and the stalled write then stay in flight.
+        h.io.poll();
+        REQUIRE(ch->outstanding_ops() > 0);
 
         // Peer half-closes its send side: the channel reads EOF -> stream_fail. The write stays
         // stalled (the peer receive side is still open but never drained).
@@ -65,7 +66,8 @@ TEST_CASE("asio stream channel: retiring a channel after a read-EOF fail with a 
         while(!errored && std::chrono::steady_clock::now() < bound)
             h.io.poll_one();
         REQUIRE(errored);
-        REQUIRE(!ch->socket().is_open()); // stream_fail closed the socket; the stalled write cannot survive
+        // stream_fail closed the socket, so the stalled write cannot survive.
+        REQUIRE(!ch->socket().is_open());
 
         const auto outcome = retire_and_drain(ch,
                                               [&]
@@ -102,14 +104,16 @@ TEST_CASE("asio stream channel: on_closed is posted (never inline) and fires exa
                 observed_later = later_turn;
             });
 
-    ch.close();        // posts on_closed
-    later_turn = true; // flipped AFTER close() returns, BEFORE the posted handler runs
-    io.poll();         // the posted on_closed runs here
+    // close() posts on_closed, so later_turn flips before the posted handler runs in io.poll().
+    ch.close();
+    later_turn = true;
+    io.poll();
 
-    REQUIRE(closed == 1);    // exactly once
-    REQUIRE(observed_later); // ran on a later turn -> posted, not fired inline from close()
+    REQUIRE(closed == 1);
+    REQUIRE(observed_later);
 
-    ch.close(); // a second close must not re-fire (socket closed + the fire-once latch)
+    // A second close must not re-fire: the socket is closed and the fire-once latch is set.
+    ch.close();
     io.poll();
     REQUIRE(closed == 1);
 }
@@ -132,7 +136,7 @@ TEST_CASE("asio stream channel: on_closed is posted (never inline) and fires exa
     ch.on_error([&](pio::io_error) { errored = true; });
     ch.on_closed([&] { ++closed; });
 
-    peer.close(); // the channel reads EOF -> stream_fail (on_error inline, on_closed posted)
+    peer.close();
 
     // Drive one handler at a time: the single ready handler is the read completion, which runs
     // stream_fail synchronously (setting errored and POSTING on_closed). Were on_closed fired
@@ -142,10 +146,10 @@ TEST_CASE("asio stream channel: on_closed is posted (never inline) and fires exa
     while(!errored && std::chrono::steady_clock::now() < bound)
         io.poll_one();
     REQUIRE(errored);
-    REQUIRE(closed == 0); // posted: not delivered inline from within the completion handler
+    REQUIRE(closed == 0);
 
     io.poll();
-    REQUIRE(closed == 1); // fires exactly once on a later turn
+    REQUIRE(closed == 1);
 }
 
 TEST_CASE("asio stream channel: retiring the channel between a stream_fail and the next poll erases it once", "[integration][asio][hardening][teardown]")

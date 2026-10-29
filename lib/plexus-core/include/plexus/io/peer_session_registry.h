@@ -18,8 +18,8 @@
 
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
-#include "plexus/io/detail/peer_session_rebuild.h"
 #include "plexus/io/detail/peer_session_retire.h"
+#include "plexus/io/detail/peer_session_rebuild.h"
 
 #include "plexus/log/logger.h"
 

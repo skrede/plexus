@@ -1,43 +1,49 @@
 #ifndef HPP_GUARD_PLEXUS_TLS_DTLS_CHANNEL_H
 #define HPP_GUARD_PLEXUS_TLS_DTLS_CHANNEL_H
 
-#include "plexus/tls/tls_credential.h"
 #include "plexus/tls/dtls_cookie.h"
+#include "plexus/tls/tls_credential.h"
+
 #include "plexus/tls/detail/dtls_context.h"
-
-#include "plexus/io/security/cert_facts.h"
-
-#include "plexus/asio/udp_server.h"
-#include "plexus/asio/asio_timer.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
-#include "plexus/datagram/mtu_budget.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/fragmentation.h"
-#include "plexus/io/detail/handshake_gate.h"
-#include "plexus/datagram/detail/reassembler.h"
+
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
+#include "plexus/io/detail/handshake_gate.h"
 #include "plexus/io/detail/close_notification.h"
-#include "plexus/detail/compat.h"
+
+#include "plexus/io/security/cert_facts.h"
+
+#include "plexus/asio/asio_timer.h"
+#include "plexus/asio/udp_server.h"
+
+#include "plexus/datagram/mtu_budget.h"
+
+#include "plexus/datagram/detail/reassembler.h"
 
 #include "plexus/node_id.h"
 
-#include "plexus/wire/udp_envelope.h"
+#include "plexus/detail/compat.h"
+
 #include "plexus/wire/close_cause.h"
+#include "plexus/wire/udp_envelope.h"
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>
 #include <chrono>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 // Forward-declared OpenSSL handle: the header never sees a complete SSL — only
 // dtls_channel.cpp includes <openssl/ssl.h>, so OpenSSL stays out of every

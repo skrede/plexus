@@ -7,6 +7,7 @@
 #include "plexus/tls/spki_fingerprint.h"
 
 #include "plexus/io/endpoint.h"
+
 #include "plexus/io/security/verify_policy.h"
 
 #include "plexus/wire/close_cause.h"
@@ -15,22 +16,23 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
+
+#include <asio/ip/tcp.hpp>
 
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
 #include <array>
+#include <chrono>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
-#include <cstdio>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <cstddef>
 #include <filesystem>
 #include <system_error>
 

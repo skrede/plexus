@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SLOT_PUBLISHER_H
 #define HPP_GUARD_PLEXUS_SHM_SLOT_PUBLISHER_H
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/loaned_buffer.h"
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/loaned_buffer.h"
+#include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -83,10 +83,11 @@ public:
             st = loan(size, out);
 
             const std::uint64_t now = slowest_consumer_position();
+            // A live consumer freed a slot: reset the window (the loop's ++ returns stalled to 0).
             if(now != last_seen)
             {
                 last_seen = now;
-                stalled   = -1; // a live consumer freed a slot: reset the window (++ returns it to 0)
+                stalled   = -1;
             }
         }
         return st;

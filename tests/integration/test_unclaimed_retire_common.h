@@ -9,8 +9,8 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 
-#include <asio/buffer.hpp>
 #include <asio/error.hpp>
+#include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
 
 #include <asio/ip/tcp.hpp>

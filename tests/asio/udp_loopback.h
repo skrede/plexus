@@ -15,8 +15,9 @@
 #include "plexus/testing/pump.h"
 
 #include <asio/buffer.hpp>
-#include <asio/ip/udp.hpp>
 #include <asio/io_context.hpp>
+
+#include <asio/ip/udp.hpp>
 
 #include <array>
 #include <chrono>

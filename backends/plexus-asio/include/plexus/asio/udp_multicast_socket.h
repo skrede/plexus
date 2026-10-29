@@ -5,16 +5,21 @@
 #include "plexus/asio/detail/interface_resolve.h"
 #include "plexus/asio/detail/udp_server_dispatch.h"
 
-#include "plexus/io/network_interface.h"
-#include "plexus/stream/datagram_socket.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+#include "plexus/io/network_interface.h"
+
 #include "plexus/io/detail/pending_ops.h"
+
+#include "plexus/stream/datagram_socket.h"
+
 #include "plexus/datagram/detail/send_queue.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 #include <asio/ip/address_v4.hpp>
 

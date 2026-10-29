@@ -1,15 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_CRYPTO_DETAIL_DATAGRAM_AEAD_PATH_H
 #define HPP_GUARD_PLEXUS_CRYPTO_DETAIL_DATAGRAM_AEAD_PATH_H
 
-#include "plexus/crypto/key_schedule.h"
-#include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/aead_epoch.h"
+#include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
 
 #include "plexus/datagram/anti_replay_window.h"
 
 #include "plexus/wire/frame.h"
 
 #include "plexus/io/locality.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include <span>

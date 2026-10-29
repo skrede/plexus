@@ -13,14 +13,16 @@ TEST_CASE("stream_send_queue fail-on-error edge: a composer that closes the bloc
 
     q.enqueue(bytes_of({1}));
     q.enqueue(bytes_of({2}));
-    REQUIRE(rec.calls.size() == 1); // only the front is in flight
+    // Only the front is in flight.
+    REQUIRE(rec.calls.size() == 1);
 
     // Simulate the composer's fail path: on the error completion it closes the block.
     q.close();
-    rec.complete_front(/*ok=*/false); // the failed write's completion fires post-close
+    rec.complete_front(/*ok=*/false);
 
-    REQUIRE(rec.calls.size() == 1); // the second frame was NOT chained onto the failed socket
-    REQUIRE(q.size() == 1);         // the failed write's node stays owned; the backlog is gone
+    REQUIRE(rec.calls.size() == 1);
+    // The failed write's node stays owned; the backlog is gone.
+    REQUIRE(q.size() == 1);
 }
 
 namespace {
@@ -48,17 +50,17 @@ TEST_CASE("stream_send_queue gathers a multi-frame burst into ONE drain turn ove
     recorder rec;
     stream_send_queue q{rec.sink()};
 
-    q.enqueue(bytes_of({1})); // turn 0, in flight alone
+    q.enqueue(bytes_of({1}));
     q.enqueue(bytes_of({2}));
     q.enqueue(bytes_of({3}));
-    q.enqueue(bytes_of({4})); // {2,3,4} park behind the in-flight turn
+    q.enqueue(bytes_of({4}));
 
     REQUIRE(rec.calls.size() == 1);
     REQUIRE(rec.calls[0].size() == 1);
 
-    rec.complete_front(); // turn 1 gathers {2,3,4} into ONE call
+    rec.complete_front();
     REQUIRE(rec.calls.size() == 2);
-    REQUIRE(rec.calls[1].size() == 3); // exactly one sink call for three frames
+    REQUIRE(rec.calls[1].size() == 3);
     REQUIRE(rec.calls[1][0] == bytes_of({2}));
     REQUIRE(rec.calls[1][1] == bytes_of({3}));
     REQUIRE(rec.calls[1][2] == bytes_of({4}));
@@ -75,15 +77,15 @@ TEST_CASE("stream_send_queue bounds the gather count per drain turn", "[io][stre
     stream_send_queue q{rec.sink(), stream_send_queue::unbounded, /*gather_limit=*/3};
 
     for(int i = 0; i < 7; ++i)
-        q.enqueue(bytes_of({i})); // {0} in flight alone, {1..6} parked
+        q.enqueue(bytes_of({i}));
 
     REQUIRE(rec.calls.size() == 1);
     REQUIRE(rec.calls[0].size() == 1);
 
-    rec.complete_front(); // turn 1: gathers {1,2,3} (capped at 3)
+    rec.complete_front();
     REQUIRE(rec.calls[1].size() == 3);
 
-    rec.complete_front(); // turn 2: gathers {4,5,6}
+    rec.complete_front();
     REQUIRE(rec.calls[2].size() == 3);
 
     rec.complete_front();
@@ -105,7 +107,8 @@ TEST_CASE("stream_send_queue holds a wire_bytes owner with no copy and keeps it 
     std::shared_ptr<std::vector<std::byte>> keep;
     auto frame                   = owned_frame({7, 8, 9}, keep);
     const std::byte *owner_bytes = frame.data();
-    REQUIRE(keep.use_count() == 2); // the test's keep + the frame's owner
+    // The test's keep plus the frame's owner.
+    REQUIRE(keep.use_count() == 2);
 
     q.enqueue(std::move(frame));
 
@@ -119,10 +122,10 @@ TEST_CASE("stream_send_queue holds a wire_bytes owner with no copy and keeps it 
     REQUIRE(keep.use_count() >= 2);
     auto weak = std::weak_ptr<std::vector<std::byte>>(keep);
     keep.reset();
-    REQUIRE_FALSE(weak.expired()); // the block keeps the owner alive in flight
+    REQUIRE_FALSE(weak.expired());
 
-    rec.complete_front();    // the single completion releases the owner
-    REQUIRE(weak.expired()); // released only AFTER the completion
+    rec.complete_front();
+    REQUIRE(weak.expired());
     REQUIRE(q.size() == 0);
 }
 
@@ -148,15 +151,15 @@ TEST_CASE("stream_send_queue keeps ALL gathered owners alive until the single co
     q.enqueue(std::move(f3));
     k1.reset();
     k2.reset();
-    k3.reset(); // drop every external reference
+    k3.reset();
 
-    rec.complete_front(); // turn 0 done; the three gather into turn 1
+    rec.complete_front();
     REQUIRE(rec.calls[1].size() == 3);
-    REQUIRE_FALSE(w1.expired()); // all three owners alive in flight
+    REQUIRE_FALSE(w1.expired());
     REQUIRE_FALSE(w2.expired());
     REQUIRE_FALSE(w3.expired());
 
-    rec.complete_front(); // the single completion releases all three
+    rec.complete_front();
     REQUIRE(w1.expired());
     REQUIRE(w2.expired());
     REQUIRE(w3.expired());

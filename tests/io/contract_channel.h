@@ -10,8 +10,8 @@
 
 #include "plexus/wire/close_cause.h"
 
-#include <deque>
 #include <span>
+#include <deque>
 #include <string>
 #include <vector>
 #include <cstddef>

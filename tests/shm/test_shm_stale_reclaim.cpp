@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 
 #if !defined(_WIN32)
@@ -35,7 +36,7 @@ using plexus::testing::ring_view;
 using plexus::testing::lifetime_fqn;
 using plexus::testing::native_broker;
 
-constexpr int k_rounds = 100;
+constexpr std::int32_t k_rounds = 100;
 
 bool create_region(native_broker &broker, const std::string &name, std::size_t bytes, native_broker::region_handle &out)
 {
@@ -79,7 +80,7 @@ bool leave_leftover(const std::vector<std::string> &args)
 void reclaim_each_round(ring_view &view, std::vector<std::string> args)
 {
     wake_bus bus;
-    for(int round = 0; round < k_rounds; ++round)
+    for(std::int32_t round = 0; round < k_rounds; ++round)
     {
         const auto outcome = plexus::testing::run_xproc("shm.stale_reclaim.leftover", args,
                                                         [&]

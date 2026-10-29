@@ -1,5 +1,5 @@
 // After kill_origin the relay must not redial the origin's serial line: the line is freed with the origin, and the kernel
-// may hand its pts name to a terminal another test owns. Reproduced over independent cold runs.
+// may hand its pts name to a terminal another test owns.
 
 #include "test_forward_serial_e2e_common.h"
 
@@ -13,7 +13,7 @@ using namespace forward_serial_e2e_fixture;
 
 namespace {
 
-constexpr int k_runs = 3;
+constexpr std::int32_t k_runs = 3;
 
 // The first backoff is uniform in 0 to 400 ms over the fixture's 200 ms minimum delay, so this outlasts all of it.
 constexpr std::chrono::milliseconds k_past_first_backoff{600};
@@ -37,7 +37,7 @@ void run_killed_origin_line_never_redialed()
 
 TEST_CASE("a relay whose serial origin was killed arms no redial to the freed line, over cold runs", "[integration][serial][relay][e2e][kill_origin]")
 {
-    for(int run = 0; run < k_runs; ++run)
+    for(std::int32_t run = 0; run < k_runs; ++run)
     {
         INFO("cold run " << run);
         run_killed_origin_line_never_redialed();

@@ -3,10 +3,10 @@
 // proves accept -> on_accepted -> a poll-able channel, the compile-time accept cap bound (default 1
 // refuses the second client; cap 2 accepts both), and view invalidation on channel close (the
 // shutdown hook wired in adopt() clears the view; asan-clean under the asan tree), which leaves the
-// channel's on_closed to the owner that retires it. Additive to the host suite baseline.
+// channel's on_closed to the owner that retires it.
 
-#include "host_tcp_listener.h" // MUST precede lwip_transport.h: declares the host POSIX listener
 #include "host_tcp_socket.h"
+#include "host_tcp_listener.h"
 #include "host_loopback_pair.h"
 
 #include "plexus/freertos/lwip_policy.h"
@@ -14,17 +14,18 @@
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
 
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include "support/retire_drain.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <vector>
 #include <memory>
+#include <vector>
 #include <cstddef>
+#include <cstdint>
 
 using plexus::test::host_tcp_socket;
 using plexus::test::host_tcp_listener;
@@ -56,7 +57,8 @@ TEST_CASE("lwip_transport accepts a loopback client and delivers one poll-able c
 {
     plexus::freertos::freertos_executor ex;
     accept_transport<> transport{ex};
-    host_tcp_listener  probe; // borrow the listener's bind to learn the ephemeral port the transport binds
+    host_tcp_listener  probe;
+    // Borrow the listener's bind to learn the ephemeral port the transport then binds.
     REQUIRE_FALSE(probe.bind_and_listen(plexus::io::endpoint{"tcp", "127.0.0.1:0"}));
     const auto address = probe.local_endpoint();
     probe.close();
@@ -89,14 +91,14 @@ TEST_CASE("lwip_transport accepts two clients under cap 2 and refuses a third un
     probe.close();
     two.listen(address);
 
-    int accepts = 0;
+    std::int32_t accepts = 0;
     std::vector<std::unique_ptr<lwip_channel>> kept;
     two.on_accepted([&](std::unique_ptr<lwip_channel> ch) { ++accepts; kept.push_back(std::move(ch)); });
 
     host_tcp_socket a = dial_loopback(address);
     host_tcp_socket b = dial_loopback(address);
     plexus::test::poll_until([&] { two.poll(); }, [&] { return !(accepts < 2); });
-    REQUIRE(accepts == 2); // both clients delivered under cap 2
+    REQUIRE(accepts == 2);
 
     plexus::freertos::freertos_executor ex1;
     accept_transport<1> one{ex1};
@@ -106,16 +108,17 @@ TEST_CASE("lwip_transport accepts two clients under cap 2 and refuses a third un
     probe1.close();
     one.listen(address1);
 
-    int                           accepts1 = 0;
+    std::int32_t                  accepts1 = 0;
     std::unique_ptr<lwip_channel> first;
     one.on_accepted([&](std::unique_ptr<lwip_channel> ch) { ++accepts1; if(!first) first = std::move(ch); });
 
     host_tcp_socket c = dial_loopback(address1);
     host_tcp_socket d = dial_loopback(address1);
     plexus::test::poll_until([&] { one.poll(); }, [&] { return accepts1 >= 1; });
-    for(int turn = 0; turn < 50; ++turn)
-        one.poll(); // drain so the capped second connection is attempted and refused, never accepted
-    REQUIRE(accepts1 == 1); // the bound holds: the second connection is refused, the set never grows
+    // Keep polling so the capped second connection is attempted and refused, never accepted.
+    for(std::int32_t turn = 0; turn < 50; ++turn)
+        one.poll();
+    REQUIRE(accepts1 == 1);
 }
 
 TEST_CASE("lwip_transport clears an accepted channel's view on close so poll never touches it", "[seam]")
@@ -136,10 +139,12 @@ TEST_CASE("lwip_transport clears an accepted channel's view on close so poll nev
     REQUIRE(accepted != nullptr);
 
     accepted->close();
-    ex.drain(); // close() already cleared the view through the shutdown hook wired in adopt()
+    // close() already cleared the view through the shutdown hook wired in adopt().
+    ex.drain();
     accepted.reset();
-    for(int turn = 0; turn < 10; ++turn)
-        transport.poll(); // poll-all must not touch the freed view (asan-clean is the proof)
+    // Poll-all must not touch the freed view; asan-clean is the proof.
+    for(std::int32_t turn = 0; turn < 10; ++turn)
+        transport.poll();
     SUCCEED();
 }
 
@@ -164,6 +169,6 @@ TEST_CASE("lwip_transport leaves a closed channel's close notification to the ow
     const auto outcome = plexus::testing::retire_and_drain(accepted, [&ex] { ex.drain(); });
     REQUIRE(outcome.erased == 1);
     REQUIRE(outcome.empty);
-    for(int turn = 0; turn < 10; ++turn)
+    for(std::int32_t turn = 0; turn < 10; ++turn)
         transport.poll();
 }
