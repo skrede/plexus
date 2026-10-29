@@ -142,8 +142,8 @@ std::chrono::system_clock::time_point time_of(const ASN1_TIME *t)
     std::tm tm{};
     if(ASN1_TIME_to_tm(t, &tm) != 1)
         return {};
-    const std::time_t secs = timegm(&tm);
-    return std::chrono::system_clock::from_time_t(secs);
+    const std::chrono::sys_days date = std::chrono::year{tm.tm_year + 1900} / (tm.tm_mon + 1) / tm.tm_mday;
+    return date + std::chrono::hours{tm.tm_hour} + std::chrono::minutes{tm.tm_min} + std::chrono::seconds{tm.tm_sec};
 }
 
 // Extract the full cert_facts field set from a peer leaf into the core VALUE struct
