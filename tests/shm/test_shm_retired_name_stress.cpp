@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <atomic>
 #include <string>
 #include <thread>
 #include <cstddef>
@@ -25,7 +26,8 @@ using plexus::testing::ring_view;
 using plexus::testing::ring_holder;
 using plexus::testing::native_broker;
 
-constexpr std::uint32_t k_rounds = 10000;
+constexpr std::uint32_t k_rounds    = 10000;
+constexpr std::uint32_t k_round_cap = 10 * k_rounds;
 
 struct tally
 {
@@ -40,18 +42,20 @@ bool names_held_ring(native_broker &broker, const std::string &name, const ring_
 }
 
 // One registry of its own in one role, retiring the ring whenever its release leaves no holder, while the other registry
-// does the same in the other role.
-tally churn(const std::string &fqn, const std::string &name, ring_role role)
+// does the same in the other role. A reader acquires only while a publisher's ring exists, so every thread churns past
+// k_rounds until each has acquired once, and the cap turns a thread that never acquires into a failure, not a hang.
+tally churn(const std::string &fqn, const std::string &name, ring_role role, std::atomic<std::uint32_t> &unacquired)
 {
     wake_bus bus;
     ring_holder holder{bus, fqn};
     native_broker broker;
     tally counted;
-    for(std::uint32_t round = 0; round < k_rounds; ++round)
+    for(std::uint32_t round = 0; round < k_round_cap && (round < k_rounds || unacquired.load() > 0); ++round)
     {
         if(holder.acquire(role) == acquire_result::failed)
             continue;
-        ++counted.acquired;
+        if(++counted.acquired == 1)
+            unacquired.fetch_sub(1);
         if(!names_held_ring(broker, name, holder))
             ++counted.mismatched;
         holder.release(role);
@@ -64,8 +68,9 @@ std::array<tally, N> churn_together(const ring_view &view, const std::array<ring
 {
     std::array<tally, N> counted{};
     std::array<std::thread, N> threads;
+    std::atomic<std::uint32_t> unacquired{N};
     for(std::size_t i = 0; i < N; ++i)
-        threads[i] = std::thread([&counted, &view, &roles, i] { counted[i] = churn(view.fqn, view.name, roles[i]); });
+        threads[i] = std::thread([&counted, &view, &roles, &unacquired, i] { counted[i] = churn(view.fqn, view.name, roles[i], unacquired); });
     for(std::thread &thread : threads)
         thread.join();
     return counted;
@@ -94,6 +99,7 @@ TEST_CASE("retired_name_identity two publishers and a reader retiring and acquir
 
     CHECK(counted[0].acquired > 0);
     CHECK(counted[1].acquired > 0);
+    CHECK(counted[2].acquired > 0);
     for(const tally &one : counted)
         CHECK(one.mismatched == 0);
     CHECK_FALSE(view.named());
