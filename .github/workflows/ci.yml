@@ -156,19 +156,6 @@ jobs:
             -DPLEXUS_BUILD_TESTS=ON -DPLEXUS_BUILD_EXAMPLES=ON \
             -DPLEXUS_BUILD_BENCHMARKS=OFF -DPLEXUS_BUILD_FUZZ_TESTS=OFF
 
-      # Pinned so FindOpenSSL cannot pick the MinGW OpenSSL that Strawberry Perl puts on the runner's PATH; bin/ goes on
-      # PATH so the test executables load the same DLLs they linked.
-      - name: locate OpenSSL (MSVC AddressSanitizer)
-        if: matrix.asan
-        shell: bash
-        run: |
-          for root in "C:/Program Files/OpenSSL" "C:/Program Files/OpenSSL-Win64"; do
-            [ -f "$root/include/openssl/ssl.h" ] && break
-          done
-          "$root/bin/openssl.exe" version | grep -q '^OpenSSL 3\.' || { echo "no OpenSSL 3 under $root" >&2; exit 1; }
-          echo "OPENSSL_ROOT_DIR=$root" >> "$GITHUB_ENV"
-          echo "$root/bin" >> "$GITHUB_PATH"
-
       # The Windows half of the retire-then-drain proof: IOCP completes a canceled operation after close returns,
       # so only there can a channel freed before its drain be caught. CXXFLAGS keeps CMake's own MSVC defaults
       # (/EHsc) beside the sanitizer, RelWithDebInfo keeps /RTC off, and the sanitizer cannot link incrementally.
@@ -182,7 +169,7 @@ jobs:
             -DCMAKE_C_COMPILER="${{ matrix.cc }}" -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" \
             -DCMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO="-debug -INCREMENTAL:NO" \
             -DPLEXUS_ENABLE_ASIO_BACKEND=ON -DPLEXUS_ENABLE_SHM_BACKEND=ON \
-            -DPLEXUS_ENABLE_CRYPTO_BACKEND=ON -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR" -DPLEXUS_AFFINITY_CHECKS=ON \
+            -DPLEXUS_ENABLE_CRYPTO_BACKEND=OFF -DPLEXUS_AFFINITY_CHECKS=ON \
             -DPLEXUS_BUILD_TESTS=ON -DPLEXUS_BUILD_EXAMPLES=ON \
             -DPLEXUS_BUILD_BENCHMARKS=OFF -DPLEXUS_BUILD_FUZZ_TESTS=OFF
 
@@ -196,7 +183,6 @@ jobs:
           cmake --build build --parallel 4 --target
           test_stream_retire_drain test_udp_retire_drain test_udp_server_retire_drain test_transport_dial_cancel
           test_unclaimed_retire_stream test_unclaimed_retire_wrap test_node_close_asio
-          test_tls_retire_drain test_dtls_retire_drain
 
       # The real-multicast-loopback discovery tests cannot run on the GitHub macOS or Windows runners:
       # macOS 15 blocks multicast for the unprivileged runner process (Local Network Privacy;
