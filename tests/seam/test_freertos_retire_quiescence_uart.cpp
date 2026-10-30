@@ -1,9 +1,9 @@
 #include "host_uart_shim.h"
 
+#include "support/serial_bytes.h"
+
 #include "plexus/freertos/uart_channel.h"
 #include "plexus/freertos/freertos_executor.h"
-
-#include "plexus/stream/crc_serial.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
@@ -27,13 +27,9 @@ constexpr std::size_t k_ring        = 2048;
 
 std::vector<std::byte> framed_with_crc()
 {
-    auto frame = plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
-                                            std::span<const std::byte>{k_payload});
-    const auto header  = std::span<const std::byte>{frame}.first(plexus::wire::header_size);
-    const auto body    = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
-    const auto trailer = plexus::stream::crc_trailer(header, body);
-    frame.insert(frame.end(), trailer.begin(), trailer.end());
-    return frame;
+    return plexus::testing::serial_bytes(
+            plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                       std::span<const std::byte>{k_payload}));
 }
 
 }

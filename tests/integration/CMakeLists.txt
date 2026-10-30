@@ -1075,6 +1075,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::stream
         plexus::asio
         Catch2::Catch2WithMain)
+    target_include_directories(test_serial_atomic_admission PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
     catch_discover_tests(test_serial_atomic_admission TEST_PREFIX "integration.")
 
     # The cross-class UDP reproducibility gate: a best_effort clean-path flow
@@ -1302,6 +1304,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::inproc
         Catch2::Catch2WithMain
         util)
+    target_include_directories(test_serial_resync PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
     catch_discover_tests(test_serial_resync TEST_PREFIX "integration.")
     endif()
 

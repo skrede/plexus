@@ -1,25 +1,19 @@
-// Host seam proof for the constrained-target UART byte_channel: the static_assert
-// fires at compile time (the load-bearing proof that uart_channel satisfies the
-// byte_channel concept), and the runtime TEST_CASEs drive synthetic bytes through its
-// reused crc_serial decorator path WITHOUT a real UART — over the test-local host UART
-// shim. The on-target uart_read_bytes/uart_write_bytes path is exercised for real only
-// in the cross-build + live gate; this TU is additive to the host suite baseline.
-
 #include "host_uart_shim.h" // MUST precede uart_channel.h: declares the host UART symbols
+
+#include "support/serial_bytes.h"
 
 #include "plexus/freertos/uart_channel.h"
 #include "plexus/freertos/freertos_executor.h"
 
-#include "plexus/stream/crc_serial.h"
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
 #include <vector>
 #include <cstddef>
-#include <algorithm>
+#include <cstdint>
 #include <initializer_list>
 
 // The explicit witness at the test site (mirrors the gate in the header).
@@ -30,17 +24,10 @@ namespace {
 constexpr std::size_t k_max_payload = 512;
 constexpr std::size_t k_ring        = 2048;
 
-// A complete on-wire byte sequence (header + payload + CRC32C trailer) for the bytes a
-// peer would put on the link — exactly what the decorator expects to verify and emit.
 std::vector<std::byte> on_wire(std::span<const std::byte> payload)
 {
-    auto frame = plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
-                                            payload);
-    const auto header  = std::span<const std::byte>{frame}.first(plexus::wire::header_size);
-    const auto body    = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
-    const auto trailer = plexus::stream::crc_trailer(header, body);
-    frame.insert(frame.end(), trailer.begin(), trailer.end());
-    return frame;
+    return plexus::testing::serial_bytes(plexus::wire::encode_frame(
+            plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload));
 }
 
 std::vector<std::byte> bytes_of(std::initializer_list<int> vs)
@@ -97,16 +84,16 @@ TEST_CASE("uart_channel drops+resyncs a garbled stream and never wedges", "[seam
     plexus::freertos::freertos_executor ex;
     plexus::freertos::uart_channel ch{0, ex, k_max_payload, k_ring};
 
-    int deliveries       = 0;
-    bool protocol_closed = false;
+    std::int32_t deliveries = 0;
+    bool protocol_closed    = false;
     ch.on_data([&](std::span<const std::byte>) { ++deliveries; });
     ch.on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });
 
-    REQUIRE_NOTHROW(ch.poll()); // a hostile/garbled stream must never abort the channel
+    REQUIRE_NOTHROW(ch.poll());
 
-    REQUIRE(ch.dropped_count() >= 1); // the corrupt frame was dropped (non-fatal, counted)
-    REQUIRE_FALSE(protocol_closed);   // a CRC drop NEVER reaches the fatal close seam
-    REQUIRE(deliveries == 1);         // the following clean frame still resynced + delivered
+    REQUIRE(ch.dropped_count() >= 1);
+    REQUIRE_FALSE(protocol_closed);
+    REQUIRE(deliveries == 1);
 }
 
 TEST_CASE("uart_channel egress appends the reused CRC trailer", "[seam]")
@@ -121,15 +108,7 @@ TEST_CASE("uart_channel egress appends the reused CRC trailer", "[seam]")
             plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
     ch.send(frame);
 
-    // The header+payload then the 4-byte CRC32C trailer landed on the wire.
-    const auto &tx = plexus::test::uart_fixture().tx;
-    REQUIRE(tx.size() == frame.size() + plexus::stream::crc_trailer_size);
-    REQUIRE(std::equal(frame.begin(), frame.end(), tx.begin()));
-
-    const auto header  = std::span<const std::byte>{frame}.first(plexus::wire::header_size);
-    const auto body    = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
-    const auto trailer = plexus::stream::crc_trailer(header, body);
-    REQUIRE(std::equal(trailer.begin(), trailer.end(), tx.end() - plexus::stream::crc_trailer_size));
+    REQUIRE(plexus::test::uart_fixture().tx == plexus::testing::serial_bytes(frame));
 }
 
 TEST_CASE("uart_channel surfaces a driver-ring overrun, never swallows it", "[seam]")
@@ -140,11 +119,11 @@ TEST_CASE("uart_channel surfaces a driver-ring overrun, never swallows it", "[se
     plexus::freertos::freertos_executor ex;
     plexus::freertos::uart_channel ch{0, ex, k_max_payload, k_ring};
 
-    int errors = 0;
+    std::int32_t errors = 0;
     ch.on_error([&](plexus::io::io_error) { ++errors; });
 
     ch.poll();
 
-    REQUIRE(ch.overrun_count() == 1); // observable counter incremented
-    REQUIRE(errors == 1);             // and the on_error seam fired
+    REQUIRE(ch.overrun_count() == 1);
+    REQUIRE(errors == 1);
 }

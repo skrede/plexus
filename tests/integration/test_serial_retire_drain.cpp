@@ -2,8 +2,7 @@
 #include "drain_after_destroy_common.h"
 
 #include "support/retire_drain.h"
-
-#include "plexus/stream/crc_serial.h"
+#include "support/serial_bytes.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/close_cause.h"
@@ -35,11 +34,7 @@ std::vector<std::byte> serial_frame()
     wire::frame_header hdr{};
     hdr.type = wire::msg_type::unidirectional;
     const std::vector<std::byte> body(16, std::byte{0x42});
-    auto out            = wire::encode_frame(hdr, body);
-    const auto framed   = std::span<const std::byte>{out};
-    const auto trailer  = stream::crc_trailer(framed.first(wire::header_size), framed.subspan(wire::header_size));
-    out.insert(out.end(), trailer.begin(), trailer.end());
-    return out;
+    return plexus::testing::serial_bytes(wire::encode_frame(hdr, body));
 }
 
 std::vector<std::byte> concat(std::vector<std::byte> first, const std::vector<std::byte> &second)
@@ -111,7 +106,7 @@ TEST_CASE("serial_retire_drain a retired channel is destroyed only after its pen
 TEST_CASE("serial_retire_drain bytes read after close reach neither on_data nor on_frame_dropped", "[integration][serial][teardown]")
 {
     auto corrupt = serial_frame();
-    corrupt[wire::header_size + 2] ^= std::byte{0xFF};
+    corrupt[plexus::testing::k_serial_header_bytes + 2] ^= std::byte{0xFF};
     const auto bytes = concat(corrupt, serial_frame());
     for(std::int32_t iter = 0; iter < k_iterations; ++iter)
     {

@@ -1,9 +1,4 @@
-// The serial egress atomic-admission oracle: a sans-IO drive of serial_bootstrap::submit against a
-// MOCK channel whose enqueue_egress* verbs forward to a REAL stream send_queue with a tiny byte cap
-// and a recording sink (no pty, no socket). It pins the dangling-view UAF (an owner-carrying submit
-// rejected by a full queue must never read the payload after the move, strongest under ASan) and
-// the atomic framing (payload + CRC trailer enter the queue as one unit, so the wire carries only
-// well-formed [header || payload || crc] frames — never a payload without its trailer).
+#include "support/serial_bytes.h"
 
 #include "plexus/asio/detail/serial_bootstrap.h"
 
@@ -23,6 +18,7 @@
 #include <memory>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace {
@@ -66,11 +62,12 @@ struct rec_sink
 // send_queue and counting the full-queue rejections the production channel surfaces.
 struct mock_channel
 {
-    send_queue queue;
-    int        full_events{0};
+    send_queue   queue;
+    std::int32_t full_events;
 
     mock_channel(send_queue::send_sink s, std::size_t cap)
             : queue(std::move(s), cap)
+            , full_events(0)
     {
     }
 
@@ -111,8 +108,8 @@ plexus::wire_bytes<> owned_of(const std::vector<std::byte> &bytes, std::shared_p
 // The peer's view of the wire: how many well-formed frames verified and how many torn spans dropped.
 struct verify_result
 {
-    int                    matches{0};
-    int                    drops{0};
+    std::int32_t           matches{0};
+    std::int32_t           drops{0};
     std::vector<std::byte> last_match;
 };
 
@@ -142,15 +139,15 @@ TEST_CASE("serial submit admits payload and CRC trailer as one well-formed unit"
     std::shared_ptr<std::vector<std::byte>> keep;
     boot.submit(ch, owned_of(frame, keep));
 
-    REQUIRE(ch.full_events == 0);            // the whole frame was admitted
-    REQUIRE(rec.turns.size() == 1);          // driven in one turn
-    REQUIRE(rec.views_per_turn[0] == 2);     // payload and trailer gathered together
+    REQUIRE(ch.full_events == 0);
+    REQUIRE(rec.turns.size() == 1);
+    REQUIRE(rec.views_per_turn[0] == 2);
     const auto wire = rec.wire_stream();
-    REQUIRE(wire.size() == frame.size() + stream::crc_trailer_size);
+    REQUIRE(wire == plexus::testing::serial_bytes(frame));
     const auto seen = verify_wire(wire);
-    REQUIRE(seen.matches == 1);              // the peer verifies exactly one frame
-    REQUIRE(seen.drops == 0);                // nothing torn
-    REQUIRE(seen.last_match == frame);       // header+payload delivered intact
+    REQUIRE(seen.matches == 1);
+    REQUIRE(seen.drops == 0);
+    REQUIRE(seen.last_match == frame);
 }
 
 TEST_CASE("serial submit admits the payload+trailer unit through the borrowed-view overload", "[integration][serial][atomic_admission]")
@@ -194,7 +191,7 @@ TEST_CASE("serial submit is all-or-nothing on a full queue and never reads the m
     owner.reset();
     boot.submit(ch, std::move(payload));
 
-    REQUIRE(ch.full_events == 1);            // the frame was rejected as a unit
-    REQUIRE(rec.turns.size() == 1);          // nothing new reached the wire
-    REQUIRE(ch.queue.size() == 1);           // only the filler is queued
+    REQUIRE(ch.full_events == 1);
+    REQUIRE(rec.turns.size() == 1);
+    REQUIRE(ch.queue.size() == 1);
 }

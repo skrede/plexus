@@ -37,6 +37,7 @@ target_link_libraries(test_crc_serial_decorator PRIVATE
     plexus::wire
     plexus::stream
     Catch2::Catch2WithMain)
+target_include_directories(test_crc_serial_decorator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_crc_serial_decorator TEST_PREFIX "wire.")
 
 # The codec parity oracle's scenario clusters (header/data/subscribe/rpc/handshake)

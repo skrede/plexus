@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_TESTS_WIRE_CRC_SERIAL_COMMON_H
 #define HPP_GUARD_TESTS_WIRE_CRC_SERIAL_COMMON_H
 
+#include "support/serial_bytes.h"
+
 #include "plexus/stream/crc_serial.h"
 
 #include "plexus/wire/frame.h"
@@ -12,10 +14,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
-
-// Shared fixtures for the CRC32C trailer + magic-resync decorator oracle: build a complete
-// serial wire frame [header][payload][CRC32C trailer LE], and a sink that records the clean
-// frames the decorator emits and counts the non-fatal crc_mismatch drops.
 
 namespace crc_serial_test {
 
@@ -39,14 +37,8 @@ inline frame_header make_header(std::size_t payload_len)
 
 inline std::vector<std::byte> framed(std::string_view payload)
 {
-    const auto pl    = as_bytes(payload);
-    const auto hdr   = encode_header(make_header(pl.size()));
-    const auto trail = crc_trailer(std::span<const std::byte>{hdr}, pl);
-    std::vector<std::byte> out;
-    out.insert(out.end(), hdr.begin(), hdr.end());
-    out.insert(out.end(), pl.begin(), pl.end());
-    out.insert(out.end(), trail.begin(), trail.end());
-    return out;
+    const auto pl = as_bytes(payload);
+    return plexus::testing::serial_bytes(encode_frame(make_header(pl.size()), pl));
 }
 
 inline std::string header_on(std::string_view payload)
@@ -58,7 +50,7 @@ inline std::string header_on(std::string_view payload)
 struct sink
 {
     std::vector<std::string> emitted;
-    int drops{0};
+    std::int32_t drops{0};
 
     crc_serial_inbound make()
     {

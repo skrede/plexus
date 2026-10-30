@@ -28,7 +28,7 @@ catch_discover_tests(test_freertos_seam TEST_PREFIX "seam.")
 # the current source dir is on the include path so the shim header resolves. Registered
 # under the same `seam.` prefix.
 add_executable(test_uart_channel_seam test_uart_channel_seam.cpp)
-target_include_directories(test_uart_channel_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(test_uart_channel_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(test_uart_channel_seam PRIVATE
     plexus::core
     plexus::wire
