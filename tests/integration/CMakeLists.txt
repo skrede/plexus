@@ -1321,6 +1321,37 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_serial_retire_drain TEST_PREFIX "integration.")
     endif()
 
+    # A dropped serial header byte over an openpty pair: the next frame and the peer's liveliness must
+    # survive it. POSIX-only (openpty).
+    if(NOT WIN32)
+    add_executable(test_serial_header_drop test_serial_header_drop.cpp)
+    target_link_libraries(test_serial_header_drop PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    target_include_directories(test_serial_header_drop PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_serial_header_drop TEST_PREFIX "integration.")
+    endif()
+
+    # Paced openpty measurement rigs (the serial payload-cap sweep and the hold after a dropped header byte), run by
+    # hand: they report numbers and assert nothing, so no ctest is registered. POSIX-only (openpty).
+    if(NOT WIN32)
+    add_executable(test_serial_cap_sweep test_serial_cap_sweep.cpp)
+    target_link_libraries(test_serial_cap_sweep PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    target_include_directories(test_serial_cap_sweep PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    endif()
+
     # The control-plane acceptance gate over the openpty serial link: a consumer node enumerates a
     # serial-attached origin THROUGH a relay end-to-end, host-side, before hardware. The origin's
     # declaration folds over the real serial wire into the relay's topic table; the relay lifts the
