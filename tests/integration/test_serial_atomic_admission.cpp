@@ -81,9 +81,9 @@ struct mock_channel
         if(!queue.enqueue(std::move(bytes)))
             ++full_events;
     }
-    void enqueue_egress_pair(plexus::wire_bytes<> first, plexus::wire_bytes<> second)
+    void enqueue_egress_unit(std::span<plexus::wire_bytes<>> nodes)
     {
-        if(!queue.enqueue_both(std::move(first), std::move(second)))
+        if(!queue.enqueue_unit(nodes))
             ++full_events;
     }
 };

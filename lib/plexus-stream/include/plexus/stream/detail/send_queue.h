@@ -34,9 +34,13 @@ public:
     using send_sink       = plexus::detail::move_only_function<void(buffer_sequence, completion)>;
 
     explicit send_queue(send_sink sink, std::size_t byte_cap = unbounded, std::size_t gather_limit = default_gather_limit)
-            : m_sink(std::move(sink))
+            : m_open(true)
+            , m_sending(false)
+            , m_bytes(0)
             , m_byte_cap(byte_cap)
+            , m_in_flight(0)
             , m_gather_limit(gather_limit)
+            , m_sink_cb(std::move(sink))
     {
     }
 
@@ -48,7 +52,8 @@ public:
             return false;
         auto owned = std::make_shared<std::vector<std::byte>>(bytes.begin(), bytes.end());
         std::span<const std::byte> view{*owned};
-        return admit(wire_bytes<>{view, std::move(owned)});
+        wire_bytes<> frame{view, std::move(owned)};
+        return admit(std::span<wire_bytes<>>{&frame, 1});
     }
 
     // Hold the supplied owner and pass its view with no copy; the owner keeps the bytes alive
@@ -57,23 +62,19 @@ public:
     {
         if(!admits(frame.size()))
             return false;
-        return admit(std::move(frame));
+        return admit(std::span<wire_bytes<>>{&frame, 1});
     }
 
-    // Admit a payload and its trailer as ONE atomic unit: both nodes are stored only if their
-    // combined size fits the remaining budget (an empty queue admits the pair whole), otherwise
-    // neither is stored and the caller sees the full signal — the wire never carries one without
-    // the other. The two stored nodes are ordinary queued frames drained by the existing single
-    // completion; no additional completion is introduced for the pair.
-    bool enqueue_both(wire_bytes<> payload, wire_bytes<> trailer)
+    // Admits every node, or none when their summed size would carry the queue past the cap, so the wire never
+    // carries part of a unit; an empty queue admits any unit whole.
+    bool enqueue_unit(std::span<wire_bytes<>> nodes)
     {
-        if(!admits(payload.size() + trailer.size()))
+        std::size_t total = 0;
+        for(const auto &node : nodes)
+            total += node.size();
+        if(!admits(total))
             return false;
-        stash(std::move(payload));
-        stash(std::move(trailer));
-        if(!m_sending)
-            drive();
-        return true;
+        return admit(nodes);
     }
 
     bool full() const noexcept
@@ -128,6 +129,16 @@ public:
     }
 
 private:
+    bool m_open;
+    bool m_sending;
+    std::size_t m_bytes;
+    std::size_t m_byte_cap;
+    std::size_t m_in_flight;
+    std::size_t m_gather_limit;
+    std::deque<wire_bytes<>> m_queue;
+    std::vector<std::span<const std::byte>> m_views;
+    send_sink m_sink_cb;
+
     // An empty queue admits one frame of any size (the per-message ceiling bounds it upstream);
     // past the first frame, compare-before-add against the remaining budget (no wrap).
     bool admits(std::size_t size) const noexcept
@@ -135,15 +146,13 @@ private:
         return m_bytes == 0 || (m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes);
     }
 
-    void stash(wire_bytes<> frame)
+    bool admit(std::span<wire_bytes<>> nodes)
     {
-        m_bytes += frame.size();
-        m_queue.push_back(std::move(frame));
-    }
-
-    bool admit(wire_bytes<> frame)
-    {
-        stash(std::move(frame));
+        for(auto &node : nodes)
+        {
+            m_bytes += node.size();
+            m_queue.push_back(std::move(node));
+        }
         if(!m_sending)
             drive();
         return true;
@@ -164,29 +173,19 @@ private:
         m_views.clear();
         for(std::size_t i = 0; i < m_in_flight; ++i)
             m_views.push_back(static_cast<std::span<const std::byte>>(m_queue[i]));
-        m_sink(buffer_sequence{m_views},
-               [this](bool /*ok*/)
-               {
-                   if(!m_open)
-                       return;
-                   for(std::size_t i = 0; i < m_in_flight; ++i)
-                   {
-                       m_bytes -= m_queue.front().size();
-                       m_queue.pop_front();
-                   }
-                   drive();
-               });
+        m_sink_cb(buffer_sequence{m_views},
+                  [this](bool /*ok*/)
+                  {
+                      if(!m_open)
+                          return;
+                      for(std::size_t i = 0; i < m_in_flight; ++i)
+                      {
+                          m_bytes -= m_queue.front().size();
+                          m_queue.pop_front();
+                      }
+                      drive();
+                  });
     }
-
-    send_sink m_sink;
-    std::size_t m_byte_cap;
-    std::size_t m_gather_limit;
-    std::deque<wire_bytes<>> m_queue;
-    std::vector<std::span<const std::byte>> m_views;
-    std::size_t m_in_flight{0};
-    std::size_t m_bytes{0};
-    bool m_open{true};
-    bool m_sending{false};
 };
 
 }

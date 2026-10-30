@@ -204,9 +204,9 @@ public:
         if(!m_egress.enqueue(std::move(bytes)))
             detail::stream_on_write_queue_full(*this);
     }
-    void enqueue_egress_pair(wire_bytes<> first, wire_bytes<> second)
+    void enqueue_egress_unit(std::span<wire_bytes<>> nodes)
     {
-        if(!m_egress.enqueue_both(std::move(first), std::move(second)))
+        if(!m_egress.enqueue_unit(nodes))
             detail::stream_on_write_queue_full(*this);
     }
     void start_read_loop()

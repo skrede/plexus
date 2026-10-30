@@ -1,9 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_DETAIL_SERIAL_BOOTSTRAP_H
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_SERIAL_BOOTSTRAP_H
 
-#include "plexus/stream/crc_serial.h"
+#include "plexus/stream/serial_frame.h"
 
 #include "plexus/wire_bytes.h"
+
+#include "plexus/wire/frame.h"
 
 #include <span>
 #include <array>
@@ -39,17 +41,17 @@ public:
     void submit(Channel &c, std::span<const std::byte> data)
     {
         auto owner = std::make_shared<std::vector<std::byte>>(data.begin(), data.end());
-        plexus::wire_bytes<> payload{std::span<const std::byte>{*owner}, owner};
-        c.enqueue_egress_pair(std::move(payload), make_trailer(data));
+        std::array<plexus::wire_bytes<>, 2> nodes{plexus::wire_bytes<>{std::span<const std::byte>{*owner}, owner}, make_trailer(data)};
+        c.enqueue_egress_unit(nodes);
     }
 
     template<typename Channel>
     void submit(Channel &c, plexus::wire_bytes<> data)
     {
-        // The trailer CRC is taken over the payload view BEFORE the move, so the owner is never
-        // read after a rejected admission; payload and trailer then enter the queue as one unit.
+        // The trailer is computed before the payload is moved, so the moved-from owner is never read.
         auto trailer = make_trailer(static_cast<std::span<const std::byte>>(data));
-        c.enqueue_egress_pair(std::move(data), std::move(trailer));
+        std::array<plexus::wire_bytes<>, 2> nodes{std::move(data), std::move(trailer)};
+        c.enqueue_egress_unit(nodes);
     }
 
     template<typename Channel>
