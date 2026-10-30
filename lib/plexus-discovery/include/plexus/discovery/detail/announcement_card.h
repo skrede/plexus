@@ -24,7 +24,7 @@ inline wire::announcement announcement_from_card(const node_id &id, const std::v
     ann.node_id  = id;
     ann.ttl_secs = ttl_secs;
     // The presence flag and pattern bytes are keyed to the LABEL, never the uint32: a node whose
-    // effective label is the default emits flagless with no pattern bytes (byte-identical legacy wire)
+    // effective label is the default emits flagless with no pattern bytes (the concrete-only uint32 shape)
     // even if its uint32 was set non-default, so a stamped announcement never carries a flagged stale
     // default that two different-universe nodes would then intersect-match and mutually admit.
     if(universe_pattern != k_default_universe_label)

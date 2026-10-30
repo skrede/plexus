@@ -32,10 +32,10 @@ using plexus::testing::member_lanes;
 using plexus::testing::delaying_broker;
 using demote_fn = plexus::detail::move_only_function<void(arm_status)>;
 
-constexpr std::uint64_t k_cells         = 16;
-constexpr std::uint64_t k_slot          = 64;
-constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
-const std::string k_fqn                 = "medium_coordinator_member.alpha";
+constexpr std::uint64_t k_cells              = 16;
+constexpr std::uint64_t k_slot               = 64;
+constexpr std::uint64_t k_foreign_ring_magic = 0x46'4f'52'45'49'47'4e'00ull;
+const std::string k_fqn                      = "medium_coordinator_member.alpha";
 
 // What each wake answers at arm; demote fires the primary's runtime demotion the way the executor runs its report.
 struct legs
@@ -115,7 +115,7 @@ plexus::detail::move_only_function<void(std::optional<layered> &, plexus::shm::c
 
 }
 
-TEST_CASE("medium_coordinator_member a ring stamped with the previous layout magic is counted as incompatible_layout", "[shm][medium_coordinator_member]")
+TEST_CASE("medium_coordinator_member a ring stamped with a foreign magic is counted as incompatible_layout", "[shm][medium_coordinator_member]")
 {
     delaying_broker broker;
     const std::string name = plexus::testing::region_name(k_fqn, plexus::node_id{});
@@ -124,7 +124,7 @@ TEST_CASE("medium_coordinator_member a ring stamped with the previous layout mag
     REQUIRE(broker.create(name + ".s", plexus::shm::slab_region_bytes(k_cells, k_slot), {}, slab) == region_status::ok);
     plexus::shm::broadcast_ring ring;
     REQUIRE(plexus::shm::broadcast_ring::create(control.bytes(), slab.bytes(), k_cells, k_slot, plexus::node_id{}, ring) == plexus::shm::loan_status::ok);
-    ring.header().magic.store(k_previous_ring);
+    ring.header().magic.store(k_foreign_ring_magic);
 
     member_lanes<delaying_broker, plexus::testing::noop_notifier> m{broker, k_fqn};
     REQUIRE(m.lanes.fallbacks() == counted(fallback_reason::incompatible_layout));

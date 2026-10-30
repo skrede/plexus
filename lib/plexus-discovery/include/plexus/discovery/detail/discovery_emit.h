@@ -17,7 +17,7 @@ void emit_with_flags(D &d, std::uint8_t flags)
         return;
     // The universe-pattern presence flag is a persistent property of this node's announcement (set
     // at build from the label); goodbye is the only transient per-emit bit. Preserve the former so a
-    // re-announce or goodbye never drops the pattern and silently reverts to legacy-flagless wire.
+    // re-announce or goodbye never drops the pattern and silently emits a flagless announcement.
     d.m_announcement->flags = flags | (d.m_announcement->flags & wire::k_announcement_universe_pattern_flag);
     wire::encode_announcement_into(d.m_scratch, *d.m_announcement);
     d.m_socket.send_multicast(d.m_scratch);

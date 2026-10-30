@@ -25,7 +25,7 @@ enum class ring_role : std::uint8_t
 };
 
 // transient_join: a later join can succeed, because the ring's creator has not finished minting it (its slab is missing
-// or its header unstamped), the ring is being retired, or every free reader slot is held for a moment; incompatible: the header carries a foreign or older layout; consumer_capacity: every reader
+// or its header unstamped), the ring is being retired, or every free reader slot is held for a moment; incompatible: the header carries a foreign layout; consumer_capacity: every reader
 // slot of the ring is taken, so this acquirer could never receive; not_found: no ring exists under the name; liveness:
 // the host gives this reader no kernel proof of its life, so a producer could not tell its cursor from a dead one;
 // creator_alive: another holder has the ring's creator slot.

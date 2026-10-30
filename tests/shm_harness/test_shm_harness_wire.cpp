@@ -26,7 +26,7 @@ using namespace shm_harness;
 
 namespace {
 
-constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
+constexpr std::uint64_t k_foreign_ring_magic = 0x46'4f'52'45'49'47'4e'00ull;
 
 }
 
@@ -81,9 +81,9 @@ TEST_CASE("harness both ends that lose every notifier at runtime deliver every m
     REQUIRE(sub.duplicates == 0);
 }
 
-// The region-observer oracle cannot tell the old region from a live ring, so the case asserts delivery and the counted
-// reason instead.
-TEST_CASE("harness a publisher whose ring name holds an older layout delivers every message over the wire", "[shm][harness]")
+// The region-observer oracle cannot tell the foreign region from a live ring, so the case asserts delivery and the
+// counted reason instead.
+TEST_CASE("harness a publisher whose ring name holds a foreign ring delivers every message over the wire", "[shm][harness]")
 {
     const std::string fqn                 = "shm_harness.mixed." + std::to_string(plexus::testing::process_id());
     const std::string name                = plexus::testing::region_name(fqn, harness_id(0));
@@ -94,9 +94,9 @@ TEST_CASE("harness a publisher whose ring name holds an older layout delivers ev
     const plexus::testing::unlink_on_exit names{control, slab};
     REQUIRE(broker.create(name, plexus::shm::control_region_bytes(geom.cell_count), {}, control) == plexus::shm::region_status::ok);
     REQUIRE(broker.create(name + ".s", plexus::shm::slab_region_bytes(geom.cell_count, geom.slot_capacity), {}, slab) == plexus::shm::region_status::ok);
-    plexus::shm::broadcast_ring old_ring;
-    REQUIRE(plexus::shm::broadcast_ring::create(control.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, harness_id(0), old_ring) == plexus::shm::loan_status::ok);
-    old_ring.header().magic.store(k_previous_ring, std::memory_order_release);
+    plexus::shm::broadcast_ring foreign_ring;
+    REQUIRE(plexus::shm::broadcast_ring::create(control.bytes(), slab.bytes(), geom.cell_count, geom.slot_capacity, harness_id(0), foreign_ring) == plexus::shm::loan_status::ok);
+    foreign_ring.header().magic.store(k_foreign_ring_magic, std::memory_order_release);
 
     topology topo{fqn, 2};
     REQUIRE(topo.created());
@@ -117,5 +117,5 @@ TEST_CASE("harness a publisher whose ring name holds an older layout delivers ev
     REQUIRE(fallbacks_of(pub, plexus::io::fallback_reason::incompatible_layout) >= 1);
     plexus::native::shm_region_handle probe;
     REQUIRE(broker.attach(name, probe) == plexus::shm::region_status::ok);
-    REQUIRE(old_ring.header().magic.load(std::memory_order_acquire) == k_previous_ring);
+    REQUIRE(foreign_ring.header().magic.load(std::memory_order_acquire) == k_foreign_ring_magic);
 }

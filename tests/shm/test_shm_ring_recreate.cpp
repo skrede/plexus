@@ -35,7 +35,7 @@ using plexus::testing::lifetime_fqn;
 using values        = std::vector<std::uint32_t>;
 using hooked_holder = plexus::testing::basic_ring_holder<plexus::testing::hold_hook_broker<plexus::testing::native_broker>>;
 
-constexpr std::uint64_t k_previous_ring = 0x50'4c'58'52'4e'47'35'00ull; // "PLXRNG5\0"
+constexpr std::uint64_t k_foreign_ring_magic = 0x46'4f'52'45'49'47'4e'00ull;
 
 }
 
@@ -112,7 +112,7 @@ TEST_CASE("ring_lifetime a ring stamped by another layout is declined and its na
     REQUIRE(view.broker.create(view.name + ".s", plexus::shm::slab_region_bytes(geom.cell_count, geom.slot_capacity), {}, view.slab) == region_status::ok);
     REQUIRE(plexus::shm::broadcast_ring::create(view.control.bytes(), view.slab.bytes(), geom.cell_count, geom.slot_capacity, plexus::testing::test_publisher(), view.ring) ==
             loan_status::ok);
-    view.ring.header().magic.store(k_previous_ring, std::memory_order_release);
+    view.ring.header().magic.store(k_foreign_ring_magic, std::memory_order_release);
 
     ring_holder publisher{bus, view.fqn};
     ring_holder reader{bus, view.fqn};
@@ -121,7 +121,7 @@ TEST_CASE("ring_lifetime a ring stamped by another layout is declined and its na
     REQUIRE(reader.acquire(ring_role::consumer) == acquire_result::failed);
     CHECK(reader.last_bound() == acquire_bound::incompatible);
     CHECK(view.named());
-    CHECK(view.ring.header().magic.load(std::memory_order_acquire) == k_previous_ring);
+    CHECK(view.ring.header().magic.load(std::memory_order_acquire) == k_foreign_ring_magic);
 }
 
 TEST_CASE("ring_lifetime a joiner that takes its slot after the ring was retired leaves as transient", "[shm][ring_lifetime]")

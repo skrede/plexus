@@ -201,7 +201,7 @@ TEST_CASE("multicast_discovery: concrete rendezvous is unchanged via the uint32 
 
     int resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
-    // A flagless (legacy uint32-only) peer of the same derived universe rides the fast-path.
+    // A flagless (concrete-only uint32) peer of the same derived universe rides the fast-path.
     socket.inject("10.0.0.3", inbound_bytes(0x53, plexus::discovery::universe_from_label("depot")));
     REQUIRE(resolved == 1);
     // A flagless peer of a different universe is dropped on the same fast-path.
@@ -253,17 +253,17 @@ TEST_CASE("multicast_discovery: a default node's real stamped announcement carri
     REQUIRE((default_ann->flags & plexus::wire::k_announcement_universe_pattern_flag) == 0);
     REQUIRE(default_ann->universe_pattern.empty());
 
-    // The legacy uint32-only shape (default label, custom uint32) also stamps flagless — never a
+    // The concrete-only uint32 shape (default label, custom uint32) also stamps flagless — never a
     // flagged stale default.
-    int ex_legacy = 0;
-    fake_datagram_socket socket_legacy;
-    discovery_under_test node_legacy{ex_legacy, socket_legacy, options_for(universe_a)};
-    node_legacy.advertise(card_for(0x62));
-    REQUIRE(socket_legacy.sent.size() == 1);
-    const auto legacy_ann = plexus::wire::decode_announcement(socket_legacy.sent.front());
-    REQUIRE(legacy_ann.has_value());
-    REQUIRE((legacy_ann->flags & plexus::wire::k_announcement_universe_pattern_flag) == 0);
-    REQUIRE(legacy_ann->universe_pattern.empty());
+    int ex_flagless = 0;
+    fake_datagram_socket socket_flagless;
+    discovery_under_test node_flagless{ex_flagless, socket_flagless, options_for(universe_a)};
+    node_flagless.advertise(card_for(0x62));
+    REQUIRE(socket_flagless.sent.size() == 1);
+    const auto flagless_ann = plexus::wire::decode_announcement(socket_flagless.sent.front());
+    REQUIRE(flagless_ann.has_value());
+    REQUIRE((flagless_ann->flags & plexus::wire::k_announcement_universe_pattern_flag) == 0);
+    REQUIRE(flagless_ann->universe_pattern.empty());
 }
 
 TEST_CASE("multicast_discovery: two same-label concrete nodes admit through the emit loop", "[multicast_discovery][universe]")

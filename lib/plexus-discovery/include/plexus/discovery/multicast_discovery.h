@@ -57,12 +57,12 @@ public:
         m_socket.bind(bind_endpoint());
         // Single source of truth: derive the concrete uint32 from the authoritative label so the
         // fast-path key and hard-scope group agree with the pattern. A consumer that left the default
-        // label but set a custom uint32 (the legacy uint32-only shape) keeps it and stays legacy-concrete.
+        // label but set a custom uint32 (the concrete-only uint32 shape) keeps it and stays concrete.
         if(m_options.universe_pattern != k_default_universe_label)
             m_options.universe = universe_from_label(m_options.universe_pattern);
         // Parse the local label once. A misconfigured label fails closed: m_universe_pattern stays empty
         // so the non-fast-path drops every flagged peer, while m_universe_is_concrete stays true so a
-        // flagless legacy peer still takes the uint32 fast-path.
+        // flagless peer still takes the uint32 fast-path.
         if(auto pattern = match::key_pattern::make(m_options.universe_pattern))
         {
             m_universe_pattern     = *pattern;

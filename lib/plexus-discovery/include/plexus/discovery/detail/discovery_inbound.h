@@ -13,7 +13,7 @@
 
 namespace plexus::discovery::detail {
 
-// The concrete/concrete common case keeps the legacy uint32 fast-path (no parse, no alloc);
+// The concrete/concrete common case takes the flagless uint32 fast-path (no parse, no alloc);
 // otherwise the universe patterns must intersect — a rider on the shared matcher, never a second
 // glob. FNV(factory/line/*) != FNV(factory/line/1) yet they intersect, so a flagged peer must never
 // take the fast-path. A malformed peer pattern or an unparsable local pattern fails closed.
