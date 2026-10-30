@@ -95,7 +95,7 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     isns.resize(k_sessions);
 
     for(auto v : isns)
-        REQUIRE(v != 0); // 0 is reserved for the legacy default
+        REQUIRE(v != 0); // 0 is the "no ISN negotiated" value
 
     std::vector<std::uint16_t> sorted = isns;
     std::sort(sorted.begin(), sorted.end());

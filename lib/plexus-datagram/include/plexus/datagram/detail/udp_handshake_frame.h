@@ -20,14 +20,13 @@ enum class udp_hs_type : std::uint8_t
 };
 
 // The delivery mode a dialer declares so the acceptor mints a symmetric channel, riding the
-// handshake's 2nd inner byte; a legacy 1-byte handshake (no mode byte) defaults to best_effort.
+// handshake's 2nd inner byte.
 enum class udp_channel_mode : std::uint8_t
 {
     best_effort       = 0,
     reliable_datagram = 1,
 };
 
-// A legacy frame without the ISN bytes decodes initial_seq = 0 (the back-compat contract).
 struct udp_handshake
 {
     udp_hs_type type;
@@ -45,27 +44,20 @@ inline void encode_handshake_into(std::vector<std::byte> &out, udp_hs_type type,
 
 // The strict first-byte check (request=0 or response=1) keeps the handshake control space disjoint
 // from the reliable-ARQ inner markers (segment=2, ack=3), so an ARQ data segment falls through to
-// the ARQ demux. A 1-byte handshake decodes mode=best_effort; absent ISN bytes decode initial_seq=0.
+// the ARQ demux. An inner frame not exactly four bytes, or with an unknown mode byte, decodes to nullopt.
 inline std::optional<udp_handshake> decode_handshake(std::span<const std::byte> datagram)
 {
     auto dec = wire::unwrap_udp(datagram);
-    if(!dec || dec->kind != wire::udp_envelope_kind::reliable_arq || dec->frame.empty() || dec->frame.size() == 3 || dec->frame.size() > 4)
+    if(!dec || dec->kind != wire::udp_envelope_kind::reliable_arq || dec->frame.size() != 4)
         return std::nullopt;
     const auto v = std::to_integer<std::uint8_t>(dec->frame[0]);
     if(v != static_cast<std::uint8_t>(udp_hs_type::request) && v != static_cast<std::uint8_t>(udp_hs_type::response))
         return std::nullopt;
-    auto mode = udp_channel_mode::best_effort;
-    if(dec->frame.size() >= 2)
-    {
-        const auto m = std::to_integer<std::uint8_t>(dec->frame[1]);
-        if(m > static_cast<std::uint8_t>(udp_channel_mode::reliable_datagram))
-            return std::nullopt; // unknown mode byte: fail closed
-        mode = static_cast<udp_channel_mode>(m);
-    }
-    std::uint16_t isn = 0;
-    if(dec->frame.size() == 4)
-        isn = static_cast<std::uint16_t>(std::to_integer<std::uint16_t>(dec->frame[2]) | (std::to_integer<std::uint16_t>(dec->frame[3]) << 8));
-    return udp_handshake{static_cast<udp_hs_type>(v), mode, isn};
+    const auto m = std::to_integer<std::uint8_t>(dec->frame[1]);
+    if(m > static_cast<std::uint8_t>(udp_channel_mode::reliable_datagram))
+        return std::nullopt;
+    const auto isn = static_cast<std::uint16_t>(std::to_integer<std::uint16_t>(dec->frame[2]) | (std::to_integer<std::uint16_t>(dec->frame[3]) << 8));
+    return udp_handshake{static_cast<udp_hs_type>(v), static_cast<udp_channel_mode>(m), isn};
 }
 
 }

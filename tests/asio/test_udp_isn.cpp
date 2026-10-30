@@ -2,7 +2,7 @@
 
 using namespace udp_isn_fixture;
 
-TEST_CASE("udp isn: the handshake frame round-trips the ISN append-only", "[udp][isn]")
+TEST_CASE("udp isn: the handshake frame round-trips its type, mode and ISN", "[udp][isn]")
 {
     namespace iod = plexus::datagram::detail;
 
@@ -15,19 +15,18 @@ TEST_CASE("udp isn: the handshake frame round-trips the ISN append-only", "[udp]
     REQUIRE(decoded->initial_seq == 0xBEEF);
 }
 
-TEST_CASE("udp isn: a legacy handshake without the ISN bytes decodes to ISN 0", "[udp][isn]")
+TEST_CASE("udp isn: an inner handshake frame of any length but four bytes is refused", "[udp][isn]")
 {
     namespace iod = plexus::datagram::detail;
 
-    // A 2-byte [hs_type, channel_mode] frame (the pre-ISN layout) — the ISN bytes absent.
-    const std::byte inner[2]{static_cast<std::byte>(iod::udp_hs_type::response), static_cast<std::byte>(iod::udp_channel_mode::reliable_datagram)};
-    std::vector<std::byte> legacy;
-    wire::wrap_udp_into(legacy, wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner, 2});
-
-    auto decoded = iod::decode_handshake(legacy);
-    REQUIRE(decoded.has_value());
-    REQUIRE(decoded->mode == iod::udp_channel_mode::reliable_datagram);
-    REQUIRE(decoded->initial_seq == 0); // the documented back-compat default
+    const std::byte inner[8]{static_cast<std::byte>(iod::udp_hs_type::request), static_cast<std::byte>(iod::udp_channel_mode::reliable_datagram), std::byte{0x11}, std::byte{0x22}};
+    for(const std::size_t length : std::initializer_list<std::size_t>{0, 1, 2, 3, 5, 6, 8})
+    {
+        CAPTURE(length);
+        std::vector<std::byte> datagram;
+        wire::wrap_udp_into(datagram, wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner, length});
+        CHECK(!iod::decode_handshake(datagram).has_value());
+    }
 }
 
 TEST_CASE("udp isn: an unknown channel-mode byte still fails closed", "[udp][isn]")

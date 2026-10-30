@@ -147,7 +147,7 @@ target_link_libraries(test_udp_reliable_datagram PRIVATE
 catch_discover_tests(test_udp_reliable_datagram TEST_PREFIX "udp.")
 
 # The randomized per-session ISN (RFC 6528 lineage): the handshake frame carries the ISN
-# append-only (legacy frames decode to 0), and a spoofed seq=0 reliable-data segment on a
+# in exactly four inner bytes, and a spoofed seq=0 reliable-data segment on a
 # non-zero-ISN plaintext udpr session is rejected as out of window. Header-only inside
 # plexus::asio; the `udp.` ctest prefix selects it.
 add_executable(test_udp_isn test_udp_isn.cpp test_udp_isn_spoof.cpp test_udp_isn_frag.cpp)
