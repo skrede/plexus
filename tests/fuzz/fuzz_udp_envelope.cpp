@@ -83,7 +83,6 @@ void fragment_leg(bytes_view frame)
     fuzz_require(std::ranges::equal(encoded, frame), "an accepted fragment header re-encodes to the same header and slice");
 }
 
-// decode_handshake reads neither the envelope sequence nor the flag bits, so the comparison clears them.
 void handshake_leg(bytes_view input)
 {
     const auto hs = datagram::detail::decode_handshake(input);
@@ -92,10 +91,7 @@ void handshake_leg(bytes_view input)
         return;
     std::vector<std::byte> encoded;
     datagram::detail::encode_handshake_into(encoded, hs->type, hs->mode, hs->initial_seq);
-    std::vector<std::byte> read{input.begin(), input.end()};
-    read[0] &= k_kind_bits;
-    read[1] = read[2] = std::byte{0};
-    fuzz_require(std::ranges::equal(encoded, read), "an accepted handshake is four inner bytes that re-encode exactly");
+    fuzz_require(std::ranges::equal(encoded, input), "an accepted handshake re-encodes to exactly the input datagram");
     fuzz_require(!wire::peek_udp_arq_kind(input.subspan(wire::udp_envelope_overhead)), "a handshake's inner frame is never an ARQ segment or ack");
 }
 

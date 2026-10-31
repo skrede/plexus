@@ -29,6 +29,38 @@ TEST_CASE("udp isn: an inner handshake frame of any length but four bytes is ref
     }
 }
 
+TEST_CASE("udp isn: a handshake under a nonzero envelope sequence is refused", "[udp][isn]")
+{
+    namespace iod = plexus::datagram::detail;
+
+    const std::byte inner[4]{static_cast<std::byte>(iod::udp_hs_type::request), static_cast<std::byte>(iod::udp_channel_mode::reliable_datagram), std::byte{0x11}, std::byte{0x22}};
+    for(const std::uint16_t seq : std::initializer_list<std::uint16_t>{1, 0x00FF, 0x8000, 0xFFFF})
+    {
+        CAPTURE(seq);
+        std::vector<std::byte> datagram;
+        wire::wrap_udp_into(datagram, wire::udp_envelope_kind::reliable_arq, seq, std::span<const std::byte>{inner, 4});
+        CHECK(!iod::decode_handshake(datagram).has_value());
+    }
+}
+
+TEST_CASE("udp isn: a handshake with any envelope flag bit set is refused", "[udp][isn]")
+{
+    namespace iod = plexus::datagram::detail;
+
+    const std::byte inner[4]{static_cast<std::byte>(iod::udp_hs_type::response), static_cast<std::byte>(iod::udp_channel_mode::best_effort), std::byte{0x11}, std::byte{0x22}};
+    std::vector<std::byte> fragmented;
+    wire::wrap_udp_into_fragmented(fragmented, wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner, 4});
+    CHECK(!iod::decode_handshake(fragmented).has_value());
+    for(std::uint8_t bit = 1; bit < wire::detail::udp_kind_shift; ++bit)
+    {
+        CAPTURE(bit);
+        std::vector<std::byte> flagged;
+        wire::wrap_udp_into(flagged, wire::udp_envelope_kind::reliable_arq, 0, std::span<const std::byte>{inner, 4});
+        flagged[0] |= std::byte{static_cast<std::uint8_t>(1u << bit)};
+        CHECK(!iod::decode_handshake(flagged).has_value());
+    }
+}
+
 TEST_CASE("udp isn: an unknown channel-mode byte still fails closed", "[udp][isn]")
 {
     namespace iod = plexus::datagram::detail;

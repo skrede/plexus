@@ -45,10 +45,13 @@ inline void encode_handshake_into(std::vector<std::byte> &out, udp_hs_type type,
 // The strict first-byte check (request=0 or response=1) keeps the handshake control space disjoint
 // from the reliable-ARQ inner markers (segment=2, ack=3), so an ARQ data segment falls through to
 // the ARQ demux. An inner frame not exactly four bytes, or with an unknown mode byte, decodes to nullopt.
+// The envelope must be exactly the one encode_handshake_into writes (reliable_arq, seq 0, no flag bits),
+// stricter than unwrap_udp, which ignores reserved flag bits.
 inline std::optional<udp_handshake> decode_handshake(std::span<const std::byte> datagram)
 {
-    auto dec = wire::unwrap_udp(datagram);
-    if(!dec || dec->kind != wire::udp_envelope_kind::reliable_arq || dec->frame.size() != 4)
+    const auto expected_flags = std::byte{wire::detail::pack_ver_flags(wire::udp_envelope_kind::reliable_arq)};
+    auto dec                  = wire::unwrap_udp(datagram);
+    if(!dec || datagram[0] != expected_flags || dec->seq != 0 || dec->frame.size() != 4)
         return std::nullopt;
     const auto v = std::to_integer<std::uint8_t>(dec->frame[0]);
     if(v != static_cast<std::uint8_t>(udp_hs_type::request) && v != static_cast<std::uint8_t>(udp_hs_type::response))
