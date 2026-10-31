@@ -104,3 +104,20 @@ TEST_CASE("ring_tampered a sequence a lap ahead with no tail past the cursor is 
     broadcast_ring::consume_result out;
     REQUIRE(t.ring.consume(0, out) == loan_status::empty);
 }
+
+TEST_CASE("ring_tampered an enqueue position a peer moved half the sequence space away is congested", "[shm][ring_tampered]")
+{
+    tampered_ring t;
+    t.ring.header().enqueue_pos.store(std::uint64_t{1} << 63);
+
+    broadcast_ring::claim_result claimed;
+    REQUIRE(t.ring.claim_with_policy(1, plexus::io::reliability::best_effort, plexus::io::congestion::block, claimed) == loan_status::congested);
+}
+
+TEST_CASE("ring_tampered a cursor half the sequence space past its cell's sequence is empty", "[shm][ring_tampered]")
+{
+    tampered_ring t;
+
+    broadcast_ring::consume_result out;
+    REQUIRE(t.ring.consume((std::uint64_t{1} << 63) - 1, out) == loan_status::empty);
+}

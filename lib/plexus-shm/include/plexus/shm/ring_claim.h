@@ -37,7 +37,7 @@ inline void stamp_skip(cell_t &c, std::uint64_t position) noexcept
 inline bool occupant_committed(const cell_t &c, std::uint64_t position, std::uint64_t cell_count) noexcept
 {
     const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-    const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(position);
+    const std::int64_t dif  = static_cast<std::int64_t>(seq - position);
     return dif == 0 || dif == 1 - static_cast<std::int64_t>(cell_count);
 }
 

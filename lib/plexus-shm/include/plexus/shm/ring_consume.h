@@ -31,7 +31,7 @@ loan_status ring_consume(Ring &r, std::uint64_t cursor, typename Ring::consume_r
 {
     cell_t &c               = r.cell_at(cursor);
     const std::uint64_t seq = c.sequence.load(std::memory_order_acquire);
-    const std::int64_t dif  = static_cast<std::int64_t>(seq) - static_cast<std::int64_t>(cursor + 1);
+    const std::int64_t dif  = static_cast<std::int64_t>(seq - (cursor + 1));
     if(dif < 0)
         return loan_status::empty;
     if(dif > 0)
