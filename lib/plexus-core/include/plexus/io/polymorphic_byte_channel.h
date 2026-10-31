@@ -1,21 +1,21 @@
 #ifndef HPP_GUARD_PLEXUS_IO_POLYMORPHIC_BYTE_CHANNEL_H
 #define HPP_GUARD_PLEXUS_IO_POLYMORPHIC_BYTE_CHANNEL_H
 
-#include "plexus/wire/close_cause.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/egress_channel_traits.h"
 
+#include "plexus/wire/close_cause.h"
+
 #include "plexus/detail/compat.h"
 
 #include <span>
 #include <memory>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace plexus::io {
 

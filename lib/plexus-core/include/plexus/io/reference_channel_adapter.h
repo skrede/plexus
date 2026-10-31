@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_REFERENCE_CHANNEL_ADAPTER_H
 #define HPP_GUARD_PLEXUS_IO_REFERENCE_CHANNEL_ADAPTER_H
 
-#include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/io/detail/egress_channel_traits.h"
 

@@ -6,9 +6,8 @@
 #include "plexus/io/splice_pool.h"
 #include "plexus/io/forward_options.h"
 
-#include "plexus/wire_bytes.h"
-
 #include "plexus/node_id.h"
+#include "plexus/wire_bytes.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/writer.h"

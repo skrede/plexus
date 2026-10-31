@@ -10,10 +10,10 @@
 
 #include "serial_link.h"
 
-#include "plexus/freertos/freertos_timer.h"
-#include "plexus/freertos/freertos_executor.h"
-#include "plexus/freertos/mcu_byte_owner.h"
 #include "plexus/freertos/uart_channel.h"
+#include "plexus/freertos/freertos_timer.h"
+#include "plexus/freertos/mcu_byte_owner.h"
+#include "plexus/freertos/freertos_executor.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -28,8 +28,8 @@
 
 #include <array>
 #include <memory>
-#include <utility>
 #include <cstddef>
+#include <utility>
 #include <string_view>
 
 namespace example {

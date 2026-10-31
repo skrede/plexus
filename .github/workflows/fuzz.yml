@@ -275,7 +275,7 @@ jobs:
     needs: fuzz
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
-    # Pushes queue instead of cancelling one another; a run still waiting is replaced by a newer one, whose push would
+    # Pushes queue instead of canceling one another; a run still waiting is replaced by a newer one, whose push would
     # overwrite its set anyway.
     concurrency:
       group: fuzz-corpus-store
