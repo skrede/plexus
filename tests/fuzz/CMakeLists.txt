@@ -80,6 +80,9 @@ target_link_libraries(fuzz_udp_envelope PRIVATE plexus::datagram plexus::core pl
 plexus_add_fuzz_target(fuzz_stream_inbound)
 target_link_libraries(fuzz_stream_inbound PRIVATE plexus::core plexus::stream plexus::inproc)
 
+plexus_add_fuzz_target(fuzz_session_sequence)
+target_link_libraries(fuzz_session_sequence PRIVATE plexus::core plexus::inproc)
+
 plexus_add_fuzz_target(fuzz_crc_serial)
 target_link_libraries(fuzz_crc_serial PRIVATE plexus::stream)
 

@@ -64,5 +64,6 @@ seed_set key_pattern_seeds();
 seed_set ring_attach_seeds();
 seed_set udp_envelope_seeds();
 seed_set stream_inbound_seeds();
+seed_set session_sequence_seeds();
 
 #endif
