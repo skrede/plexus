@@ -1,8 +1,10 @@
 # The plexus-freertos serial example component. plexus is header-only, so this pulls in its
 # include trees and binds against FreeRTOS plus the UART driver (the transport opens UART0)
 # and the GPIO driver (the example pin read). Both drivers are EXAMPLE-component deps, never
-# core — the HAL touch stays out of lib/ (the pure-comms-library invariant).
-idf_component_register(SRCS "app_main.cpp" INCLUDE_DIRS "."
+# core — the HAL touch stays out of lib/ (the pure-comms-library invariant). examples/mcu is on
+# the include path because the link's payload cap lives in serial_link.h, which the host gate
+# compiles too, so the two ends cannot drift apart.
+idf_component_register(SRCS "app_main.cpp" INCLUDE_DIRS "." "${PLEXUS_ROOT}/examples/mcu"
     REQUIRES freertos esp_driver_uart esp_driver_gpio)
 
 target_include_directories(${COMPONENT_LIB} PRIVATE

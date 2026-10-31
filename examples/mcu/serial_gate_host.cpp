@@ -11,6 +11,8 @@
 // host-link concern and stays here (the comms library never touches a HAL): it is driven on a raw fd
 // of the same device before the dial, pulsing the board into RUN.
 
+#include "serial_link.h"
+
 #include "plexus/node.h"
 #include "plexus/subscriber.h"
 #include "plexus/node_options.h"
@@ -86,7 +88,7 @@ std::string_view device_of(std::string_view endpoint_address)
 int main()
 {
     ::asio::io_context io;
-    pasio::serial_transport transport{io};
+    pasio::serial_transport transport{io, {.max_payload = example::k_gate_link_max_payload}};
 
     // Point-at-port discovery: the serial link is the only peer, so the table is empty (no IP
     // discovery). The board boots fresh on the reset pulse; the bounded handshake retry then absorbs

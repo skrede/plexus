@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_EXAMPLE_BENCH_UART_H
 #define HPP_GUARD_PLEXUS_EXAMPLE_BENCH_UART_H
 
+#include "serial_link.h"
+
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/mcu_byte_owner.h"
@@ -37,8 +39,7 @@ struct bench_uart_policy : plexus::executor_verbs<plexus::freertos::freertos_exe
 
 static_assert(plexus::Policy<bench_uart_policy>, "bench_uart_policy must satisfy Policy");
 
-inline constexpr std::size_t k_uart_max_payload = 8 * 1024;
-inline constexpr std::size_t k_uart_rx_ring     = 8 * 1024;
+inline constexpr std::size_t k_uart_rx_ring = 8 * 1024;
 
 // The serial link baud is a build define (default 115200) so the runner can sweep the line rate; the host
 // serial_bench_host must be launched at the SAME baud (its @baud endpoint), or the framing desyncs.
@@ -127,7 +128,7 @@ public:
 private:
     std::unique_ptr<plexus::freertos::uart_channel> mint_channel()
     {
-        auto ch   = std::make_unique<plexus::freertos::uart_channel>(k_link_uart, m_ex, k_uart_max_payload, k_uart_rx_ring);
+        auto ch   = std::make_unique<plexus::freertos::uart_channel>(k_link_uart, m_ex, k_bench_link_max_payload, k_uart_rx_ring);
         m_channel = ch.get();
         return ch;
     }

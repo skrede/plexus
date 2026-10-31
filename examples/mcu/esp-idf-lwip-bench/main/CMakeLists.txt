@@ -1,4 +1,6 @@
-idf_component_register(SRCS "app_main.cpp" INCLUDE_DIRS "."
+# examples/mcu is on the include path because the serial cell's payload cap lives in serial_link.h,
+# which serial_bench_host compiles too, so the two ends cannot drift apart.
+idf_component_register(SRCS "app_main.cpp" INCLUDE_DIRS "." "${PLEXUS_ROOT}/examples/mcu"
     REQUIRES freertos esp_wifi esp_netif nvs_flash esp_event esp_timer esp_driver_uart lwip)
 
 target_include_directories(${COMPONENT_LIB} PRIVATE

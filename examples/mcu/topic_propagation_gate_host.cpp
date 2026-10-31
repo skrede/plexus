@@ -9,6 +9,7 @@
 // touches a HAL): it is driven on a raw fd of the same device before the dial, pulsing the board
 // into RUN. The lost-boot-handshake race is absorbed by the bounded handshake_retry.
 
+#include "serial_link.h"
 #include "topic_graph_types.h"
 
 #include "plexus/node.h"
@@ -112,7 +113,7 @@ int main(int argc, char **argv)
     const std::string endpoint = argc > 1 ? argv[1] : k_default_endpoint;
 
     ::asio::io_context io;
-    pasio::serial_transport transport{io};
+    pasio::serial_transport transport{io, {.max_payload = example::k_gate_link_max_payload}};
 
     // Point-at-port discovery: the serial link is the only peer, so the table is empty. The board
     // boots fresh on the reset pulse; the bounded handshake retry absorbs the boot race.

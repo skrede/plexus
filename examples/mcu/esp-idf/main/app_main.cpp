@@ -15,6 +15,8 @@
 
 #include "uart_transport.h"
 
+#include "serial_link.h"
+
 #include "plexus/node.h"
 #include "plexus/publisher.h"
 #include "plexus/node_options.h"
@@ -115,7 +117,7 @@ void plexus_task(void *)
     // The message cap is dialed small for the target.
     plexus::node_options opts;
     opts.name              = "esp32-telemetry";
-    opts.max_message_bytes = example::k_max_payload_bytes;
+    opts.max_message_bytes = example::k_gate_link_max_payload;
     opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x32C0DE;
 

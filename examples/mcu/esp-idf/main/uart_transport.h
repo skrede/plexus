@@ -8,6 +8,8 @@
 // leaf stays the uart_channel; the binding + transport keep the engine-edit blast radius
 // minimal. Both mirror the host serial_transport's no-acceptor point-to-point shape.
 
+#include "serial_link.h"
+
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/mcu_byte_owner.h"
@@ -44,10 +46,8 @@ struct uart_policy : plexus::executor_verbs<plexus::freertos::freertos_executor>
 static_assert(plexus::Policy<uart_policy>,
               "uart_policy must satisfy Policy — check the channel/timer/post() seam");
 
-// Per-message ceiling dialed small for the constrained target, and the RX ring sized to
-// the driver install below. The ring ceiling is the channel's overrun probe threshold.
-inline constexpr std::size_t k_max_payload_bytes = 256;
-inline constexpr std::size_t k_rx_ring_bytes     = 2048;
+// The RX ring is sized to the driver install below; its ceiling is the channel's overrun probe threshold.
+inline constexpr std::size_t k_rx_ring_bytes = 2048;
 
 // The ESP32 UART0 default pads (U0TXD/U0RXD), set explicitly: under CONSOLE_NONE the IDF
 // driver finds no routed RX pin and ties RX to a constant logic-1 (a break-detect
@@ -142,7 +142,7 @@ private:
     // the caller (the engine moves it into a session). The raw handle never owns.
     std::unique_ptr<plexus::freertos::uart_channel> mint_channel()
     {
-        auto ch   = std::make_unique<plexus::freertos::uart_channel>(m_port, m_ex, k_max_payload_bytes, k_rx_ring_bytes);
+        auto ch   = std::make_unique<plexus::freertos::uart_channel>(m_port, m_ex, k_gate_link_max_payload, k_rx_ring_bytes);
         m_channel = ch.get();
         return ch;
     }
