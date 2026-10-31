@@ -2,7 +2,7 @@
 
 This directory holds the libFuzzer harnesses over the untrusted-input surface, the seed emitter that generates their
 starting corpus from the real encoders, and the replay test that runs every seed on each build. CI fuzzes every harness
-under a time budget against an accumulated corpus kept in a private store. The sanitizer trees the gate depends on are
+under a time budget against an accumulated corpus kept in a separate store. The sanitizer trees the gate depends on are
 described at the end.
 
 ## Harnesses
@@ -127,7 +127,7 @@ build-fuzz/tests/fuzz/$h -merge=1 -timeout=25 -rss_limit_mb=2048 minimized/$h bu
 8. On `master` only, never from a pull request, push the minimized set back to the store.
 9. On failure, upload the crash inputs and the per-harness logs (which carry the seed used) as `fuzz-findings`.
 
-The store is the private repository `skrede/plexus-fuzz-corpus`, one directory per harness. It is reached over SSH only,
+The store is the repository `skrede/plexus-fuzz-corpus`, one directory per harness. It is reached over SSH only,
 for both restore and push, through the repository variable `PLEXUS_FUZZ_CORPUS_URL` (a `git@github.com:` URL) and the
 secret `FUZZ_CORPUS_DEPLOY_KEY` (the private half of a deploy key with write access on the store). The key reaches
 disk only by redirection and github.com's published ed25519 host key is pinned. When the variable or the key is not

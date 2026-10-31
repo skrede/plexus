@@ -133,13 +133,13 @@ TEST_CASE("multicast_discovery: a same-universe announcement resolves", "[multic
 
 TEST_CASE("multicast_discovery: two configless leaves rendezvous on the default universe", "[multicast_discovery][universe]")
 {
-    int ex_b = 0;
+    std::int32_t ex_b = 0;
     fake_datagram_socket socket_b;
     discovery_under_test node_b{ex_b, socket_b};
     node_b.advertise({"node", plexus::io::endpoint{"", "host"}, plexus::discovery::assemble_contact_card(make_id(0x31), sample_listens())});
     REQUIRE(socket_b.sent.size() == 1);
 
-    int ex_a = 0;
+    std::int32_t ex_a = 0;
     fake_datagram_socket socket_a;
     discovery_under_test node_a{ex_a, socket_a};
 
@@ -243,7 +243,7 @@ TEST_CASE("multicast_discovery: a malformed peer universe pattern fails closed",
 
 TEST_CASE("multicast_discovery: a default node's real stamped announcement carries no pattern flag", "[multicast_discovery][universe]")
 {
-    int ex_default = 0;
+    std::int32_t ex_default = 0;
     fake_datagram_socket socket_default;
     discovery_under_test node_default{ex_default, socket_default};
     node_default.advertise(card_for(0x61));
@@ -255,7 +255,7 @@ TEST_CASE("multicast_discovery: a default node's real stamped announcement carri
 
     // The concrete-only uint32 shape (default label, custom uint32) also stamps flagless — never a
     // flagged stale default.
-    int ex_flagless = 0;
+    std::int32_t ex_flagless = 0;
     fake_datagram_socket socket_flagless;
     discovery_under_test node_flagless{ex_flagless, socket_flagless, options_for(universe_a)};
     node_flagless.advertise(card_for(0x62));
@@ -268,13 +268,13 @@ TEST_CASE("multicast_discovery: a default node's real stamped announcement carri
 
 TEST_CASE("multicast_discovery: two same-label concrete nodes admit through the emit loop", "[multicast_discovery][universe]")
 {
-    int ex_a = 0;
+    std::int32_t ex_a = 0;
     fake_datagram_socket socket_a;
     discovery_under_test node_a{ex_a, socket_a, options_for_pattern("alpha")};
     node_a.advertise(card_for(0x71));
     REQUIRE(socket_a.sent.size() == 1);
 
-    int ex_c = 0;
+    std::int32_t ex_c = 0;
     fake_datagram_socket socket_c;
     discovery_under_test node_c{ex_c, socket_c, options_for_pattern("alpha")};
 
@@ -288,13 +288,13 @@ TEST_CASE("multicast_discovery: two same-label concrete nodes admit through the 
 
 TEST_CASE("multicast_discovery: two different concrete universes do not mutually admit through the emit loop", "[multicast_discovery][universe]")
 {
-    int ex_alpha = 0;
+    std::int32_t ex_alpha = 0;
     fake_datagram_socket socket_alpha;
     discovery_under_test node_alpha{ex_alpha, socket_alpha, options_for_pattern("alpha")};
     node_alpha.advertise(card_for(0x63));
     REQUIRE(socket_alpha.sent.size() == 1);
 
-    int ex_beta = 0;
+    std::int32_t ex_beta = 0;
     fake_datagram_socket socket_beta;
     discovery_under_test node_beta{ex_beta, socket_beta, options_for_pattern("beta")};
     node_beta.advertise(card_for(0x64));

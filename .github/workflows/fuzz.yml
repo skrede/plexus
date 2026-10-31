@@ -123,7 +123,7 @@ jobs:
       - name: regression replay over the generated seeds
         run: ctest --test-dir build --output-on-failure --no-tests=error -R _replay
 
-      # The store is private, so restore and push both go over SSH with the deploy key. A missing variable or key
+      # Restore and push both go over SSH with the deploy key. A missing variable or key
       # (a fork's pull request receives no secrets) fuzzes from the generated seeds only. Never add -x to this step:
       # the job log is public and tracing would echo the key, which reaches disk only by redirection; masking is a
       # backstop, not the protection.

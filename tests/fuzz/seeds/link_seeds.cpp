@@ -101,7 +101,7 @@ seed arq_wrap_and_exhaust()
         arq_submit(s, payload);
     arq_ack(s, 0xfffe, {});
     arq_submit(s, "s");
-    for(int i = 0; i < 8; ++i)
+    for(std::int32_t i = 0; i < 8; ++i)
         advance(s, 3, 2500);
     return s;
 }
