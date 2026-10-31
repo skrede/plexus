@@ -23,6 +23,29 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
+env:
+  PLEXUS_FUZZ_TARGETS: >-
+    fuzz_frame_reassembler
+    fuzz_data_frame
+    fuzz_varint
+    fuzz_rpc_frame
+    fuzz_handshake_frame
+    fuzz_subscribe_frame
+    fuzz_fetch_latched_frame
+    fuzz_heartbeat_frame
+    fuzz_topic_declaration_frame
+    fuzz_companion_frame
+    fuzz_announcement_frame
+    fuzz_peer_report_frame
+    fuzz_forwarded_frame
+    fuzz_reassembler
+    fuzz_key_pattern
+    fuzz_ring_attach
+    fuzz_udp_envelope
+    fuzz_stream_inbound
+    fuzz_session_sequence
+    fuzz_crc_serial
+
 jobs:
   fuzz:
     name: fuzz untrusted-input decoders
@@ -34,27 +57,6 @@ jobs:
       # The targets already abort on undefined behavior; this keeps a report from ever being the only thing standing
       # between a finding and a green run.
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
-      PLEXUS_FUZZ_TARGETS: >-
-        fuzz_frame_reassembler
-        fuzz_data_frame
-        fuzz_varint
-        fuzz_rpc_frame
-        fuzz_handshake_frame
-        fuzz_subscribe_frame
-        fuzz_fetch_latched_frame
-        fuzz_heartbeat_frame
-        fuzz_topic_declaration_frame
-        fuzz_companion_frame
-        fuzz_announcement_frame
-        fuzz_peer_report_frame
-        fuzz_forwarded_frame
-        fuzz_reassembler
-        fuzz_key_pattern
-        fuzz_ring_attach
-        fuzz_udp_envelope
-        fuzz_stream_inbound
-        fuzz_session_sequence
-        fuzz_crc_serial
       PLEXUS_FUZZ_PLANTED: fuzz_crc_serial_planted
 
     steps:
@@ -123,49 +125,27 @@ jobs:
       - name: regression replay over the generated seeds
         run: ctest --test-dir build --output-on-failure --no-tests=error -R _replay
 
-      # Restore and push both go over SSH with the deploy key. A missing variable or key
-      # (a fork's pull request receives no secrets) fuzzes from the generated seeds only. Never add -x to this step:
-      # the job log is public and tracing would echo the key, which reaches disk only by redirection; masking is a
-      # backstop, not the protection.
-      - name: set up corpus store access
-        id: store
+      # The store is public and read anonymously, so no step of this job holds the write key. Once configured, an
+      # unreachable store is an error, because a silently skipped restore would degrade every later run to seed-only
+      # while reporting green; a store without a master branch is a first run.
+      - name: restore the accumulated corpus
         env:
           CORPUS_URL: ${{ vars.PLEXUS_FUZZ_CORPUS_URL }}
-          CORPUS_KEY: ${{ secrets.FUZZ_CORPUS_DEPLOY_KEY }}
+          GIT_TERMINAL_PROMPT: 0
         run: |
           set -euo pipefail
-          if [ -z "${CORPUS_URL:-}" ] || [ -z "${CORPUS_KEY:-}" ]; then
-            echo "::notice::no corpus store or credential configured; fuzzing from the generated seeds only"
-            echo "store=absent" >> "$GITHUB_OUTPUT"
+          if [ -z "${CORPUS_URL:-}" ]; then
+            echo "::notice::no corpus store configured; fuzzing from the generated seeds only"
             exit 0
           fi
-          case "$CORPUS_URL" in
-            git@github.com:*) ;;
-            *) echo "::error::the corpus store URL is not a git@github.com: address" >&2; exit 1 ;;
-          esac
-          umask 077
-          mkdir -p ~/.ssh
-          # github.com's published ed25519 host key, pinned rather than keyscanned.
-          printf '%s\n' \
-            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
-            > ~/.ssh/known_hosts
-          printf '%s\n' "${CORPUS_KEY}" > ~/.ssh/corpus_key
-          chmod 600 ~/.ssh/corpus_key
-          ssh_options="-o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
-          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/corpus_key $ssh_options" >> "$GITHUB_ENV"
-          echo "store=ready" >> "$GITHUB_OUTPUT"
-
-      # Once configured, an unreachable store is an error, because a silently skipped restore would degrade every
-      # later run to seed-only while reporting green; a store without a master branch is a first run.
-      - name: restore the accumulated corpus
-        if: steps.store.outputs.store == 'ready'
-        env:
-          CORPUS_URL: ${{ vars.PLEXUS_FUZZ_CORPUS_URL }}
-        run: |
-          set -euo pipefail
+          if [[ ! "$CORPUS_URL" =~ ^git@github\.com:([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+)\.git$ ]]; then
+            echo "::error::the corpus store URL is not a git@github.com:<owner>/<repo>.git address" >&2
+            exit 1
+          fi
+          restore_url="https://github.com/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}.git"
           git init -q accumulated
           cd accumulated
-          git remote add origin "$CORPUS_URL"
+          git remote add origin "$restore_url"
           if ! git ls-remote origin > "$RUNNER_TEMP"/store-refs 2> "$RUNNER_TEMP"/store-err; then
             echo "::error::the corpus store is unreachable" >&2
             cat "$RUNNER_TEMP"/store-err >&2
@@ -277,43 +257,6 @@ jobs:
           name: minimized-corpus
           path: minimized-corpus/
 
-      # Only from master and never from a pull request: a corpus grown against unmerged code would be
-      # indistinguishable from the rest once stored. The store receives the merged set only; crash inputs travel as
-      # a failure artifact, and a failed run never reaches this step. Never add -x: the deploy key is in reach.
-      - name: push the merged corpus to the store
-        if: >-
-          steps.store.outputs.store == 'ready'
-          && github.event_name != 'pull_request'
-          && github.ref == 'refs/heads/master'
-        run: |
-          set -euo pipefail
-          # A merge that produced nothing would empty the store on push.
-          for target in $PLEXUS_FUZZ_TARGETS; do
-            count=$(find minimized-corpus/"$target" -type f 2>/dev/null | wc -l)
-            if [ "$count" -lt 1 ]; then
-              echo "::error::$target merged to zero inputs; refusing to overwrite the store" >&2
-              exit 1
-            fi
-          done
-          total=$(find minimized-corpus -type f | wc -l)
-          cd accumulated
-          git config user.name "plexus fuzz"
-          git config user.email "noreply@github.com"
-          # An empty store leaves HEAD unborn, so the branch is created on the first push only.
-          git rev-parse --verify HEAD > /dev/null 2>&1 || git checkout -q -b master
-          for target in $PLEXUS_FUZZ_TARGETS; do
-            rm -rf "$target"
-            cp -a ../minimized-corpus/"$target" "$target"
-          done
-          git add -A
-          if git diff --cached --quiet; then
-            echo "the merged set is identical to the store; nothing to push"
-            exit 0
-          fi
-          git commit -q -m "Merge corpus from ${GITHUB_SHA:0:12} (${total} inputs)"
-          git push origin HEAD:master
-          echo "pushed ${total} input(s) to the store"
-
       # The per-target log carries the seed the run used, so it travels with the crash input.
       - name: upload crash inputs and run logs
         if: failure()
@@ -323,3 +266,116 @@ jobs:
           path: |
             fuzz-artifacts/
             planted.log
+
+  # Only from master and never from a pull request: a corpus grown against unmerged code would be indistinguishable
+  # from the rest once stored. This job checks out and runs no repository code, so the deploy key is never in reach of
+  # a binary built from the tree, and a failed fuzz job never starts it.
+  store:
+    name: store the merged corpus
+    needs: fuzz
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    # Pushes queue instead of cancelling one another; a run still waiting is replaced by a newer one, whose push would
+    # overwrite its set anyway.
+    concurrency:
+      group: fuzz-corpus-store
+      cancel-in-progress: false
+
+    steps:
+      - name: check the store configuration
+        id: config
+        env:
+          CORPUS_URL: ${{ vars.PLEXUS_FUZZ_CORPUS_URL }}
+          HAS_KEY: ${{ secrets.FUZZ_CORPUS_DEPLOY_KEY != '' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CORPUS_URL:-}" ] || [ "$HAS_KEY" != "true" ]; then
+            echo "::notice::no corpus store or deploy key configured; the merged corpus is not stored"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ ! "$CORPUS_URL" =~ ^git@github\.com:[A-Za-z0-9-]+/[A-Za-z0-9_.-]+\.git$ ]]; then
+            echo "::error::the corpus store URL is not a git@github.com:<owner>/<repo>.git address" >&2
+            exit 1
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: download the minimized corpus
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: minimized-corpus
+          path: minimized-corpus
+
+      # Never add -x to this step: the job log is public and tracing would echo the key, which reaches disk only by
+      # redirection; masking is a backstop, not the protection. Each attempt rebuilds on a fresh fetch of the store's
+      # tip, so a concurrent push costs a retry rather than a red run.
+      - name: push the merged corpus to the store
+        if: steps.config.outputs.ready == 'true'
+        env:
+          CORPUS_URL: ${{ vars.PLEXUS_FUZZ_CORPUS_URL }}
+          CORPUS_KEY: ${{ secrets.FUZZ_CORPUS_DEPLOY_KEY }}
+          GIT_TERMINAL_PROMPT: 0
+        run: |
+          set -euo pipefail
+          # A merge that produced nothing would empty the store on push.
+          for target in $PLEXUS_FUZZ_TARGETS; do
+            count=0
+            if [ -d minimized-corpus/"$target" ]; then
+              count=$(find minimized-corpus/"$target" -type f | wc -l)
+            fi
+            if [ "$count" -lt 1 ]; then
+              echo "::error::$target merged to zero inputs; refusing to overwrite the store" >&2
+              exit 1
+            fi
+          done
+          total=$(find minimized-corpus -type f | wc -l)
+          umask 077
+          key_dir=$(mktemp -d "$RUNNER_TEMP"/corpus-key.XXXXXX)
+          trap 'rm -rf "$key_dir"' EXIT
+          # github.com's published ed25519 host key, pinned rather than keyscanned.
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$key_dir"/known_hosts
+          printf '%s\n' "${CORPUS_KEY}" > "$key_dir"/key
+          ssh_options="-o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$key_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key_dir/key $ssh_options"
+          for attempt in 1 2 3; do
+            rm -rf store
+            git init -q store
+            cd store
+            git config user.name "plexus fuzz"
+            git config user.email "noreply@github.com"
+            git remote add origin "$CORPUS_URL"
+            if ! heads=$(git ls-remote origin refs/heads/master); then
+              echo "::error::the corpus store is unreachable" >&2
+              exit 1
+            fi
+            if [ -n "$heads" ]; then
+              git fetch -q --depth 1 origin master
+              git checkout -q -B master FETCH_HEAD
+            else
+              git symbolic-ref HEAD refs/heads/master
+            fi
+            for target in $PLEXUS_FUZZ_TARGETS; do
+              rm -rf "$target"
+              cp -a ../minimized-corpus/"$target" "$target"
+            done
+            git add -A
+            if git diff --cached --quiet; then
+              echo "the merged set is identical to the store; nothing to push"
+              exit 0
+            fi
+            git commit -q -m "Merge corpus from ${GITHUB_SHA:0:12} (${total} inputs)"
+            if git push origin HEAD:master; then
+              echo "pushed ${total} input(s) to the store"
+              exit 0
+            fi
+            cd ..
+            echo "::warning::the store rejected push attempt $attempt of 3"
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 5))
+            fi
+          done
+          echo "::error::the store rejected every push attempt" >&2
+          exit 1

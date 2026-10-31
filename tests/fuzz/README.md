@@ -112,28 +112,33 @@ build-fuzz/tests/fuzz/$h -merge=1 -timeout=25 -rss_limit_mb=2048 minimized/$h bu
 ## The CI workflow
 
 `.github/workflows/fuzz.yml` runs on pushes to `master`, `develop` and `milestone/**`, on pull requests to `master` and
-`develop`, weekly on a schedule, and on manual dispatch. It runs one job:
+`develop`, weekly on a schedule, and on manual dispatch. It runs two jobs. The fuzz job:
 
 1. Build every harness with Clang 18 and generate the seeds.
 2. Assert that every listed harness and the planted twin were built and that the build produced no harness the list
    omits, then that every harness's corpus holds at least one input.
 3. Run the replay tests over the generated seeds.
-4. Restore the accumulated corpus from the store into the build-tree corpus.
+4. Restore the accumulated corpus from the store over anonymous https into the build-tree corpus.
 5. Fuzz every harness for 60 seconds with `-seed=1` on pushes and pull requests, or 300 seconds with a random seed on
    the schedule and on dispatch. The harnesses run in parallel, one per runner core, each at the full budget. A
    harness fails the run on a nonzero exit or when it reports zero executed inputs.
 6. Require the planted twin to fail with the oracle's message.
 7. Minimize every corpus with `-merge=1` and upload the result as the `minimized-corpus` artifact.
-8. On `master` only, never from a pull request, push the minimized set back to the store.
-9. On failure, upload the crash inputs and the per-harness logs (which carry the seed used) as `fuzz-findings`.
+8. On failure, upload the crash inputs and the per-harness logs (which carry the seed used) as `fuzz-findings`.
 
-The store is the repository `skrede/plexus-fuzz-corpus`, one directory per harness. It is reached over SSH only,
-for both restore and push, through the repository variable `PLEXUS_FUZZ_CORPUS_URL` (a `git@github.com:` URL) and the
-secret `FUZZ_CORPUS_DEPLOY_KEY` (the private half of a deploy key with write access on the store). The key reaches
-disk only by redirection and github.com's published ed25519 host key is pinned. When the variable or the key is not
-set, as for pull requests from forks, the run fuzzes from the generated seeds only and says so in a notice. A store
-that is configured but unreachable fails the run, and a minimization that leaves any harness with zero inputs refuses
-to push.
+The store job runs on `master` only, never for a pull request, and starts only after the fuzz job succeeds. It checks
+out and runs no repository code: it downloads the `minimized-corpus` artifact and pushes it to the store. It is the only
+place the deploy key exists, written for its push step alone and removed when that step ends. Store pushes are
+serialized by their own concurrency group, and each attempt rebuilds on the store's current tip, so a push that lands
+first costs the next one a retry rather than a failed run.
+
+The store is the public repository `skrede/plexus-fuzz-corpus`, one directory per harness. The repository variable
+`PLEXUS_FUZZ_CORPUS_URL` names it as a `git@github.com:` URL, from which the https restore URL is derived; the push goes
+over SSH with the secret `FUZZ_CORPUS_DEPLOY_KEY` (an ed25519 key whose public half is a write deploy key on the store),
+and github.com's published ed25519 host key is pinned. Without the variable, the run fuzzes from the generated seeds
+only and says so in a notice. With the variable but without the key, it restores and the store job skips the push with a
+notice. A pull request from a fork receives no secrets and never reaches the store job. A store that is configured but
+unreachable fails the run, and a minimization that leaves any harness with zero inputs refuses to push.
 
 ## The sanitizer trees
 
