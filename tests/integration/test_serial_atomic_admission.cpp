@@ -125,11 +125,11 @@ verify_result verify_wire(std::span<const std::byte> bytes)
 
 }
 
-TEST_CASE("serial submit admits payload and CRC trailer as one well-formed unit", "[integration][serial][atomic_admission]")
+TEST_CASE("serial submit admits header, payload and CRC trailer as one well-formed unit", "[integration][serial][atomic_admission]")
 {
-    // A byte cap of exactly the framed-payload size: the old two-admission logic admits the payload
-    // and rejects the separate trailer, tearing the frame. The atomic admission treats them as one
-    // message and admits both onto the empty queue — one verifiable [header || payload || crc] frame.
+    // A byte cap of exactly the framed-message size: separate admissions would admit the header and
+    // payload and reject the trailer, tearing the frame. The atomic admission treats the three nodes
+    // as one message and admits them onto the empty queue — one verifiable serial frame.
     const auto frame = framed_message("atomic-serial-payload");
 
     rec_sink                              rec;
@@ -141,7 +141,7 @@ TEST_CASE("serial submit admits payload and CRC trailer as one well-formed unit"
 
     REQUIRE(ch.full_events == 0);
     REQUIRE(rec.turns.size() == 1);
-    REQUIRE(rec.views_per_turn[0] == 2);
+    REQUIRE(rec.views_per_turn[0] == 3);
     const auto wire = rec.wire_stream();
     REQUIRE(wire == plexus::testing::serial_bytes(frame));
     const auto seen = verify_wire(wire);
@@ -150,7 +150,7 @@ TEST_CASE("serial submit admits payload and CRC trailer as one well-formed unit"
     REQUIRE(seen.last_match == frame);
 }
 
-TEST_CASE("serial submit admits the payload+trailer unit through the borrowed-view overload", "[integration][serial][atomic_admission]")
+TEST_CASE("serial submit admits the header+payload+trailer unit through the borrowed-view overload", "[integration][serial][atomic_admission]")
 {
     const auto frame = framed_message("borrowed-view-payload");
 
@@ -161,7 +161,7 @@ TEST_CASE("serial submit admits the payload+trailer unit through the borrowed-vi
     boot.submit(ch, std::span<const std::byte>{frame});
 
     REQUIRE(ch.full_events == 0);
-    REQUIRE(rec.views_per_turn.at(0) == 2);
+    REQUIRE(rec.views_per_turn.at(0) == 3);
     const auto seen = verify_wire(rec.wire_stream());
     REQUIRE(seen.matches == 1);
     REQUIRE(seen.drops == 0);
@@ -170,9 +170,8 @@ TEST_CASE("serial submit admits the payload+trailer unit through the borrowed-vi
 
 TEST_CASE("serial submit is all-or-nothing on a full queue and never reads the moved-from payload", "[integration][serial][atomic_admission]")
 {
-    // The dangling-view UAF: with the queue full the payload admission is rejected, which under the
-    // old path destroyed the moved-in owner then read its view for the CRC. The atomic admission
-    // computes the trailer before the move and rejects both as a unit — no freed read (ASan-clean).
+    // With the queue full the unit is rejected while the payload's owner is still held, so the CRCs
+    // never read a freed view (ASan-clean) and all three nodes are refused together.
     const auto frame = framed_message("rejected-under-backpressure");
 
     rec_sink                              rec;

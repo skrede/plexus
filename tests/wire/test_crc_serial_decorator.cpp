@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <string>
 #include <vector>
 #include <cstddef>
 
@@ -68,4 +69,47 @@ TEST_CASE("crc_serial: an empty-payload frame round-trips (trailer over the bare
     REQUIRE(s.drops == 0);
     REQUIRE(s.emitted.size() == 1);
     REQUIRE(s.emitted[0] == header_on(""));
+}
+
+TEST_CASE("crc_serial: a damaged header is refused once its 32 bytes arrive, without waiting for its declared length", "[wire][crc_serial]")
+{
+    sink s;
+    auto dec   = s.make();
+    auto frame = framed("damaged-header");
+    frame[plexus::testing::k_serial_timestamp_offset] ^= std::byte{0x01};
+    dec.feed(std::span<const std::byte>{frame}.first(serial_header_size));
+
+    REQUIRE(s.drops == 1);
+    REQUIRE(s.emitted.empty());
+}
+
+TEST_CASE("crc_serial: bytes under a foreign format id are never emitted", "[wire][crc_serial]")
+{
+    sink s;
+    auto dec        = s.make();
+    auto stream     = framed("foreign-id");
+    stream[0]       = std::byte{0x12};
+    stream[1]       = std::byte{0x34};
+    const auto good = framed("native-id");
+    stream.insert(stream.end(), good.begin(), good.end());
+    dec.feed(stream);
+
+    REQUIRE(s.emitted.size() == 1);
+    REQUIRE(s.emitted[0] == header_on("native-id"));
+}
+
+TEST_CASE("crc_serial: an emitted frame is the wire frame", "[wire][crc_serial]")
+{
+    sink s;
+    auto dec           = s.make();
+    const auto payload = as_bytes("wire-frame");
+    frame_header hdr{.type = msg_type::bidirectional, .flags = 0x05, .session_id = 0x0102030405060708u, .timestamp_ns = 0x1112131415161718u, .payload_len = 0};
+    const auto wire = encode_frame(hdr, payload);
+    dec.feed(plexus::testing::serial_bytes(wire));
+
+    REQUIRE(s.drops == 0);
+    REQUIRE(s.emitted.size() == 1);
+    REQUIRE(s.emitted[0] == std::string(reinterpret_cast<const char *>(wire.data()), wire.size()));
+    REQUIRE(std::byte(s.emitted[0][0]) == magic_byte_0);
+    REQUIRE(std::byte(s.emitted[0][1]) == magic_byte_1);
 }

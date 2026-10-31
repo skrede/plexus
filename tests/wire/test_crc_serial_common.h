@@ -43,8 +43,9 @@ inline std::vector<std::byte> framed(std::string_view payload)
 
 inline std::string header_on(std::string_view payload)
 {
-    const auto f = framed(payload);
-    return std::string{reinterpret_cast<const char *>(f.data()), header_size + payload.size()};
+    const auto pl = as_bytes(payload);
+    const auto f  = encode_frame(make_header(pl.size()), pl);
+    return std::string{reinterpret_cast<const char *>(f.data()), f.size()};
 }
 
 struct sink

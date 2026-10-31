@@ -147,7 +147,7 @@ void expect_peer_kept_alive()
 
 }
 
-TEST_CASE("serial header drop: a dropped header byte costs only its frame and the next frame arrives at once", "[integration][serial][!shouldfail]")
+TEST_CASE("serial header drop: a dropped header byte costs only its frame and the next frame arrives at once", "[integration][serial]")
 {
     for(std::size_t offset = 0; offset < k_serial_header_bytes; ++offset)
     {
@@ -156,7 +156,7 @@ TEST_CASE("serial header drop: a dropped header byte costs only its frame and th
     }
 }
 
-TEST_CASE("serial header drop: liveliness never declares the peer dead across a dropped header byte", "[integration][serial][!shouldfail]")
+TEST_CASE("serial header drop: liveliness never declares the peer dead across a dropped header byte", "[integration][serial]")
 {
     for(std::int32_t round = 0; round < k_liveliness_rounds; ++round)
     {

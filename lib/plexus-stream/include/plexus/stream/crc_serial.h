@@ -8,7 +8,6 @@
 #include "plexus/wire/frame.h"
 #include "plexus/wire/crc32c.h"
 #include "plexus/wire/close_cause.h"
-#include "plexus/wire/frame_codec.h"
 
 #include <span>
 #include <vector>
@@ -17,8 +16,9 @@
 
 namespace plexus::stream {
 
-// A self-resyncing CRC32C frame decorator between a serial read-loop and stream_inbound::feed. It emits each
-// verified frame through on_match; on a refused frame it resyncs and raises a non-fatal crc_mismatch, never closing the link.
+// A self-resyncing CRC32C frame decorator between a serial read-loop and stream_inbound::feed. It emits each verified
+// frame as a wire frame through on_match. A header whose CRC fails is refused as soon as it is buffered, before its
+// payload_len is trusted; on a refused frame it resyncs and raises a non-fatal crc_mismatch, never closing the link.
 class crc_serial_inbound
 {
     enum class step : std::uint8_t
@@ -66,7 +66,7 @@ private:
     {
         for(;;)
         {
-            if(!align_to_magic())
+            if(!align_to_format_id())
                 return;
             const auto step = try_one_frame();
             if(step == step::need_more)
@@ -76,27 +76,29 @@ private:
 
     step try_one_frame()
     {
-        auto at = std::span<const std::byte>{m_buf}.subspan(m_pos);
-        if(at.size() < wire::header_size)
+        const auto at = std::span<std::byte>{m_buf}.subspan(m_pos);
+        if(at.size() < serial_header_size)
             return step::need_more;
-        const auto hdr = wire::decode_header(at);
-        if(!hdr || hdr->payload_len > m_max_payload)
+        if(!serial_header_intact(at))
             return resync();
-        const std::size_t frame_len = wire::header_size + hdr->payload_len;
+        const std::uint64_t payload_len = serial_payload_len(at);
+        if(payload_len > m_max_payload)
+            return resync();
+        const std::size_t frame_len = serial_header_size + static_cast<std::size_t>(payload_len);
         if(at.size() < frame_len + crc_trailer_size)
             return step::need_more;
-        return verify(at, hdr->payload_len, frame_len);
+        return verify(at, frame_len);
     }
 
-    step verify(std::span<const std::byte> at, std::size_t payload_len, std::size_t frame_len)
+    step verify(std::span<std::byte> at, std::size_t frame_len)
     {
-        const auto header  = at.subspan(0, wire::header_size);
-        const auto payload = at.subspan(wire::header_size, payload_len);
-        const auto trailer = at.subspan(frame_len, crc_trailer_size);
-        if(read_crc_le(trailer) != wire::crc32c(payload, wire::crc32c(header)))
+        const auto header  = at.first(serial_header_size);
+        const auto payload = at.subspan(serial_header_size, frame_len - serial_header_size);
+        if(read_crc_le(at.subspan(frame_len, crc_trailer_size)) != wire::crc32c(payload, wire::crc32c(header)))
             return resync();
+        const auto frame = wire_frame_in_place(at.first(frame_len));
         if(m_on_match_cb)
-            m_on_match_cb(at.subspan(0, frame_len));
+            m_on_match_cb(frame);
         m_pos += frame_len + crc_trailer_size;
         return step::consumed;
     }
@@ -109,17 +111,17 @@ private:
         return step::dropped;
     }
 
-    // Keeps at most a trailing magic_byte_0, in case its pair arrives with the next feed.
-    bool align_to_magic()
+    // Keeps at most a trailing first format-id byte, in case its pair arrives with the next feed.
+    bool align_to_format_id()
     {
         const auto buf = std::span<const std::byte>{m_buf};
         while(m_pos + 1 < buf.size())
         {
-            if(buf[m_pos] == wire::magic_byte_0 && buf[m_pos + 1] == wire::magic_byte_1)
+            if(peek_serial_format(buf.subspan(m_pos)))
                 return true;
             ++m_pos;
         }
-        if(m_pos < buf.size() && buf[m_pos] != wire::magic_byte_0)
+        if(m_pos < buf.size() && buf[m_pos] != k_serial_format_id[0])
             ++m_pos;
         return false;
     }

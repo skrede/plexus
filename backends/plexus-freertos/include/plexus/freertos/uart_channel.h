@@ -41,10 +41,11 @@ public:
     {
         if(m_close.closed())
             return;
-        const auto header  = framed.first(plexus::wire::header_size);
+        const auto header  = plexus::stream::encode_serial_header(framed.first(plexus::wire::header_size));
         const auto payload = framed.subspan(plexus::wire::header_size);
         const auto trailer = plexus::stream::crc_trailer(header, payload);
-        detail::uart_write_all(m_port, framed);
+        detail::uart_write_all(m_port, std::span<const std::byte>{header});
+        detail::uart_write_all(m_port, payload);
         detail::uart_write_all(m_port, std::span<const std::byte>{trailer});
     }
 

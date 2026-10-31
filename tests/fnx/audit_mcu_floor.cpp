@@ -104,7 +104,6 @@ int main()
     plexus::stream::crc_serial_inbound dec;
     dec.on_match([](std::span<const std::byte>) {});
     dec.on_drop([](plexus::wire::close_cause) {});
-    const std::byte probe[]{std::byte{0x56}, std::byte{0x50}};
-    dec.feed(probe);
+    dec.feed(plexus::stream::k_serial_format_id);
     return 0;
 }

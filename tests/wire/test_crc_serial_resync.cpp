@@ -44,8 +44,7 @@ TEST_CASE("crc_serial: a flipped HEADER byte is caught by the CRC and resyncs on
 
     auto bad = framed("hdr-corrupt");
     // Flip a header byte that does NOT move payload_len (the flags byte at offset 3): the
-    // frame length and trailer position are unchanged, but the CRC over [header||payload]
-    // no longer matches the trailer -> the corruption is caught and the frame is dropped.
+    // header CRC no longer matches, so the frame is dropped once its header is buffered.
     bad[3] ^= std::byte{0x01};
 
     const auto good = framed("after");
@@ -78,7 +77,7 @@ TEST_CASE("crc_serial: a lying oversized payload_len stays bounded - no over-rea
     // A well-formed header whose declared payload_len (4096) dwarfs the 16-byte cap, with
     // only a few trailing bytes: the decorator must NOT wait to buffer 4096 bytes nor read
     // past the buffer — it drops on the over-cap length and resyncs.
-    auto hdr = encode_header(make_header(4096));
+    auto hdr = encode_serial_header(encode_header(make_header(4096)));
     std::vector<std::byte> stream{hdr.begin(), hdr.end()};
     for(int i = 0; i < 8; ++i)
         stream.push_back(std::byte{0x00});
@@ -87,5 +86,5 @@ TEST_CASE("crc_serial: a lying oversized payload_len stays bounded - no over-rea
     dec.feed(stream);
 
     REQUIRE(drops >= 1);
-    REQUIRE(out == std::string(reinterpret_cast<const char *>(good.data()), header_size + 2));
+    REQUIRE(out == header_on("ok"));
 }
