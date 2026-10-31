@@ -1,7 +1,4 @@
-# libFuzzer harnesses over the untrusted-input surfaces: the header-only wire decoders,
-# whose blast radius is plexus::wire, and the shared-memory ring attached over a control
-# region another process wrote.
-# libFuzzer requires a Clang toolchain — skip with a warning otherwise.
+# libFuzzer harnesses over the untrusted-input surfaces, each linking the libraries its decoder's headers reach.
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(WARNING
         "plexus fuzz: PLEXUS_BUILD_FUZZ_TESTS is ON but the compiler is "
@@ -9,16 +6,41 @@ if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     return()
 endif()
 
-function(plexus_add_fuzz_target name)
-    add_executable(${name} ${name}.cpp)
-    target_link_libraries(${name} PRIVATE plexus::wire)
-    target_compile_options(${name} PRIVATE
+function(plexus_add_fuzz_binary target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE plexus::wire)
+    target_compile_options(${target} PRIVATE
         -fsanitize=fuzzer,address
         -fno-sanitize-recover=all
         -fno-omit-frame-pointer
         -g
         -O1)
-    target_link_options(${name} PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(${target} PRIVATE -fsanitize=fuzzer,address)
+endfunction()
+
+function(plexus_add_fuzz_target name)
+    plexus_add_fuzz_binary(${name} ${name}.cpp)
+endfunction()
+
+# libFuzzer writes every coverage-increasing input into the directory it is given, so runs only ever see this
+# build-tree corpus, seeded from the encoders, and never the source tree.
+set(plexus_fuzz_corpus_dir ${CMAKE_CURRENT_BINARY_DIR}/corpus)
+
+add_subdirectory(seeds)
+add_custom_target(fuzz_seed_corpus COMMAND plexus_fuzz_seeds ${plexus_fuzz_corpus_dir} VERBATIM)
+add_test(NAME fuzz_seed_corpus COMMAND plexus_fuzz_seeds ${plexus_fuzz_corpus_dir})
+set_tests_properties(fuzz_seed_corpus PROPERTIES FIXTURES_SETUP fuzz_corpus)
+
+function(plexus_add_fuzz_replay name)
+    add_test(NAME ${name}_replay
+             COMMAND ${CMAKE_COMMAND}
+                     -DTARGET=$<TARGET_FILE:${name}>
+                     -DCORPUS=${plexus_fuzz_corpus_dir}/${name}
+                     -DMINIMUM=1
+                     -P ${CMAKE_CURRENT_SOURCE_DIR}/replay.cmake)
+    set_tests_properties(${name}_replay PROPERTIES
+        FIXTURES_REQUIRED fuzz_corpus
+        ENVIRONMENT "UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1")
 endfunction()
 
 plexus_add_fuzz_target(fuzz_frame_reassembler)
@@ -32,35 +54,30 @@ plexus_add_fuzz_target(fuzz_heartbeat_frame)
 plexus_add_fuzz_target(fuzz_topic_declaration_frame)
 plexus_add_fuzz_target(fuzz_companion_frame)
 
-# The announcement decoder's header reaches plexus/node_id.h in plexus::core, so this
-# harness links core on top of the plexus::wire blast radius the others share.
 plexus_add_fuzz_target(fuzz_announcement_frame)
 target_link_libraries(fuzz_announcement_frame PRIVATE plexus::core)
 
-# The peer_report decoder's header reaches plexus/node_id.h and the match key-pattern bounds in
-# plexus::core, so this harness links core on top of the plexus::wire blast radius.
 plexus_add_fuzz_target(fuzz_peer_report_frame)
 target_link_libraries(fuzz_peer_report_frame PRIVATE plexus::core)
 
-# The forwarded_frame decoder's header reaches plexus/node_id.h in plexus::core, so this harness
-# links core on top of the plexus::wire blast radius.
 plexus_add_fuzz_target(fuzz_forwarded_frame)
 target_link_libraries(fuzz_forwarded_frame PRIVATE plexus::core)
 
-# The datagram reassembler harness drives the header-only reassembler in the
-# plexus::datagram family instantiated against the plexus::inproc executor/timer,
-# beyond the plexus::wire blast radius the other harnesses share -- so it links those
-# as well.
 plexus_add_fuzz_target(fuzz_reassembler)
 target_link_libraries(fuzz_reassembler PRIVATE plexus::core plexus::datagram plexus::inproc)
 
-# The key-pattern matcher lives in plexus::core, so this harness links core on top of
-# the plexus::wire blast radius the others share.
 plexus_add_fuzz_target(fuzz_key_pattern)
 target_link_libraries(fuzz_key_pattern PRIVATE plexus::core)
 
-# The ring-attach harness drives the shared-memory ring, whose header carries a node id and whose verbs take the
-# delivery enums of plexus::core; the no-op notifier comes from the shared-memory test support.
 plexus_add_fuzz_target(fuzz_ring_attach)
 target_link_libraries(fuzz_ring_attach PRIVATE plexus::shm plexus::core)
 target_include_directories(fuzz_ring_attach PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)
+
+plexus_add_fuzz_target(fuzz_crc_serial)
+target_link_libraries(fuzz_crc_serial PRIVATE plexus::stream)
+plexus_add_fuzz_replay(fuzz_crc_serial)
+
+# The same harness with one oracle leg inverted, kept out of the replay tests; it must fail.
+plexus_add_fuzz_binary(fuzz_crc_serial_planted fuzz_crc_serial.cpp)
+target_link_libraries(fuzz_crc_serial_planted PRIVATE plexus::stream)
+target_compile_definitions(fuzz_crc_serial_planted PRIVATE PLEXUS_FUZZ_PLANT_VIOLATION)
