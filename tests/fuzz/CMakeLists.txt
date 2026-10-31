@@ -74,6 +74,12 @@ plexus_add_fuzz_target(fuzz_ring_attach)
 target_link_libraries(fuzz_ring_attach PRIVATE plexus::shm plexus::core)
 target_include_directories(fuzz_ring_attach PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)
 
+plexus_add_fuzz_target(fuzz_udp_envelope)
+target_link_libraries(fuzz_udp_envelope PRIVATE plexus::datagram plexus::core plexus::inproc)
+
+plexus_add_fuzz_target(fuzz_stream_inbound)
+target_link_libraries(fuzz_stream_inbound PRIVATE plexus::core plexus::stream plexus::inproc)
+
 plexus_add_fuzz_target(fuzz_crc_serial)
 target_link_libraries(fuzz_crc_serial PRIVATE plexus::stream)
 

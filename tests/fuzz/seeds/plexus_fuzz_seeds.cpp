@@ -18,7 +18,7 @@ struct seed_target
     seed_set (&make)();
 };
 
-const std::array<seed_target, 17> k_targets{{
+const std::array<seed_target, 19> k_targets{{
         {"fuzz_frame_reassembler", frame_reassembler_seeds},
         {"fuzz_data_frame", data_frame_seeds},
         {"fuzz_varint", varint_seeds},
@@ -36,6 +36,8 @@ const std::array<seed_target, 17> k_targets{{
         {"fuzz_key_pattern", key_pattern_seeds},
         {"fuzz_ring_attach", ring_attach_seeds},
         {"fuzz_crc_serial", crc_serial_seeds},
+        {"fuzz_udp_envelope", udp_envelope_seeds},
+        {"fuzz_stream_inbound", stream_inbound_seeds},
 }};
 
 std::string seed_name(std::size_t index)
