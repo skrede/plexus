@@ -1373,6 +1373,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_serial_oversize TEST_PREFIX "integration.")
     endif()
 
+    # A receiver at the default payload cap refuses a larger peer's over-cap frame as too large, not as line noise, and
+    # delivers the next frame. POSIX-only (openpty).
+    if(NOT WIN32)
+    add_executable(test_serial_cap_refusal test_serial_cap_refusal.cpp)
+    target_link_libraries(test_serial_cap_refusal PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    target_include_directories(test_serial_cap_refusal PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_serial_cap_refusal TEST_PREFIX "integration.")
+    endif()
+
     # The serial options aggregate keeps the serial payload cap under a partial override, on a channel, the test helper
     # and a listened transport channel. POSIX-only (openpty).
     if(NOT WIN32)

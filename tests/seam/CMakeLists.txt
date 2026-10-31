@@ -36,6 +36,17 @@ target_link_libraries(test_uart_channel_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_uart_channel_seam TEST_PREFIX "seam.")
 
+# The UART byte_channel's payload cap over the same host shim: a frame over the leaf's cap reaches the consumer's
+# frame-dropped seam with its cause, and the next fitting frame is delivered.
+add_executable(test_uart_channel_cap test_uart_channel_cap.cpp)
+target_include_directories(test_uart_channel_cap PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_uart_channel_cap PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_uart_channel_cap TEST_PREFIX "seam.")
+
 # Host proof for the constrained-target device facade: drives the borrow-only tick/run
 # loop discipline (poll -> drain -> watchdog-safe park) over a fake pollable and a
 # host freertos_executor. The host shim's no-op vTaskDelay makes the facade run

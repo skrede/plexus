@@ -56,6 +56,7 @@ public:
         m_on_data_cb           = nullptr;
         m_on_error_cb          = nullptr;
         m_on_protocol_close_cb = nullptr;
+        m_on_frame_dropped_cb  = nullptr;
         m_close.notify();
     }
 
@@ -82,6 +83,13 @@ public:
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
     {
         m_on_protocol_close_cb = std::move(cb);
+    }
+
+    // The non-fatal drop seam, distinct from on_protocol_close: every frame the deframer refuses fires here with its
+    // cause, synchronously from poll, and the link resyncs without closing the channel.
+    void on_frame_dropped(plexus::detail::move_only_function<void(plexus::wire::close_cause)> cb)
+    {
+        m_on_frame_dropped_cb = std::move(cb);
     }
 
     void poll()
@@ -114,12 +122,20 @@ private:
     std::array<std::byte, k_scratch_bytes> m_scratch;
     plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error_cb;
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_frame_dropped_cb;
     plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close_cb;
 
     void wire_decorator()
     {
         m_decorator.on_match([this](std::span<const std::byte> f) { deliver(f); });
-        m_decorator.on_drop([this](plexus::wire::close_cause) { ++m_dropped_count; });
+        m_decorator.on_drop([this](plexus::wire::close_cause cause) { drop(cause); });
+    }
+
+    void drop(plexus::wire::close_cause cause)
+    {
+        ++m_dropped_count;
+        if(m_on_frame_dropped_cb)
+            m_on_frame_dropped_cb(cause);
     }
 
     // Delivery is synchronous because poll runs on the executor's task, so the frame is consumed before poll reuses
