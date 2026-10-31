@@ -19,18 +19,23 @@
 #include <asio/serial_port.hpp>
 
 #include <span>
-#include <utility>
 #include <cstddef>
+#include <utility>
 #include <system_error>
 
 namespace plexus::asio {
 
-// The host serial byte_channel: stream_channel over ::asio::serial_port plus the serial-only
-// CRC32C integrity decorator. The egress appends a 4-byte CRC32C trailer (serial_bootstrap);
-// inbound runs its OWN read loop (serial_do_read) driving a CRC verify+resync decorator instead
-// of the shared stream_inbound feed, so a corrupt frame is dropped + magic-resynced (never
-// closing the link). A failed CRC surfaces through the non-fatal on_frame_dropped seam, leaving
-// on_protocol_close strictly fatal.
+// Serial applies no socket options and never feeds the shared stream inbound, so neither has a knob here.
+struct serial_channel_options
+{
+    std::size_t max_payload{stream::k_serial_default_max_payload};
+    io::congestion congestion{io::congestion::block};
+    io::egress_capacity egress{io::egress_capacity::bounded_default()};
+    std::size_t read_buffer_bytes{k_stream_read_buffer_bytes};
+};
+
+// The serial channel runs its own read loop through the serial deframer instead of the shared stream feed. A refused
+// frame is non-fatal and surfaces on on_frame_dropped, while on_protocol_close stays fatal.
 struct serial_traits
 {
     static io::endpoint format_endpoint(const ::asio::serial_port &)
@@ -62,22 +67,16 @@ class serial_channel : public stream_channel<::asio::serial_port, serial_traits,
     using base = stream_channel<::asio::serial_port, serial_traits, detail::serial_bootstrap<::asio::serial_port>>;
 
 public:
-    explicit serial_channel(::asio::io_context &io,
-                            stream::stream_inbound_config cfg = stream::with_message_limits({}, stream::k_serial_default_max_payload, io::reassembly_memory_budget),
-                            io::congestion congestion = io::congestion::block, io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
-                            std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
-            : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
-            , m_decorator(cfg.max_payload_size)
+    explicit serial_channel(::asio::io_context &io, serial_channel_options opts = {})
+            : base(io, inbound_config(opts.max_payload), opts.congestion, opts.egress, stream_socket_options{}, opts.read_buffer_bytes)
+            , m_decorator(opts.max_payload)
     {
         detail::serial_wire_decorator(*this);
     }
 
-    serial_channel(::asio::io_context &io, ::asio::serial_port connected,
-                   stream::stream_inbound_config cfg = stream::with_message_limits({}, stream::k_serial_default_max_payload, io::reassembly_memory_budget),
-                   io::congestion congestion = io::congestion::block, io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
-                   std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
-            : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
-            , m_decorator(cfg.max_payload_size)
+    serial_channel(::asio::io_context &io, ::asio::serial_port connected, serial_channel_options opts = {})
+            : base(io, std::move(connected), inbound_config(opts.max_payload), opts.congestion, opts.egress, stream_socket_options{}, opts.read_buffer_bytes)
+            , m_decorator(opts.max_payload)
     {
         detail::serial_wire_decorator(*this);
         // The adopt ctor's read loop, deferred until the decorator is constructed.
@@ -120,6 +119,12 @@ private:
     // operation completed.
     stream::crc_serial_inbound m_decorator;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped_cb;
+
+    // The base's stream inbound is never fed on this leg, so its limits only have to agree with the deframer's.
+    static stream::stream_inbound_config inbound_config(std::size_t max_payload) noexcept
+    {
+        return stream::with_message_limits({}, max_payload, io::reassembly_memory_budget);
+    }
 };
 
 }

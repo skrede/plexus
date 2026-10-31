@@ -6,8 +6,6 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/liveliness_options.h"
 
-#include "plexus/stream/stream_inbound.h"
-
 #include "plexus/wire/frame.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -131,7 +129,7 @@ double max_gap_ms(const std::vector<rx_delivery> &deliveries, std::optional<std:
 struct pty_rig
 {
     explicit pty_rig(std::size_t cap)
-            : rx(adopt_channel(io, pty.take_slave(), stream::with_message_limits({}, cap, cap + wire::header_size)))
+            : rx(adopt_channel(io, pty.take_slave(), {.max_payload = cap}))
     {
         probe.wire(*rx);
     }
@@ -165,7 +163,8 @@ void report_sweep_cell(std::uint32_t rate, std::size_t payload_len)
               << " hb_max_gap_ms=" << max_gap_ms(rig.probe.deliveries, k_small_bytes) << std::endl;
 }
 
-// The rig keeps the 8 MiB cap the node path gives the serial leg, so the stretched length is awaited, not refused.
+// The cap is large so the header check alone must refuse a stretched length: had it missed, the length would be awaited,
+// not refused.
 void report_hold(std::size_t payload_len)
 {
     pty_rig rig{plexus::io::global_default_max_message_bytes};

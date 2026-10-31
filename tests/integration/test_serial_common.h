@@ -163,9 +163,9 @@ struct pty_pair
 
 // Adopt a pty fd into a fresh serial_channel: wrap the fd as a serial_port (the native-handle
 // ctor — the port now owns the fd) and move it into the adopt-connected channel ctor.
-inline std::unique_ptr<pasio::serial_channel> adopt_channel(::asio::io_context &io, int fd, stream::stream_inbound_config cfg = {})
+inline std::unique_ptr<pasio::serial_channel> adopt_channel(::asio::io_context &io, int fd, pasio::serial_channel_options opts = {})
 {
-    return std::make_unique<pasio::serial_channel>(io, ::asio::serial_port{io, fd}, cfg);
+    return std::make_unique<pasio::serial_channel>(io, ::asio::serial_port{io, fd}, opts);
 }
 
 inline constexpr std::chrono::seconds k_pump_bound{5};

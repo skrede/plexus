@@ -22,18 +22,16 @@
 #include "plexus/asio/serial_transport.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/congestion.h"
-#include "plexus/io/egress_capacity.h"
 #include "plexus/io/reconnect_config.h"
 
 #include <asio/io_context.hpp>
 #include <asio/steady_timer.hpp>
 
 #include <span>
-#include <string>
 #include <chrono>
-#include <cstdlib>
+#include <string>
 #include <cstddef>
+#include <cstdlib>
 #include <iostream>
 #include <string_view>
 
@@ -71,7 +69,7 @@ std::string link_endpoint(int argc, char **argv)
 int main(int argc, char **argv)
 {
     ::asio::io_context io;
-    pasio::serial_transport transport{io, {}, plexus::io::congestion::block, plexus::io::egress_capacity::bounded_default(), k_max_payload_bytes};
+    pasio::serial_transport transport{io, {.max_payload = k_max_payload_bytes}};
 
     plexus::discovery::static_discovery disc{{}};
 

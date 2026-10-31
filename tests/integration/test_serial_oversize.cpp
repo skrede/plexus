@@ -2,8 +2,6 @@
 
 #include "plexus/io/detail/drop_event.h"
 
-#include "plexus/io/fragmentation.h"
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -26,9 +24,8 @@ constexpr std::size_t k_fitting_body  = 512;
 
 serial_context production_context(::asio::io_context &io, int fd, std::string peer_name)
 {
-    const auto cfg = stream::with_message_limits({}, stream::k_serial_default_max_payload, pio::reassembly_memory_budget);
     serial_context ctx;
-    ctx.channel   = adopt_channel(io, fd, cfg);
+    ctx.channel   = adopt_channel(io, fd);
     ctx.node_name = std::move(peer_name);
     return ctx;
 }

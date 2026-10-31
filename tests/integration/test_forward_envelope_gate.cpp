@@ -99,12 +99,12 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
         serial_rpc_fwd relay_procedures{io, k_long_timeout, sink};
         serial_rpc_fwd peer_procedures{io, k_long_timeout, sink};
 
-        const auto cfg_limited = stream::with_message_limits(stream::stream_inbound_config{}, k_ceiling, k_ceiling + wire::header_size);
+        const pasio::serial_channel_options limited{.max_payload = k_ceiling};
         pio::peer_context<pasio::serial_policy> relay_ctx;
         pio::peer_context<pasio::serial_policy> peer_ctx;
-        relay_ctx.channel   = adopt_channel(io, pty.take_master(), cfg_limited);
+        relay_ctx.channel   = adopt_channel(io, pty.take_master(), limited);
         relay_ctx.node_name = "narrow";
-        peer_ctx.channel    = adopt_channel(io, pty.take_slave(), cfg_limited);
+        peer_ctx.channel    = adopt_channel(io, pty.take_slave(), limited);
         peer_ctx.node_name  = "relay";
         serial_session relay{relay_ctx, io, make_cfg(0x01), k_long_timeout, relay_messages, relay_procedures, /*is_inbound_bootstrap=*/false, sink};
         serial_session peer{peer_ctx, io, make_cfg(0x02), k_long_timeout, peer_messages, peer_procedures, /*is_inbound_bootstrap=*/true, sink};

@@ -6,17 +6,12 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_serial_endpoint_parse.h"
 
-#include "plexus/stream/serial_frame.h"
-#include "plexus/stream/stream_inbound.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
-#include "plexus/io/congestion.h"
-#include "plexus/io/fragmentation.h"
-#include "plexus/io/egress_capacity.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/detail/retiring_table.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -24,10 +19,10 @@
 
 #include <array>
 #include <memory>
-#include <cstddef>
+#include <cstdint>
 #include <utility>
-#include <system_error>
 #include <string_view>
+#include <system_error>
 
 namespace plexus::asio {
 
@@ -40,14 +35,10 @@ namespace plexus::asio {
 class serial_transport
 {
 public:
-    explicit serial_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
-                              io::egress_capacity egress = io::egress_capacity::bounded_default(), std::size_t global_default = stream::k_serial_default_max_payload,
-                              std::size_t reassembly_budget = io::reassembly_memory_budget)
+    explicit serial_transport(::asio::io_context &io, serial_channel_options opts = {})
             : m_io(io)
             , m_retiring()
-            , m_cfg(stream::with_message_limits(cfg, global_default, reassembly_budget))
-            , m_congestion(congestion)
-            , m_egress(egress)
+            , m_opts(opts)
     {
     }
 
@@ -118,7 +109,7 @@ private:
         apply_line_discipline(port, parsed.baud, ec);
         if(ec)
             return nullptr;
-        auto ch = std::make_unique<serial_channel>(m_io, std::move(port), m_cfg, m_congestion, m_egress);
+        auto ch = std::make_unique<serial_channel>(m_io, std::move(port), m_opts);
         ch->start_read();
         return ch;
     }
@@ -154,9 +145,7 @@ private:
 
     ::asio::io_context &m_io;
     io::detail::retiring_table<serial_channel> m_retiring;
-    stream::stream_inbound_config m_cfg;
-    io::congestion m_congestion;
-    io::egress_capacity m_egress;
+    serial_channel_options m_opts;
     plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> m_on_dialed_cb;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
