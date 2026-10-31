@@ -6,10 +6,13 @@
 #include "plexus/asio/detail/serial_channel_io.h"
 
 #include "plexus/stream/crc_serial.h"
+#include "plexus/stream/serial_frame.h"
+#include "plexus/stream/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/egress_capacity.h"
 
 #include <asio/io_context.hpp>
@@ -59,8 +62,9 @@ class serial_channel : public stream_channel<::asio::serial_port, serial_traits,
     using base = stream_channel<::asio::serial_port, serial_traits, detail::serial_bootstrap<::asio::serial_port>>;
 
 public:
-    explicit serial_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
-                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
+    explicit serial_channel(::asio::io_context &io,
+                            stream::stream_inbound_config cfg = stream::with_message_limits({}, stream::k_serial_default_max_payload, io::reassembly_memory_budget),
+                            io::congestion congestion = io::congestion::block, io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
                             std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
@@ -69,8 +73,10 @@ public:
         detail::serial_wire_decorator(*this);
     }
 
-    serial_channel(::asio::io_context &io, ::asio::serial_port connected, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
-                   io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {}, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
+    serial_channel(::asio::io_context &io, ::asio::serial_port connected,
+                   stream::stream_inbound_config cfg = stream::with_message_limits({}, stream::k_serial_default_max_payload, io::reassembly_memory_budget),
+                   io::congestion congestion = io::congestion::block, io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
+                   std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
             , m_max_frame_bytes(cfg.max_payload_size)

@@ -22,6 +22,8 @@
 #include "plexus/asio/serial_transport.h"
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/congestion.h"
+#include "plexus/io/egress_capacity.h"
 #include "plexus/io/reconnect_config.h"
 
 #include <asio/io_context.hpp>
@@ -47,6 +49,9 @@ constexpr const char *k_stream_topic  = "stream";
 constexpr const char *k_default_link  = "/dev/ttyUSB1";
 constexpr const char *k_baud          = "115200";
 
+// Matches the bench firmware's UART payload cap.
+constexpr std::size_t k_max_payload_bytes = 8 * 1024;
+
 // The serial endpoint the host listens on: the second adapter's device path with the @baud suffix the
 // serial_transport parser expects. Device is argv[1] or LINK_PORT (FTDI-vs-CP2102 enumeration order can
 // swap across reboots); baud is argv[2] (default 115200) and MUST match the device's compiled BENCH_BAUD.
@@ -66,13 +71,14 @@ std::string link_endpoint(int argc, char **argv)
 int main(int argc, char **argv)
 {
     ::asio::io_context io;
-    pasio::serial_transport transport{io};
+    pasio::serial_transport transport{io, {}, plexus::io::congestion::block, plexus::io::egress_capacity::bounded_default(), k_max_payload_bytes};
 
     plexus::discovery::static_discovery disc{{}};
 
     plexus::node_options opts;
-    opts.name      = "serial-bench-host";
-    opts.reconnect = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.name              = "serial-bench-host";
+    opts.max_message_bytes = k_max_payload_bytes;
+    opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
 
     plexus::node<pasio::serial_policy, pasio::serial_transport> node{io, disc, "serial-bench-host", transport, opts};
 

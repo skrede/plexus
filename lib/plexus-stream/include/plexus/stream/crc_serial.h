@@ -5,7 +5,6 @@
 
 #include "plexus/detail/compat.h"
 
-#include "plexus/wire/frame.h"
 #include "plexus/wire/crc32c.h"
 #include "plexus/wire/close_cause.h"
 
@@ -13,6 +12,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <algorithm>
 
 namespace plexus::stream {
 
@@ -32,10 +32,12 @@ public:
     using emit = plexus::detail::move_only_function<void(std::span<const std::byte>)>;
     using drop = plexus::detail::move_only_function<void(wire::close_cause)>;
 
-    explicit crc_serial_inbound(std::size_t max_payload = wire::k_max_reassembler_payload_bytes) noexcept
+    explicit crc_serial_inbound(std::size_t max_payload = k_serial_default_max_payload)
             : m_pos(0)
             , m_max_payload(max_payload)
+            , m_capacity(serial_header_size + max_payload + crc_trailer_size)
     {
+        m_buf.reserve(m_capacity);
     }
 
     void on_match(emit cb)
@@ -48,16 +50,23 @@ public:
         m_on_drop_cb = std::move(cb);
     }
 
+    // A full buffer holds a whole frame or a refusable header at its front, so every round frees room.
     void feed(std::span<const std::byte> bytes)
     {
-        m_buf.insert(m_buf.end(), bytes.begin(), bytes.end());
-        drain();
-        compact();
+        while(!bytes.empty())
+        {
+            const auto piece = bytes.first(std::min(bytes.size(), m_capacity - m_buf.size()));
+            m_buf.insert(m_buf.end(), piece.begin(), piece.end());
+            bytes = bytes.subspan(piece.size());
+            drain();
+            compact();
+        }
     }
 
 private:
     std::size_t m_pos;
     std::size_t m_max_payload;
+    const std::size_t m_capacity;
     std::vector<std::byte> m_buf;
     drop m_on_drop_cb;
     emit m_on_match_cb;

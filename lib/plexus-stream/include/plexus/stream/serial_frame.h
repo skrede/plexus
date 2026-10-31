@@ -20,6 +20,9 @@ inline constexpr std::array<std::byte, 2> k_serial_format_id{std::byte{0x53}, st
 inline constexpr std::size_t crc_trailer_size   = 4;
 inline constexpr std::size_t serial_header_size = wire::header_size + sizeof(std::uint32_t);
 
+// The largest payload whose frame holds a 115200-baud line for less than one default heartbeat interval.
+inline constexpr std::size_t k_serial_default_max_payload = 1024;
+
 enum class serial_format : std::uint8_t
 {
     crc32c_header

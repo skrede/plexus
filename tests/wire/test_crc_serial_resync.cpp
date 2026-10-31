@@ -6,9 +6,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <vector>
 #include <string>
+#include <vector>
 #include <cstddef>
+#include <cstdint>
 
 // The corruption/resync/boundedness legs of the decorator oracle: a flipped trailer or header
 // byte is caught by the CRC and the link resyncs onto the next frame, and a lying oversized
@@ -87,4 +88,33 @@ TEST_CASE("crc_serial: a lying oversized payload_len stays bounded - no over-rea
 
     REQUIRE(drops >= 1);
     REQUIRE(out == header_on("ok"));
+}
+
+TEST_CASE("crc_serial: a payload of exactly the cap is delivered and one byte more is refused at the header", "[wire][crc_serial]")
+{
+    constexpr std::size_t cap = 64;
+    std::int32_t drops        = 0;
+    std::vector<std::string> emitted;
+    crc_serial_inbound dec{cap};
+    dec.on_match([&](std::span<const std::byte> f) { emitted.emplace_back(reinterpret_cast<const char *>(f.data()), f.size()); });
+    dec.on_drop([&](close_cause) { ++drops; });
+
+    const std::string at_cap(cap, 'a');
+    dec.feed(framed(at_cap));
+    REQUIRE(drops == 0);
+    REQUIRE(emitted.size() == 1);
+    REQUIRE(emitted[0] == header_on(at_cap));
+
+    const auto over = framed(std::string(cap + 1, 'b'));
+    const std::span<const std::byte> bytes{over};
+    dec.feed(bytes.first(serial_header_size - 1));
+    REQUIRE(drops == 0);
+    dec.feed(bytes.subspan(serial_header_size - 1, 1));
+    REQUIRE(drops == 1);
+
+    dec.feed(bytes.subspan(serial_header_size));
+    dec.feed(framed("next"));
+    REQUIRE(drops == 1);
+    REQUIRE(emitted.size() == 2);
+    REQUIRE(emitted[1] == header_on("next"));
 }

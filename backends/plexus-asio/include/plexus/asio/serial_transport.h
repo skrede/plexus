@@ -6,6 +6,7 @@
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_serial_endpoint_parse.h"
 
+#include "plexus/stream/serial_frame.h"
 #include "plexus/stream/stream_inbound.h"
 
 #include "plexus/io/endpoint.h"
@@ -40,7 +41,7 @@ class serial_transport
 {
 public:
     explicit serial_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
-                              io::egress_capacity egress = io::egress_capacity::bounded_default(), std::size_t global_default = io::global_default_max_message_bytes,
+                              io::egress_capacity egress = io::egress_capacity::bounded_default(), std::size_t global_default = stream::k_serial_default_max_payload,
                               std::size_t reassembly_budget = io::reassembly_memory_budget)
             : m_io(io)
             , m_retiring()

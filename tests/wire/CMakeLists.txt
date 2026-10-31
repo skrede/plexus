@@ -40,6 +40,17 @@ target_link_libraries(test_crc_serial_decorator PRIVATE
 target_include_directories(test_crc_serial_decorator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_crc_serial_decorator TEST_PREFIX "wire.")
 
+# The deframer's zero-allocation gate includes support/alloc_counter.h (one operator-new override
+# per program), so it is its own executable, serialized so concurrent tests cannot skew the count.
+add_executable(test_crc_serial_noalloc test_crc_serial_noalloc.cpp)
+target_link_libraries(test_crc_serial_noalloc PRIVATE
+    plexus::wire
+    plexus::stream
+    Catch2::Catch2WithMain)
+target_include_directories(test_crc_serial_noalloc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_crc_serial_noalloc TEST_PREFIX "wire."
+    PROPERTIES RUN_SERIAL TRUE)
+
 # The codec parity oracle's scenario clusters (header/data/subscribe/rpc/handshake)
 # compile into the one test_wire_codec binary so catch_discover_tests enumerates the
 # identical set across the split layout.
