@@ -91,7 +91,7 @@ public:
         m_lower->on_protocol_close(std::move(cb));
     }
 
-    // The optional occupancy/scheduler/drop edges the erased multi-transport channel and the
+    // The optional occupancy/scheduler/ceiling/drop edges the erased multi-transport channel and the
     // egress scheduler reach for: forwarded only when the Lower has them, so the decorated
     // bare concrete channel still satisfies everything the registry calls without forcing an
     // edge onto a Lower that lacks one (the channel_adapter optional-edge discipline). The
@@ -107,6 +107,11 @@ public:
         requires requires(const Lower &l) { l.scheduler_key(); }
     {
         return m_lower->scheduler_key();
+    }
+    std::size_t max_frame_bytes() const
+        requires requires(const Lower &l) { l.max_frame_bytes(); }
+    {
+        return m_lower->max_frame_bytes();
     }
 
     void on_drop(plexus::detail::move_only_function<void(const detail::drop_event &)> cb)

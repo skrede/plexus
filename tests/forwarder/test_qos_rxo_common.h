@@ -38,6 +38,7 @@ using plexus::io::k_rxo_field_deadline;
 using plexus::io::k_rxo_field_lease;
 using plexus::io::k_rxo_field_max_message_bytes;
 using plexus::io::max_message_bytes_compatible;
+using plexus::io::k_unlimited_message_bytes;
 
 // The node-level per-message default the size relation resolves an offered topic's
 // 0=unset max against. Sized away from the round numbers the cases use so the

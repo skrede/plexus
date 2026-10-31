@@ -41,9 +41,10 @@ inline bool source_identity_compatible(bool offered_emit, bool requires_sid) noe
     return !requires_sid || offered_emit;
 }
 
-inline bool max_message_bytes_compatible(std::size_t offered_effective_max, std::uint32_t requested_max) noexcept
+// The leg's ceiling is one the subscriber did not choose: an offer the leg cannot carry whole fails like one over its own.
+inline bool max_message_bytes_compatible(std::size_t offered_effective_max, std::uint32_t requested_max, std::size_t leg_ceiling) noexcept
 {
-    return requested_max == 0 || offered_effective_max <= requested_max;
+    return offered_effective_max <= leg_ceiling && (requested_max == 0 || offered_effective_max <= requested_max);
 }
 
 constexpr std::uint8_t k_rxo_field_reliability       = 0x01;
@@ -68,7 +69,7 @@ struct rxo_result
 
 // Source identity is the one always-hard field: it is evaluated FIRST and refuses regardless of
 // the subscriber's rxo_mode. The soft fields are mode-gated.
-inline rxo_result rxo_check(const topic_qos &offered, bool offers_source_identity, std::size_t global_default, const subscriber_qos &requested) noexcept
+inline rxo_result rxo_check(const topic_qos &offered, bool offers_source_identity, std::size_t global_default, std::size_t leg_ceiling, const subscriber_qos &requested) noexcept
 {
     if(!source_identity_compatible(offers_source_identity, requested.requires_source_identity))
         return {rxo_verdict::source_identity_incompatible, 0};
@@ -82,7 +83,7 @@ inline rxo_result rxo_check(const topic_qos &offered, bool offers_source_identit
         bits |= k_rxo_field_deadline;
     if(!lease_compatible(offered.offered_lease_ns, requested.requested_lease_ns))
         bits |= k_rxo_field_lease;
-    if(!max_message_bytes_compatible(effective_max(offered, global_default), requested.requested_max_message_bytes))
+    if(!max_message_bytes_compatible(effective_max(offered, global_default), requested.requested_max_message_bytes, leg_ceiling))
         bits |= k_rxo_field_max_message_bytes;
 
     if(bits == 0)

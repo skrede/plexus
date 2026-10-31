@@ -10,6 +10,7 @@
 
 #include "plexus/io/detail/forwarder_publish.h"
 #include "plexus/io/detail/forwarder_companion.h"
+#include "plexus/io/detail/egress_channel_traits.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"
@@ -59,7 +60,7 @@ bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::o
     }
     const topic_qos offered = f.m_endpoint.registry().qos_for(hash);
     const bool offers_sid   = f.m_endpoint.registry().offers_source_identity(hash);
-    const auto rxo          = io::rxo_check(offered, offers_sid, f.m_global_default, sub_qos);
+    const auto rxo          = io::rxo_check(offered, offers_sid, f.m_global_default, detail::channel_frame_ceiling(p.channel), sub_qos);
     if(rxo.verdict == io::rxo_verdict::incompatible_qos || rxo.verdict == io::rxo_verdict::source_identity_incompatible)
     {
         auto resp = wire::encode_subscribe_response({.topic_hash = hash, .status = status_of(rxo.verdict)});

@@ -4,6 +4,7 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+#include "plexus/io/detail/egress_channel_traits.h"
 
 #include "plexus/wire/close_cause.h"
 
@@ -66,6 +67,10 @@ public:
     std::uint64_t scheduler_key() const override
     {
         return reinterpret_cast<std::uint64_t>(&m_c);
+    }
+    std::size_t max_frame_bytes() const override
+    {
+        return detail::channel_frame_ceiling(m_c);
     }
 
 private:
