@@ -13,8 +13,8 @@ enum class close_cause : std::uint8_t
     payload_too_large,
     buffer_overflow,
     no_progress_timeout,
-    // Append-only. The one non-fatal cause (drop+resync), raised only by the serial CRC
-    // decorator and surfaced through on_frame_dropped, never on_protocol_close.
+    // Append-only. Raised only by the serial deframer, whose causes are all non-fatal: they surface through the
+    // frame-dropped seam, never on_protocol_close.
     crc_mismatch
 };
 

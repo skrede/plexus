@@ -9,6 +9,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 using namespace crc_serial_test;
 
@@ -86,4 +87,17 @@ TEST_CASE("crc_serial noalloc: the deframer allocates nothing after construction
 
     REQUIRE(allocations_during([&] { dec.feed(damaged); }) == 0);
     REQUIRE(emits == 10);
+}
+
+TEST_CASE("crc_serial noalloc: construction makes exactly one allocation, of one maximal frame", "[wire][crc_serial][noalloc]")
+{
+    std::optional<crc_serial_inbound> dec;
+    REQUIRE(allocations_during([&] { dec.emplace(k_cap); }) == 1);
+
+    std::int32_t emits = 0;
+    dec->on_match([&](std::span<const std::byte>) { ++emits; });
+    const auto frame = full_frames(1);
+    REQUIRE(frame.size() == k_max_frame);
+    REQUIRE(allocations_during([&] { dec->feed(frame); }) == 0);
+    REQUIRE(emits == 1);
 }

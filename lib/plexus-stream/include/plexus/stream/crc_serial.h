@@ -5,6 +5,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include "plexus/wire/frame.h"
 #include "plexus/wire/crc32c.h"
 #include "plexus/wire/close_cause.h"
 
@@ -18,7 +19,9 @@ namespace plexus::stream {
 
 // A self-resyncing CRC32C frame decorator between a serial read-loop and stream_inbound::feed. It emits each verified
 // frame as a wire frame through on_match. A header whose CRC fails is refused as soon as it is buffered, before its
-// payload_len is trusted; on a refused frame it resyncs and raises a non-fatal crc_mismatch, never closing the link.
+// payload_len is trusted; on a refused frame it resyncs and raises a non-fatal cause, never closing the link:
+// crc_mismatch for a damaged header or trailer, payload_too_large for an intact header over the cap. A CRC is not a
+// MAC, so a refused frame's bytes are rescanned like garbage, never skipped by the length it declares.
 class crc_serial_inbound
 {
     enum class step : std::uint8_t
@@ -34,8 +37,8 @@ public:
 
     explicit crc_serial_inbound(std::size_t max_payload = k_serial_default_max_payload)
             : m_pos(0)
-            , m_max_payload(max_payload)
-            , m_capacity(serial_header_size + max_payload + crc_trailer_size)
+            , m_max_payload(std::min(max_payload, wire::k_max_reassembler_payload_bytes))
+            , m_capacity(serial_header_size + m_max_payload + crc_trailer_size)
     {
         m_buf.reserve(m_capacity);
     }
@@ -55,7 +58,6 @@ public:
         return m_max_payload;
     }
 
-    // A full buffer holds a whole frame or a refusable header at its front, so every round frees room.
     void feed(std::span<const std::byte> bytes)
     {
         while(!bytes.empty())
@@ -65,13 +67,19 @@ public:
             bytes = bytes.subspan(piece.size());
             drain();
             compact();
+            // Guards the invariant that a full buffer holds a decidable frame, so every round frees room.
+            if(m_buf.size() == m_capacity)
+            {
+                resync(wire::close_cause::buffer_overflow);
+                compact();
+            }
         }
     }
 
 private:
     std::size_t m_pos;
     std::size_t m_max_payload;
-    const std::size_t m_capacity;
+    std::size_t m_capacity;
     std::vector<std::byte> m_buf;
     drop m_on_drop_cb;
     emit m_on_match_cb;
@@ -94,10 +102,10 @@ private:
         if(at.size() < serial_header_size)
             return step::need_more;
         if(!serial_header_intact(at))
-            return resync();
+            return resync(wire::close_cause::crc_mismatch);
         const std::uint64_t payload_len = serial_payload_len(at);
         if(payload_len > m_max_payload)
-            return resync();
+            return resync(wire::close_cause::payload_too_large);
         const std::size_t frame_len = serial_header_size + static_cast<std::size_t>(payload_len);
         if(at.size() < frame_len + crc_trailer_size)
             return step::need_more;
@@ -109,7 +117,7 @@ private:
         const auto header  = at.first(serial_header_size);
         const auto payload = at.subspan(serial_header_size, frame_len - serial_header_size);
         if(read_crc_le(at.subspan(frame_len, crc_trailer_size)) != wire::crc32c(payload, wire::crc32c(header)))
-            return resync();
+            return resync(wire::close_cause::crc_mismatch);
         const auto frame = wire_frame_in_place(at.first(frame_len));
         if(m_on_match_cb)
             m_on_match_cb(frame);
@@ -117,11 +125,11 @@ private:
         return step::consumed;
     }
 
-    step resync()
+    step resync(wire::close_cause cause)
     {
         ++m_pos;
         if(m_on_drop_cb)
-            m_on_drop_cb(wire::close_cause::crc_mismatch);
+            m_on_drop_cb(cause);
         return step::dropped;
     }
 

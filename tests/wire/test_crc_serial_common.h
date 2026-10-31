@@ -9,8 +9,8 @@
 #include "plexus/wire/frame_codec.h"
 
 #include <span>
-#include <vector>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -52,16 +52,19 @@ struct sink
 {
     std::vector<std::string> emitted;
     std::int32_t drops{0};
+    std::int32_t over_cap{0};
 
-    crc_serial_inbound make()
+    crc_serial_inbound make(std::size_t max_payload = k_serial_default_max_payload)
     {
-        crc_serial_inbound dec;
+        crc_serial_inbound dec{max_payload};
         dec.on_match([this](std::span<const std::byte> f) { emitted.emplace_back(reinterpret_cast<const char *>(f.data()), f.size()); });
         dec.on_drop(
                 [this](close_cause c)
                 {
                     if(c == close_cause::crc_mismatch)
                         ++drops;
+                    if(c == close_cause::payload_too_large)
+                        ++over_cap;
                 });
         return dec;
     }

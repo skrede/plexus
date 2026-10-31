@@ -31,7 +31,8 @@ catch_discover_tests(test_frame_reassembler TEST_PREFIX "wire.")
 # the core compat shim transitively); the frame fixtures it builds use the wire codec directly.
 add_executable(test_crc_serial_decorator
     test_crc_serial_decorator.cpp
-    test_crc_serial_resync.cpp)
+    test_crc_serial_resync.cpp
+    test_crc_serial_cap.cpp)
 target_link_libraries(test_crc_serial_decorator PRIVATE
     plexus::wire
     plexus::stream

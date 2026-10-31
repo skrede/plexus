@@ -83,8 +83,8 @@ public:
         start_read();
     }
 
-    // The non-fatal drop seam, distinct from on_protocol_close: a CRC mismatch fires here (the
-    // frame was dropped and the link resynced), never tearing the channel down.
+    // The non-fatal drop seam, distinct from on_protocol_close: every frame the deframer refuses fires here with its
+    // cause, and the link resyncs without tearing the channel down.
     void on_frame_dropped(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
         m_on_frame_dropped_cb = std::move(cb);

@@ -63,16 +63,16 @@ TEST_CASE("crc_serial: a flipped HEADER byte is caught by the CRC and resyncs on
 TEST_CASE("crc_serial: a lying oversized payload_len stays bounded - no over-read, no over-alloc", "[wire][crc_serial]")
 {
     // A tiny payload cap so a crafted header that claims more than the cap exercises the
-    // lying-length branch deterministically (independent of the 16 MiB default).
+    // lying-length branch deterministically.
     crc_serial_inbound dec{/*max_payload=*/16};
-    int drops = 0;
+    std::int32_t over_cap = 0;
     std::string out;
     dec.on_match([&](std::span<const std::byte> f) { out.assign(reinterpret_cast<const char *>(f.data()), f.size()); });
     dec.on_drop(
             [&](close_cause c)
             {
-                if(c == close_cause::crc_mismatch)
-                    ++drops;
+                if(c == close_cause::payload_too_large)
+                    ++over_cap;
             });
 
     // A well-formed header whose declared payload_len (4096) dwarfs the 16-byte cap, with
@@ -80,13 +80,13 @@ TEST_CASE("crc_serial: a lying oversized payload_len stays bounded - no over-rea
     // past the buffer — it drops on the over-cap length and resyncs.
     auto hdr = encode_serial_header(encode_header(make_header(4096)));
     std::vector<std::byte> stream{hdr.begin(), hdr.end()};
-    for(int i = 0; i < 8; ++i)
+    for(std::int32_t i = 0; i < 8; ++i)
         stream.push_back(std::byte{0x00});
     const auto good = framed("ok"); // 2-byte payload <= 16-byte cap
     stream.insert(stream.end(), good.begin(), good.end());
     dec.feed(stream);
 
-    REQUIRE(drops >= 1);
+    REQUIRE(over_cap == 1);
     REQUIRE(out == header_on("ok"));
 }
 
