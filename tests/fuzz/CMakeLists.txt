@@ -10,16 +10,12 @@ function(plexus_add_fuzz_binary target source)
     add_executable(${target} ${source})
     target_link_libraries(${target} PRIVATE plexus::wire)
     target_compile_options(${target} PRIVATE
-        -fsanitize=fuzzer,address
+        -fsanitize=fuzzer,address,undefined
         -fno-sanitize-recover=all
         -fno-omit-frame-pointer
         -g
         -O1)
-    target_link_options(${target} PRIVATE -fsanitize=fuzzer,address)
-endfunction()
-
-function(plexus_add_fuzz_target name)
-    plexus_add_fuzz_binary(${name} ${name}.cpp)
+    target_link_options(${target} PRIVATE -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all)
 endfunction()
 
 # libFuzzer writes every coverage-increasing input into the directory it is given, so runs only ever see this
@@ -41,6 +37,11 @@ function(plexus_add_fuzz_replay name)
     set_tests_properties(${name}_replay PROPERTIES
         FIXTURES_REQUIRED fuzz_corpus
         ENVIRONMENT "UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1")
+endfunction()
+
+function(plexus_add_fuzz_target name)
+    plexus_add_fuzz_binary(${name} ${name}.cpp)
+    plexus_add_fuzz_replay(${name})
 endfunction()
 
 plexus_add_fuzz_target(fuzz_frame_reassembler)
@@ -75,7 +76,6 @@ target_include_directories(fuzz_ring_attach PRIVATE ${PROJECT_SOURCE_DIR}/tests/
 
 plexus_add_fuzz_target(fuzz_crc_serial)
 target_link_libraries(fuzz_crc_serial PRIVATE plexus::stream)
-plexus_add_fuzz_replay(fuzz_crc_serial)
 
 # The same harness with one oracle leg inverted, kept out of the replay tests; it must fail.
 plexus_add_fuzz_binary(fuzz_crc_serial_planted fuzz_crc_serial.cpp)

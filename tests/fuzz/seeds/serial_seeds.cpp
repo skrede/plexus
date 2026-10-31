@@ -11,7 +11,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 #include <initializer_list>
 
 namespace {
@@ -24,11 +23,6 @@ struct frame_spec
     std::uint64_t session_id;
     std::span<const std::byte> payload;
 };
-
-std::span<const std::byte> text(std::string_view s) noexcept
-{
-    return std::as_bytes(std::span<const char>{s.data(), s.size()});
-}
 
 const std::array<frame_spec, 3> k_frames{{
         {wire::msg_type::unidirectional, 0x0102030405060708, text("hello")},
