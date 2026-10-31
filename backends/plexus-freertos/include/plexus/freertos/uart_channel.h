@@ -6,7 +6,10 @@
 #include "plexus/freertos/detail/uart_io.h"
 #include "plexus/freertos/detail/close_state.h"
 
+#include "plexus/io/io_error.h"
+#include "plexus/io/locality.h"
 #include "plexus/io/byte_channel.h"
+#include "plexus/io/detail/drop_event.h"
 
 #include "plexus/stream/crc_serial.h"
 #include "plexus/stream/serial_frame.h"
@@ -41,6 +44,8 @@ public:
     {
         if(m_close.closed())
             return;
+        if(framed.size() > max_frame_bytes())
+            return refuse_oversize();
         const auto header  = plexus::stream::encode_serial_header(framed.first(plexus::wire::header_size));
         const auto payload = framed.subspan(plexus::wire::header_size);
         const auto trailer = plexus::stream::crc_trailer(header, payload);
@@ -57,6 +62,7 @@ public:
         m_on_error_cb          = nullptr;
         m_on_protocol_close_cb = nullptr;
         m_on_frame_dropped_cb  = nullptr;
+        m_on_drop_cb           = nullptr;
         m_close.notify();
     }
 
@@ -92,6 +98,18 @@ public:
         m_on_frame_dropped_cb = std::move(cb);
     }
 
+    void on_drop(plexus::detail::move_only_function<void(const plexus::io::detail::drop_event &)> cb)
+    {
+        m_on_drop_cb = std::move(cb);
+    }
+
+    // The largest wire frame this leg carries; the peer's deframer must run the same payload cap, or it refuses what
+    // this end sends.
+    std::size_t max_frame_bytes() const noexcept
+    {
+        return plexus::stream::serial_frame_ceiling(m_decorator.max_payload());
+    }
+
     void poll()
     {
         if(m_close.closed())
@@ -124,6 +142,7 @@ private:
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
     plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_frame_dropped_cb;
     plexus::detail::move_only_function<void(plexus::wire::close_cause)> m_on_protocol_close_cb;
+    plexus::detail::move_only_function<void(const plexus::io::detail::drop_event &)> m_on_drop_cb;
 
     void wire_decorator()
     {
@@ -136,6 +155,14 @@ private:
         ++m_dropped_count;
         if(m_on_frame_dropped_cb)
             m_on_frame_dropped_cb(cause);
+    }
+
+    void refuse_oversize()
+    {
+        if(m_on_error_cb)
+            m_on_error_cb(plexus::io::io_error::message_too_large);
+        if(m_on_drop_cb)
+            m_on_drop_cb(plexus::io::detail::drop_event{.cause = plexus::io::detail::drop_cause::oversize, .transport = plexus::io::locality::remote});
     }
 
     // Delivery is synchronous because poll runs on the executor's task, so the frame is consumed before poll reuses

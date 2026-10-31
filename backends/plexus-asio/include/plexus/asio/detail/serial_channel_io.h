@@ -3,6 +3,10 @@
 
 #include "plexus/wire/close_cause.h"
 
+#include "plexus/io/io_error.h"
+#include "plexus/io/locality.h"
+#include "plexus/io/detail/drop_event.h"
+
 #include <asio/post.hpp>
 #include <asio/buffer.hpp>
 
@@ -28,6 +32,15 @@ void serial_post_frame(Ch &c, std::span<const std::byte> frame)
                      if(c.m_on_data_cb)
                          c.m_on_data_cb(std::span<const std::byte>{*owned});
                  });
+}
+
+template<typename Ch>
+void serial_refuse_oversize(Ch &c)
+{
+    if(c.m_on_error_cb)
+        c.m_on_error_cb(io::io_error::message_too_large);
+    if(c.m_on_drop_cb)
+        c.m_on_drop_cb(io::detail::drop_event{.cause = io::detail::drop_cause::oversize, .transport = io::locality::remote});
 }
 
 template<typename Ch>

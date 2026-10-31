@@ -9,11 +9,14 @@
 #include "plexus/stream/serial_frame.h"
 #include "plexus/stream/stream_inbound.h"
 
+#include "plexus/wire_bytes.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/egress_capacity.h"
+#include "plexus/io/detail/drop_event.h"
 
 #include <asio/io_context.hpp>
 #include <asio/serial_port.hpp>
@@ -83,6 +86,25 @@ public:
         start_read();
     }
 
+    void send(std::span<const std::byte> data)
+    {
+        if(data.size() > max_frame_bytes())
+            return detail::serial_refuse_oversize(*this);
+        base::send(data);
+    }
+
+    void send(wire_bytes<> data)
+    {
+        if(data.size() > max_frame_bytes())
+            return detail::serial_refuse_oversize(*this);
+        base::send(std::move(data));
+    }
+
+    void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
+    {
+        m_on_drop_cb = std::move(cb);
+    }
+
     // The non-fatal drop seam, distinct from on_protocol_close: every frame the deframer refuses fires here with its
     // cause, and the link resyncs without tearing the channel down.
     void on_frame_dropped(plexus::detail::move_only_function<void(wire::close_cause)> cb)
@@ -114,11 +136,14 @@ private:
     friend void detail::serial_post_frame(Ch &, std::span<const std::byte>);
     template<typename Ch>
     friend void detail::serial_wire_decorator(Ch &);
+    template<typename Ch>
+    friend void detail::serial_refuse_oversize(Ch &);
 
     // These die before the base closes the port, which is safe because a channel is destroyed only after its last
     // operation completed.
     stream::crc_serial_inbound m_decorator;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped_cb;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
 
     // The base's stream inbound is never fed on this leg, so its limits only have to agree with the deframer's.
     static stream::stream_inbound_config inbound_config(std::size_t max_payload) noexcept

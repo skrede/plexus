@@ -107,9 +107,9 @@ void wire_channel_seams(Session &s)
     s.m_channel.on_error(
             [&s](io_error e)
             {
-                // would_block is a transient back-pressure stall, not a broken channel; only a
-                // genuine channel break drives the transport-drop reconnect.
-                if(e == io_error::would_block)
+                // Both are refused sends that leave the channel open; only a genuine channel break drives the
+                // transport-drop reconnect.
+                if(e == io_error::would_block || e == io_error::message_too_large)
                     return;
                 if(s.m_on_drop_cb && !s.m_torn_down && !s.m_closed_for_protocol_error)
                     s.m_on_drop_cb();

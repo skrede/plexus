@@ -1389,6 +1389,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_serial_cap_refusal TEST_PREFIX "integration.")
     endif()
 
+    # Each serial egress refuses a frame larger than its leg's ceiling before writing it, and a refused send leaves the
+    # channel and both sessions up. POSIX-only (openpty).
+    if(NOT WIN32)
+    add_executable(test_serial_send_refusal test_serial_send_refusal.cpp)
+    target_link_libraries(test_serial_send_refusal PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    target_include_directories(test_serial_send_refusal PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_serial_send_refusal TEST_PREFIX "integration.")
+    endif()
+
     # The serial options aggregate keeps the serial payload cap under a partial override, on a channel, the test helper
     # and a listened transport channel. POSIX-only (openpty).
     if(NOT WIN32)
