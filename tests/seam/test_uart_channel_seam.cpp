@@ -1,5 +1,6 @@
 #include "host_uart_shim.h" // MUST precede uart_channel.h: declares the host UART symbols
 
+#include "support/serial_kat.h"
 #include "support/serial_bytes.h"
 
 #include "plexus/freertos/uart_channel.h"
@@ -96,19 +97,18 @@ TEST_CASE("uart_channel drops+resyncs a garbled stream and never wedges", "[seam
     REQUIRE(deliveries == 1);
 }
 
-TEST_CASE("uart_channel egress appends the reused CRC trailer", "[seam]")
+TEST_CASE("uart_channel egress writes the pinned serial frame bytes", "[seam]")
 {
     plexus::test::reset_uart_fixture();
 
     plexus::freertos::freertos_executor ex;
     plexus::freertos::uart_channel ch{0, ex, k_max_payload, k_ring};
 
-    const auto payload = bytes_of({0x11, 0x22});
-    const auto frame   = plexus::wire::encode_frame(
-            plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
+    const auto &row  = plexus::testing::serial_kat_row("two-byte payload");
+    const auto frame = plexus::wire::encode_frame(row.header, plexus::testing::from_hex(row.payload_hex));
     ch.send(frame);
 
-    REQUIRE(plexus::test::uart_fixture().tx == plexus::testing::serial_bytes(frame));
+    REQUIRE(plexus::test::uart_fixture().tx == plexus::testing::from_hex(row.frame_hex));
 }
 
 TEST_CASE("uart_channel surfaces a driver-ring overrun, never swallows it", "[seam]")

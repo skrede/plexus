@@ -10,7 +10,6 @@ set(PLEXUS_WIRE_TESTS
     test_heartbeat_codec
     test_topic_declaration_codec
     test_crc32c
-    test_serial_crc_kat
     test_fnv1a_kat)
 
 foreach(test ${PLEXUS_WIRE_TESTS})
@@ -39,6 +38,15 @@ target_link_libraries(test_crc_serial_decorator PRIVATE
     Catch2::Catch2WithMain)
 target_include_directories(test_crc_serial_decorator PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_crc_serial_decorator TEST_PREFIX "wire.")
+
+# The serial known-answer vectors: full on-wire frames as captured literals, checked through the stream codec.
+add_executable(test_serial_frame_kat test_serial_frame_kat.cpp)
+target_link_libraries(test_serial_frame_kat PRIVATE
+    plexus::wire
+    plexus::stream
+    Catch2::Catch2WithMain)
+target_include_directories(test_serial_frame_kat PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_serial_frame_kat TEST_PREFIX "wire.")
 
 # The deframer's zero-allocation gate includes support/alloc_counter.h (one operator-new override
 # per program), so it is its own executable, serialized so concurrent tests cannot skew the count.

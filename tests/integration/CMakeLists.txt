@@ -1325,6 +1325,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     catch_discover_tests(test_serial_retire_drain TEST_PREFIX "integration.")
     endif()
 
+    # The host serial channel's egress read off an openpty master equals a serial known-answer row byte for byte.
+    # POSIX-only (openpty).
+    if(NOT WIN32)
+    add_executable(test_serial_egress_kat test_serial_egress_kat.cpp)
+    target_link_libraries(test_serial_egress_kat PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::inproc
+        Catch2::Catch2WithMain
+        util)
+    target_include_directories(test_serial_egress_kat PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_serial_egress_kat TEST_PREFIX "integration.")
+    endif()
+
     # A dropped serial header byte over an openpty pair: the next frame and the peer's liveliness must
     # survive it. POSIX-only (openpty).
     if(NOT WIN32)
