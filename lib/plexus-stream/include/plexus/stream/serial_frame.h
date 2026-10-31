@@ -61,11 +61,11 @@ inline std::array<std::byte, crc_trailer_size> crc_trailer(std::span<const std::
     return trailer;
 }
 
-inline std::array<std::byte, serial_header_size> encode_serial_header(std::span<const std::byte> wire_header) noexcept
+inline std::array<std::byte, serial_header_size> encode_serial_header(std::span<const std::byte, wire::header_size> wire_header) noexcept
 {
     std::array<std::byte, serial_header_size> header{};
     const auto fields = std::copy(k_serial_format_id.begin(), k_serial_format_id.end(), header.begin());
-    std::copy(wire_header.begin() + k_serial_format_id.size(), wire_header.begin() + wire::header_size, fields);
+    std::copy(wire_header.begin() + k_serial_format_id.size(), wire_header.end(), fields);
     const std::span<std::byte> out{header};
     write_crc_le(out.subspan(wire::header_size), wire::crc32c(out.first(wire::header_size)));
     return header;

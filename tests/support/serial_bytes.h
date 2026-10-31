@@ -16,7 +16,7 @@ inline constexpr std::size_t k_serial_timestamp_offset = 12;
 
 inline std::vector<std::byte> serial_bytes(std::span<const std::byte> framed)
 {
-    const auto header  = stream::encode_serial_header(framed.first(wire::header_size));
+    const auto header  = stream::encode_serial_header(framed.first<wire::header_size>());
     const auto payload = framed.subspan(wire::header_size);
     const auto trailer = stream::crc_trailer(header, payload);
     std::vector<std::byte> out{header.begin(), header.end()};

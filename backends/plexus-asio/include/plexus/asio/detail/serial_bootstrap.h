@@ -11,15 +11,15 @@
 #include <array>
 #include <memory>
 #include <vector>
-#include <utility>
 #include <cstddef>
+#include <utility>
 
 namespace plexus::asio::detail {
 
 // plaintext_bootstrap plus the serial framing on egress. submit admits the serial header, the payload and the CRC32C
-// trailer as one atomic unit, so a full egress queue never leaves part of a frame on the wire; the three nodes ride the
-// same writev. arm_on_accept does NOT start a read loop: serial_channel owns and starts the inbound CRC verify+resync
-// loop after its derived members are constructed.
+// trailer as one atomic unit, so a full egress queue never leaves part of a frame on the wire; the gather limit may
+// split a unit across write turns, which is harmless on an ordered byte stream. arm_on_accept does NOT start a read
+// loop: serial_channel owns and starts the inbound CRC verify+resync loop after its derived members are constructed.
 template<typename Stream>
 class serial_bootstrap
 {
@@ -47,14 +47,14 @@ public:
     {
         const auto payload = data.subspan(plexus::wire::header_size);
         auto owner         = std::make_shared<std::vector<std::byte>>(payload.begin(), payload.end());
-        enqueue_framed(c, data.first(plexus::wire::header_size), plexus::wire_bytes<>{std::span<const std::byte>{*owner}, owner});
+        enqueue_framed(c, data.first<plexus::wire::header_size>(), plexus::wire_bytes<>{std::span<const std::byte>{*owner}, owner});
     }
 
     template<typename Channel>
     void submit(Channel &c, plexus::wire_bytes<> data)
     {
         const std::span<const std::byte> framed = data;
-        enqueue_framed(c, framed.first(plexus::wire::header_size), plexus::wire_bytes<>{framed.subspan(plexus::wire::header_size), data.owner()});
+        enqueue_framed(c, framed.first<plexus::wire::header_size>(), plexus::wire_bytes<>{framed.subspan(plexus::wire::header_size), data.owner()});
     }
 
     template<typename Channel>
@@ -70,7 +70,7 @@ public:
 private:
     // The header and trailer share one heap node so they stay resident across the gather-write.
     template<typename Channel>
-    static void enqueue_framed(Channel &c, std::span<const std::byte> wire_header, plexus::wire_bytes<> payload)
+    static void enqueue_framed(Channel &c, std::span<const std::byte, plexus::wire::header_size> wire_header, plexus::wire_bytes<> payload)
     {
         const auto header = plexus::stream::encode_serial_header(wire_header);
         auto owner        = std::make_shared<const envelope>(envelope{header, plexus::stream::crc_trailer(header, payload)});

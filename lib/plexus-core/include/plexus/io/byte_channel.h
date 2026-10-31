@@ -17,7 +17,8 @@ namespace plexus::io {
 // Contract every backend honors identically: on_data is ALWAYS posted onto the executor (never invoked synchronously
 // from send()/feed()), so a handler may call back into the channel without reentrancy hazard; the delivered span is a
 // COMPLETE header-on frame (a frame_header followed by its payload), NOT the stripped inner payload. on_error and
-// on_protocol_close are DISTINCT seams: on_error is a network drop (re-dials); on_protocol_close is a wire-misbehaving
+// on_protocol_close are DISTINCT seams: on_error with would_block or message_too_large is a refused send that leaves the
+// channel open (does NOT re-dial), with any other code a network drop (re-dials); on_protocol_close is a wire-misbehaving
 // peer (does NOT re-dial). A channel is closed once close(), a fail or a protocol close happened; close() is idempotent.
 // Closing detaches on_data, on_error and on_protocol_close (on the fail path on_error fires first, then the detach).
 // on_closed fires exactly once, posted, after the channel's last outstanding operation has completed; a handler
