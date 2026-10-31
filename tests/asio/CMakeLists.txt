@@ -37,7 +37,7 @@ catch_discover_tests(test_stream_read_buffer TEST_PREFIX "asio.")
 # crypto backend is on, the SAME TU also compiles the mux-route legs (the multiplexing
 # transport header pulls in plexus::crypto for its secure member), gated by
 # PLEXUS_HAVE_TLS_MUX so the base UDP legs build with crypto off.
-add_executable(test_udp_transport test_udp_transport.cpp test_udp_transport_mux.cpp)
+add_executable(test_udp_transport test_udp_transport.cpp test_udp_transport_mux.cpp test_udp_publish_ceiling.cpp)
 target_link_libraries(test_udp_transport PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)

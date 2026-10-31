@@ -68,7 +68,6 @@ public:
                             std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
-            , m_max_frame_bytes(cfg.max_payload_size)
     {
         detail::serial_wire_decorator(*this);
     }
@@ -79,7 +78,6 @@ public:
                    std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
             , m_decorator(cfg.max_payload_size)
-            , m_max_frame_bytes(cfg.max_payload_size)
     {
         detail::serial_wire_decorator(*this);
         // The adopt ctor's read loop, deferred until the decorator is constructed.
@@ -103,12 +101,11 @@ public:
         detail::serial_do_read(*this);
     }
 
-    // The per-MESSAGE size ceiling for this leg (the inbound reassembler's max payload). The splice
-    // gates an outbound forwarded envelope against this so a frame too large for the serial leg
-    // drops-with-count rather than being sent and rejected at the peer's reassembler (a teardown).
+    // The largest wire frame this leg carries; the peer's deframer must run the same payload cap, or it refuses what
+    // this end sends.
     std::size_t max_frame_bytes() const noexcept
     {
-        return m_max_frame_bytes;
+        return stream::serial_frame_ceiling(m_decorator.max_payload());
     }
 
 private:
@@ -122,7 +119,6 @@ private:
     // These die before the base closes the port, which is safe because a channel is destroyed only after its last
     // operation completed.
     stream::crc_serial_inbound m_decorator;
-    std::size_t m_max_frame_bytes;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_frame_dropped_cb;
 };
 

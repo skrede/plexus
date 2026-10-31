@@ -28,6 +28,8 @@ enum class drop_cause : std::uint8_t
     closed_unsent,
     splice_exhausted,
     splice_oversize,
+    // A frame larger than its outbound leg's per-message ceiling, refused before it reached the wire.
+    oversize,
 };
 
 struct drop_event

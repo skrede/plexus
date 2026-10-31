@@ -61,9 +61,12 @@ public:
     // highest-priority backlog the destination can currently accept.
     // Returns the drop cause the admission incurred (drop_cause::none on a clean admit) so
     // the forwarder records the per-(topic, band) drop at the fan-out site. The inproc/sink
-    // short-circuit never has a bounded band backlog, so it never drops here (none).
+    // short-circuit never has a bounded band backlog, so it never drops here (none), and a
+    // frame over the leg's ceiling is refused as oversize before either path sees it.
     drop_cause enqueue(Channel &ch, std::size_t band, io::congestion congestion, wire_bytes<> frame)
     {
+        if(frame.size() > channel_frame_ceiling(ch))
+            return drop_cause::oversize;
         if constexpr(!can_poll<Channel>())
         {
             // inproc/sink: no bounded band backlog, so congestion is moot. The owner

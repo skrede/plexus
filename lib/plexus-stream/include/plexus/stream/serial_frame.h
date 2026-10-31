@@ -23,6 +23,12 @@ inline constexpr std::size_t serial_header_size = wire::header_size + sizeof(std
 // The largest payload whose frame holds a 115200-baud line for less than one default heartbeat interval.
 inline constexpr std::size_t k_serial_default_max_payload = 1024;
 
+// The largest wire frame a deframer with this payload cap accepts.
+constexpr std::size_t serial_frame_ceiling(std::size_t max_payload) noexcept
+{
+    return wire::header_size + max_payload;
+}
+
 enum class serial_format : std::uint8_t
 {
     crc32c_header

@@ -125,13 +125,13 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
         REQUIRE(peer.is_complete());
 
         // The relay serves the topic over the narrow leg (the exact channel a downstream demand would
-        // fan onto). The probe reports the configured ceiling; an unprobed inproc channel is unlimited.
-        REQUIRE(relay.msg_peer().channel.max_frame_bytes() == k_ceiling);
+        // fan onto). The probe reports the framed ceiling; an unprobed inproc channel is unlimited.
+        REQUIRE(relay.msg_peer().channel.max_frame_bytes() == k_ceiling + wire::header_size);
         plexus::inproc::inproc_bus<> ibus;
         plexus::inproc::inproc_executor<> iex{ibus};
         plexus::inproc::inproc_channel<> unprobed{iex};
         REQUIRE(pio::detail::channel_frame_ceiling(unprobed) == (std::numeric_limits<std::size_t>::max)());
-        REQUIRE(pio::detail::channel_frame_ceiling(relay.msg_peer().channel) == k_ceiling);
+        REQUIRE(pio::detail::channel_frame_ceiling(relay.msg_peer().channel) == k_ceiling + wire::header_size);
 
         const bool attached = relay_messages.attach_for_fanout(serial_msg_fwd::peer{relay.msg_peer().channel, "narrow"}, "gated");
         plexus::testing::pump_until(io, [&] { return true; }, k_pump_bound);

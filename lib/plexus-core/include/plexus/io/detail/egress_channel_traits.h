@@ -3,6 +3,7 @@
 
 #include "plexus/io/fragmentation.h"
 
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 
@@ -31,6 +32,17 @@ std::uint64_t key_of(Channel &ch)
         return ch.scheduler_key();
     else
         return 0;
+}
+
+// The largest wire frame the channel's leg carries when it publishes max_frame_bytes(); a channel without the probe is
+// unlimited.
+template<typename Channel>
+inline std::size_t channel_frame_ceiling(const Channel &ch) noexcept
+{
+    if constexpr(requires(const Channel &c) { c.max_frame_bytes(); })
+        return ch.max_frame_bytes();
+    else
+        return (std::numeric_limits<std::size_t>::max)();
 }
 
 // The channel's own write-queue byte cap when it publishes one, so the band hand-off and the channel's admission stay in

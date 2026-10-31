@@ -50,6 +50,11 @@ public:
         m_on_drop_cb = std::move(cb);
     }
 
+    std::size_t max_payload() const noexcept
+    {
+        return m_max_payload;
+    }
+
     // A full buffer holds a whole frame or a refusable header at its front, so every round frees room.
     void feed(std::span<const std::byte> bytes)
     {

@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_FORWARD_SPLICE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_FORWARD_SPLICE_H
 
+#include "plexus/io/detail/egress_channel_traits.h"
+
 #include "plexus/io/splice_pool.h"
 #include "plexus/io/forward_options.h"
 
@@ -14,7 +16,6 @@
 #include "plexus/wire/forwarded_frame.h"
 
 #include <span>
-#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -46,19 +47,6 @@ struct null_forward_splice
 };
 
 namespace detail {
-
-// The outbound leg's per-message envelope ceiling: a channel that publishes max_frame_bytes() (a
-// real per-message size limit — a serial or datagram leg) gates the splice against it; a channel
-// without the probe is UNLIMITED, so the gate is inert and a single-leg / wide-leg node stays
-// byte-identical. The probe mirrors the can_poll()/scheduler_key() capability pattern.
-template<typename Channel>
-inline std::size_t channel_frame_ceiling(const Channel &ch) noexcept
-{
-    if constexpr(requires(const Channel &c) { c.max_frame_bytes(); })
-        return ch.max_frame_bytes();
-    else
-        return (std::numeric_limits<std::size_t>::max)();
-}
 
 // The encoded envelope size for an inner region of inner_n bytes (the outer header, the preamble, the
 // u32 inner-length prefix, then the inner bytes). The splice gates a slot against this before encoding.
