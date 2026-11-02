@@ -465,6 +465,28 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_node_close_asio TEST_PREFIX "node.")
 
+    # Two nodes over loopback TCP: the dialer's observer sees the peer alive once connected and lost once it stops.
+    add_executable(test_liveliness_tcp test_liveliness_tcp.cpp)
+    target_link_libraries(test_liveliness_tcp PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::inproc
+        plexus::testing
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_liveliness_tcp TEST_PREFIX "node.")
+
+    # The same pair over loopback UDP, where a stopped peer sends no close and its loss comes from missed heartbeats.
+    add_executable(test_liveliness_udp test_liveliness_udp.cpp)
+    target_link_libraries(test_liveliness_udp PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::inproc
+        plexus::testing
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    catch_discover_tests(test_liveliness_udp TEST_PREFIX "node.")
+
     # A foreign thread hands work to a node through plexus::post while the driver thread runs it, over an asio
     # io_context and an inproc stepping thread; the TSan tree is the witness that the work never ran off the driver.
     add_executable(test_post_from_thread test_post_from_thread.cpp)
