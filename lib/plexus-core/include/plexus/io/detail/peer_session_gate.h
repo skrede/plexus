@@ -20,19 +20,19 @@ enum class gate_verdict : std::uint8_t
 };
 
 // decode_header casts the type byte unchecked, so a byte outside the enumeration reaches this switch. It has no
-// default arm so that a new msg_type fails the build under -Wswitch until it is listed here and classified below.
-constexpr bool is_known_type(wire::msg_type type) noexcept
+// default arm so that a new msg_type fails the build under -Wswitch until it is given a verdict here.
+// NOLINTNEXTLINE(readability-function-size)
+constexpr gate_verdict classify(bool complete, wire::msg_type type) noexcept
 {
     switch(type)
     {
-        case wire::msg_type::unidirectional:
-        case wire::msg_type::bidirectional:
         case wire::msg_type::handshake_req:
         case wire::msg_type::handshake_resp:
+            return gate_verdict::admit;
+        case wire::msg_type::unidirectional:
         case wire::msg_type::subscribe:
         case wire::msg_type::unsubscribe:
         case wire::msg_type::fetch_latched:
-        case wire::msg_type::fetch_metadata:
         case wire::msg_type::rpc_request:
         case wire::msg_type::rpc_response:
         case wire::msg_type::subscribe_response:
@@ -44,19 +44,13 @@ constexpr bool is_known_type(wire::msg_type type) noexcept
         case wire::msg_type::companion_withdrawn:
         case wire::msg_type::companion_switch:
         case wire::msg_type::companion_offer:
-            return true;
+            return complete ? gate_verdict::admit : gate_verdict::unestablished;
+        // Neither side has a consumer for these, so they are malformed in every state.
+        case wire::msg_type::bidirectional:
+        case wire::msg_type::fetch_metadata:
+            return gate_verdict::malformed;
     }
-    return false;
-}
-
-// bidirectional and fetch_metadata have no consumer on either side, so they are malformed in every state.
-constexpr gate_verdict classify(bool complete, wire::msg_type type) noexcept
-{
-    if(!is_known_type(type) || type == wire::msg_type::bidirectional || type == wire::msg_type::fetch_metadata)
-        return gate_verdict::malformed;
-    if(complete || type == wire::msg_type::handshake_req || type == wire::msg_type::handshake_resp)
-        return gate_verdict::admit;
-    return gate_verdict::unestablished;
+    return gate_verdict::malformed;
 }
 
 template<typename Session>
