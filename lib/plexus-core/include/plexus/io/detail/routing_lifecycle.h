@@ -93,6 +93,8 @@ void arm_relayed_suppression(Engine &e, const node_id &slot_id)
 template<typename Engine>
 void dispatch_lifecycle(Engine &e, const lifecycle_event &ev)
 {
+    if(is_misidentified_dial(ev))
+        e.m_known_peers.invalidate_binding(ev.id);
     feed_liveliness_session(e, ev);
     forget_topics_on_teardown(e, ev);
     if(ev.edge == lifecycle_edge::connected || ev.edge == lifecycle_edge::reconnected)

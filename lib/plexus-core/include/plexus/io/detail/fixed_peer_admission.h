@@ -24,9 +24,10 @@ typename Slots::value_type *claim_identity_slot(Slots &slots, const node_id &id,
     for(auto &e : slots)
         if(!e.occupied)
         {
-            e.occupied = true;
-            e.id       = id;
-            e.count    = 0;
+            e.occupied        = true;
+            e.id              = id;
+            e.count           = 0;
+            e.binding_invalid = false;
             return &e;
         }
     if(is_direct)

@@ -33,4 +33,13 @@ struct lifecycle_event
 
 }
 
+namespace plexus::io::detail {
+
+inline bool is_misidentified_dial(const lifecycle_event &ev) noexcept
+{
+    return ev.edge == lifecycle_edge::rejected && ev.reason == handshake_outcome::reject_identity && ev.kind == peer_kind::dialed;
+}
+
+}
+
 #endif

@@ -33,11 +33,12 @@ class basic_known_peers
 public:
     bool note_peer(const node_id &id, const endpoint &ep)
     {
-        return m_storage.put(id, ep);
+        return note_peer(id, ep, 0);
     }
 
     bool note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
+        m_storage.set_binding_invalid(id, false);
         return m_storage.put(id, ep, now);
     }
 
@@ -105,6 +106,25 @@ public:
     bool contains(const node_id &id) const
     {
         return m_storage.has(id);
+    }
+
+    // A dial that proved another identity leaves the binding known but undialable until the id's next card.
+    void invalidate_binding(const node_id &id)
+    {
+        if(lookup(id))
+            m_storage.set_binding_invalid(id, true);
+    }
+
+    bool binding_invalid(const node_id &id) const
+    {
+        return m_storage.binding_invalid(id);
+    }
+
+    std::optional<endpoint> dial_target(const node_id &id) const
+    {
+        if(binding_invalid(id))
+            return std::nullopt;
+        return lookup(id);
     }
 
     bool forget(const node_id &id)

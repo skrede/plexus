@@ -25,6 +25,7 @@ set(PLEXUS_IO_TESTS
     test_epoch_source
     test_known_peers_storage
     test_known_peers_change
+    test_known_peers_binding
     test_liveness_storage
     test_peer_liveliness_types
     test_pending_ops

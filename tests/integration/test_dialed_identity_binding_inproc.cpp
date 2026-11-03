@@ -75,7 +75,7 @@ TEST_CASE("dialed identity binding: a rejection does not turn the peer's livelin
     t.net.a.remove_observer(probe);
 }
 
-TEST_CASE("dialed identity binding: a card for the identity now at the endpoint does not re-authorize the stale card", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity binding: a card for the identity now at the endpoint does not re-authorize the stale card", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;
@@ -90,7 +90,7 @@ TEST_CASE("dialed identity binding: a card for the identity now at the endpoint 
     CHECK(t.rec.for_peer(t.net.id_b).disconnected == 0);
 }
 
-TEST_CASE("dialed identity binding: a session proving the id serves demand and its end does not redial the stale endpoint", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity binding: a session proving the id serves demand and its end does not redial the stale endpoint", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;

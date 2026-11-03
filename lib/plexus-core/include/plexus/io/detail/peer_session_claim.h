@@ -20,7 +20,7 @@ void track_identity_claim(Registry &reg, Record &record, const lifecycle_event &
 {
     if(ev.edge == lifecycle_edge::connected || ev.edge == lifecycle_edge::reconnected)
         record.claim_released = false;
-    if(ev.edge != lifecycle_edge::rejected || ev.reason != handshake_outcome::reject_identity || ev.kind != peer_kind::dialed)
+    if(!detail::is_misidentified_dial(ev))
         return;
     record.claim_released = true;
     reg.deny_redial(ev.id);

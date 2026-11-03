@@ -270,7 +270,7 @@ public:
     {
         if(m_registry.is_connected(id) || detail::any_session_for(*this, id))
             return;
-        auto ep = m_known_peers.lookup(id);
+        auto ep = m_known_peers.dial_target(id);
         if(!ep)
             return;
         if(!m_registry.ensure_slot(id, *ep, node_name_of(id)))

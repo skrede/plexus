@@ -104,6 +104,18 @@ public:
             slot->last_refreshed = now;
     }
 
+    void set_binding_invalid(const node_id &id, bool invalid)
+    {
+        if(entry *slot = find(id))
+            slot->binding_invalid = invalid;
+    }
+
+    bool binding_invalid(const node_id &id) const
+    {
+        const entry *slot = find(id);
+        return slot != nullptr && slot->binding_invalid;
+    }
+
     std::optional<endpoint> get(const node_id &id) const
     {
         if(const entry *slot = find(id))
@@ -178,6 +190,7 @@ private:
         std::size_t count{0};
         std::uint64_t last_refreshed{0};
         bool occupied{false};
+        bool binding_invalid{false};
     };
 
     entry *find(const node_id &id)

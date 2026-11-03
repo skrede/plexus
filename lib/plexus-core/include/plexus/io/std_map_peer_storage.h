@@ -100,6 +100,16 @@ public:
         if(auto it = m_table.find(id); it != m_table.end())
             it->second.last_refreshed = now;
     }
+    void set_binding_invalid(const node_id &id, bool invalid)
+    {
+        if(auto it = m_table.find(id); it != m_table.end())
+            it->second.binding_invalid = invalid;
+    }
+    bool binding_invalid(const node_id &id) const
+    {
+        auto it = m_table.find(id);
+        return it != m_table.end() && it->second.binding_invalid;
+    }
     std::optional<endpoint> get(const node_id &id) const
     {
         auto it = m_table.find(id);
@@ -168,6 +178,7 @@ private:
         std::array<route_candidate, candidate_cap> candidates{};
         std::size_t count{0};
         std::uint64_t last_refreshed{0};
+        bool binding_invalid{false};
     };
 
     std::map<node_id, record> m_table;

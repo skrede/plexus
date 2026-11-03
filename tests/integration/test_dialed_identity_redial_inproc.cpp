@@ -32,7 +32,7 @@ TEST_CASE("dialed identity redial: a fresh card for the endpoint dials it again 
     CHECK(!t.net.a.is_connected(t.advertised));
 }
 
-TEST_CASE("dialed identity redial: a demand after a rejection does not dial until a fresh card", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity redial: a demand after a rejection does not dial until a fresh card", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;
@@ -54,7 +54,7 @@ TEST_CASE("dialed identity redial: a demand after a rejection does not dial unti
     CHECK(driver.redial_denied());
 }
 
-TEST_CASE("dialed identity redial: under eager dialing each card dials once and a demand between cards dials nothing", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity redial: under eager dialing each card dials once and a demand between cards dials nothing", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     two_node net(true);
@@ -78,7 +78,7 @@ TEST_CASE("dialed identity redial: under eager dialing each card dials once and 
     }
 }
 
-TEST_CASE("dialed identity redial: a card with a new endpoint authorizes one dial and no demand after it dials", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity redial: a card with a new endpoint authorizes one dial and no demand after it dials", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;
