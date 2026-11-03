@@ -21,6 +21,21 @@ target_link_libraries(test_message_forwarder PRIVATE
 
 catch_discover_tests(test_message_forwarder TEST_PREFIX "forwarder.")
 
+# A subscribe repeated on one channel is answered and leaves the single attachment, its replay
+# and its demand edge as they were, so a re-sent subscribe after a lost response is safe.
+add_executable(test_subscribe_duplicate test_subscribe_duplicate.cpp)
+
+target_include_directories(test_subscribe_duplicate PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+target_link_libraries(test_subscribe_duplicate PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_subscribe_duplicate TEST_PREFIX "forwarder.")
+
 # The splice-buffer zero-steady-state-alloc gate: a warm loop of pooled buffer-builds (checkout +
 # encode the forwarded envelope into the slot + release) allocates exactly ZERO per iteration, proven
 # through support/alloc_counter.h — the make_shared buffer-build shape it replaces allocates every
