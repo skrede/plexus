@@ -1,7 +1,5 @@
 #include "test_crossed_dial_common.h"
 
-#include "plexus/io/endpoint_id.h"
-
 #include "plexus/wire/rpc_status.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -78,7 +76,7 @@ TEST_CASE("crossed dial: neither end redials after the pair resolves", "[integra
     }
 }
 
-TEST_CASE("crossed dial: a later reach for the peer does not dial again", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: a later reach for the peer does not dial again", "[integration][crossed_dial]")
 {
     manual_clock::reset();
     crossed_net net;
@@ -96,7 +94,7 @@ TEST_CASE("crossed dial: a later reach for the peer does not dial again", "[inte
     CHECK(complete_sessions_for(net.b.e, net.id_a) == 1);
 }
 
-TEST_CASE("crossed dial: subscribe and call by discovered id reach the survivor in both directions", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: subscribe and call by discovered id reach the survivor in both directions", "[integration][crossed_dial]")
 {
     manual_clock::reset();
     crossed_net net;
@@ -115,7 +113,7 @@ TEST_CASE("crossed dial: subscribe and call by discovered id reach the survivor 
     CHECK(answered_call(net, net.b, net.id_a) == 1);
 }
 
-TEST_CASE("crossed dial: a drop on a demoted loser closes it at once without a redial", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: a drop on a demoted loser closes it at once without a redial", "[integration][crossed_dial]")
 {
     manual_clock::reset();
     crossed_net net;

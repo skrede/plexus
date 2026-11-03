@@ -30,6 +30,14 @@ typename Engine::session_type *session_by_identity(Engine &e, const node_id &pro
     return found;
 }
 
+// An accepted survivor is keyed by a provisional id, so the slot of a peer's own id may hold the closed loser of a crossed pair.
+template<typename Engine>
+typename Engine::session_type *live_session_for(Engine &e, const node_id &id)
+{
+    typename Engine::session_type *s = e.registry().session_for(id);
+    return s != nullptr && s->is_complete() ? s : session_by_identity(e, id);
+}
+
 }
 
 #endif

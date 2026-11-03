@@ -79,6 +79,32 @@ bool admit_complete(Registry &reg, Build &build, Slot &slot, const node_id &slot
     return kept == kind;
 }
 
+template<typename Registry>
+bool superseded(Registry &reg, const node_id &slot_id)
+{
+    const typename Registry::session_type *s = reg.session_for(slot_id);
+    if(s == nullptr)
+        return false;
+    if(detail::is_demoted(*s))
+        return true;
+    bool other = false;
+    if(s->is_complete())
+        reg.for_each_connected([&](const node_id &id, const typename Registry::session_type &o) { other = other || (id != slot_id && o.peer_identity() == s->peer_identity()); });
+    return other;
+}
+
+// The remote's close of a crossed pair's loser is no failure, so its drop is closed quietly instead of redialed.
+template<typename Registry>
+bool close_if_superseded(Registry &reg, const node_id &slot_id, peer_kind kind)
+{
+    if(!detail::superseded(reg, slot_id))
+        return false;
+    if(kind == peer_kind::dialed)
+        reg.deny_redial(slot_id);
+    detail::quiet_tear_down(*reg.session_for(slot_id));
+    return true;
+}
+
 template<typename Registry, typename Build, typename Slot>
 void wire_admit_complete(Registry &reg, Build &build, Slot &slot, const node_id &slot_id)
 {

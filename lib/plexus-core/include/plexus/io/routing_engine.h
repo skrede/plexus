@@ -268,7 +268,7 @@ public:
 
     void reach(const node_id &id)
     {
-        if(m_registry.is_connected(id))
+        if(m_registry.is_connected(id) || detail::any_session_for(*this, id))
             return;
         auto ep = m_known_peers.lookup(id);
         if(!ep)
@@ -293,8 +293,8 @@ public:
         reach(id);
 
         m_messages.remember_demand(node_name_of(id), fqn, qos, type_id, type_name);
-        auto *session = m_registry.session_for(id);
-        if(session != nullptr && session->is_complete())
+        auto *session = detail::live_session_for(*this, id);
+        if(session != nullptr)
             session->subscribe(fqn, qos, type_id, type_name);
     }
 
@@ -302,8 +302,8 @@ public:
               std::optional<std::chrono::nanoseconds> deadline = std::nullopt)
     {
         reach(id);
-        auto *session = m_registry.session_for(id);
-        if(session != nullptr && session->is_complete())
+        auto *session = detail::live_session_for(*this, id);
+        if(session != nullptr)
             m_procedures.call(session->rpc_peer(), fqn, param, std::move(on_response), deadline, session->session_id());
         else
             m_procedures.forward_call(id, fqn, param, std::move(on_response), deadline);
@@ -312,8 +312,8 @@ public:
     void unsubscribe(const node_id &id, std::string_view fqn)
     {
         m_messages.forget_remembered_demand(node_name_of(id), fqn);
-        auto *session = m_registry.session_for(id);
-        if(session != nullptr && session->is_complete())
+        auto *session = detail::live_session_for(*this, id);
+        if(session != nullptr)
             session->unsubscribe(fqn);
     }
 

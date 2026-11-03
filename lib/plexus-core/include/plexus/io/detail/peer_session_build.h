@@ -31,7 +31,7 @@ void wire_drop(Registry &reg, Slot &slot, const node_id &id)
             [&reg, id]
             {
                 auto it = reg.m_slots.find(id);
-                if(it != reg.m_slots.end())
+                if(it != reg.m_slots.end() && !detail::close_if_superseded(reg, id, peer_kind::dialed))
                     it->second->driver.on_channel_dropped();
             });
 }
@@ -44,7 +44,7 @@ void wire_inbound_drop(Registry &reg, Slot &slot, const node_id &id)
             [&reg, id]
             {
                 auto it = reg.m_slots.find(id);
-                if(it != reg.m_slots.end() && it->second->session)
+                if(it != reg.m_slots.end() && it->second->session && !detail::close_if_superseded(reg, id, peer_kind::accepted))
                     it->second->session->tear_down();
             });
 }

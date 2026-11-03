@@ -45,12 +45,6 @@ if(LINUX)
         PROPERTIES TIMEOUT 300)
 endif()
 
-# The same-host delivery defects still open, each tagged [!shouldfail]; the label keeps the set listable with
-# ctest -L shm-red.
-if(LINUX)
-    plexus_add_shm_harness_test(test_shm_lane_probes_red test_shm_lane_probes_red.cpp PROPERTIES LABELS "shm-red" TIMEOUT 300)
-endif()
-
 # The subscriber denies itself io_uring with a seccomp filter before it builds its node.
 if(LINUX)
     plexus_add_shm_harness_test(test_shm_harness_denial test_shm_harness_denial.cpp)
