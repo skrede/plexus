@@ -49,6 +49,8 @@ std::optional<fsm_step_result> validate(F &f, std::uint8_t peer_protocol_version
         return reject_version_result(f);
     if(peer_id == f.m_cfg.self_id)
         return identity_conflict_result(f);
+    if(f.m_cfg.expected_peer_id != node_id{} && peer_id != f.m_cfg.expected_peer_id)
+        return identity_conflict_result(f);
     if(f.m_cfg.attach_policy != nullptr && !f.m_cfg.attach_policy->decide(facts))
         return reject_unauthorized_result(f);
     if(f.m_complete_emitted)

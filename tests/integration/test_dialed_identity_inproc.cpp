@@ -7,7 +7,7 @@
 using namespace dialed_identity_fixture;
 using plexus::io::handshake_outcome;
 
-TEST_CASE("dialed identity: a dialed peer that proves another identity is rejected and never completes", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity: a dialed peer that proves another identity is rejected and never completes", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;
@@ -19,12 +19,15 @@ TEST_CASE("dialed identity: a dialed peer that proves another identity is reject
     CHECK(!t.net.a.is_connected(t.net.id_b));
 }
 
-TEST_CASE("dialed identity: a rejected dialed slot is not redialed by its backoff", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity: a rejected dialed slot is not redialed by its backoff", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;
     REQUIRE(t.rec.for_peer(t.advertised).rejected == 1);
+    auto &driver      = t.net.a.registry().driver_for(t.advertised);
     const auto before = t.net.a.attempt_count(t.advertised);
+    CHECK(driver.redial_denied());
+    driver.on_channel_dropped();
     t.net.advance(k_ceiling);
     t.net.advance(k_ceiling);
     CHECK(t.net.a.attempt_count(t.advertised) == before);

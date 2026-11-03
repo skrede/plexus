@@ -66,6 +66,7 @@ struct handshake_fsm_config
     // budget re-sends the request that many times before surrendering to the same abort. Only a
     // directly-dialed point-to-point slot sets it, so the generic timeout edge is unchanged by default.
     std::uint32_t handshake_retry{0};
+    node_id expected_peer_id{};
 };
 
 }

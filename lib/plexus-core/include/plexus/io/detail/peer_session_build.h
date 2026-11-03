@@ -10,6 +10,7 @@
 #include "plexus/io/handshake_protocol.h"
 
 #include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/peer_session_slot.h"
 
 #include "plexus/node_id.h"
 
@@ -46,12 +47,21 @@ void wire_inbound_drop(Registry &reg, Slot &slot, const node_id &id)
             });
 }
 
+// A dialed slot whose peer proved an identity other than its card's waits for a fresh card, not for its backoff.
+template<typename Registry>
+void deny_misidentified(Registry &reg, const lifecycle_event &ev)
+{
+    if(ev.edge == lifecycle_edge::rejected && ev.reason == handshake_outcome::reject_identity && ev.kind == peer_kind::dialed)
+        reg.deny_redial(ev.id);
+}
+
 template<typename Registry, typename Slot>
 void wire_observer(Registry &reg, Slot &slot)
 {
     slot.session->on_lifecycle(
             [&reg](const lifecycle_event &ev)
             {
+                detail::deny_misidentified(reg, ev);
                 if(reg.m_build.on_lifecycle)
                     reg.m_build.on_lifecycle(ev);
             });
@@ -161,7 +171,9 @@ void wire_dead(Registry &reg, Slot &slot, const node_id &id)
 template<typename Registry, typename Build, typename Slot>
 void emplace_session(Registry &reg, Build &build, Slot &slot, bool inbound)
 {
-    slot.session.emplace(slot.record, build.executor, build.fsm_cfg, build.handshake_timeout, build.messages, build.procedures, inbound, build.logger);
+    handshake_fsm_config fsm_cfg = build.fsm_cfg;
+    fsm_cfg.expected_peer_id     = detail::expected_identity(slot.record, inbound);
+    slot.session.emplace(slot.record, build.executor, fsm_cfg, build.handshake_timeout, build.messages, build.procedures, inbound, build.logger);
     if(inbound)
         detail::wire_inbound_drop(reg, slot, slot.record.peer_id);
     else

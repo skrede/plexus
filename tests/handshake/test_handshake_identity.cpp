@@ -37,6 +37,13 @@ handshake_fsm_config config_for(node_id self) noexcept
     return handshake_fsm_config{.self_id = self, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
+handshake_fsm_config config_expecting(node_id expected) noexcept
+{
+    auto cfg             = config_for(k_self);
+    cfg.expected_peer_id = expected;
+    return cfg;
+}
+
 handshake_request request_from(node_id peer) noexcept
 {
     return handshake_request{.id                       = peer,
@@ -131,4 +138,34 @@ TEST_CASE("identity: a request refused for its protocol version writes no identi
     CHECK(r.action == fsm_action::abort);
     CHECK(r.outcome == handshake_outcome::reject_version);
     CHECK(fsm.last_seen_peer_id() == node_id{});
+}
+
+TEST_CASE("identity: a response from a peer other than the expected one aborts with reject_identity", "[handshake][identity]")
+{
+    handshake_fsm fsm(config_expecting(k_peer));
+    fsm.on_dial_started();
+    fsm.on_outbound_connected();
+    const auto r = fsm.on_response(response_from(k_other));
+    CHECK(r.action == fsm_action::abort);
+    CHECK(r.outcome == handshake_outcome::reject_identity);
+    CHECK(fsm.last_seen_peer_id() == node_id{});
+}
+
+TEST_CASE("identity: a request on a slot expecting another peer aborts with reject_identity", "[handshake][identity]")
+{
+    handshake_fsm fsm(config_expecting(k_peer));
+    const auto r = fsm.on_request(request_from(k_other), true);
+    CHECK(r.action == fsm_action::abort);
+    CHECK(r.outcome == handshake_outcome::reject_identity);
+    CHECK(fsm.last_seen_peer_id() == node_id{});
+}
+
+TEST_CASE("identity: a config with no expected peer accepts any peer", "[handshake][identity]")
+{
+    handshake_fsm inbound(config_for(k_self));
+    CHECK(inbound.on_request(request_from(k_other), true).action == fsm_action::complete);
+    handshake_fsm outbound(config_for(k_self));
+    outbound.on_dial_started();
+    outbound.on_outbound_connected();
+    CHECK(outbound.on_response(response_from(k_other)).action == fsm_action::complete);
 }

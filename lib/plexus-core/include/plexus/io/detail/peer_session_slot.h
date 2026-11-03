@@ -3,6 +3,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reconnect.h"
+#include "plexus/io/endpoint_id.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/peer_session.h"
 #include "plexus/io/session_build_context.h"
@@ -53,6 +54,16 @@ struct session_slot
     bool dead;
     plexus::detail::move_only_function<void()> on_emptied_cb;
 };
+
+// dial(ep) keys its slot by the endpoint and learns the peer's id in the handshake, so only a slot keyed by a
+// discovered id has an identity to expect.
+template<typename Record>
+node_id expected_identity(const Record &r, bool inbound) noexcept
+{
+    if(inbound || r.peer_id == endpoint_id(r.dial_endpoint))
+        return node_id{};
+    return r.peer_id;
+}
 
 inline node_id inbound_slot_id(std::uint64_t n)
 {

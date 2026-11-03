@@ -7,7 +7,7 @@
 using namespace dialed_identity_fixture;
 using plexus::io::handshake_outcome;
 
-TEST_CASE("dialed identity redial: a fresh card for the endpoint dials it again after a rejection", "[integration][dialed_identity][!shouldfail]")
+TEST_CASE("dialed identity redial: a fresh card for the endpoint dials it again after a rejection", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;
