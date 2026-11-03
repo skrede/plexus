@@ -2144,3 +2144,17 @@ target_link_libraries(test_forward_demand_propagation PRIVATE
 target_include_directories(test_forward_demand_propagation PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_forward_demand_propagation TEST_PREFIX "integration.")
+
+# Two nodes that dial each other keep one session per pair, chosen identically at both ends.
+add_executable(test_crossed_dial_inproc
+    test_crossed_dial_common.cpp
+    test_crossed_dial_inproc.cpp)
+target_link_libraries(test_crossed_dial_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_crossed_dial_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_crossed_dial_inproc TEST_PREFIX "integration.")
