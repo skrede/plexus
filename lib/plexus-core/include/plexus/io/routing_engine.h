@@ -122,7 +122,26 @@ public:
             , m_security_fanout{*this}
             , m_messages(logger, global_default)
             , m_procedures(executor, handshake_timeout, logger)
-            , m_build{executor, fsm_cfg, handshake_timeout, m_messages, m_procedures, redial, redial_seed, logger, {}, {}, {}, {}, routes.usage == route_usage::never, {}, m_security_fanout, {}, {}}
+            , m_build{executor,
+                      fsm_cfg,
+                      handshake_timeout,
+                      m_messages,
+                      m_procedures,
+                      redial,
+                      redial_seed,
+                      logger,
+                      {},
+                      {},
+                      {},
+                      {},
+                      routes.usage == route_usage::never,
+                      {},
+                      m_security_fanout,
+                      {},
+                      {},
+                      {},
+                      {},
+                      subscribe_retry}
             , m_ops()
             , m_registry(transport, m_build)
             , m_monitor(m_executor)
@@ -131,7 +150,6 @@ public:
             , m_retry_timer(executor)
             , m_splice(io::make_forward_ctx(forward))
     {
-        m_build.subscribe_retry = subscribe_retry;
         m_messages.set_forward_options(forward);
         m_messages.set_consume_relayed(routes.usage != route_usage::never);
         detail::install_routing_sinks(*this);

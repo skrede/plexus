@@ -78,6 +78,7 @@ void check_refused(const object_probe &probe, const counted_slot &held)
     CHECK(probe.drops.front().cause == drop_cause::unestablished);
     CHECK(probe.drops.front().topic_hash == wire::fqn_topic_hash(k_topic));
 }
+
 }
 
 TEST_CASE("session gate object lane: an object before completion is not routed", "[integration][session_gate]")

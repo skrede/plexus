@@ -170,6 +170,7 @@ inline std::optional<subscribe_response> decode_subscribe_response(std::span<con
     }
     return resp;
 }
+
 }
 
 #endif

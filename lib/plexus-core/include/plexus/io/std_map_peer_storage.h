@@ -37,6 +37,7 @@ public:
     {
         return admit(id, direct_candidate(ep), now, route_options{});
     }
+
     bool admit(const node_id &id, const route_candidate &cand, std::uint64_t now, const route_options &opts)
     {
         record &rec        = m_table[id];
@@ -46,6 +47,7 @@ public:
             ++m_dropped;
         return r.changed;
     }
+
     detail::report_admit note_reported(const node_id &id, const route_candidate &cand, std::uint16_t seq, std::uint64_t now, const route_options &opts)
     {
         record &rec  = m_table[id];
@@ -53,6 +55,7 @@ public:
         m_dropped += static_cast<std::size_t>(r == detail::report_admit::dropped);
         return r;
     }
+
     bool remove_transitive(const node_id &id, const node_id &via)
     {
         auto it = m_table.find(id);
@@ -62,16 +65,19 @@ public:
             m_table.erase(it);
         return true;
     }
+
     bool mark_unreachable_via(const node_id &id, const node_id &via)
     {
         auto it = m_table.find(id);
         return it != m_table.end() && detail::mark_reachability_via(it->second.candidates.data(), it->second.count, via, graph::reachability::unreachable) != 0;
     }
+
     bool mark_reachable_via(const node_id &id, const node_id &via)
     {
         auto it = m_table.find(id);
         return it != m_table.end() && detail::mark_reachability_via(it->second.candidates.data(), it->second.count, via, graph::reachability::reachable) != 0;
     }
+
     std::size_t reset_reported_windows(const node_id &via)
     {
         std::size_t n = 0;
@@ -79,11 +85,13 @@ public:
             n += detail::reset_windows_via(rec.candidates.data(), rec.count, via);
         return n;
     }
+
     bool withdraw_seq_fresh(const node_id &id, const node_id &via, std::uint16_t seq)
     {
         auto it = m_table.find(id);
         return it != m_table.end() && detail::admit_via_seq(it->second.candidates.data(), it->second.count, via, seq);
     }
+
     template<typename Fn>
     void for_each_origin_via(const node_id &via, Fn fn) const
     {
@@ -95,21 +103,25 @@ public:
                     break;
                 }
     }
+
     void refresh(const node_id &id, std::uint64_t now)
     {
         if(auto it = m_table.find(id); it != m_table.end())
             it->second.last_refreshed = now;
     }
+
     void set_binding_invalid(const node_id &id, bool invalid)
     {
         if(auto it = m_table.find(id); it != m_table.end())
             it->second.binding_invalid = invalid;
     }
+
     bool binding_invalid(const node_id &id) const
     {
         auto it = m_table.find(id);
         return it != m_table.end() && it->second.binding_invalid;
     }
+
     std::optional<endpoint> get(const node_id &id) const
     {
         auto it = m_table.find(id);
@@ -117,10 +129,12 @@ public:
             return std::nullopt;
         return detail::direct_endpoint(it->second.candidates.data(), it->second.count);
     }
+
     bool has(const node_id &id) const
     {
         return m_table.find(id) != m_table.end();
     }
+
     std::span<const route_candidate> candidates(const node_id &id) const
     {
         auto it = m_table.find(id);
@@ -128,14 +142,17 @@ public:
             return {};
         return {it->second.candidates.data(), it->second.count};
     }
+
     bool remove(const node_id &id)
     {
         return m_table.erase(id) != 0;
     }
+
     std::size_t dropped() const noexcept
     {
         return m_dropped;
     }
+
     template<typename Report>
     void expire_older_than(std::uint64_t deadline, Report report)
     {
@@ -150,6 +167,7 @@ public:
                 ++it;
         }
     }
+
     template<typename Fn>
     void for_each(Fn fn) const
     {

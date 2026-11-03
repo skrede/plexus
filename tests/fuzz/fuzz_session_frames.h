@@ -183,6 +183,7 @@ inline frame foreign_frame(fuzz_input &in, std::uint64_t latched)
     const std::uint8_t flags = in.u8();
     return plexus::wire::encode_frame({.type = type, .flags = flags, .session_id = foreign_id_field(in, latched), .timestamp_ns = 0, .payload_len = 0}, payload);
 }
+
 }
 
 #endif

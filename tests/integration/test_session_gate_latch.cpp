@@ -76,6 +76,7 @@ struct drop_recorder final : plexus::io::observer
 
     std::vector<plexus::io::detail::drop_event> seen;
 };
+
 }
 
 TEST_CASE("session gate latch: a stray frame before completion does not latch a session id", "[integration][session_gate]")
