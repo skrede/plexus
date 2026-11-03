@@ -526,6 +526,9 @@ private:
     friend void detail::install_routing_sinks(E &);
 
     template<typename E>
+    friend void detail::install_heartbeat_hooks(E &);
+
+    template<typename E>
     friend auto detail::make_drop_sink(E &);
 
     template<typename E>
@@ -703,27 +706,15 @@ private:
 
     void on_dialed(std::unique_ptr<channel_type> channel, const endpoint &dialed)
     {
-        wire_channel_drop(*channel);
-        wire_channel_capture(*channel, m_registry.id_for_endpoint(dialed).value_or(node_id{}));
+        detail::wire_channel_drop(*this, *channel);
+        detail::wire_channel_capture(*this, *channel, m_registry.id_for_endpoint(dialed).value_or(node_id{}));
         m_registry.build_session_for_endpoint(dialed, std::move(channel));
     }
 
     void on_accepted(std::unique_ptr<channel_type> channel)
     {
-        wire_channel_drop(*channel);
-        m_registry.accept_session(std::move(channel), [this](channel_type &ch, const node_id &peer) { wire_channel_capture(ch, peer); });
-    }
-
-    void wire_channel_drop(channel_type &channel)
-    {
-        if constexpr(requires { channel.on_drop(detail::make_drop_sink(*this)); })
-            channel.on_drop(detail::make_drop_sink(*this));
-    }
-
-    void wire_channel_capture(channel_type &channel, const node_id &peer)
-    {
-        if constexpr(requires { channel.on_wire(detail::make_wire_sink(*this, peer)); })
-            channel.on_wire(detail::make_wire_sink(*this, peer));
+        detail::wire_channel_drop(*this, *channel);
+        m_registry.accept_session(std::move(channel), [this](channel_type &ch, const node_id &peer) { detail::wire_channel_capture(*this, ch, peer); });
     }
 
     std::uint64_t now_for_aging() const

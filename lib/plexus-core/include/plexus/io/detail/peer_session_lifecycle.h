@@ -26,7 +26,7 @@ void tear_down_session(Session &s)
 {
     const bool was_complete = s.m_forwarders_installed;
     s.m_torn_down           = true;
-    s.m_handshake_timer.cancel();
+    s.m_session_timer.cancel();
     s.m_waits.close();
     s.m_messages.detach_all(s.m_msg_peer);
     s.m_procedures.detach_all(s.m_rpc_peer);
@@ -81,9 +81,9 @@ void receive_frame(Session &s, std::span<const std::byte> frame)
 template<typename Session>
 void arm_handshake_timer(Session &s)
 {
-    s.m_handshake_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(s.m_handshake_timeout));
+    s.m_session_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(s.m_handshake_timeout));
     s.m_waits.begin();
-    s.m_handshake_timer.async_wait(
+    s.m_session_timer.async_wait(
             [&s](std::error_code ec)
             {
                 s.m_waits.end();

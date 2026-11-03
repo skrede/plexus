@@ -38,24 +38,27 @@ inline std::vector<std::byte> accepted_response(std::uint64_t hash, const io::rx
             {.topic_hash = hash, .status = wire::subscribe_status::subscribed_degraded, .offer = offer_state_of(offer), .has_degraded = true, .degraded_flags = rxo.degraded_fields});
 }
 
+// type_mismatch is checked first: a declared-vs-declared mismatch is the more specific refusal.
+inline std::optional<wire::subscribe_status> type_refusal(bool type_mismatch, bool type_undeclared) noexcept
+{
+    if(type_mismatch)
+        return wire::subscribe_status::type_mismatch;
+    if(type_undeclared)
+        return wire::subscribe_status::type_undeclared;
+    return std::nullopt;
+}
+
 // Each refusal replies a status, registers no fan-out entry, and returns false — a per-topic
 // refusal, never a peer teardown.
 template<typename Forwarder, typename Peer>
 // NOLINTNEXTLINE(readability-function-size)
 bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::optional<std::uint64_t> subscriber_type_id, const subscriber_qos &sub_qos)
 {
-    auto hash = wire::fqn_topic_hash(fqn);
-    if(f.type_id_mismatch(hash, subscriber_type_id))
+    auto hash             = wire::fqn_topic_hash(fqn);
+    const bool undeclared = sub_qos.posture == attach_posture::strict && subscriber_type_id && !f.m_endpoint.registry().producer_type_id(hash);
+    if(auto refusal = type_refusal(f.type_id_mismatch(hash, subscriber_type_id), undeclared))
     {
-        auto resp = wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::type_mismatch});
-        f.send_control(p.channel, wire::msg_type::subscribe_response, resp);
-        return false;
-    }
-    // Ordered after type_mismatch: a declared-vs-declared mismatch is the more specific refusal.
-    if(sub_qos.posture == attach_posture::strict && subscriber_type_id && !f.m_endpoint.registry().producer_type_id(hash))
-    {
-        auto resp = wire::encode_subscribe_response({.topic_hash = hash, .status = wire::subscribe_status::type_undeclared});
-        f.send_control(p.channel, wire::msg_type::subscribe_response, resp);
+        f.send_control(p.channel, wire::msg_type::subscribe_response, wire::encode_subscribe_response({.topic_hash = hash, .status = *refusal}));
         return false;
     }
     const topic_qos offered = f.m_endpoint.registry().qos_for(hash);

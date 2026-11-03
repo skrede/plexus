@@ -136,7 +136,7 @@ void on_complete(Session &s)
         return;
     if(s.m_is_inbound_bootstrap)
         send_handshake_response(s, handshake_outcome::accept_inbound);
-    s.m_handshake_timer.cancel();
+    s.m_session_timer.cancel();
     s.m_session_id = s.m_ctx.epochs.next();
     record_same_host(s);
     if(!s.m_negotiator.install_on_accept(channel_is_self_securing(s)))

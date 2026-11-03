@@ -84,6 +84,25 @@ void install_companion_sinks(Forwarder &messages, Coordinator &coordinator, Regi
 }
 
 template<typename Engine>
+void install_heartbeat_hooks(Engine &e)
+{
+    // A received heartbeat asserts session presence AND refreshes the peer's discovery TTL, so an
+    // actively-heartbeating peer never ages out of awareness even if its multicast announces lapse;
+    // refresh is a no-op for a peer that is not currently known, inventing no awareness.
+    e.m_build.on_stamp_seen = [&e](const node_id &ep)
+    {
+        e.m_monitor.stamp_seen(ep);
+        e.m_known_peers.refresh(ep, e.now_for_aging());
+        e.m_peer_liveliness.note_heartbeat(ep, e.now_for_aging());
+    };
+    // A peer's heartbeat also carries its cooperative decline posture; the engine honors the transition
+    // (withdraw an emitted report / re-lift on un-decline), a no-op on a non-relay node's null twin.
+    e.m_build.on_decline_seen = [&e](const node_id &ep, bool declines) { detail::note_decline(e, ep, declines); };
+    e.m_monitor.on_liveness([&e](const liveness_event &ev) { detail::post_counted(e, [ev](Engine &eng) { detail::fan_liveness(eng, ev); }); });
+    e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
+}
+
+template<typename Engine>
 // NOLINTNEXTLINE(readability-function-size)
 void install_routing_sinks(Engine &e)
 {
@@ -132,20 +151,7 @@ void install_routing_sinks(Engine &e)
     e.m_messages.on_forward_rpc([&e](const node_id &origin, const node_id &destination, std::uint8_t hop, std::span<const std::byte> frame)
                                 { return detail::forward_rpc(e, origin, destination, hop, frame); });
     e.m_messages.set_on_data_stamp([&e](const node_id &ep, std::uint64_t topic_hash) { e.m_monitor.stamp_data(ep, topic_hash); });
-    // A received heartbeat asserts session presence AND refreshes the peer's discovery TTL, so an
-    // actively-heartbeating peer never ages out of awareness even if its multicast announces lapse;
-    // refresh is a no-op for a peer that is not currently known, inventing no awareness.
-    e.m_build.on_stamp_seen = [&e](const node_id &ep)
-    {
-        e.m_monitor.stamp_seen(ep);
-        e.m_known_peers.refresh(ep, e.now_for_aging());
-        e.m_peer_liveliness.note_heartbeat(ep, e.now_for_aging());
-    };
-    // A peer's heartbeat also carries its cooperative decline posture; the engine honors the transition
-    // (withdraw an emitted report / re-lift on un-decline), a no-op on a non-relay node's null twin.
-    e.m_build.on_decline_seen = [&e](const node_id &ep, bool declines) { detail::note_decline(e, ep, declines); };
-    e.m_monitor.on_liveness([&e](const liveness_event &ev) { detail::post_counted(e, [ev](Engine &eng) { detail::fan_liveness(eng, ev); }); });
-    e.m_peer_liveliness.on_verdict([&e](const peer_liveliness_event &ev) { detail::post_liveliness(e, ev); });
+    install_heartbeat_hooks(e);
     // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
     // the configured interval has elapsed (the default equals the tick cadence, so emission is
     // per-tick and wire-identical) and, on the same cadence, re-assert every held relay report so a

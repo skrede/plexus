@@ -43,6 +43,20 @@ auto make_wire_sink(Engine &e, const node_id &peer)
     return [&e, peer](recording::wire_direction dir, std::uint64_t seq, std::span<const std::byte> bytes) { post_wire(e, dir, seq, peer, bytes); };
 }
 
+template<typename Engine, typename Channel>
+void wire_channel_drop(Engine &e, Channel &channel)
+{
+    if constexpr(requires { channel.on_drop(make_drop_sink(e)); })
+        channel.on_drop(make_drop_sink(e));
+}
+
+template<typename Engine, typename Channel>
+void wire_channel_capture(Engine &e, Channel &channel, const node_id &peer)
+{
+    if constexpr(requires { channel.on_wire(make_wire_sink(e, peer)); })
+        channel.on_wire(make_wire_sink(e, peer));
+}
+
 template<typename Engine>
 auto make_publish_sink(Engine &e)
 {
