@@ -4,6 +4,7 @@
 #include "plexus/io/companion_event.h"
 
 #include "plexus/io/detail/peer_session_gate.h"
+#include "plexus/io/detail/peer_session_retry.h"
 
 #include "plexus/wire/subscribe.h"
 
@@ -42,13 +43,16 @@ void note_offer(const Session &s, Forwarder &messages, const wire::subscribe_res
 
 // The anti-wrap guard stays first: a response with no outstanding match is a
 // stray/duplicate/forged frame, dropped before anything else so it can never fire a callback
-// nor wrap m_outstanding_subscribes (which would make ready unreachable for the cycle).
+// nor wrap m_outstanding_subscribes (which would make ready unreachable for the cycle). A
+// retrying session matches by topic, and a re-send makes a duplicate expected, so it is quiet.
 template<typename Session>
 void on_subscribe_response_received(Session &s, std::span<const std::byte> inner)
 {
     auto resp = wire::decode_subscribe_response(inner);
     if(!resp)
         return report_malformed(s);
+    if(retries(s.m_retry) && !take_unacked(s.m_retry, resp->topic_hash))
+        return;
     if(s.m_outstanding_subscribes == 0)
         return s.m_logger.warn("plexus: subscribe_response with no outstanding match");
     surface_subscribe_outcome(s, *resp);

@@ -20,10 +20,12 @@
 #include "plexus/io/handshake_protocol.h"
 #include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/procedure_forwarder.h"
+#include "plexus/io/subscribe_retry_config.h"
 
 #include "plexus/io/detail/warn_line.h"
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/session_hooks.h"
+#include "plexus/io/detail/peer_session_retry.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_consumers.h"
@@ -38,6 +40,7 @@
 #include "plexus/wire/handshake.h"
 #include "plexus/wire/heartbeat.h"
 #include "plexus/wire/subscribe.h"
+#include "plexus/wire/topic_hash.h"
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/topic_declaration.h"
 
@@ -81,6 +84,7 @@ public:
             , m_messages(messages)
             , m_outstanding_subscribes(0)
             , m_procedures(procedures)
+            , m_retry()
             , m_handshake_timeout(handshake_timeout)
             , m_msg_peer{m_channel, ctx.node_name}
             , m_malformed_warning(detail::k_malformed_warning_interval)
@@ -153,10 +157,18 @@ public:
         detail::close_for_protocol_error(*this, cause);
     }
 
+    // Set before start(): a subscribe already outstanding is untracked, so its response would be ignored.
+    void set_subscribe_retry(const subscribe_retry_config &cfg)
+    {
+        m_retry.config = cfg;
+    }
+
     void subscribe(std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {})
     {
-        if(m_messages.attach(m_msg_peer, fqn, qos, type_id, type_name))
-            ++m_outstanding_subscribes;
+        if(!m_messages.attach(m_msg_peer, fqn, qos, type_id, type_name))
+            return;
+        ++m_outstanding_subscribes;
+        detail::note_subscribe_sent(*this, wire::fqn_topic_hash(fqn));
     }
 
     void unsubscribe(std::string_view fqn)
@@ -247,6 +259,7 @@ private:
     std::uint16_t m_outstanding_subscribes;
     std::vector<std::byte> m_payload_scratch;
     procedure_forwarder<Policy> &m_procedures;
+    io::detail::subscribe_retry_state m_retry;
     std::chrono::nanoseconds m_handshake_timeout;
     typename message_forwarder<Policy>::peer m_msg_peer;
     io::detail::rate_limited_warning m_malformed_warning;
@@ -327,6 +340,26 @@ private:
     friend void detail::report_malformed(S &);
     template<typename S>
     friend void detail::arm_handshake_timer(S &);
+    template<typename S>
+    friend void detail::note_admitted(S &, const wire::frame_header &);
+    template<typename S>
+    friend void detail::note_subscribe_sent(S &, std::uint64_t);
+    template<typename S>
+    friend void detail::arm_subscribe_retry(S &);
+    template<typename S>
+    friend void detail::on_subscribe_retry_due(S &);
+    template<typename S>
+    friend bool detail::is_settled(const S &, const detail::unacked_subscribe &);
+    template<typename S>
+    friend void detail::resend_subscribe(S &, detail::unacked_subscribe &);
+    template<typename S>
+    friend void detail::settle_subscribe(S &, const detail::unacked_subscribe &);
+    template<typename S>
+    friend void detail::exhaust_subscribe(S &, const detail::unacked_subscribe &);
+    template<typename S>
+    friend void detail::release_subscribe(S &);
+    template<typename S>
+    friend void detail::redeclare_once(S &);
     template<typename S>
     friend void detail::wire_channel_seams(S &);
     template<typename S>

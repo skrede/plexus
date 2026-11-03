@@ -32,6 +32,8 @@ enum class drop_cause : std::uint8_t
     oversize,
     unestablished,
     foreign_session,
+    // A subscribe whose bounded re-sends all went unanswered; the session is kept.
+    unacknowledged,
 };
 
 struct drop_event

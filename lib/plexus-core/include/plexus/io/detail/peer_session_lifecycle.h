@@ -8,10 +8,12 @@
 #include "plexus/io/handshake_protocol.h"
 
 #include "plexus/io/detail/peer_session_gate.h"
+#include "plexus/io/detail/peer_session_retry.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_consumers.h"
 
+#include "plexus/wire/frame.h"
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/frame_codec.h"
 
@@ -35,6 +37,7 @@ void tear_down_session(Session &s)
     s.m_forwarders_installed     = false;
     s.m_outstanding_subscribes   = 0;
     s.m_ready_latched_this_cycle = false;
+    detail::reset_retry_cycle(s.m_retry);
     s.m_fsm.on_torn_down();
     s.m_channel.close();
     if(was_complete)
@@ -61,6 +64,17 @@ void protocol_close(Session &s, wire::close_cause cause)
     close_for_protocol_error(s, cause);
 }
 
+template<typename Session>
+void note_admitted(Session &s, const wire::frame_header &hdr)
+{
+    if(!s.is_complete())
+        return;
+    if(hdr.session_id != 0 && s.m_peer_session_id == 0)
+        s.m_peer_session_id = hdr.session_id;
+    if(hdr.type != wire::msg_type::handshake_req && hdr.type != wire::msg_type::handshake_resp)
+        detail::redeclare_once(s);
+}
+
 // The establishment gate runs first, so a refused frame can never latch an epoch. After it, a frame whose non-zero
 // session_id differs from the latched epoch is a previous-session straggler; it is dropped and the session stays open.
 template<typename Session>
@@ -85,8 +99,7 @@ void receive_frame(Session &s, std::span<const std::byte> frame)
     }
     if(hdr->session_id != 0 && s.m_peer_session_id != 0 && hdr->session_id != s.m_peer_session_id)
         return detail::report_drop(s, drop_cause::foreign_session);
-    if(hdr->session_id != 0 && s.m_peer_session_id == 0 && s.is_complete())
-        s.m_peer_session_id = hdr->session_id;
+    note_admitted(s, *hdr);
     s.m_router.route(frame);
 }
 
