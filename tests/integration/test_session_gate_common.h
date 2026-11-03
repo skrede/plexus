@@ -113,7 +113,7 @@ struct lone_session
     inproc_bus<> bus;
     inproc_executor<> ex;
     inproc_transport<> transport;
-    plexus::log::null_logger sink;
+    counting_logger sink;
     msg_forwarder messages;
     rpc_forwarder procedures;
     plexus::io::peer_context<inproc_policy> ctx;

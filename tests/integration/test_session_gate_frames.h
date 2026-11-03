@@ -33,6 +33,16 @@ constexpr std::string_view k_topic     = "gate/topic";
 constexpr std::string_view k_latched   = "gate/latched";
 constexpr std::string_view k_procedure = "gate/procedure";
 
+struct counting_logger final : plexus::log::logger
+{
+    void warn(std::string_view) override
+    {
+        ++lines;
+    }
+
+    std::uint32_t lines{0};
+};
+
 inline std::vector<std::byte> frame_of(wire::msg_type type, std::span<const std::byte> payload, std::uint64_t session_id = 0)
 {
     const wire::frame_header hdr{.type = type, .flags = 0, .session_id = session_id, .timestamp_ns = 0, .payload_len = payload.size()};

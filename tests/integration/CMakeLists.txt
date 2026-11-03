@@ -2025,6 +2025,19 @@ target_include_directories(test_session_identity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_session_identity TEST_PREFIX "integration.")
 
+# Every inbound decode failure counted and its warning rate-limited, with an alloc gate over the malformed path.
+add_executable(test_session_malformed_logging test_session_malformed_logging.cpp)
+target_link_libraries(test_session_malformed_logging PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_session_malformed_logging PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
+catch_discover_tests(test_session_malformed_logging TEST_PREFIX "integration."
+    PROPERTIES RUN_SERIAL TRUE)
+
 # A dialed slot whose peer proves an identity other than the one its discovery card advertised.
 add_executable(test_dialed_identity
     test_dialed_identity_inproc.cpp
