@@ -2014,6 +2014,17 @@ target_include_directories(test_session_gate PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_session_gate TEST_PREFIX "integration.")
 
+# A proven identity against a later handshake on the same established session.
+add_executable(test_session_identity test_session_identity.cpp)
+target_link_libraries(test_session_identity PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_session_identity PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_session_identity TEST_PREFIX "integration.")
+
 add_executable(test_forward_splice_pubsub test_forward_splice_pubsub.cpp)
 target_link_libraries(test_forward_splice_pubsub PRIVATE
     plexus::core

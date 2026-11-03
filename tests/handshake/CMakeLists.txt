@@ -51,3 +51,13 @@ target_link_libraries(test_version_interop PRIVATE
     Catch2::Catch2WithMain)
 
 catch_discover_tests(test_version_interop TEST_PREFIX "handshake.")
+
+# The proven identity of a handshake: written only by an accepted handshake before completion, never rewritten after.
+add_executable(test_handshake_identity test_handshake_identity.cpp)
+
+target_link_libraries(test_handshake_identity PRIVATE
+    plexus::core
+    plexus::wire
+    Catch2::Catch2WithMain)
+
+catch_discover_tests(test_handshake_identity TEST_PREFIX "handshake.")
