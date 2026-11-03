@@ -31,6 +31,8 @@ if(MSVC)
     # /Zc:preprocessor selects the conformant preprocessor so the deliberate
     # empty-argument trait-macro expansions do not trip the legacy preprocessor's C4003.
     add_compile_options(/W4 /permissive- /Zc:__cplusplus /Zc:preprocessor)
+    # An enumerator missing from a default-less switch is an error, as -Wswitch is under -Werror on GCC and Clang.
+    add_compile_options(/we4062)
     # Enable warnings-as-errors for MSVC once the build is warning-clean under /W4.
     # add_compile_options(/WX)
 else()

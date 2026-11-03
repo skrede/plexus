@@ -34,7 +34,7 @@ void surface_subscribe_outcome(Session &s, const wire::subscribe_response &resp)
 template<typename Session, typename Forwarder>
 void note_offer(const Session &s, Forwarder &messages, const wire::subscribe_response &resp)
 {
-    if(s.is_complete() && !is_refusal(resp.status))
+    if(!is_refusal(resp.status))
         messages.note_companion(s.msg_peer(), resp.topic_hash, offer_event_of(resp.offer));
 }
 

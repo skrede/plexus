@@ -23,7 +23,7 @@ namespace plexus::io::detail {
 template<typename Session>
 void originate_if_pubsub(Session &s, const wire::frame_header &hdr, std::span<const std::byte> body)
 {
-    if(!s.m_messages.wants_refan() || !s.is_complete())
+    if(!s.m_messages.wants_refan())
         return;
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
     auto uni                       = wire::decode_unidirectional(body, has_source_identity);

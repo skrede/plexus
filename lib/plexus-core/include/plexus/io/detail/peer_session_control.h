@@ -26,9 +26,6 @@
 
 namespace plexus::io::detail {
 
-// An unauthenticated peer must not reach the graph: only a complete session's records are folded,
-// so a record cannot be injected before the handshake settles who is speaking.
-//
 // The edge is attributed to the identity the handshake proved, NOT to the slot's key: an accepted
 // session's slot carries a provisional id minted before the peer spoke, and a pair that both dials
 // and accepts holds two sessions. Keying on the proven identity collapses both onto the one
@@ -37,8 +34,6 @@ namespace plexus::io::detail {
 template<typename Session>
 void fold_topic_edge(Session &s, std::string_view topic, std::string_view type_name, std::optional<std::uint64_t> type_id, graph::topic_role role)
 {
-    if(!s.is_complete())
-        return;
     s.m_messages.note_topic_edge(graph::topic_edge{s.m_fsm.last_seen_peer_id(), topic, type_name, type_id, role});
 }
 
@@ -83,8 +78,7 @@ void on_declare_received(Session &s, std::span<const std::byte> inner)
 template<typename Session, typename Forwarder>
 void on_peer_report_received(Session &s, Forwarder &messages, std::span<const std::byte> inner)
 {
-    if(s.is_complete())
-        ingest_peer_report_frame(messages, s.peer_identity(), inner);
+    ingest_peer_report_frame(messages, s.peer_identity(), inner);
 }
 
 // The sending relay is the proven identity the admission gate keys on, distinct from the trailer
@@ -92,8 +86,7 @@ void on_peer_report_received(Session &s, Forwarder &messages, std::span<const st
 template<typename Session>
 void on_forwarded_received(Session &s, std::span<const std::byte> inner)
 {
-    if(s.is_complete())
-        deliver_forwarded_frame(s, s.peer_identity(), inner);
+    deliver_forwarded_frame(s, s.peer_identity(), inner);
 }
 
 template<typename Session, typename Forwarder>
@@ -103,13 +96,10 @@ void on_fetch_latched_received(Session &s, Forwarder &messages, std::span<const 
         messages.fetch_latched(s.msg_peer(), req->topic_hash, req->max_samples);
 }
 
-// Only a complete session speaks for the peer it proved, so a lane is never moved by a peer that has not. A late
-// offer is heard as an offer in the subscribe response is.
+// A late offer is heard as an offer in the subscribe response is.
 template<typename Session, typename Forwarder>
 void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type, std::span<const std::byte> inner)
 {
-    if(!s.is_complete())
-        return;
     if(type == wire::msg_type::companion_switch)
     {
         if(auto marker = wire::decode_companion_switch(inner))
@@ -130,8 +120,6 @@ void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type,
 template<typename Session, typename Forwarder>
 void on_unsubscribe_received(Session &s, Forwarder &messages, std::span<const std::byte> inner)
 {
-    if(!s.is_complete())
-        return;
     if(auto req = wire::decode_unsubscribe_request(inner))
         messages.detach_for_fanout(s.msg_peer(), messages.fqn_for(req->topic_hash));
 }

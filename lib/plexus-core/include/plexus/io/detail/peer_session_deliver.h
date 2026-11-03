@@ -4,6 +4,8 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 
+#include "plexus/io/detail/peer_session_gate.h"
+
 #include "plexus/node_id.h"
 
 #include "plexus/wire/frame.h"
@@ -69,6 +71,11 @@ void deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<c
 template<typename Session>
 void deliver_session_object(Session &s, const object_carrier &c)
 {
+    if(detail::classify(s.is_complete(), wire::msg_type::unidirectional) != gate_verdict::admit)
+    {
+        detail::report_drop(s, drop_cause::unestablished, c.topic_hash);
+        return release(c);
+    }
     auto fqn = s.m_messages.fqn_for(c.topic_hash);
     if(fqn.empty())
     {
