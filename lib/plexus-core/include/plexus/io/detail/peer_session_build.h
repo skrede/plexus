@@ -12,6 +12,7 @@
 
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/peer_session_slot.h"
+#include "plexus/io/detail/peer_session_dedup.h"
 
 #include "plexus/node_id.h"
 
@@ -180,6 +181,7 @@ void emplace_session(Registry &reg, Build &build, Slot &slot, bool inbound)
     else
         detail::wire_drop(reg, slot, slot.record.peer_id);
     detail::wire_observer(reg, slot);
+    detail::wire_admit_complete(reg, build, slot, slot.record.peer_id);
     detail::wire_frame_drops(build, slot);
     detail::wire_message_route(reg, slot);
     detail::wire_object_route(reg, slot);

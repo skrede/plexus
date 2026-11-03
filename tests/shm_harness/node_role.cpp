@@ -54,13 +54,23 @@ using denied_member = plexus::shm::shm_mux_member<plexus::native::shm_region_bro
 using lost_notifier = plexus::shm::fallback_notifier<plexus::testing::demoting_primary<plexus::asio::asio_policy>, plexus::testing::denied_floor>;
 using lost_member   = plexus::shm::shm_mux_member<plexus::native::shm_region_broker, lost_notifier>;
 
+// A pair that dials each other keeps one session, which on the lower id is the accepted one, so a peer is found by the
+// identity it proved rather than by the slot this node dialed.
+template<typename Node>
+bool proven_connected(Node &node, const plexus::node_id &id)
+{
+    bool found = false;
+    node.router().registry().for_each_connected([&](const plexus::node_id &, auto &s) { found = found || s.peer_identity() == id; });
+    return found;
+}
+
 template<typename Node>
 void update_connected(Node &node, const node_args &args, node_slot &slot)
 {
     std::uint32_t connected = 0;
     for(std::uint32_t peer = 0; peer < args.count; ++peer)
     {
-        if(dials(args, peer) && node.router().is_connected(harness_id(peer)))
+        if(dials(args, peer) && proven_connected(node, harness_id(peer)))
             ++connected;
     }
     slot.connected.store(connected, std::memory_order_release);

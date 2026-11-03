@@ -68,6 +68,7 @@ public:
             : m_torn_down(false)
             , m_fsm(fsm_cfg)
             , m_router(logger)
+            , m_quiet_teardown(false)
             , m_logger(logger)
             , m_channel(*ctx.channel)
             , m_from_intra_process(tier_of(m_channel.remote_endpoint().scheme) == locality::process)
@@ -240,6 +241,7 @@ private:
     bool m_torn_down;
     handshake_fsm m_fsm;
     frame_router m_router;
+    bool m_quiet_teardown;
     log::logger &m_logger;
     channel_type &m_channel;
     bool m_from_intra_process;
@@ -328,6 +330,12 @@ private:
     friend void detail::send_handshake_response(S &, handshake_outcome);
     template<typename S>
     friend void detail::tear_down_session(S &);
+    template<typename S>
+    friend void detail::quiet_tear_down(S &);
+    template<typename S>
+    friend bool detail::is_demoted(const S &) noexcept;
+    template<typename S>
+    friend void detail::demote_loser(S &);
     template<typename S>
     friend void detail::close_for_protocol_error(S &, wire::close_cause);
     template<typename S>

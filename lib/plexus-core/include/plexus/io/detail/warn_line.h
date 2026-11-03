@@ -3,6 +3,8 @@
 
 #include "plexus/log/logger.h"
 
+#include "plexus/node_id.h"
+
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -40,6 +42,17 @@ public:
         const std::to_chars_result result = std::to_chars(m_buffer.data() + m_size, m_buffer.data() + k_capacity, count);
         if(result.ec == std::errc{})
             m_size = static_cast<std::size_t>(result.ptr - m_buffer.data());
+    }
+
+    void append_id(const node_id &id) noexcept
+    {
+        constexpr std::string_view digits = "0123456789abcdef";
+        for(const std::byte b : id)
+        {
+            const auto v = std::to_integer<std::uint8_t>(b);
+            append(digits.substr(v >> 4, 1));
+            append(digits.substr(v & 0x0f, 1));
+        }
     }
 
     std::string_view view() const noexcept

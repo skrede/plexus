@@ -81,10 +81,15 @@ inline fsm_step_result accept_inbound_no_complete() noexcept
 
 // Greater node_id keeps its outbound; the loser keeps the inbound it accepted. The equal case is
 // rejected at validation, so the comparison is strict and both sides agree on the survivor.
+inline dedup_decision arbitrate_dedup(const node_id &self_id, const node_id &peer_id) noexcept
+{
+    return self_id > peer_id ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
+}
+
 template<typename F>
 dedup_decision arbitrate_dedup(const F &f) noexcept
 {
-    return f.m_cfg.self_id > f.m_peer_id ? dedup_decision::keep_outbound : dedup_decision::keep_inbound;
+    return arbitrate_dedup(f.m_cfg.self_id, f.m_peer_id);
 }
 
 // A fresh inbound bootstrap completes inbound-only (no counter-dial to arbitrate). A mid-dial

@@ -11,7 +11,6 @@
 
 #include "plexus/node_id.h"
 
-#include <span>
 #include <chrono>
 #include <string>
 #include <vector>

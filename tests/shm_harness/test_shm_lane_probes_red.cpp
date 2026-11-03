@@ -7,8 +7,7 @@
 
 using namespace shm_harness;
 
-// The duplicate comes from the two sessions a crossed dial leaves standing, not from the ring.
-TEST_CASE("lane_probe an unhinted pair that dials each other delivers each message exactly once", "[shm][lane_probe][!shouldfail]")
+TEST_CASE("lane_probe an unhinted pair that dials each other delivers each message exactly once", "[shm][lane_probe]")
 {
     topology topo{probe_fqn("crossed"), 2, dial_wiring::crossed};
     REQUIRE(topo.created());

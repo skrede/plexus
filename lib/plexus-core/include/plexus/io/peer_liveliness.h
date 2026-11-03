@@ -68,6 +68,19 @@ public:
         settle(id, state, now_ns);
     }
 
+    // Withdraws a superseded session's contribution without a verdict; the peer stays reachable through the session that replaced it.
+    void retire_session(const node_id &id)
+    {
+        peer_state *state = m_storage.find(id);
+        if(state == nullptr)
+            return;
+        if(!state->aware)
+            return m_storage.erase(id);
+        state->session           = session_presence::absent;
+        state->last_heartbeat_ns = 0;
+        state->dropped_at_ns     = 0;
+    }
+
     void evaluate(std::uint64_t now_ns)
     {
         m_storage.for_each([&](const node_id &id, peer_state &state) { settle(id, state, now_ns); });

@@ -1,6 +1,5 @@
 #include "test_crossed_dial_common.h"
 
-#include "plexus/io/endpoint_id.h"
 #include "plexus/io/message_info.h"
 
 #include <span>
@@ -112,7 +111,7 @@ void crossed_net::advance_by(std::chrono::nanoseconds total)
 }
 
 // newcomer_loses: a dials first and subscribes, then b dials a. incumbent_loses: b dials first and subscribes,
-// then a dials b. The second completion is the newcomer.
+// then a dials b. The second dial waits one tick, so the first session has been judged alive before it is resolved.
 void crossed_net::cross(crossing order, const plexus::io::subscriber_qos &qos)
 {
     if(order != crossing::incumbent_loses)
@@ -128,7 +127,7 @@ void crossed_net::cross(crossing order, const plexus::io::subscriber_qos &qos)
     node_side &first  = order == crossing::newcomer_loses ? a : b;
     node_side &second = order == crossing::newcomer_loses ? b : a;
     first.e.subscribe(order == crossing::newcomer_loses ? id_b : id_a, k_topic, qos);
-    drive();
+    advance_by(k_step);
     second.e.dial(order == crossing::newcomer_loses ? ep_a : ep_b);
     drive();
 }

@@ -120,7 +120,8 @@ struct pair_fixture
         a.listen({"inproc", "host-a:5000"});
         b.listen({"inproc", "host-b:6000"});
         drive();
-        REQUIRE(a.router().is_connected(id_b));
+        // Both dial eagerly; the higher id keeps the session it dialed, so b holds the pair under a's id.
+        REQUIRE(b.router().is_connected(id_a));
     }
 };
 

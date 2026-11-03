@@ -40,8 +40,42 @@ void tear_down_session(Session &s)
     detail::reset_retry_cycle(s.m_retry);
     s.m_fsm.on_torn_down();
     s.m_channel.close();
-    if(was_complete)
+    if(was_complete && !s.m_quiet_teardown)
         detail::fire_lifecycle(s, lifecycle_edge::disconnected);
+}
+
+template<typename Session>
+void quiet_tear_down(Session &s)
+{
+    s.m_quiet_teardown = true;
+    tear_down_session(s);
+}
+
+template<typename Session>
+bool is_demoted(const Session &s) noexcept
+{
+    return s.m_quiet_teardown;
+}
+
+// The close waits one handshake window, within which the remote demotes its own end, so it never crosses the remote's survivor completion.
+template<typename Session>
+void demote_loser(Session &s)
+{
+    s.m_messages.detach_all(s.m_msg_peer);
+    s.m_procedures.detach_all(s.m_rpc_peer);
+    s.m_forwarders_installed   = false;
+    s.m_outstanding_subscribes = 0;
+    s.m_quiet_teardown         = true;
+    detail::reset_retry_cycle(s.m_retry);
+    s.m_session_timer.expires_after(std::chrono::duration_cast<std::chrono::milliseconds>(s.m_handshake_timeout));
+    s.m_waits.begin();
+    s.m_session_timer.async_wait(
+            [&s](std::error_code ec)
+            {
+                s.m_waits.end();
+                if(!ec && !s.m_torn_down)
+                    quiet_tear_down(s);
+            });
 }
 
 template<typename Session>
@@ -148,6 +182,7 @@ template<typename Session>
 void start_session(Session &s)
 {
     s.m_torn_down                 = false;
+    s.m_quiet_teardown            = false;
     s.m_closed_for_protocol_error = false;
     s.m_negotiator.prime();
     wire_channel_seams(s);

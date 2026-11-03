@@ -20,6 +20,9 @@ template<typename Session>
 void on_complete(Session &s);
 
 template<typename Session>
+void demote_loser(Session &s);
+
+template<typename Session>
 peer_kind session_kind(const Session &s) noexcept
 {
     return s.m_is_inbound_bootstrap ? peer_kind::accepted : peer_kind::dialed;
@@ -156,6 +159,8 @@ void on_complete(Session &s)
     s.m_session_timer.cancel();
     s.m_session_id = s.m_ctx.epochs.next();
     record_same_host(s);
+    if(s.m_admit_complete_cb && !s.m_admit_complete_cb(s.peer_identity(), session_kind(s)))
+        return demote_loser(s);
     if(!s.m_negotiator.install_on_accept(channel_is_self_securing(s)))
         return refuse_posture(s);
     s.m_forwarders_installed = true;

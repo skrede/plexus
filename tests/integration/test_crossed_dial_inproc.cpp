@@ -8,7 +8,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <string>
 #include <optional>
 
 using namespace crossed_dial_fixture;
@@ -29,7 +28,7 @@ bool fired_nothing(const recording_observer::counts &c)
 
 }
 
-TEST_CASE("crossed dial: each node keeps exactly one session for its peer", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: each node keeps exactly one session for its peer", "[integration][crossed_dial]")
 {
     for(const crossing order : k_orders)
     {
@@ -42,7 +41,7 @@ TEST_CASE("crossed dial: each node keeps exactly one session for its peer", "[in
     }
 }
 
-TEST_CASE("crossed dial: the higher id keeps the session it dialed and the lower id the one it accepted", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: the higher id keeps the session it dialed and the lower id the one it accepted", "[integration][crossed_dial]")
 {
     for(const crossing order : k_orders)
     {
@@ -55,7 +54,7 @@ TEST_CASE("crossed dial: the higher id keeps the session it dialed and the lower
     }
 }
 
-TEST_CASE("crossed dial: a session that loses on completion fires no lifecycle edge", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: a session that loses on completion fires no lifecycle edge", "[integration][crossed_dial]")
 {
     manual_clock::reset();
     crossed_net net;
@@ -68,7 +67,7 @@ TEST_CASE("crossed dial: a session that loses on completion fires no lifecycle e
     CHECK(net.b.e.registry().driver_for(endpoint_id(net.ep_a)).redial_denied());
 }
 
-TEST_CASE("crossed dial: an incumbent that loses closes without a disconnected edge and its demand moves to the survivor", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: an incumbent that loses closes without a disconnected edge and its demand moves to the survivor", "[integration][crossed_dial]")
 {
     manual_clock::reset();
     crossed_net net;
@@ -89,7 +88,7 @@ TEST_CASE("crossed dial: an incumbent that loses closes without a disconnected e
     CHECK(net.b.received.size() == 1);
 }
 
-TEST_CASE("crossed dial: each resolution logs one warning naming the peer and the kept session", "[integration][crossed_dial][!shouldfail]")
+TEST_CASE("crossed dial: each resolution logs one warning naming the peer and the kept session", "[integration][crossed_dial]")
 {
     for(const crossing order : k_orders)
     {

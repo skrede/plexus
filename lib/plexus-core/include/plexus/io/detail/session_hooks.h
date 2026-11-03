@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_SESSION_HOOKS_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_SESSION_HOOKS_H
 
+#include "plexus/io/peer_kind.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/security_event.h"
@@ -87,6 +88,12 @@ public:
         m_on_frame_dropped_cb = std::move(cb);
     }
 
+    // Asked at completion, before the connect edge: false demotes this session as the loser of a crossed dial.
+    void on_admit_complete(plexus::detail::move_only_function<bool(const node_id &, peer_kind)> cb)
+    {
+        m_admit_complete_cb = std::move(cb);
+    }
+
 protected:
     // Protected so the detail free functions reach them through the friend grants of the session deriving from this class.
     plexus::detail::move_only_function<void()> m_on_drop_cb;
@@ -95,6 +102,7 @@ protected:
     plexus::detail::move_only_function<void(const drop_event &)> m_on_frame_dropped_cb;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle_cb;
     plexus::detail::move_only_function<void(const node_id &, bool)> m_on_decline_seen_cb;
+    plexus::detail::move_only_function<bool(const node_id &, peer_kind)> m_admit_complete_cb;
     plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded_cb;
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>)> m_on_message_cb;
     plexus::detail::move_only_function<void(std::string_view, const object_carrier &)> m_on_object_route_cb;
