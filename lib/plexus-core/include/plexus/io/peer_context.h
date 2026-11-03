@@ -30,6 +30,7 @@ struct peer_context
     epoch_source epochs;
     bool has_ever_connected{false};
     bool same_host{false}; // fail-closed: not co-located until proven
+    bool claim_released{false};
 };
 
 }

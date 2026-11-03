@@ -6,6 +6,7 @@
 
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
+#include "plexus/io/detail/peer_session_claim.h"
 
 #include "plexus/node_id.h"
 
@@ -87,15 +88,6 @@ void build_session_into(Registry &reg, Slot &slot, std::unique_ptr<typename Regi
     rebuild_session(reg, reg.m_build, slot, std::move(channel), inbound);
 }
 
-template<typename Registry>
-bool endpoint_claimed(const Registry &reg, const node_id &id, const endpoint &ep)
-{
-    for(const auto &[other, slot] : reg.m_slots)
-        if(other != id && slot->record.dial_endpoint == ep)
-            return true;
-    return false;
-}
-
 // The inbound id taken is one no slot holds, so an accepted slot is always fresh.
 template<typename Registry>
 typename Registry::slot_block &emplace_inbound_slot(Registry &reg)
@@ -119,10 +111,10 @@ void retire_unclaimed(Registry &reg, std::unique_ptr<typename Registry::channel_
 template<typename Registry>
 void build_for_endpoint(Registry &reg, const endpoint &ep, std::unique_ptr<typename Registry::channel_type> channel)
 {
-    for(auto &[id, slot] : reg.m_slots)
-        if(slot->record.dial_endpoint == ep)
-            return detail::build_session_into(reg, *slot, std::move(channel), false);
-    retire_unclaimed(reg, std::move(channel));
+    auto it = detail::attributed_slot(reg.m_slots, ep);
+    if(it == reg.m_slots.end())
+        return retire_unclaimed(reg, std::move(channel));
+    detail::build_session_into(reg, *it->second, std::move(channel), false);
 }
 
 template<typename Registry, typename PreBuild>

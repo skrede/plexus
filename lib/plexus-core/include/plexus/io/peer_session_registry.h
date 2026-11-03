@@ -89,10 +89,8 @@ public:
 
     std::optional<node_id> id_for_endpoint(const endpoint &ep) const
     {
-        for(const auto &[id, slot] : m_slots)
-            if(slot->record.dial_endpoint == ep)
-                return id;
-        return std::nullopt;
+        auto it = detail::attributed_slot(m_slots, ep);
+        return it == m_slots.end() ? std::nullopt : std::optional{it->first};
     }
 
     bool has_session(const node_id &id) const
@@ -157,9 +155,9 @@ public:
 
     void notify_dial_failed(const endpoint &ep)
     {
-        for(auto &[id, slot] : m_slots)
-            if(slot->record.dial_endpoint == ep)
-                return slot->driver.notify_dial_failed();
+        auto it = detail::attributed_slot(m_slots, ep);
+        if(it != m_slots.end())
+            it->second->driver.notify_dial_failed();
     }
 
     void close(detail::pending_ops &owner)

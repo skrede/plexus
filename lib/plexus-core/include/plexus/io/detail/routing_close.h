@@ -6,8 +6,6 @@
 
 #include "plexus/io/detail/pending_ops.h"
 
-#include "plexus/node_id.h"
-
 namespace plexus::io::detail {
 
 // The sequence is itself one operation, so nothing it completes synchronously settles the engine before it ends, and a
@@ -34,13 +32,12 @@ void close_engine(Engine &e)
     e.m_ops.end();
 }
 
-// Only a slot dial() made answers, so an endpoint reached through discovery or never dialed is left alone.
+// Only the slot dial() keyed by the endpoint's own id answers, the one dial() itself consults, so an endpoint reached
+// through discovery or never dialed is left alone even when another slot shares it.
 template<typename Engine>
 void hang_up_endpoint(Engine &e, const endpoint &ep)
 {
-    const node_id id = endpoint_id(ep);
-    if(e.m_registry.id_for_endpoint(ep) == id)
-        e.m_registry.hang_up(id);
+    e.m_registry.hang_up(endpoint_id(ep));
 }
 
 }

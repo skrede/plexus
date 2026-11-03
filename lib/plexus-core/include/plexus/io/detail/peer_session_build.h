@@ -12,6 +12,7 @@
 
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/peer_session_slot.h"
+#include "plexus/io/detail/peer_session_claim.h"
 #include "plexus/io/detail/peer_session_dedup.h"
 
 #include "plexus/node_id.h"
@@ -49,21 +50,13 @@ void wire_inbound_drop(Registry &reg, Slot &slot, const node_id &id)
             });
 }
 
-// A dialed slot whose peer proved an identity other than its card's waits for a fresh card, not for its backoff.
-template<typename Registry>
-void deny_misidentified(Registry &reg, const lifecycle_event &ev)
-{
-    if(ev.edge == lifecycle_edge::rejected && ev.reason == handshake_outcome::reject_identity && ev.kind == peer_kind::dialed)
-        reg.deny_redial(ev.id);
-}
-
 template<typename Registry, typename Slot>
 void wire_observer(Registry &reg, Slot &slot)
 {
     slot.session->on_lifecycle(
-            [&reg](const lifecycle_event &ev)
+            [&reg, &record = slot.record](const lifecycle_event &ev)
             {
-                detail::deny_misidentified(reg, ev);
+                detail::track_identity_claim(reg, record, ev);
                 if(reg.m_build.on_lifecycle)
                     reg.m_build.on_lifecycle(ev);
             });

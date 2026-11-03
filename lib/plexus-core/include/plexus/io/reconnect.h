@@ -98,6 +98,11 @@ public:
         return m_denied;
     }
 
+    bool dialing() const noexcept
+    {
+        return m_dialing;
+    }
+
     // Denies every redial for good; pending() settles once an armed backoff wait has completed.
     void close()
     {
