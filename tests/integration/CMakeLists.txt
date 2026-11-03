@@ -2003,6 +2003,17 @@ target_include_directories(test_heartbeat_decline_gate PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_heartbeat_decline_gate TEST_PREFIX "integration.")
 
+# Every message type against every session state, on both ingress lanes, over real inproc peer_sessions.
+add_executable(test_session_gate test_session_gate_matrix.cpp test_session_gate_object_lane.cpp test_session_gate_latch.cpp)
+target_link_libraries(test_session_gate PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_session_gate PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_session_gate TEST_PREFIX "integration.")
+
 add_executable(test_forward_splice_pubsub test_forward_splice_pubsub.cpp)
 target_link_libraries(test_forward_splice_pubsub PRIVATE
     plexus::core
