@@ -85,7 +85,7 @@ void complete_outbound(handshake_fsm &fsm)
 
 }
 
-TEST_CASE("identity: a request naming another peer after completion aborts and keeps the proven id", "[handshake][identity][!shouldfail]")
+TEST_CASE("identity: a request naming another peer after completion aborts and keeps the proven id", "[handshake][identity]")
 {
     handshake_fsm fsm(config_for(k_self));
     complete_inbound(fsm);
@@ -105,7 +105,7 @@ TEST_CASE("identity: a request from the proven peer after completion is answered
     CHECK(fsm.last_seen_peer_id() == k_peer);
 }
 
-TEST_CASE("identity: a response naming another peer after completion aborts and keeps the proven id", "[handshake][identity][!shouldfail]")
+TEST_CASE("identity: a response naming another peer after completion aborts and keeps the proven id", "[handshake][identity]")
 {
     handshake_fsm fsm(config_for(k_self));
     complete_outbound(fsm);
@@ -122,7 +122,7 @@ TEST_CASE("identity: a response from the proven peer after completion takes no a
     CHECK(fsm.last_seen_peer_id() == k_peer);
 }
 
-TEST_CASE("identity: a request refused for its protocol version writes no identity", "[handshake][identity][!shouldfail]")
+TEST_CASE("identity: a request refused for its protocol version writes no identity", "[handshake][identity]")
 {
     handshake_fsm fsm(config_for(k_self));
     auto req             = request_from(k_peer);

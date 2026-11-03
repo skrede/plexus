@@ -60,14 +60,15 @@ struct watched_acceptor : established_acceptor
 
 }
 
-TEST_CASE("session identity: a later handshake naming another peer closes the session and keeps the proven id", "[integration][session_identity][!shouldfail]")
+TEST_CASE("session identity: a later handshake naming another peer closes the session and keeps the proven id", "[integration][session_identity]")
 {
     watched_acceptor f;
     const plexus::node_id proven = make_cfg(0x02).self_id;
     REQUIRE(f.subject->is_complete());
     REQUIRE(f.subject->peer_identity() == proven);
     f.hear(request_naming(0x03));
-    CHECK(f.events.size() == 1);
+    REQUIRE(f.events.size() == 1);
+    CHECK(f.events.front().kind == plexus::io::security_kind::identity_changed);
     CHECK(f.saw(lifecycle_edge::disconnected));
     CHECK_FALSE(f.saw(lifecycle_edge::rejected));
     CHECK_FALSE(f.subject->is_complete());

@@ -81,6 +81,23 @@ void on_abort(Session &s, handshake_outcome reason)
 }
 
 template<typename Session>
+void on_identity_changed(Session &s)
+{
+    fire_security(s, security_kind::identity_changed);
+    s.close_for_protocol_error(wire::close_cause::invalid_magic);
+}
+
+// An established session is closed, never rejected: it already announced connected, so its
+// teardown fires disconnected and the proven identity stays readable until then.
+template<typename Session>
+void on_established_abort(Session &s, handshake_outcome reason)
+{
+    if(reason == handshake_outcome::reject_identity)
+        return on_identity_changed(s);
+    s.close_for_protocol_error(wire::close_cause::invalid_magic);
+}
+
+template<typename Session>
 void execute(Session &s, const fsm_step_result &step)
 {
     switch(step.action)
@@ -94,7 +111,7 @@ void execute(Session &s, const fsm_step_result &step)
         case fsm_action::retry:
             return s.m_logger.warn("plexus: peer_session retry_no_dialer");
         case fsm_action::abort:
-            return on_abort(s, step.outcome);
+            return s.is_complete() ? on_established_abort(s, step.outcome) : on_abort(s, step.outcome);
         case fsm_action::none:
             return;
     }

@@ -13,7 +13,8 @@ enum class security_kind : std::uint8_t
     downgrade_refused,
     posture_mismatch,
     stream_tamper_teardown,
-    rekey
+    rekey,
+    identity_changed
 };
 
 enum class security_cause : std::uint8_t
