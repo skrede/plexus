@@ -17,6 +17,7 @@
 #include "plexus/graph/topic_record.h"
 
 #include "plexus/wire/frame.h"
+#include "plexus/wire/subscribe.h"
 #include "plexus/wire/frame_codec.h"
 
 #include "plexus/topic_qos.h"
@@ -70,6 +71,7 @@ struct retry_link
             , resp_drops()
             , req_declared()
             , resp_received()
+            , resp_refusals()
             , req_stamps(0)
             , resp_ready(0)
     {
@@ -84,6 +86,7 @@ struct retry_link
         requester->on_frame_dropped([this](const drop_event &e) { req_drops.push_back(e); });
         requester->on_stamp_seen([this](const plexus::node_id &) { ++req_stamps; });
         responder->on_frame_dropped([this](const drop_event &e) { resp_drops.push_back(e); });
+        responder->on_subscribe_refused([this](std::uint64_t hash, wire::subscribe_status status) { resp_refusals.emplace_back(hash, status); });
         responder->on_message([this](std::string_view, std::span<const std::byte> d) { resp_received.emplace_back(to_string(d)); });
         responder->on_lifecycle([this](const plexus::io::lifecycle_event &e) { resp_ready += e.edge == plexus::io::lifecycle_edge::ready ? 1u : 0u; });
         near.on_data([this](std::span<const std::byte> f) { carry(to_responder, far, f); });
@@ -146,6 +149,7 @@ struct retry_link
     std::vector<drop_event> resp_drops;
     std::vector<std::string> req_declared;
     std::vector<std::string> resp_received;
+    std::vector<std::pair<std::uint64_t, wire::subscribe_status>> resp_refusals;
     std::uint32_t req_stamps;
     std::uint32_t resp_ready;
 

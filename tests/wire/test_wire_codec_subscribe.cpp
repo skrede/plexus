@@ -62,6 +62,12 @@ TEST_CASE("subscribe response with an offer state past withheld is refused", "[w
     }
 }
 
+TEST_CASE("subscribe response carrying the local-only unacknowledged status is refused", "[wire][subscribe]")
+{
+    const auto encoded = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::unacknowledged, .offer = offer_state::offered});
+    CHECK_FALSE(decode_subscribe_response(encoded).has_value());
+}
+
 TEST_CASE("subscribe response shorter than the offer byte is refused", "[wire][subscribe]")
 {
     const auto encoded = encode_subscribe_response({.topic_hash = 0xFEED, .status = subscribe_status::subscribed, .offer = offer_state::offered});

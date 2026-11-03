@@ -31,7 +31,9 @@ enum class subscribe_status : uint8_t
     // A strict-posture subscriber attached to a producer that declared no type. Only
     // ever emitted to a subscriber that requested the strict attach posture, so an old
     // peer (which never sets that bit) never receives it (append-safe).
-    type_undeclared = 0x08
+    type_undeclared = 0x08,
+    // Local-only: a session reports a subscribe its retry gave up on; never encoded, and refused when decoded.
+    unacknowledged = 0x09
 };
 
 enum class unsubscribe_status : uint8_t

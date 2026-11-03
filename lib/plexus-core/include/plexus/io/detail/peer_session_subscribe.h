@@ -15,7 +15,8 @@ namespace plexus::io::detail {
 
 inline bool is_refusal(wire::subscribe_status status)
 {
-    return status == wire::subscribe_status::type_mismatch || status == wire::subscribe_status::incompatible_qos || status == wire::subscribe_status::source_identity_incompatible;
+    return status == wire::subscribe_status::type_mismatch || status == wire::subscribe_status::incompatible_qos || status == wire::subscribe_status::source_identity_incompatible ||
+            status == wire::subscribe_status::unacknowledged;
 }
 
 template<typename Session>

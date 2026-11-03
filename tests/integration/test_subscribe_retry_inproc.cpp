@@ -5,6 +5,7 @@
 #include "plexus/io/detail/drop_event.h"
 
 #include "plexus/wire/frame.h"
+#include "plexus/wire/subscribe.h"
 #include "plexus/wire/topic_hash.h"
 
 #include <catch2/catch_test_macros.hpp>
@@ -15,6 +16,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <algorithm>
 
 using namespace subscribe_retry_fixture;
@@ -22,17 +24,6 @@ using namespace std::chrono_literals;
 using plexus::io::detail::drop_cause;
 using plexus::wire::msg_type;
 using received = std::vector<std::string>;
-
-namespace {
-
-plexus::io::subscriber_qos latest()
-{
-    plexus::io::subscriber_qos q;
-    q.durability_mode = plexus::io::durability::latest;
-    return q;
-}
-
-}
 
 TEST_CASE("subscribe retry: a subscribe that overtakes the handshake response is re-sent and takes effect", "[integration][subscribe_retry]")
 {
@@ -113,11 +104,25 @@ TEST_CASE("subscribe retry: an unanswered subscribe is re-sent four times, then 
     CHECK(link.to_requester.count(msg_type::subscribe) == 5);
 }
 
+TEST_CASE("subscribe retry: an exhausted subscribe is reported through the subscribe outcome", "[integration][subscribe_retry]")
+{
+    retry_link link;
+    link.enable_retry(*link.responder);
+    link.demand(k_topic);
+    link.to_requester.rule = on(msg_type::subscribe, relay_action::drop, {1, 3, 4, 5, 6});
+    link.start();
+    link.responder->subscribe(k_other);
+    link.ex.drain();
+    for(const auto wait : {250ms, 500ms, 1000ms, 2000ms, 2000ms})
+        link.advance(wait);
+    CHECK(link.resp_refusals == std::vector{std::pair{plexus::wire::fqn_topic_hash(k_topic), plexus::wire::subscribe_status::unacknowledged}});
+}
+
 TEST_CASE("subscribe retry: a lost response is re-acknowledged without a second attachment", "[integration][subscribe_retry]")
 {
     retry_link link;
     link.enable_retry(*link.responder);
-    link.demand(k_latched, latest());
+    link.demand(k_latched, {.durability_mode = plexus::io::durability::latest});
     link.to_responder.rule = on(msg_type::subscribe_response, relay_action::hold, {1});
     link.start();
     CHECK(link.resp_received == received{"latched"});

@@ -9,6 +9,7 @@
 #include "plexus/io/detail/forwarder_subscribe.h"
 #include "plexus/io/detail/peer_session_complete.h"
 
+#include "plexus/wire/subscribe.h"
 #include "plexus/wire/topic_hash.h"
 
 #include <chrono>
@@ -84,10 +85,14 @@ void release_subscribe(Session &s)
 }
 
 template<typename Session>
+void surface_subscribe_outcome(Session &s, const wire::subscribe_response &resp);
+
+template<typename Session>
 void exhaust_subscribe(Session &s, const unacked_subscribe &entry)
 {
     detail::report_drop(s, drop_cause::unacknowledged, entry.topic_hash);
     s.m_logger.warn("plexus: peer_session subscribe_unacknowledged");
+    detail::surface_subscribe_outcome(s, wire::subscribe_response{.topic_hash = entry.topic_hash, .status = wire::subscribe_status::unacknowledged});
     release_subscribe(s);
 }
 
