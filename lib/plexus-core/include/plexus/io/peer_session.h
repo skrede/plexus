@@ -319,6 +319,8 @@ private:
     template<typename S>
     friend void detail::receive_frame(S &, std::span<const std::byte>);
     template<typename S>
+    friend void detail::report_drop(S &, detail::drop_cause, std::uint64_t);
+    template<typename S>
     friend void detail::arm_handshake_timer(S &);
     template<typename S>
     friend void detail::wire_channel_seams(S &);

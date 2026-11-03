@@ -2,6 +2,8 @@
 
 #include "plexus/io/lifecycle_event.h"
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
 
@@ -12,6 +14,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <vector>
 #include <cstdint>
 #include <algorithm>
 
@@ -89,8 +92,14 @@ void check_quiet(const lone_session &f)
     CHECK_FALSE(f.fanned_out());
 }
 
+plexus::io::detail::drop_cause expected_drop(wire::msg_type type, bool torn_down)
+{
+    const bool unused = type == wire::msg_type::bidirectional || type == wire::msg_type::fetch_metadata;
+    return unused && !torn_down ? plexus::io::detail::drop_cause::malformed : plexus::io::detail::drop_cause::unestablished;
+}
+
 template<typename Fixture>
-void check_every_type_quiet()
+void check_every_type_quiet(bool torn_down)
 {
     for(const wire::msg_type type : k_all_types)
     {
@@ -101,6 +110,7 @@ void check_every_type_quiet()
         INFO("msg_type " << static_cast<std::uint32_t>(type));
         f.inject(frame_for(type));
         check_quiet(f);
+        CHECK(f.fx.drops == std::vector{expected_drop(type, torn_down)});
         CHECK_FALSE(f.subject->is_complete());
         CHECK(f.subject->peer_identity() == before);
     }
@@ -108,14 +118,14 @@ void check_every_type_quiet()
 
 }
 
-TEST_CASE("session gate: an accepted session admits only handshake frames before its handshake", "[integration][session_gate][!shouldfail]")
+TEST_CASE("session gate: an accepted session admits only handshake frames before its handshake", "[integration][session_gate]")
 {
-    check_every_type_quiet<pre_handshake_acceptor>();
+    check_every_type_quiet<pre_handshake_acceptor>(false);
 }
 
-TEST_CASE("session gate: a dialed session admits only handshake frames before the response", "[integration][session_gate][!shouldfail]")
+TEST_CASE("session gate: a dialed session admits only handshake frames before the response", "[integration][session_gate]")
 {
-    check_every_type_quiet<pre_response_dialer>();
+    check_every_type_quiet<pre_response_dialer>(false);
 }
 
 TEST_CASE("session gate: a session refused at attach runs no consumer", "[integration][session_gate]")
@@ -123,14 +133,14 @@ TEST_CASE("session gate: a session refused at attach runs no consumer", "[integr
     const refused_acceptor probe;
     REQUIRE(saw(probe, lifecycle_edge::rejected));
     REQUIRE_FALSE(probe.subject->is_complete());
-    check_every_type_quiet<refused_acceptor>();
+    check_every_type_quiet<refused_acceptor>(true);
 }
 
 TEST_CASE("session gate: a torn-down session runs no consumer", "[integration][session_gate]")
 {
     const torn_down_acceptor probe;
     REQUIRE(saw(probe, lifecycle_edge::disconnected));
-    check_every_type_quiet<torn_down_acceptor>();
+    check_every_type_quiet<torn_down_acceptor>(true);
 }
 
 TEST_CASE("session gate: an established session runs every observable consumer", "[integration][session_gate]")
@@ -142,6 +152,7 @@ TEST_CASE("session gate: an established session runs every observable consumer",
         INFO("msg_type " << static_cast<std::uint32_t>(type));
         f.inject(frame_for(type));
         CHECK(observed(f, type) == 1);
+        CHECK(f.fx.drops.empty());
         CHECK(f.subject->is_complete());
     }
 }

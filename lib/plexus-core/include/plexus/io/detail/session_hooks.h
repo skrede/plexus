@@ -6,6 +6,8 @@
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/wire/subscribe.h"
 
 #include "plexus/node_id.h"
@@ -80,11 +82,17 @@ public:
         m_on_subscribe_degraded_cb = std::move(cb);
     }
 
+    void on_frame_dropped(plexus::detail::move_only_function<void(const drop_event &)> cb)
+    {
+        m_on_frame_dropped_cb = std::move(cb);
+    }
+
 protected:
     // Protected so the detail free functions reach them through the friend grants of the session deriving from this class.
     plexus::detail::move_only_function<void()> m_on_drop_cb;
     plexus::detail::move_only_function<void(const node_id &)> m_on_stamp_seen_cb;
     plexus::detail::move_only_function<void(const security_event &)> m_on_security_cb;
+    plexus::detail::move_only_function<void(const drop_event &)> m_on_frame_dropped_cb;
     plexus::detail::move_only_function<void(const lifecycle_event &)> m_on_lifecycle_cb;
     plexus::detail::move_only_function<void(const node_id &, bool)> m_on_decline_seen_cb;
     plexus::detail::move_only_function<void(std::uint64_t, std::uint8_t)> m_on_subscribe_degraded_cb;

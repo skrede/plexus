@@ -30,6 +30,8 @@ enum class drop_cause : std::uint8_t
     splice_oversize,
     // A frame larger than its outbound leg's per-message ceiling, refused before it reached the wire.
     oversize,
+    unestablished,
+    foreign_session,
 };
 
 struct drop_event

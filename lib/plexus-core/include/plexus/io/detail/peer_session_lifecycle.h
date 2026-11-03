@@ -7,6 +7,7 @@
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/handshake_protocol.h"
 
+#include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_consumers.h"
@@ -60,20 +61,29 @@ void protocol_close(Session &s, wire::close_cause cause)
     close_for_protocol_error(s, cause);
 }
 
-// The staleness gate runs before the router: a frame whose non-zero session_id differs from
-// the latched epoch is a previous-session straggler and is dropped; the first non-zero
-// observation latches the peer's epoch.
+// The establishment gate runs first, so a refused frame can never latch an epoch. After it, a frame whose non-zero
+// session_id differs from the latched epoch is a previous-session straggler; it is dropped and the session stays open.
 template<typename Session>
 void receive_frame(Session &s, std::span<const std::byte> frame)
 {
     if(s.m_torn_down)
-        return;
+        return detail::report_drop(s, drop_cause::unestablished);
     auto hdr = wire::decode_header(frame);
     if(!hdr)
         return close_for_protocol_error(s, wire::close_cause::invalid_magic);
+    switch(detail::classify(s.is_complete(), hdr->type))
+    {
+        case gate_verdict::unestablished:
+            return detail::report_drop(s, drop_cause::unestablished);
+        case gate_verdict::malformed:
+            s.m_logger.warn("plexus: peer_session malformed_frame");
+            return detail::report_drop(s, drop_cause::malformed);
+        case gate_verdict::admit:
+            break;
+    }
     if(hdr->session_id != 0 && s.m_peer_session_id != 0 && hdr->session_id != s.m_peer_session_id)
-        return;
-    if(hdr->session_id != 0 && s.m_peer_session_id == 0)
+        return detail::report_drop(s, drop_cause::foreign_session);
+    if(hdr->session_id != 0 && s.m_peer_session_id == 0 && s.is_complete())
         s.m_peer_session_id = hdr->session_id;
     s.m_router.route(frame);
 }

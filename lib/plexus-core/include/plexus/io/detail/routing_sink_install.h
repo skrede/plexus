@@ -113,6 +113,7 @@ void install_routing_sinks(Engine &e)
     e.m_transport.on_accepted([&e](std::unique_ptr<channel_type> ch) { e.on_accepted(std::move(ch)); });
     e.m_transport.on_dial_failed([&e](const endpoint &ep, io_error) { e.m_registry.notify_dial_failed(ep); });
     e.m_build.on_lifecycle = [&e](const lifecycle_event &ev) { detail::dispatch_lifecycle(e, ev); };
+    e.m_build.on_frame_dropped = make_drop_sink(e);
     e.m_messages.on_drop(make_drop_sink(e));
     // The data-path observation sinks post a snapshot on the borrowed executor, never inline from
     // the per-publish loop (the DoS-amplifier guard).

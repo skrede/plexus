@@ -8,6 +8,8 @@
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/handshake_protocol.h"
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
 
@@ -54,6 +56,7 @@ struct effects
     std::uint32_t messages{0};
     std::uint32_t peer_frames{0};
     std::uint32_t handler_runs{0};
+    std::vector<plexus::io::detail::drop_cause> drops{};
 };
 
 // One real session over the inproc rendezvous whose peer end is a bare channel: the test speaks for the peer, so no
@@ -153,6 +156,7 @@ private:
         subject->on_message([this](std::string_view, std::span<const std::byte>) { ++fx.messages; });
         subject->on_stamp_seen([this](const plexus::node_id &) { ++fx.stamps; });
         subject->on_lifecycle([this](const plexus::io::lifecycle_event &e) { edges.push_back(e.edge); });
+        subject->on_frame_dropped([this](const plexus::io::detail::drop_event &e) { fx.drops.push_back(e.cause); });
         subject->start();
     }
 };

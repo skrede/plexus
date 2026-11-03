@@ -9,6 +9,8 @@
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/handshake_protocol.h"
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/node_id.h"
 
 #include <span>
@@ -67,6 +69,17 @@ void wire_observer(Registry &reg, Slot &slot)
                     reg.m_build.on_decline_seen(id, declines);
             });
     slot.session->on_security([&reg](const security_event &ev) { reg.m_build.session_observer.on_security(ev); });
+}
+
+template<typename Build, typename Slot>
+void wire_frame_drops(Build &build, Slot &slot)
+{
+    slot.session->on_frame_dropped(
+            [&build](const drop_event &ev)
+            {
+                if(build.on_frame_dropped)
+                    build.on_frame_dropped(ev);
+            });
 }
 
 // Re-threaded on every reconnect rebuild: the per-session receive seam is lost on a rebuild,
@@ -154,6 +167,7 @@ void emplace_session(Registry &reg, Build &build, Slot &slot, bool inbound)
     else
         detail::wire_drop(reg, slot, slot.record.peer_id);
     detail::wire_observer(reg, slot);
+    detail::wire_frame_drops(build, slot);
     detail::wire_message_route(reg, slot);
     detail::wire_object_route(reg, slot);
     detail::wire_security(reg, slot);

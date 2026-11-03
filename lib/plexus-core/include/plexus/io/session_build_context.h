@@ -15,6 +15,8 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/log/logger.h"
 
 #include <span>
@@ -49,6 +51,7 @@ struct session_build_context
     security_seam install_security;
     // Fail-closed: a security-engaged accept with no factory wired is refused, never fail-open.
     plexus::detail::move_only_function<void(typename Policy::byte_channel_type &, const security_negotiation &)> install_security_factory;
+    plexus::detail::move_only_function<void(const detail::drop_event &)> on_frame_dropped{};
 };
 
 }
