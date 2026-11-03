@@ -2025,6 +2025,20 @@ target_include_directories(test_session_identity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_session_identity TEST_PREFIX "integration.")
 
+# A dialed slot whose peer proves an identity other than the one its discovery card advertised.
+add_executable(test_dialed_identity
+    test_dialed_identity_inproc.cpp
+    test_dialed_identity_redial_inproc.cpp)
+target_link_libraries(test_dialed_identity PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_dialed_identity PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_dialed_identity TEST_PREFIX "integration.")
+
 add_executable(test_forward_splice_pubsub test_forward_splice_pubsub.cpp)
 target_link_libraries(test_forward_splice_pubsub PRIVATE
     plexus::core
