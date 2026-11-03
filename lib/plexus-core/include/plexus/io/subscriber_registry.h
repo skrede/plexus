@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
+#include <algorithm>
 #include <string_view>
 #include <unordered_map>
 
@@ -57,6 +58,12 @@ public:
             if(&sub.channel.get() == &channel)
                 return sub.sub_qos;
         return subscriber_qos{};
+    }
+
+    bool has_subscriber(std::uint64_t topic_hash, const Channel &channel) const
+    {
+        auto it = m_topics.find(topic_hash);
+        return it != m_topics.end() && std::ranges::any_of(it->second.subscribers, [&channel](const subscriber &sub) { return &sub.channel.get() == &channel; });
     }
 
     // Record a publisher-declared per-topic qos (and the topic_hash -> fqn

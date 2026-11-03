@@ -71,6 +71,11 @@ bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::o
         f.emit_qos_change(qos_edge::refused, hash, sub_qos, rxo.verdict, subscriber_type_id);
         return false;
     }
+    if(f.m_endpoint.registry().has_subscriber(hash, p.channel))
+    {
+        f.send_control(p.channel, wire::msg_type::subscribe_response, accepted_response(hash, rxo, offer_of(f.m_companion_hooks, p.node_name, fqn)));
+        return true;
+    }
     if(!f.m_endpoint.admit_gate(p.node_name, fqn))
         return false;
     f.m_endpoint.registry().add_subscriber(hash, fqn, p.channel, p.node_name, sub_qos, subscriber_type_id);

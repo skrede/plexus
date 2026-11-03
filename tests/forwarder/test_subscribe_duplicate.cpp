@@ -56,7 +56,7 @@ plexus::io::subscriber_qos latest()
 
 }
 
-TEST_CASE("subscribe duplicate: a repeated subscribe on one channel is answered", "[forwarder][subscribe_duplicate][!shouldfail]")
+TEST_CASE("subscribe duplicate: a repeated subscribe on one channel is answered", "[forwarder][subscribe_duplicate]")
 {
     duplicate_fixture f;
     REQUIRE(f.fwd.attach_for_fanout(f.peer, "alpha"));
@@ -82,7 +82,7 @@ TEST_CASE("subscribe duplicate: a repeated subscribe adds no fan-out, replay or 
     CHECK(f.demand_ups == 1);
 }
 
-TEST_CASE("subscribe duplicate: one unsubscribe after a repeated subscribe detaches the channel", "[forwarder][subscribe_duplicate][!shouldfail]")
+TEST_CASE("subscribe duplicate: one unsubscribe after a repeated subscribe detaches the channel", "[forwarder][subscribe_duplicate]")
 {
     duplicate_fixture f;
     f.fwd.attach_for_fanout(f.peer, "alpha");
