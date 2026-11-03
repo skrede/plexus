@@ -1839,6 +1839,18 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         catch_discover_tests(test_default_discovery_xproc TEST_PREFIX "integration."
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback LABELS "live-multicast")
     endif()
+
+    # Two nodes over real UDP behind a relay that reorders and drops, recovered by the bounded subscribe re-send.
+    add_executable(test_subscribe_retry_udp test_subscribe_retry_udp.cpp)
+    target_link_libraries(test_subscribe_retry_udp PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::testing
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    target_include_directories(test_subscribe_retry_udp PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    catch_discover_tests(test_subscribe_retry_udp TEST_PREFIX "integration.")
 endif()
 
 # The host-side flat-stream to MCAP transcode round-trip: a live wire-capturing inproc

@@ -7,29 +7,34 @@
 #include <asio/io_context.hpp>
 #include <asio/ip/udp.hpp>
 
+#include <span>
 #include <array>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <optional>
 
 namespace plexus::testing {
 
 // A live UDP relay applying the deterministic loss_reorder_scheduler at the wire boundary between
 // a client and a server socket: each client->server datagram is forwarded, dropped, or held and
-// re-emitted out of order; replies are piped back untouched (the loss model is one-directional on
-// the client->server leg). The schedule is byte-identical across runs (the empirical-
+// re-emitted out of order. Replies pass back untouched unless a second schedule is given for the
+// server->client leg. The schedule is byte-identical across runs (the empirical-
 // reproducibility property the fragment sweep and lossy-link bench cell depend on; no std::random).
 class loss_reorder_relay
 {
 public:
-    loss_reorder_relay(::asio::io_context &io, std::uint16_t server_port, loss_reorder_config cfg)
+    loss_reorder_relay(::asio::io_context &io, std::uint16_t server_port, loss_reorder_config cfg, std::optional<loss_reorder_config> back_cfg = std::nullopt)
             : m_io(io)
             , m_front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , m_back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , m_server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
             , m_sched(cfg)
+            , m_back_sched()
     {
+        if(back_cfg)
+            m_back_sched.emplace(*back_cfg);
         recv_front();
         recv_back();
     }
@@ -68,6 +73,12 @@ private:
                                    });
     }
 
+    void emit_to_client(std::span<const std::byte> dg)
+    {
+        if(m_client_ep.port() != 0)
+            m_front.send_to(::asio::buffer(dg.data(), dg.size()), m_client_ep);
+    }
+
     void recv_back()
     {
         m_back.async_receive_from(::asio::buffer(m_back_buf), m_from,
@@ -75,8 +86,12 @@ private:
                                   {
                                       if(ec)
                                           return;
-                                      if(m_client_ep.port() != 0)
-                                          m_front.send_to(::asio::buffer(m_back_buf.data(), n), m_client_ep);
+                                      const std::span<const std::byte> dg{m_back_buf.data(), n};
+                                      if(!m_back_sched)
+                                          emit_to_client(dg);
+                                      else
+                                          for(const auto &held : m_back_sched->drive(dg))
+                                              emit_to_client(held);
                                       recv_back();
                                   });
     }
@@ -90,6 +105,7 @@ private:
     std::array<std::byte, 65536> m_front_buf{};
     std::array<std::byte, 65536> m_back_buf{};
     loss_reorder_scheduler m_sched;
+    std::optional<loss_reorder_scheduler> m_back_sched;
     std::size_t m_forwarded = 0;
 };
 

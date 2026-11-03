@@ -8,6 +8,7 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/security/attach_policy.h"
+#include "plexus/io/subscribe_retry_config.h"
 
 #include "plexus/log/logger.h"
 
@@ -50,6 +51,9 @@ struct node_options
     // REQUIRED: the reconnect backoff/surrender cadence is tuned per deployment, so a zeroed
     // default would silently ship an un-tuned cadence.
     io::reconnect_config reconnect;
+
+    // Applied only on best-effort datagram legs; ordered and reliable legs never re-send a subscribe.
+    io::subscribe_retry_config subscribe_retry{};
 
     // REQUIRED, distinct per node — a shared seed phase-locks redial jitter across nodes,
     // defeating the decorrelation the jitter exists to provide.

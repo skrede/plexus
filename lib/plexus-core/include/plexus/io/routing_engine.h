@@ -27,6 +27,7 @@
 #include "plexus/io/peer_session_registry.h"
 #include "plexus/io/peer_report_emitter.h"
 #include "plexus/io/session_build_context.h"
+#include "plexus/io/subscribe_retry_config.h"
 #include "plexus/io/reliability_requirement.h"
 
 #include "plexus/graph/graph_change.h"
@@ -110,7 +111,8 @@ public:
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
-                   io::liveliness_options live = {}, io::route_options routes = {}, const io::report_options &report = {}, const io::forward_options &forward = {})
+                   io::liveliness_options live = {}, io::route_options routes = {}, const io::report_options &report = {}, const io::forward_options &forward = {},
+                   const io::subscribe_retry_config &subscribe_retry = {})
             : m_dial_eagerly(dial_eagerly)
             , m_liveliness(live)
             , m_route_options(routes)
@@ -129,6 +131,7 @@ public:
             , m_retry_timer(executor)
             , m_splice(io::make_forward_ctx(forward))
     {
+        m_build.subscribe_retry = subscribe_retry;
         m_messages.set_forward_options(forward);
         m_messages.set_consume_relayed(routes.usage != route_usage::never);
         detail::install_routing_sinks(*this);

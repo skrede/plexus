@@ -12,12 +12,17 @@ enum class reliability_requirement : std::uint8_t
     reliable,
 };
 
-// The engine-side mirror of the asio selector's reliability_of_scheme; MUST stay
+// The engine-side mirrors of the asio selector's reliability_of_scheme; both MUST stay
 // consistent with it. Fail-closed: plain "udp" and any unrecognized scheme are NOT
 // reliable, so a strict-reliable demand is never admitted over an unproven transport.
 inline bool scheme_is_reliable(std::string_view scheme) noexcept
 {
     return scheme == "udpr" || scheme == "tcp" || scheme == "tls" || scheme == "unix" || scheme == "inproc";
+}
+
+inline bool scheme_is_best_effort(std::string_view scheme) noexcept
+{
+    return scheme == "udp" || scheme == "dtls";
 }
 
 }

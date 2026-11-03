@@ -8,6 +8,7 @@
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/handshake_protocol.h"
+#include "plexus/io/reliability_requirement.h"
 
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/peer_session_slot.h"
@@ -183,6 +184,8 @@ void emplace_session(Registry &reg, Build &build, Slot &slot, bool inbound)
     detail::wire_message_route(reg, slot);
     detail::wire_object_route(reg, slot);
     detail::wire_security(reg, slot);
+    if(scheme_is_best_effort(slot.record.channel->remote_endpoint().scheme))
+        slot.session->set_subscribe_retry(build.subscribe_retry);
     slot.session->start();
 }
 
