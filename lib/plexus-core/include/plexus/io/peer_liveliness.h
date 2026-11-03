@@ -62,7 +62,7 @@ public:
 
     void note_session_down(const node_id &id, std::uint64_t now_ns)
     {
-        peer_state &state = m_storage.at_or_insert(id);
+        peer_state &state   = m_storage.at_or_insert(id);
         state.session       = session_presence::down;
         state.dropped_at_ns = now_ns;
         settle(id, state, now_ns);
@@ -117,8 +117,7 @@ public:
 private:
     static std::uint64_t miss_window(const liveliness_options &opts)
     {
-        const std::uint64_t interval = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(opts.heartbeat_interval).count());
+        const std::uint64_t interval = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(opts.heartbeat_interval).count());
         return static_cast<std::uint64_t>(opts.heartbeat_miss_limit) * interval;
     }
 
@@ -128,11 +127,7 @@ private:
     {
         const bool hb_seen  = state.last_heartbeat_ns != 0 && state.last_heartbeat_ns > state.dropped_at_ns;
         const bool hb_fresh = hb_seen && now_ns - state.last_heartbeat_ns <= m_miss_window_ns;
-        return detail::signal_view{state.session == session_presence::up,
-                                   state.session != session_presence::absent,
-                                   state.aware,
-                                   hb_fresh,
-                                   hb_seen};
+        return detail::signal_view{state.session == session_presence::up, state.session != session_presence::absent, state.aware, hb_fresh, hb_seen};
     }
 
     void settle(const node_id &id, peer_state &state, std::uint64_t now_ns)
@@ -153,8 +148,7 @@ private:
     {
         if(m_subscribers == 0 || !m_on_verdict)
             return;
-        const liveliness_verdict verdict =
-                outcome == detail::fuse_outcome::alive ? liveliness_verdict::alive : liveliness_verdict::lost;
+        const liveliness_verdict verdict = outcome == detail::fuse_outcome::alive ? liveliness_verdict::alive : liveliness_verdict::lost;
         m_on_verdict(peer_liveliness_event{id, verdict, detail::contributing_mask(sv, outcome)});
     }
 

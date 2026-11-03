@@ -78,8 +78,8 @@ struct default_liveliness_storage
 };
 
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock, typename PeerStorage = std_map_peer_storage,
-         typename TopicStorage = graph::std_map_topic_storage, typename LivelinessStorage = default_liveliness_storage,
-         typename GraphChangeLog = graph::vector_graph_change_log, typename PeerReportEmitter = null_peer_report_emitter, typename ForwardSplice = null_forward_splice>
+         typename TopicStorage = graph::std_map_topic_storage, typename LivelinessStorage = default_liveliness_storage, typename GraphChangeLog = graph::vector_graph_change_log,
+         typename PeerReportEmitter = null_peer_report_emitter, typename ForwardSplice = null_forward_splice>
     requires plexus::Policy<Policy> && transport_backend<Transport, Policy>
 class routing_engine
 {
@@ -104,10 +104,10 @@ public:
     using topic_storage_type       = TopicStorage;
     using peer_report_emitter_type = PeerReportEmitter;
     using forward_splice_type      = ForwardSplice;
-    using session_type       = peer_session<Policy>;
-    using executor_type      = typename Policy::executor_type;
-    using channel_type       = typename Policy::byte_channel_type;
-    using registry_type      = peer_session_registry<Policy, Transport, Clock>;
+    using session_type             = peer_session<Policy>;
+    using executor_type            = typename Policy::executor_type;
+    using channel_type             = typename Policy::byte_channel_type;
+    using registry_type            = peer_session_registry<Policy, Transport, Clock>;
 
     routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,

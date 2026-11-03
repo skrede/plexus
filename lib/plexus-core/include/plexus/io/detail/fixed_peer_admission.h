@@ -50,7 +50,7 @@ bool admit_identity_candidate(S &s, const node_id &id, const route_candidate &ca
         return false;
     }
     slot->last_refreshed = now;
-    const auto r = detail::admit_candidate(slot->candidates.data(), slot->count, slot->candidates.size(), cand, now, opts);
+    const auto r         = detail::admit_candidate(slot->candidates.data(), slot->count, slot->candidates.size(), cand, now, opts);
     if(r.dropped)
         ++s.m_dropped;
     return r.changed;

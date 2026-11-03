@@ -144,8 +144,7 @@ void install_routing_sinks(Engine &e)
     e.m_messages.on_peer_report([&e](const node_id &reporter, const wire::peer_report &pr) { e.ingest_peer_report(reporter, pr); });
     // A local declaration reaches every peer already listening; an incomplete session would lose
     // the frame, so the ones still handshaking are caught by the replay their completion runs.
-    e.m_messages.on_declaration([&e](const wire::topic_declaration &td)
-                                { e.m_registry.for_each_connected([&td](const node_id &, session_type &s) { s.declare(td); }); });
+    e.m_messages.on_declaration([&e](const wire::topic_declaration &td) { e.m_registry.for_each_connected([&td](const node_id &, session_type &s) { s.declare(td); }); });
     e.m_procedures.on_rpc_call(make_rpc_sink(e, &observer::on_rpc_call));
     e.m_procedures.on_rpc_serve(make_rpc_sink(e, &observer::on_rpc_serve));
     e.m_procedures.on_rpc_reply(make_rpc_sink(e, &observer::on_rpc_reply));
@@ -169,8 +168,7 @@ void install_routing_sinks(Engine &e)
             [&e, last_emit_ns = std::uint64_t{0}]() mutable
             {
                 const std::uint64_t now      = e.now_for_aging();
-                const std::uint64_t interval = static_cast<std::uint64_t>(
-                        std::chrono::duration_cast<std::chrono::nanoseconds>(e.m_liveliness.heartbeat_interval).count());
+                const std::uint64_t interval = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(e.m_liveliness.heartbeat_interval).count());
                 if(now - last_emit_ns >= interval)
                 {
                     e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });

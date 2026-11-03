@@ -158,7 +158,8 @@ class procedure;
 // Debug) aborts a call from any other thread, a second driver included; a call made before the driver's claim is not.
 template<typename Profile, typename... Transports>
     requires detail::target_profile<Profile> && (sizeof...(Transports) >= 1) &&
-        (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, typename detail::profile_traits<Profile>::policy> : (io::mux_member<Transports> && ...))
+        (sizeof...(Transports) == 1 ? io::transport_backend<std::tuple_element_t<0, std::tuple<Transports..., void>>, typename detail::profile_traits<Profile>::policy>
+                                    : (io::mux_member<Transports> && ...))
 class basic_node
 {
     // The registration/retire seams are private; the endpoint handles reach them only as friends
@@ -188,12 +189,12 @@ public:
                                                      io::null_forward_splice, io::forward_splice<engine_policy>>;
     // Storage is threaded off the profile, never off engine_policy/muxify — muxify re-exports only
     // the mechanism members, so reading storage through it silently reverts to the heap twins.
-    using engine_type      = io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
-                                                typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage,
-                                                typename detail::profile_traits<Profile>::graph_change_log, typename detail::profile_traits<Profile>::peer_report_emitter,
-                                                engine_forward_splice>;
-    using engine_channel   = typename engine_type::channel_type;
-    using transport_tuple  = std::tuple<Transports...>;
+    using engine_type =
+            io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
+                               typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage,
+                               typename detail::profile_traits<Profile>::graph_change_log, typename detail::profile_traits<Profile>::peer_report_emitter, engine_forward_splice>;
+    using engine_channel  = typename engine_type::channel_type;
+    using transport_tuple = std::tuple<Transports...>;
 
     // The self-route engages whenever the pack carries an intra_node_transport: the pure
     // single-transport node binds the loopback channel as channel_type (concrete, zero erasure,
@@ -373,12 +374,10 @@ public:
     // One record per (participant, topic, role) edge, so a topic with both a publisher and a subscriber yields both —
     // these edges are the substrate the counts and by-node views reduce over, which is why neither keeps an index of its
     // own. A filter admits only the topics its keyset intersects.
-    graph::snapshot_result topics(std::span<graph::topic_record> out,
-                                  const std::optional<match::key_pattern> &filter = std::nullopt) const
+    graph::snapshot_result topics(std::span<graph::topic_record> out, const std::optional<match::key_pattern> &filter = std::nullopt) const
     {
         affine("topics");
-        return detail::sweep_topics(m_engine.topic_table(), out,
-                                    [&](const graph::topic_record &rec) { return detail::topic_in(rec.name, filter); });
+        return detail::sweep_topics(m_engine.topic_table(), out, [&](const graph::topic_record &rec) { return detail::topic_in(rec.name, filter); });
     }
 
     // Registers a graph-change observer over the engine's add_observer seam and returns a move-only
@@ -531,8 +530,7 @@ private:
 
     graph::snapshot_result topics_of(const plexus::node_id &node, graph::topic_role role, std::span<graph::topic_record> out) const
     {
-        return detail::sweep_topics(m_engine.topic_table(), out,
-                                    [&](const graph::topic_record &rec) { return rec.node == node && rec.role == role; });
+        return detail::sweep_topics(m_engine.topic_table(), out, [&](const graph::topic_record &rec) { return rec.node == node && rec.role == role; });
     }
 
     registration_id register_subscriber_seam(std::string_view fqn, const io::subscriber_qos &qos,
@@ -645,8 +643,8 @@ private:
             const auto hdr = wire::decode_header(framed);
             if(!hdr)
                 return;
-            const std::span<const std::byte> inner       = framed.subspan(wire::header_size);
-            const bool has_source_identity               = (hdr->flags & wire::k_flag_source_identity) != 0;
+            const std::span<const std::byte> inner = framed.subspan(wire::header_size);
+            const bool has_source_identity         = (hdr->flags & wire::k_flag_source_identity) != 0;
             io::message_info info{};
             info.from_intra_process = true;
             typename io::message_forwarder<engine_policy>::peer self{self_route(), m_service_name};

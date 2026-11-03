@@ -61,7 +61,7 @@ void forget_topics_on_teardown(Engine &e, const lifecycle_event &ev)
     typename Engine::session_type *torn = e.m_registry.session_for(ev.id);
     if(torn != nullptr && !any_session_for(e, torn->peer_identity()))
     {
-        const node_id who  = torn->peer_identity();
+        const node_id who = torn->peer_identity();
         detail::relay_withdraw(e, who);
         e.m_emitter.clear_decline(who);
         mark_reports_via_unreachable(e, who);
