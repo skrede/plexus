@@ -2053,7 +2053,8 @@ catch_discover_tests(test_session_malformed_logging TEST_PREFIX "integration."
 # A dialed slot whose peer proves an identity other than the one its discovery card advertised.
 add_executable(test_dialed_identity
     test_dialed_identity_inproc.cpp
-    test_dialed_identity_redial_inproc.cpp)
+    test_dialed_identity_redial_inproc.cpp
+    test_dialed_identity_binding_inproc.cpp)
 target_link_libraries(test_dialed_identity PRIVATE
     plexus::core
     plexus::wire
