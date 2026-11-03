@@ -6,6 +6,7 @@
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/subscribe_qos_wire.h"
 
+#include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_forward.h"
 #include "plexus/io/detail/peer_report_consumers.h"
 #include "plexus/io/detail/peer_session_subscribe.h"
@@ -56,7 +57,7 @@ void on_subscribe_received(Session &s, std::span<const std::byte> inner)
 {
     auto req = wire::decode_subscribe_request(inner);
     if(!req)
-        return;
+        return report_malformed(s);
     // type_hash == 0 is the undeclared-type sentinel: lift it to nullopt so an undeclared
     // subscriber is never refused.
     std::optional<std::uint64_t> subscriber_type_id;
@@ -72,6 +73,8 @@ void on_declare_received(Session &s, std::span<const std::byte> inner)
 {
     if(auto td = wire::decode_topic_declaration(inner))
         fold_topic_edge(s, td->fqn, td->type_name, declared_id(*td), graph::topic_role::publisher);
+    else
+        report_malformed(s);
 }
 
 // The reporter is the handshake-proven sender, distinct from the report's origin.
@@ -94,6 +97,8 @@ void on_fetch_latched_received(Session &s, Forwarder &messages, std::span<const 
 {
     if(auto req = wire::decode_fetch_latched_request(inner))
         messages.fetch_latched(s.msg_peer(), req->topic_hash, req->max_samples);
+    else
+        report_malformed(s);
 }
 
 // A late offer is heard as an offer in the subscribe response is.
@@ -103,18 +108,20 @@ void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type,
     if(type == wire::msg_type::companion_switch)
     {
         if(auto marker = wire::decode_companion_switch(inner))
-            messages.note_switch(s.msg_peer(), marker->topic_hash, marker->first_sequence);
-        return;
+            return messages.note_switch(s.msg_peer(), marker->topic_hash, marker->first_sequence);
+        return report_malformed(s);
     }
     if(type == wire::msg_type::companion_ready)
     {
         if(auto ready = wire::decode_companion_ready(inner))
-            messages.note_companion(s.msg_peer(), ready->topic_hash, companion_event::ready, {ready->reader, ready->generation});
-        return;
+            return messages.note_companion(s.msg_peer(), ready->topic_hash, companion_event::ready, {ready->reader, ready->generation});
+        return report_malformed(s);
     }
     const companion_event event = type == wire::msg_type::companion_offer ? companion_event::offered : companion_event::withdrawn;
     if(auto signal = wire::decode_companion(inner))
         messages.note_companion(s.msg_peer(), signal->topic_hash, event, k_no_reader);
+    else
+        report_malformed(s);
 }
 
 template<typename Session, typename Forwarder>
@@ -122,6 +129,8 @@ void on_unsubscribe_received(Session &s, Forwarder &messages, std::span<const st
 {
     if(auto req = wire::decode_unsubscribe_request(inner))
         messages.detach_for_fanout(s.msg_peer(), messages.fqn_for(req->topic_hash));
+    else
+        report_malformed(s);
 }
 
 template<typename Session, typename Forwarder>

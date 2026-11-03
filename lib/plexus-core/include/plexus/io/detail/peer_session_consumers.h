@@ -3,6 +3,7 @@
 
 #include "plexus/io/frame_router.h"
 
+#include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_control.h"
 #include "plexus/io/detail/peer_session_complete.h"
@@ -25,26 +26,26 @@ void register_handshake_consumers(Session &s)
     s.m_router.on_handshake_req(
             [&s](std::span<const std::byte> inner)
             {
-                if(auto req = wire::decode_handshake_request(inner))
-                {
-                    s.m_negotiator.assemble(*req, security::attach_role::responder, req->id, s.m_fsm_cfg.self_id, s.m_fsm.attach_policy() != nullptr);
-                    s.m_negotiator.latch_peer_proof(*req);
-                    if(s.m_negotiator.posture_mismatched(*req))
-                        return refuse_posture(s);
-                    execute(s, s.m_fsm.on_request(*req, s.m_is_inbound_bootstrap, s.m_negotiator.facts()));
-                }
+                auto req = wire::decode_handshake_request(inner);
+                if(!req)
+                    return report_malformed(s);
+                s.m_negotiator.assemble(*req, security::attach_role::responder, req->id, s.m_fsm_cfg.self_id, s.m_fsm.attach_policy() != nullptr);
+                s.m_negotiator.latch_peer_proof(*req);
+                if(s.m_negotiator.posture_mismatched(*req))
+                    return refuse_posture(s);
+                execute(s, s.m_fsm.on_request(*req, s.m_is_inbound_bootstrap, s.m_negotiator.facts()));
             });
     s.m_router.on_handshake_resp(
             [&s](std::span<const std::byte> inner)
             {
-                if(auto resp = wire::decode_handshake_response(inner))
-                {
-                    s.m_negotiator.assemble(*resp, security::attach_role::initiator, resp->id, s.m_fsm_cfg.self_id, s.m_fsm.attach_policy() != nullptr);
-                    s.m_negotiator.latch_peer_proof(*resp);
-                    if(s.m_negotiator.posture_mismatched(*resp))
-                        return refuse_posture(s);
-                    execute(s, s.m_fsm.on_response(*resp, s.m_negotiator.facts()));
-                }
+                auto resp = wire::decode_handshake_response(inner);
+                if(!resp)
+                    return report_malformed(s);
+                s.m_negotiator.assemble(*resp, security::attach_role::initiator, resp->id, s.m_fsm_cfg.self_id, s.m_fsm.attach_policy() != nullptr);
+                s.m_negotiator.latch_peer_proof(*resp);
+                if(s.m_negotiator.posture_mismatched(*resp))
+                    return refuse_posture(s);
+                execute(s, s.m_fsm.on_response(*resp, s.m_negotiator.facts()));
             });
 }
 
@@ -75,7 +76,7 @@ void register_session_consumers(Session &s)
             {
                 const auto hb = wire::decode_heartbeat(inner);
                 if(!hb)
-                    return;
+                    return report_malformed(s);
                 if(s.m_on_stamp_seen_cb)
                     s.m_on_stamp_seen_cb(s.m_ctx.peer_id);
                 // The relay honor points key on the handshake-proven identity (m_reported, the broadcast

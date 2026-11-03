@@ -7,6 +7,7 @@
 
 #include "plexus/wire/frame.h"
 
+#include <chrono>
 #include <cstdint>
 
 namespace plexus::io::detail {
@@ -63,6 +64,13 @@ void report_drop(Session &s, drop_cause cause, std::uint64_t topic_hash = 0)
 {
     if(s.m_on_frame_dropped_cb)
         s.m_on_frame_dropped_cb(drop_event{cause, tier_of(s.m_channel.remote_endpoint().scheme), 0, topic_hash, s.m_ctx.peer_id, 1});
+}
+
+template<typename Session>
+void report_malformed(Session &s)
+{
+    report_drop(s, drop_cause::malformed);
+    s.m_malformed_warning.note(s.m_logger, "plexus: peer_session malformed_frame", std::chrono::steady_clock::now());
 }
 
 }

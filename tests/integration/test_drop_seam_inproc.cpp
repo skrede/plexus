@@ -589,16 +589,16 @@ TEST_CASE("inproc drop seam: a header-undecodable complete frame closes via the 
         const auto before      = net.a.attempt_count(net.id_b);
         const int warns_before = net.a_logger.warns;
 
-        // A complete frame whose header does NOT decode is a frame-level protocol
-        // violation: on_receive funnels it into close_for_protocol_error (one warn +
-        // tear_down) and does NOT route it. No re-dial (the short-circuit).
+        // A complete frame whose header does NOT decode is a frame-level protocol violation:
+        // on_receive warns it as malformed, then close_for_protocol_error warns and tears down.
+        // It is NOT routed and NOT re-dialed (the short-circuit).
         auto *a_session = net.a.session_for(net.id_b);
         REQUIRE(a_session != nullptr);
         auto bad = make_undecodable_frame();
         a_session->on_receive(bad);
         net.drive();
 
-        REQUIRE(net.a_logger.warns == warns_before + 1);
+        REQUIRE(net.a_logger.warns == warns_before + 2);
         REQUIRE(!net.a.is_connected(net.id_b));
         REQUIRE(net.a.attempt_count(net.id_b) == before);
         net.advance(k_ceiling);

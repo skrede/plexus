@@ -21,6 +21,7 @@
 #include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/io/detail/warn_line.h"
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/session_hooks.h"
 #include "plexus/io/detail/peer_session_deliver.h"
@@ -82,6 +83,7 @@ public:
             , m_procedures(procedures)
             , m_handshake_timeout(handshake_timeout)
             , m_msg_peer{m_channel, ctx.node_name}
+            , m_malformed_warning(detail::k_malformed_warning_interval)
             , m_rpc_peer{m_channel, ctx.node_name}
     {
     }
@@ -247,6 +249,7 @@ private:
     procedure_forwarder<Policy> &m_procedures;
     std::chrono::nanoseconds m_handshake_timeout;
     typename message_forwarder<Policy>::peer m_msg_peer;
+    io::detail::rate_limited_warning m_malformed_warning;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
     bool m_declines_relay = false;
 
@@ -320,6 +323,8 @@ private:
     friend void detail::receive_frame(S &, std::span<const std::byte>);
     template<typename S>
     friend void detail::report_drop(S &, detail::drop_cause, std::uint64_t);
+    template<typename S>
+    friend void detail::report_malformed(S &);
     template<typename S>
     friend void detail::arm_handshake_timer(S &);
     template<typename S>

@@ -13,6 +13,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
 #include <memory>
 #include <vector>
 #include <cstddef>
@@ -25,6 +26,12 @@ using engine_clock = routing_inproc_fixture::manual_clock;
 namespace {
 
 constexpr std::uint32_t k_flood = 1000;
+
+constexpr std::array k_decoding_consumers{
+        wire::msg_type::handshake_req,   wire::msg_type::handshake_resp,  wire::msg_type::heartbeat,           wire::msg_type::subscribe_response,
+        wire::msg_type::subscribe,       wire::msg_type::declare,         wire::msg_type::fetch_latched,       wire::msg_type::unsubscribe,
+        wire::msg_type::companion_ready, wire::msg_type::companion_offer, wire::msg_type::companion_withdrawn, wire::msg_type::companion_switch,
+};
 
 std::vector<std::byte> undecodable_subscribe()
 {
@@ -88,18 +95,22 @@ struct engine_with_raw_peer
 
 }
 
-TEST_CASE("session malformed: an inner payload that fails to decode is counted", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: an inner payload that fails to decode is counted", "[integration][session_malformed]")
 {
-    established_acceptor f;
-    REQUIRE(f.subject->is_complete());
+    for(const wire::msg_type type : k_decoding_consumers)
+    {
+        established_acceptor f;
+        REQUIRE(f.subject->is_complete());
+        INFO("msg_type " << static_cast<std::uint32_t>(type));
 
-    f.inject(undecodable_subscribe());
+        f.inject(frame_of(type, {}));
 
-    CHECK(f.fx.drops == std::vector{drop_cause::malformed});
-    CHECK(f.subject->is_complete());
+        CHECK(f.fx.drops == std::vector{drop_cause::malformed});
+        CHECK(f.subject->is_complete());
+    }
 }
 
-TEST_CASE("session malformed: a header that fails to decode is counted and closes the session", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a header that fails to decode is counted and closes the session", "[integration][session_malformed]")
 {
     established_acceptor f;
     REQUIRE(f.subject->is_complete());
@@ -110,7 +121,7 @@ TEST_CASE("session malformed: a header that fails to decode is counted and close
     CHECK_FALSE(f.subject->is_complete());
 }
 
-TEST_CASE("session malformed: a flood inside one interval logs one line", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a flood inside one interval logs one line", "[integration][session_malformed]")
 {
     established_acceptor f;
     const std::uint32_t before = f.sink.lines;
@@ -122,7 +133,7 @@ TEST_CASE("session malformed: a flood inside one interval logs one line", "[inte
     CHECK(f.sink.lines - before == 1);
 }
 
-TEST_CASE("session malformed: the malformed path does not allocate", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: the malformed path does not allocate", "[integration][session_malformed]")
 {
     established_acceptor f;
     const std::vector<std::byte> frame = undecodable_subscribe();
@@ -139,7 +150,7 @@ TEST_CASE("session malformed: the malformed path does not allocate", "[integrati
     REQUIRE(after - before == 0);
 }
 
-TEST_CASE("session malformed: an engine's logger receives the warning", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: an engine's logger receives the warning", "[integration][session_malformed]")
 {
     drop_recorder recorder;
     engine_with_raw_peer link;

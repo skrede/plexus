@@ -3,6 +3,8 @@
 
 #include "plexus/io/companion_event.h"
 
+#include "plexus/io/detail/peer_session_gate.h"
+
 #include "plexus/wire/subscribe.h"
 
 #include <span>
@@ -46,7 +48,7 @@ void on_subscribe_response_received(Session &s, std::span<const std::byte> inner
 {
     auto resp = wire::decode_subscribe_response(inner);
     if(!resp)
-        return;
+        return report_malformed(s);
     if(s.m_outstanding_subscribes == 0)
         return s.m_logger.warn("plexus: subscribe_response with no outstanding match");
     surface_subscribe_outcome(s, *resp);

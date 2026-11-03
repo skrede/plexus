@@ -34,7 +34,8 @@ set(PLEXUS_IO_TESTS
     test_registry_retire
     test_executor_affinity
     test_driver_record
-    test_session_gate_classify)
+    test_session_gate_classify
+    test_warn_line)
 
 # The peer-liveliness arbiter oracle: its fusion-matrix and precedence/hysteresis scenario
 # clusters compile into the one target so catch_discover_tests enumerates the identical set.
@@ -58,6 +59,7 @@ target_include_directories(test_liveness_storage PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_include_directories(test_channel_graveyard PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_include_directories(test_slot_rebuild_sequencing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_include_directories(test_registry_retire PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_include_directories(test_warn_line PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
 # The scenario-split block oracles: each split file's siblings compile into the one
 # existing target so catch_discover_tests enumerates the identical set.

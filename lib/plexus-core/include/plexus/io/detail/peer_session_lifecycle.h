@@ -70,14 +70,16 @@ void receive_frame(Session &s, std::span<const std::byte> frame)
         return detail::report_drop(s, drop_cause::unestablished);
     auto hdr = wire::decode_header(frame);
     if(!hdr)
+    {
+        detail::report_malformed(s);
         return close_for_protocol_error(s, wire::close_cause::invalid_magic);
+    }
     switch(detail::classify(s.is_complete(), hdr->type))
     {
         case gate_verdict::unestablished:
             return detail::report_drop(s, drop_cause::unestablished);
         case gate_verdict::malformed:
-            s.m_logger.warn("plexus: peer_session malformed_frame");
-            return detail::report_drop(s, drop_cause::malformed);
+            return detail::report_malformed(s);
         case gate_verdict::admit:
             break;
     }
