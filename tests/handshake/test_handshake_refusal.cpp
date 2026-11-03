@@ -40,7 +40,7 @@ void require_no_identity(const handshake_fsm &fsm)
 
 }
 
-TEST_CASE("refusal: a request below the version window records no identity", "[handshake][refusal][!shouldfail]")
+TEST_CASE("refusal: a request below the version window records no identity", "[handshake][refusal]")
 {
     handshake_fsm fsm(config_for(k_self));
     auto req          = request_from(k_peer);
@@ -52,7 +52,7 @@ TEST_CASE("refusal: a request below the version window records no identity", "[h
     require_no_identity(fsm);
 }
 
-TEST_CASE("refusal: an accepted response below the version window records no identity", "[handshake][refusal][!shouldfail]")
+TEST_CASE("refusal: an accepted response below the version window records no identity", "[handshake][refusal]")
 {
     auto fsm           = armed_outbound();
     auto resp          = response_from(k_peer);
@@ -64,7 +64,7 @@ TEST_CASE("refusal: an accepted response below the version window records no ide
     require_no_identity(fsm);
 }
 
-TEST_CASE("refusal: a response with a non-accepted status records no identity", "[handshake][refusal][!shouldfail]")
+TEST_CASE("refusal: a response with a non-accepted status records no identity", "[handshake][refusal]")
 {
     for(const auto status : {handshake_status::version_incompatible, handshake_status::identity_conflict, handshake_status::rejected_unknown, handshake_status::unauthorized})
     {

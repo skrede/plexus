@@ -55,17 +55,18 @@ public:
     fsm_step_result on_request(const wire::handshake_request &req, bool inbound_is_bootstrap, const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = req.protocol_version;
-        if(auto gate = detail::validate(*this, req.protocol_version, req.id, req.fingerprint, facts))
+        if(auto gate = detail::validate(*this, req.protocol_version, req.id, facts))
             return *gate;
         if(!detail::is_version_compatible(*this, req.version_major, req.version_minor))
             return detail::reject_version_result(*this);
+        detail::record_identity(*this, req.id, req.fingerprint);
         return detail::resolve_inbound(*this, inbound_is_bootstrap);
     }
 
     fsm_step_result on_response(const wire::handshake_response &resp, const security::attach_facts &facts = {}) noexcept
     {
         m_last_seen_their_protocol_version = resp.protocol_version;
-        if(auto gate = detail::validate(*this, resp.protocol_version, resp.id, resp.fingerprint, facts))
+        if(auto gate = detail::validate(*this, resp.protocol_version, resp.id, facts))
             return *gate;
         if(resp.status == wire::handshake_status::identity_conflict)
             return detail::identity_conflict_result(*this);
@@ -73,6 +74,7 @@ public:
             return detail::reject_version_result(*this);
         if(!detail::is_version_compatible(*this, resp.version_major, resp.version_minor))
             return detail::reject_version_result(*this);
+        detail::record_identity(*this, resp.id, resp.fingerprint);
         return detail::resolve_outbound(*this);
     }
 
@@ -158,7 +160,9 @@ private:
     template<typename F>
     friend fsm_step_result detail::abort_result(F &, handshake_outcome) noexcept;
     template<typename F>
-    friend std::optional<fsm_step_result> detail::validate(F &, std::uint8_t, const node_id &, std::uint64_t, const security::attach_facts &) noexcept;
+    friend std::optional<fsm_step_result> detail::validate(F &, std::uint8_t, const node_id &, const security::attach_facts &) noexcept;
+    template<typename F>
+    friend void detail::record_identity(F &, const node_id &, std::uint64_t) noexcept;
     template<typename F>
     friend bool detail::racing_outbound(const F &) noexcept;
     template<typename F>

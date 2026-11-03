@@ -42,8 +42,7 @@ fsm_step_result reject_unauthorized_result(F &f) noexcept
 }
 
 template<typename F>
-std::optional<fsm_step_result> validate(F &f, std::uint8_t peer_protocol_version, const node_id &peer_id, std::uint64_t peer_fingerprint,
-                                        const security::attach_facts &facts = {}) noexcept
+std::optional<fsm_step_result> validate(F &f, std::uint8_t peer_protocol_version, const node_id &peer_id, const security::attach_facts &facts = {}) noexcept
 {
     if(peer_protocol_version != wire::k_protocol_version)
         return reject_version_result(f);
@@ -53,11 +52,20 @@ std::optional<fsm_step_result> validate(F &f, std::uint8_t peer_protocol_version
         return identity_conflict_result(f);
     if(f.m_cfg.attach_policy != nullptr && !f.m_cfg.attach_policy->decide(facts))
         return reject_unauthorized_result(f);
+    if(f.m_complete_emitted && peer_id != f.m_peer_id)
+        return identity_conflict_result(f);
+    return std::nullopt;
+}
+
+// Runs only after every refusal check has passed and writes only before completion, so a refused
+// handshake leaves no claimed identity and a completed one keeps the identity it proved.
+template<typename F>
+void record_identity(F &f, const node_id &peer_id, std::uint64_t peer_fingerprint) noexcept
+{
     if(f.m_complete_emitted)
-        return peer_id == f.m_peer_id ? std::nullopt : std::optional{identity_conflict_result(f)};
+        return;
     f.m_peer_id          = peer_id;
     f.m_peer_fingerprint = host_fingerprint{peer_fingerprint};
-    return std::nullopt;
 }
 
 template<typename F>
