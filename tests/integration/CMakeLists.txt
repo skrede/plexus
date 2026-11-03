@@ -2149,7 +2149,9 @@ catch_discover_tests(test_forward_demand_propagation TEST_PREFIX "integration.")
 add_executable(test_crossed_dial_inproc
     test_crossed_dial_common.cpp
     test_crossed_dial_inproc.cpp
-    test_crossed_dial_quiet_inproc.cpp)
+    test_crossed_dial_quiet_inproc.cpp
+    test_crossed_dial_order_inproc.cpp
+    test_crossed_dial_remote_inproc.cpp)
 target_link_libraries(test_crossed_dial_inproc PRIVATE
     plexus::core
     plexus::wire
