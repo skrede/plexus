@@ -2,9 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CLAIM_H
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/peer_kind.h"
 #include "plexus/io/lifecycle_event.h"
-#include "plexus/io/handshake_protocol.h"
 
 #include "plexus/node_id.h"
 

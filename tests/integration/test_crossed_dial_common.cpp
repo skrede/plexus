@@ -52,9 +52,9 @@ std::optional<node_id> kept_slot(engine &e, const node_id &proven)
     return slots.size() == 1 ? std::optional<node_id>{slots.front()} : std::nullopt;
 }
 
-int verdicts_for(const recording_liveliness_observer &obs, const node_id &id, std::size_t from)
+std::int32_t verdicts_for(const recording_liveliness_observer &obs, const node_id &id, std::size_t from)
 {
-    int n = 0;
+    std::int32_t n = 0;
     for(std::size_t i = from; i < obs.events.size(); ++i)
         n += obs.events[i].id == id ? 1 : 0;
     return n;

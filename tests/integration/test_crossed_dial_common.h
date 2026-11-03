@@ -49,7 +49,7 @@ std::string hex_of(const node_id &id);
 std::vector<std::string> resolution_lines(const recording_logger &log);
 std::size_t complete_sessions_for(engine &e, const node_id &proven);
 std::optional<node_id> kept_slot(engine &e, const node_id &proven);
-int verdicts_for(const recording_liveliness_observer &obs, const node_id &id, std::size_t from);
+std::int32_t verdicts_for(const recording_liveliness_observer &obs, const node_id &id, std::size_t from);
 
 struct node_side
 {

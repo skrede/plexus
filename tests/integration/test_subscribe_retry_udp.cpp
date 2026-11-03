@@ -104,7 +104,7 @@ public:
     bool pump_for(std::chrono::milliseconds bound, Pred done)
     {
         std::chrono::steady_clock::time_point next = std::chrono::steady_clock::now();
-        const auto publish_and_check = [&]
+        const auto publish_and_check               = [&]
         {
             if(std::chrono::steady_clock::now() >= next)
             {

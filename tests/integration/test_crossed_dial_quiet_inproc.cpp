@@ -74,9 +74,9 @@ std::size_t liveness_for(const node_side &side, const node_id &id)
     return n;
 }
 
-int lost_for(const recording_liveliness_observer &obs, const node_id &id)
+std::int32_t lost_for(const recording_liveliness_observer &obs, const node_id &id)
 {
-    int n = 0;
+    std::int32_t n = 0;
     for(const auto &ev : obs.events)
         n += ev.id == id && ev.verdict == liveliness_verdict::lost ? 1 : 0;
     return n;

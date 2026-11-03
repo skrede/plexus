@@ -10,8 +10,8 @@ namespace plexus::io {
 struct subscribe_retry_config
 {
     std::uint8_t max_attempts{4};
-    std::chrono::milliseconds first_interval{250};
     std::chrono::milliseconds max_interval{2000};
+    std::chrono::milliseconds first_interval{250};
 };
 
 }

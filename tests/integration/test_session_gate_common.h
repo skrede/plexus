@@ -10,15 +10,10 @@
 
 #include "plexus/io/detail/drop_event.h"
 
-#include "plexus/io/security/attach_facts.h"
-#include "plexus/io/security/attach_policy.h"
-
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
 #include "plexus/inproc/inproc_transport.h"
-
-#include "plexus/log/logger.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/topic_hash.h"

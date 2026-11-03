@@ -53,8 +53,8 @@ struct session_build_context
     // Fail-closed: a security-engaged accept with no factory wired is refused, never fail-open.
     plexus::detail::move_only_function<void(typename Policy::byte_channel_type &, const security_negotiation &)> install_security_factory;
     plexus::detail::move_only_function<void(const detail::drop_event &)> on_frame_dropped{};
-    subscribe_retry_config subscribe_retry{};
     plexus::detail::move_only_function<void(const node_id &, std::string_view)> on_session_superseded{};
+    subscribe_retry_config subscribe_retry{};
 };
 
 }

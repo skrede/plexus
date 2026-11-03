@@ -101,7 +101,7 @@ void on_fetch_latched_received(Session &s, Forwarder &messages, std::span<const 
         report_malformed(s);
 }
 
-// A late offer is heard as an offer in the subscribe response is.
+// A late companion offer is heard the same way as the offer carried in the subscribe response.
 template<typename Session, typename Forwarder>
 void on_companion_received(Session &s, Forwarder &messages, wire::msg_type type, std::span<const std::byte> inner)
 {
