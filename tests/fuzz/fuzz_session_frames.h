@@ -161,6 +161,28 @@ inline frame unknown_frame(fuzz_input &in)
     return framed(in, type, payload);
 }
 
+// Every type but the two handshake ones, which a real sender always frames under session_id 0.
+inline msg_type epoch_type_field(fuzz_input &in)
+{
+    const auto pick = static_cast<std::uint8_t>(1 + in.u8() % 17);
+    return static_cast<msg_type>(pick < static_cast<std::uint8_t>(msg_type::handshake_req) ? pick : pick + 2);
+}
+
+inline std::uint64_t foreign_id_field(fuzz_input &in, std::uint64_t latched)
+{
+    const std::uint64_t id = in.any();
+    if(id != 0 && id != latched)
+        return id;
+    return latched == 1 ? 2 : 1;
+}
+
+inline frame foreign_frame(fuzz_input &in, std::uint64_t latched)
+{
+    const msg_type type      = epoch_type_field(in);
+    const auto payload       = bytes_field(in, 64);
+    const std::uint8_t flags = in.u8();
+    return plexus::wire::encode_frame({.type = type, .flags = flags, .session_id = foreign_id_field(in, latched), .timestamp_ns = 0, .payload_len = 0}, payload);
+}
 }
 
 #endif

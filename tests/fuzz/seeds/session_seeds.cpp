@@ -15,6 +15,8 @@ constexpr std::uint8_t k_subscribe = 4;
 constexpr std::uint8_t k_declare   = 5;
 constexpr std::uint8_t k_heartbeat = 6;
 constexpr std::uint8_t k_tear_down = 7;
+constexpr std::uint8_t k_advance   = 8;
+constexpr std::uint8_t k_foreign   = 9;
 
 constexpr std::uint8_t k_requester = 0;
 constexpr std::uint8_t k_responder = 1;
@@ -65,6 +67,17 @@ void declaration(seed &out)
     append(out, {0, 1, 5, 2});
 }
 
+void advance_clock(seed &out, std::size_t ms)
+{
+    append(out, {k_advance, lo(ms), hi(ms)});
+}
+
+void subscribe(seed &out, std::uint8_t from)
+{
+    append(out, {k_subscribe, from});
+    field(out, k_topic);
+}
+
 seed established_traffic()
 {
     seed out{std::byte{k_drive}, std::byte{k_subscribe}, std::byte{k_requester}};
@@ -111,6 +124,42 @@ seed unknown_type_when_established()
     return out;
 }
 
+// The responder is gone but nothing tells the requester, so its subscribe is never answered and the retry runs out.
+seed subscribe_retry_exhausted()
+{
+    seed out{std::byte{k_drive}, std::byte{k_tear_down}, std::byte{k_responder}, std::byte{k_drive}};
+    subscribe(out, k_requester);
+    for(const std::size_t ms : {0, 250, 500, 1000, 2000, 2000})
+        advance_clock(out, ms);
+    return out;
+}
+
+seed tear_down_with_retry_armed()
+{
+    seed out{std::byte{k_drive}};
+    subscribe(out, k_requester);
+    append(out, {k_tear_down, k_requester});
+    advance_clock(out, 300);
+    return out;
+}
+
+// A heartbeat under session_id 0x7f latches that epoch; a heartbeat under 0x42 is then from another one.
+seed foreign_epoch_when_established()
+{
+    seed out{std::byte{k_drive}, std::byte{k_inject}, std::byte{k_requester}, std::byte{k_heartbeat_frame}, std::byte{1}, std::byte{0}};
+    header(out, 0x7f);
+    append(out, {k_foreign, k_requester, 9, 2, 1, 0, 0, 1, 0x42, k_drive});
+    return out;
+}
+
+seed handshake_after_drive(std::uint8_t from_id)
+{
+    seed out{std::byte{k_drive}};
+    handshake(out, k_responder, false, from_id);
+    append(out, {k_drive});
+    return out;
+}
+
 seed handshake_before_drive(std::uint8_t to, bool response, std::uint8_t from_id)
 {
     seed out;
@@ -121,7 +170,7 @@ seed handshake_before_drive(std::uint8_t to, bool response, std::uint8_t from_id
 
 }
 
-// Grammar: one operation byte (modulo eight) and its fields, repeated; the side byte's low bit picks the responder.
+// Grammar: one operation byte (modulo ten) and its fields, repeated; the side byte's low bit picks the responder.
 seed_set session_sequence_seeds()
 {
     return {seed{std::byte{k_drive}},
@@ -132,5 +181,10 @@ seed_set session_sequence_seeds()
             established_traffic(),
             declared_traffic(),
             subscribe_then_garbage(),
-            unknown_type_when_established()};
+            unknown_type_when_established(),
+            subscribe_retry_exhausted(),
+            tear_down_with_retry_armed(),
+            foreign_epoch_when_established(),
+            handshake_after_drive(0x02),
+            handshake_after_drive(0x07)};
 }

@@ -1,9 +1,12 @@
+#include "fuzz_clock.h"
 #include "fuzz_input.h"
 #include "fuzz_oracle.h"
 #include "fuzz_session_link.h"
 #include "fuzz_session_frames.h"
 
 #include <span>
+#include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 
@@ -67,6 +70,20 @@ void inject_raw(session_link &link, fuzz_input &in)
     link.inject(s, std::as_bytes(in.take(in.u8())));
 }
 
+// Settled first, as for an unknown type. Before an epoch is latched the first non-zero session_id becomes it, so the
+// oracle applies only once one is.
+void inject_foreign(session_link &link, fuzz_input &in)
+{
+    const side s = side_field(in);
+    require_quiescence(link);
+    session_end &end       = link.at(s);
+    const bool established = end.live && end.live->is_complete() && !end.closed() && end.live->peer_session_id() != 0;
+    const frame f          = foreign_frame(in, established ? end.live->peer_session_id() : 0);
+    link.inject(s, f);
+    require_quiescence(link);
+    fuzz_require(!established || !end.closed(), "a frame from a foreign epoch never closes an established session");
+}
+
 void subscribe(session_link &link, fuzz_input &in)
 {
     const side s = side_field(in);
@@ -79,27 +96,35 @@ void declare(session_link &link, fuzz_input &in)
     link.call(s, [td = declaration_field(in)](session &live) { live.declare(td); });
 }
 
+void advance(session_link &link, fuzz_input &in)
+{
+    fuzz_clock::advance(std::chrono::milliseconds{static_cast<std::int64_t>(in.uint(2) % 4096)});
+    require_quiescence(link);
+}
+
+void drive(session_link &link, fuzz_input &)
+{
+    require_quiescence(link);
+}
+
+void heartbeat(session_link &link, fuzz_input &in)
+{
+    link.call(side_field(in), [](session &s) { s.emit_heartbeat(); });
+}
+
+void tear_down(session_link &link, fuzz_input &in)
+{
+    link.tear_down(side_field(in));
+}
+
+using operation = void (*)(session_link &, fuzz_input &);
+
+// The index is the operation byte the seeds encode.
+constexpr std::array<operation, 10> k_operations{drive, inject_frame, inject_raw, inject_unknown, subscribe, declare, heartbeat, tear_down, advance, inject_foreign};
+
 void apply(session_link &link, fuzz_input &in)
 {
-    switch(in.u8() % 8)
-    {
-        case 0:
-            return require_quiescence(link);
-        case 1:
-            return inject_frame(link, in);
-        case 2:
-            return inject_raw(link, in);
-        case 3:
-            return inject_unknown(link, in);
-        case 4:
-            return subscribe(link, in);
-        case 5:
-            return declare(link, in);
-        case 6:
-            return link.call(side_field(in), [](session &s) { s.emit_heartbeat(); });
-        default:
-            return link.tear_down(side_field(in));
-    }
+    k_operations[in.u8() % k_operations.size()](link, in);
 }
 
 void check(session_end &end)
@@ -110,6 +135,7 @@ void check(session_end &end)
     const std::uint64_t peer = end.live->peer_session_id();
     fuzz_require(!end.seen.complete || end.live->is_complete() || closed, "completion never reverts while the session is open");
     fuzz_require(end.seen.peer_session_id == 0 || peer == end.seen.peer_session_id || (closed && peer == 0), "a latched peer_session_id never changes");
+    fuzz_require(!end.seen.identity || closed || end.live->peer_identity() == *end.seen.identity, "a proven identity never changes while the session is open");
     fuzz_require(end.seen.disconnects == 0 || (end.seen.disconnects == 1 && closed), "a disconnected edge fires at most once, from a closed session");
     end.seen.complete = end.seen.complete || end.live->is_complete();
     if(end.seen.peer_session_id == 0)
@@ -133,6 +159,7 @@ void finish(session_link &link)
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
+    fuzz_clock::reset();
     fuzz_input in{std::span<const std::uint8_t>{data, size}};
     session_link link;
     for(std::size_t n = 0; n < k_max_operations && !in.exhausted(); ++n)
