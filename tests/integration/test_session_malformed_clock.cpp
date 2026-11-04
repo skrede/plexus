@@ -1,5 +1,7 @@
 #include "test_session_malformed_common.h"
 
+#include "plexus/io/peer_session.h"
+
 #include "plexus/io/detail/warn_line.h"
 #include "plexus/io/detail/drop_event.h"
 
@@ -9,10 +11,13 @@
 #include <vector>
 #include <cstdint>
 #include <algorithm>
+#include <type_traits>
 
 using namespace session_malformed_fixture;
 using plexus::io::detail::drop_cause;
 using plexus::io::detail::k_malformed_warning_interval;
+
+static_assert(std::is_same_v<plexus::io::peer_session<routing_inproc_fixture::manual_policy>::clock_type, routing_inproc_fixture::manual_clock>);
 
 namespace {
 
@@ -43,7 +48,7 @@ std::vector<std::string> scripted_run()
 
 }
 
-TEST_CASE("session malformed: the warning interval follows the session's clock", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: the warning interval follows the session's clock", "[integration][session_malformed]")
 {
     engine_clock::reset();
     drop_recorder recorder;
@@ -64,7 +69,7 @@ TEST_CASE("session malformed: the warning interval follows the session's clock",
     CHECK(std::ranges::count(recorder.seen, drop_cause::malformed) == 1001);
 }
 
-TEST_CASE("session malformed: two identical runs on the session's clock log the same warnings", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: two identical runs on the session's clock log the same warnings", "[integration][session_malformed]")
 {
     const std::vector<std::string> first  = scripted_run();
     const std::vector<std::string> second = scripted_run();

@@ -62,6 +62,7 @@ public:
     using channel_type  = typename Policy::byte_channel_type;
     using executor_type = typename Policy::executor_type;
     using timer_type    = typename Policy::timer_type;
+    using clock_type    = plexus::timer_clock_t<timer_type>;
 
     peer_session(peer_context<Policy> &ctx, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, message_forwarder<Policy> &messages,
                  procedure_forwarder<Policy> &procedures, bool is_inbound_bootstrap, log::logger &logger)
@@ -264,7 +265,7 @@ private:
     io::detail::subscribe_retry_state m_retry;
     std::chrono::nanoseconds m_handshake_timeout;
     typename message_forwarder<Policy>::peer m_msg_peer;
-    io::detail::rate_limited_warning m_malformed_warning;
+    io::detail::rate_limited_warning<clock_type> m_malformed_warning;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
     bool m_declines_relay = false;
 

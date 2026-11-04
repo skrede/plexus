@@ -16,6 +16,7 @@
 #include "plexus/executor_verbs.h"
 
 #include <memory>
+#include <type_traits>
 
 namespace fuzz_session {
 
@@ -34,6 +35,8 @@ struct fuzz_policy : plexus::executor_verbs<executor>
 using session       = plexus::io::peer_session<fuzz_policy>;
 using msg_forwarder = plexus::io::message_forwarder<fuzz_policy>;
 using rpc_forwarder = plexus::io::procedure_forwarder<fuzz_policy>;
+
+static_assert(std::is_same_v<session::clock_type, fuzz_clock>);
 
 }
 

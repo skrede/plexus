@@ -16,6 +16,8 @@ namespace plexus::asio {
 class asio_timer
 {
 public:
+    using clock_type = ::asio::steady_timer::clock_type;
+
     explicit asio_timer(::asio::io_context &io)
             : m_timer(io)
     {

@@ -7,7 +7,6 @@
 
 #include "plexus/wire/frame.h"
 
-#include <chrono>
 #include <cstdint>
 
 namespace plexus::io::detail {
@@ -64,7 +63,7 @@ template<typename Session>
 void report_malformed(Session &s)
 {
     report_drop(s, drop_cause::malformed);
-    s.m_malformed_warning.note(s.m_logger, "plexus: peer_session malformed_frame", std::chrono::steady_clock::now());
+    s.m_malformed_warning.note(s.m_logger, "plexus: peer_session malformed_frame", Session::clock_type::now());
 }
 
 }

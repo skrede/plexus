@@ -65,17 +65,18 @@ private:
     std::array<char, k_capacity> m_buffer;
 };
 
+template<typename Clock>
 class rate_limited_warning
 {
 public:
-    explicit rate_limited_warning(std::chrono::steady_clock::duration interval) noexcept
+    explicit rate_limited_warning(typename Clock::duration interval) noexcept
             : m_suppressed(0)
             , m_interval(interval)
             , m_last_line()
     {
     }
 
-    void note(log::logger &logger, std::string_view line, std::chrono::steady_clock::time_point now)
+    void note(log::logger &logger, std::string_view line, typename Clock::time_point now)
     {
         if(m_last_line && now - *m_last_line < m_interval)
         {
@@ -97,8 +98,8 @@ public:
 
 private:
     std::uint64_t m_suppressed;
-    std::chrono::steady_clock::duration m_interval;
-    std::optional<std::chrono::steady_clock::time_point> m_last_line;
+    typename Clock::duration m_interval;
+    std::optional<typename Clock::time_point> m_last_line;
 };
 
 }

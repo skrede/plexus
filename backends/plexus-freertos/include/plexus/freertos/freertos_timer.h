@@ -23,6 +23,8 @@ namespace plexus::freertos {
 class freertos_timer
 {
 public:
+    using clock_type = std::chrono::steady_clock;
+
     explicit freertos_timer(freertos_executor &ex)
             : m_exec(&ex)
     {

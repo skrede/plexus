@@ -25,6 +25,19 @@ constexpr std::chrono::seconds k_interval{1};
 constexpr std::chrono::milliseconds k_tick{10};
 const steady_clock::time_point k_start{std::chrono::hours(1)};
 
+struct tick_clock
+{
+    using duration   = std::chrono::nanoseconds;
+    using rep        = duration::rep;
+    using period     = duration::period;
+    using time_point = std::chrono::time_point<tick_clock>;
+
+    static time_point now() noexcept
+    {
+        return time_point{};
+    }
+};
+
 struct recording_logger final : plexus::log::logger
 {
     void warn(std::string_view message) override
@@ -52,7 +65,7 @@ struct counting_logger final : plexus::log::logger
 TEST_CASE("warn line: the first note warns at once and the first after the interval carries the suppressed count", "[io][warn_line]")
 {
     recording_logger logger;
-    rate_limited_warning warning(k_interval);
+    rate_limited_warning<steady_clock> warning(k_interval);
 
     warning.note(logger, k_line, k_start);
     REQUIRE(logger.lines == std::vector<std::string>{std::string(k_line)});
@@ -68,7 +81,7 @@ TEST_CASE("warn line: the first note warns at once and the first after the inter
 TEST_CASE("warn line: a note after a quiet interval warns the plain line", "[io][warn_line]")
 {
     recording_logger logger;
-    rate_limited_warning warning(k_interval);
+    rate_limited_warning<steady_clock> warning(k_interval);
 
     warning.note(logger, k_line, k_start);
     warning.note(logger, k_line, k_start + 2 * k_interval);
@@ -92,7 +105,7 @@ TEST_CASE("warn line: a summary never exceeds the buffer and is built without al
 {
     const std::string long_line(3 * warn_line::k_capacity, 'x');
     counting_logger logger;
-    rate_limited_warning warning(k_interval);
+    rate_limited_warning<steady_clock> warning(k_interval);
     warning.note(logger, long_line, k_start);
 
     plexus::testing::reset_alloc_count();
@@ -107,4 +120,18 @@ TEST_CASE("warn line: a summary never exceeds the buffer and is built without al
     CHECK(logger.lines == 101);
     CHECK(logger.longest == warn_line::k_capacity);
     CHECK(after - before == 0);
+}
+
+TEST_CASE("warn line: the interval is measured on the limiter's own clock", "[io][warn_line]")
+{
+    recording_logger logger;
+    rate_limited_warning<tick_clock> warning(k_interval);
+    const tick_clock::time_point t0 = tick_clock::now();
+
+    warning.note(logger, k_line, t0);
+    warning.note(logger, k_line, t0 + k_interval - tick_clock::duration{1});
+    REQUIRE(logger.lines.size() == 1);
+
+    warning.note(logger, k_line, t0 + k_interval);
+    CHECK(logger.lines == std::vector<std::string>{std::string(k_line), "plexus: test event, 1 more"});
 }

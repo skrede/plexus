@@ -53,6 +53,21 @@ struct observation
     std::optional<plexus::node_id> identity;
 };
 
+struct counting_logger final : plexus::log::logger
+{
+    counting_logger() noexcept
+            : lines(0)
+    {
+    }
+
+    void warn(std::string_view) override
+    {
+        ++lines;
+    }
+
+    std::uint64_t lines;
+};
+
 struct session_end
 {
     session_end(executor &ex, plexus::log::logger &sink)
@@ -155,7 +170,7 @@ private:
     bus m_bus;
     executor m_ex;
     transport m_transport;
-    plexus::log::null_logger m_sink;
+    counting_logger m_sink;
     session_end m_requester;
     session_end m_responder;
 

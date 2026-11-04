@@ -18,6 +18,8 @@ template<typename Clock = std::chrono::steady_clock>
 class inproc_timer
 {
 public:
+    using clock_type = Clock;
+
     explicit inproc_timer(inproc_executor<Clock> &ex)
             : m_exec(&ex)
     {

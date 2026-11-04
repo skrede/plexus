@@ -20,6 +20,23 @@ concept timer = requires(T &t, std::chrono::milliseconds dur, detail::move_only_
     { t.cancel() } -> std::same_as<void>;
 };
 
+// A timer may name the clock it fires on; one that names none runs on the steady clock.
+template<typename Timer>
+struct timer_clock
+{
+    using type = std::chrono::steady_clock;
+};
+
+template<typename Timer>
+    requires requires { typename Timer::clock_type; }
+struct timer_clock<Timer>
+{
+    using type = typename Timer::clock_type;
+};
+
+template<typename Timer>
+using timer_clock_t = typename timer_clock<Timer>::type;
+
 // Channel construction is deliberately NOT a Policy constraint: it is transport-
 // specific and owned by transport_backend; requiring executor-alone construction
 // would force a sentinel/setter mutation on any channel needing more.
