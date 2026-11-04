@@ -2038,7 +2038,7 @@ target_include_directories(test_session_identity PRIVATE
 catch_discover_tests(test_session_identity TEST_PREFIX "integration.")
 
 # Every inbound decode failure counted and its warning rate-limited, with an alloc gate over the malformed path.
-add_executable(test_session_malformed_logging test_session_malformed_logging.cpp)
+add_executable(test_session_malformed_logging test_session_malformed_logging.cpp test_session_malformed_clock.cpp)
 target_link_libraries(test_session_malformed_logging PRIVATE
     plexus::core
     plexus::wire
