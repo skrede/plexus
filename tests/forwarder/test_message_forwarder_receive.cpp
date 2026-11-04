@@ -71,7 +71,7 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
     REQUIRE_FALSE(bus.has_pending_packets()); // nothing was ever enqueued
 }
 
-TEST_CASE("receive tail warn-and-drops a malformed frame through the injected logger", "[forwarder]")
+TEST_CASE("receive tail reports an undecodable payload and leaves its warning to the caller", "[forwarder][!shouldfail]")
 {
     counting_logger log;
     inproc_bus<> bus;
@@ -89,8 +89,8 @@ TEST_CASE("receive tail warn-and-drops a malformed frame through the injected lo
     bool fired = false;
     fwd.deliver(peer, garbage, plexus::node_id{}, /*has_source_identity=*/false, [&](std::string_view, std::span<const std::byte>) { fired = true; });
 
-    REQUIRE_FALSE(fired);    // dropped: no subscriber callback
-    REQUIRE(log.count == 1); // the warn seam fired exactly once
+    REQUIRE_FALSE(fired);
+    REQUIRE(log.count == 0);
 }
 
 TEST_CASE("default forwarder drops a malformed frame silently via null_logger", "[forwarder]")

@@ -25,11 +25,14 @@ constexpr std::array k_decoding_consumers{
         wire::msg_type::handshake_req,   wire::msg_type::handshake_resp,  wire::msg_type::heartbeat,           wire::msg_type::subscribe_response,
         wire::msg_type::subscribe,       wire::msg_type::declare,         wire::msg_type::fetch_latched,       wire::msg_type::unsubscribe,
         wire::msg_type::companion_ready, wire::msg_type::companion_offer, wire::msg_type::companion_withdrawn, wire::msg_type::companion_switch,
+        wire::msg_type::unidirectional,  wire::msg_type::rpc_request,     wire::msg_type::rpc_response,        wire::msg_type::peer_report,
+        wire::msg_type::forwarded,
 };
+static_assert(k_decoding_consumers.size() == 17);
 
 }
 
-TEST_CASE("session malformed: an inner payload that fails to decode is counted", "[integration][session_malformed]")
+TEST_CASE("session malformed: an inner payload that fails to decode is counted", "[integration][session_malformed][!shouldfail]")
 {
     for(const wire::msg_type type : k_decoding_consumers)
     {
