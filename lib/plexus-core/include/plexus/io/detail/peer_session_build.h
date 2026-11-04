@@ -49,12 +49,22 @@ void wire_inbound_drop(Registry &reg, Slot &slot)
             });
 }
 
+template<typename Slot>
+void note_dial_connected(Slot &slot, const lifecycle_event &ev)
+{
+    if(ev.kind != peer_kind::dialed || (ev.edge != lifecycle_edge::connected && ev.edge != lifecycle_edge::reconnected))
+        return;
+    slot.dead = false;
+    slot.driver.note_connected();
+}
+
 template<typename Registry, typename Slot>
 void wire_observer(Registry &reg, Slot &slot)
 {
     slot.session->on_lifecycle(
             [&reg, &slot](const lifecycle_event &ev)
             {
+                detail::note_dial_connected(slot, ev);
                 if(reg.m_build.on_lifecycle)
                     reg.m_build.on_lifecycle(ev);
                 detail::track_identity_claim(reg, slot, ev);

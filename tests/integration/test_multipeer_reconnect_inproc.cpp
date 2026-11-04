@@ -313,18 +313,14 @@ TEST_CASE("multipeer inproc: one peer crossing a surrender bound is is_dead whil
         for(std::size_t i = 0; i < k_n; ++i)
             REQUIRE(net.a.is_connected(net.peer(i).id));
 
-        // Each real drop on peer 0's current accepted end advances A's slot-0 attempt
-        // counter by 1; the peer files each re-dial's accept under A's proven id.
-        // Cross the bound: the last drop reports the slot dead and arms no backoff.
-        for(std::uint8_t n = 1; n <= k_max_attempts; ++n)
-        {
-            auto *inbound = net.peer(0).eng.session_for(make_id(0xA1));
-            REQUIRE(inbound != nullptr);
-            inbound->tear_down();
-            net.drive();
-            if(n < k_max_attempts)
-                net.advance(k_ceiling);
-        }
+        // A completed re-dial resets the attempt counter, so peer 0 stops listening
+        // before the one real drop: the drop and each refused re-dial advance A's
+        // slot-0 counter by 1, and the last refusal reports the slot dead.
+        net.peer(0).transport.close();
+        net.drop_peer(0);
+        net.drive();
+        for(std::uint32_t n = 1; n < k_max_attempts; ++n)
+            net.advance(k_ceiling);
 
         REQUIRE(net.a.is_dead(net.peer(0).id));
         REQUIRE(net.a.attempt_count(net.peer(0).id) == k_max_attempts);

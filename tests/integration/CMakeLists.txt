@@ -2243,3 +2243,17 @@ target_include_directories(test_session_stale_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_session_stale_inproc TEST_PREFIX "integration.")
+
+# A reach never disturbs a live session and a completed session resets the backoff.
+add_executable(test_reach_guard_inproc
+    test_reach_guard_inproc.cpp
+    test_reach_guard_backoff_inproc.cpp)
+target_link_libraries(test_reach_guard_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_reach_guard_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_reach_guard_inproc TEST_PREFIX "integration.")

@@ -289,15 +289,14 @@ TEST_CASE("inproc observer: dead fires once when the driver surrenders, and the 
         REQUIRE(a.is_connected(id_b));
         REQUIRE(a.is_connected(id_c));
 
-        for(std::uint8_t n = 1; n <= k_max_attempts; ++n)
+        // A completed re-dial resets the attempt counter, so b stops listening before the one real drop.
+        transport_b.close();
+        b.session_for(make_id(0xA1))->tear_down();
+        ex.drain();
+        for(std::uint32_t n = 1; n < k_max_attempts; ++n)
         {
-            b.session_for(make_id(0xA1))->tear_down();
+            manual_clock::advance(k_ceiling);
             ex.drain();
-            if(n < k_max_attempts)
-            {
-                manual_clock::advance(k_ceiling);
-                ex.drain();
-            }
         }
         ex.drain(); // flush the posted dead edge
 

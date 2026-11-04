@@ -70,6 +70,15 @@ public:
         m_dialing = false;
     }
 
+    // A backoff still armed when a session completes belongs to a dial that start() overtook; left armed it would tear
+    // the completed session down.
+    void note_connected()
+    {
+        m_attempt     = 0;
+        m_surrendered = false;
+        m_backoff_timer.cancel();
+    }
+
     // Forget means forget: awareness for this peer was withdrawn, so an armed backoff is canceled
     // and any further redial is refused until a fresh start() re-authorizes it. A dial already
     // issued to the transport is denied at the build seam, which consults redial_denied().
@@ -104,9 +113,12 @@ public:
 
     // A transport drop on an already-complete session. A clean/intentional close must NOT route
     // here — only a transport drop does, so a self-defending close never amplifies into a re-dial.
+    // With no failed attempt since the last completed session, the drop starts the outage the surrender bounds measure.
     void on_channel_dropped()
     {
         m_dialing = false;
+        if(m_attempt == 0)
+            m_first_attempt = Clock::now();
         schedule_redial();
     }
 

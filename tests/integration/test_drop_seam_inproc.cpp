@@ -10,9 +10,9 @@
 //     strictly-later epoch on the next backoff;
 //   - clean-close-no-redial: a clean tear_down on A's OWN B-session advances no
 //     attempt_count (the m_torn_down guard + the silent-closing-end contract);
-//   - surrender-without-collateral: enough real drops cross a max_attempts bound on
-//     B's slot, marking is_dead(id_b) true while a co-resident live peer C stays
-//     connected and is_dead(id_c) false.
+//   - surrender-without-collateral: a real drop and the refused re-dials after it cross
+//     a max_attempts bound on B's slot, marking is_dead(id_b) true while a co-resident
+//     live peer C stays connected and is_dead(id_c) false.
 // The scaffold (manual_clock/manual_policy, k_seed/k_long_timeout, the discovery
 // stub, the two_node rendezvous + drive/advance idiom) mirrors the routing oracle.
 
@@ -486,20 +486,18 @@ TEST_CASE("inproc drop seam: crossing a surrender bound marks is_dead and re-dia
         REQUIRE(a.is_connected(id_b));
         REQUIRE(a.is_connected(id_c));
 
-        // Each real drop on B's current accepted end advances A's slot-B attempt
-        // counter by 1; B files each re-dial's re-accept under A's proven id.
-        // Cross the bound: the last drop reports B dead and arms no further backoff.
-        for(std::uint8_t n = 1; n <= k_max_attempts; ++n)
+        // A completed re-dial resets the attempt counter, so B stops listening before
+        // the one real drop: the drop and each refused re-dial advance A's slot-B
+        // counter by 1, and the last refusal reports B dead and arms no backoff.
+        transport_b.close();
+        auto *b_inbound = b.session_for(make_id(0xA1));
+        REQUIRE(b_inbound != nullptr);
+        b_inbound->tear_down();
+        ex.drain();
+        for(std::uint32_t n = 1; n < k_max_attempts; ++n)
         {
-            auto *b_inbound = b.session_for(make_id(0xA1));
-            REQUIRE(b_inbound != nullptr);
-            b_inbound->tear_down();
+            manual_clock::advance(k_ceiling);
             ex.drain();
-            if(n < k_max_attempts)
-            {
-                manual_clock::advance(k_ceiling);
-                ex.drain();
-            }
         }
 
         REQUIRE(a.is_dead(id_b));
