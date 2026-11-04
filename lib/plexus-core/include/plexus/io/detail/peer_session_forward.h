@@ -75,10 +75,10 @@ void dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff)
         case wire::msg_type::rpc_request:
             return s.m_procedures.deliver_request(s.m_rpc_peer, body, s.m_session_id, &ff.origin);
         case wire::msg_type::rpc_response:
-        {
-            const std::string key = node_name_of(ff.origin);
-            return s.m_procedures.deliver_response(s.m_rpc_peer, body, &key);
-        }
+            {
+                const std::string key = node_name_of(ff.origin);
+                return s.m_procedures.deliver_response(s.m_rpc_peer, body, &key);
+            }
         default:
             return;
     }

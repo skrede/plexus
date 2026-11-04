@@ -78,8 +78,7 @@ public:
     {
     }
 
-    bool attach(const peer &p, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt,
-                std::string_view type_name = {})
+    bool attach(const peer &p, std::string_view fqn, const subscriber_qos &qos = subscriber_qos{}, std::optional<std::uint64_t> type_id = std::nullopt, std::string_view type_name = {})
     {
         if(!m_endpoint.subscribe_gate(p.node_name, fqn))
             return false;
@@ -212,7 +211,8 @@ public:
     // Relay-installed only: the seam a completed forwarded receive fires so the relay twin re-fans the
     // frame. A non-relay node never installs it, so the forwarded receive path stays a pure local
     // delivery with no splice code reached.
-    void on_forward_refan(plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> hook)
+    void on_forward_refan(
+            plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> hook)
     {
         m_on_forward_refan_cb = std::move(hook);
     }
@@ -682,7 +682,8 @@ private:
     std::unordered_map<const void *, std::size_t> m_self_route_channels;
     detail::companion_hooks<channel_type> m_companion_hooks;
     plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
-    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)> m_on_forward_refan_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)>
+            m_on_forward_refan_cb;
     plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> m_on_originate_cb;
     plexus::detail::move_only_function<bool(const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>)> m_on_forward_rpc_cb;
     plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;

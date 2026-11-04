@@ -89,10 +89,10 @@ private:
         }
     }
 
-    freertos_executor                                        *m_exec;
-    TickType_t                                                m_expiry{};
+    freertos_executor *m_exec;
+    TickType_t m_expiry{};
     plexus::detail::move_only_function<void(std::error_code)> m_handler;
-    bool                                                      m_active{false};
+    bool m_active{false};
 };
 
 inline bool freertos_executor::fire_due_timer()

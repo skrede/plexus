@@ -13,6 +13,7 @@
 
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/procedure_fanout.h"
+#include "plexus/io/detail/procedure_deliver.h"
 #include "plexus/io/detail/procedure_deadline.h"
 
 #include "plexus/log/logger.h"
@@ -222,21 +223,7 @@ public:
     // attach (a known topic whose provider is gone), which replies topic_not_found instead.
     void deliver_request(const peer &p, std::span<const std::byte> inner, std::uint64_t session_id = 0, const node_id *reply_origin = nullptr)
     {
-        auto decoded = wire::decode_rpc_request(inner);
-        if(!decoded)
-            return drop("plexus: forwarder rpc_request decode_failed");
-
-        const reply_context ctx{&p.channel, decoded->header, session_id, reply_origin != nullptr, reply_origin ? *reply_origin : node_id{}};
-
-        auto hash_it = m_hash_to_fqn.find(ctx.req_hdr.topic_hash);
-        if(hash_it == m_hash_to_fqn.end())
-        {
-            auto status = m_endpoint.registry().fqn_for(ctx.req_hdr.topic_hash).empty() ? wire::rpc_status::no_handler : wire::rpc_status::topic_not_found;
-            return emit_reply(ctx, status, {});
-        }
-        bind_reply(ctx);
-        detail::emit_rpc_serve(*this, hash_it->second, ctx.req_hdr.correlation_id);
-        m_providers.find(hash_it->second)->second(decoded->param_data, m_reply);
+        detail::deliver_request(*this, p, inner, session_id, reply_origin);
     }
 
     // Find the pending entry for this peer by correlation_id, move it out + erase it, and fire its
@@ -246,23 +233,7 @@ public:
     // (carried by the forwarded envelope) rather than the via, matching forward_call's origin-keyed entry.
     void deliver_response(const peer &p, std::span<const std::byte> inner, const std::string *key_override = nullptr)
     {
-        auto decoded = wire::decode_rpc_response(inner);
-        if(!decoded)
-            return drop("plexus: forwarder rpc_response decode_failed");
-
-        auto peer_it = m_outstanding.find(key_override ? *key_override : p.node_name);
-        if(peer_it == m_outstanding.end())
-            return drop("plexus: forwarder rpc_response_orphan");
-
-        auto entry_it = peer_it->second.find(decoded->header.correlation_id);
-        if(entry_it == peer_it->second.end())
-            return drop("plexus: forwarder rpc_response_orphan");
-
-        pending_rpc pending = std::move(entry_it->second);
-        peer_it->second.erase(entry_it);
-        pending.timer->cancel();
-        detail::emit_rpc_reply(*this, pending.fqn, decoded->header.correlation_id, decoded->status);
-        pending.on_response(decoded->status, decoded->return_data);
+        detail::deliver_response(*this, p, inner, key_override);
     }
 
     // Every pending call completes once with canceled, and so does every later call; pending() settles once the canceled
@@ -342,6 +313,10 @@ private:
     friend void detail::fire_timeout(F &, const std::string &, std::uint64_t);
     template<typename F>
     friend void detail::close_forwarder(F &);
+    template<typename F, typename P>
+    friend void detail::deliver_request(F &, const P &, std::span<const std::byte>, std::uint64_t, const node_id *);
+    template<typename F, typename P>
+    friend void detail::deliver_response(F &, const P &, std::span<const std::byte>, const std::string *);
 
     wire::bidirectional_header request_header(std::string_view fqn, std::uint64_t corr_id)
     {
@@ -396,11 +371,6 @@ private:
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
         m_endpoint.send_control(channel, type, inner);
-    }
-
-    void drop(std::string_view message)
-    {
-        m_logger.warn(message);
     }
 };
 
