@@ -10,11 +10,10 @@
 namespace plexus::io::detail {
 
 // A (k1, k2) -> uint32 nested-map refcount: the single source of truth the
-// per-(node_name, fqn) subscribe gate and the same-host ring-acquire gate both
-// consume. bump returns the post-increment count (the 0->1 result is the caller's
-// emit gate); drop returns the post-decrement count, erasing an emptied inner then
-// outer entry, and returns k_no_entry for a missing pair so the caller treats it as
-// "no transition".
+// per-(node_name, fqn) admit gate consumes. bump returns the post-increment count
+// (the 0->1 result is the caller's emit gate); drop returns the post-decrement count,
+// erasing an emptied inner then outer entry, and returns k_no_entry for a missing pair
+// so the caller treats it as "no transition".
 class keyed_refcount
 {
 public:

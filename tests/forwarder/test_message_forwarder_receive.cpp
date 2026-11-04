@@ -2,7 +2,7 @@
 
 using namespace message_forwarder_fixture;
 
-TEST_CASE("detach on 1->0 emits exactly one unsubscribe_request", "[forwarder]")
+TEST_CASE("detach of a pair attached twice emits exactly one unsubscribe_request", "[forwarder]")
 {
     inproc_bus<> bus;
     inproc_executor<> ex(bus);
@@ -13,12 +13,12 @@ TEST_CASE("detach on 1->0 emits exactly one unsubscribe_request", "[forwarder]")
     plexus::log::null_logger sink;
     forwarder fwd{sink};
     fwd.attach(peer, "alpha");
-    fwd.attach(peer, "alpha"); // refcount 2
+    fwd.attach(peer, "alpha");
     ex.drain();
     cap.frames.clear();
 
-    REQUIRE_FALSE(fwd.detach(peer, "alpha")); // 2->1, no emit
-    REQUIRE(fwd.detach(peer, "alpha"));       // 1->0, emit
+    REQUIRE(fwd.detach(peer, "alpha"));
+    REQUIRE_FALSE(fwd.detach(peer, "alpha"));
     ex.drain();
     REQUIRE(count_unsubscribes(cap) == 1);
 }

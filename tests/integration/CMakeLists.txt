@@ -439,6 +439,19 @@ target_include_directories(test_spine_lifecycle_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_spine_lifecycle_inproc TEST_PREFIX "integration.")
 
+# The last local subscriber's removal unsubscribes from the publisher once.
+add_executable(test_unsubscribe_e2e_inproc test_unsubscribe_e2e_inproc.cpp)
+target_link_libraries(test_unsubscribe_e2e_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+target_include_directories(test_unsubscribe_e2e_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_unsubscribe_e2e_inproc TEST_PREFIX "integration.")
+
 # The per-topic capture-gate oracle: a counting encode thunk witnesses the gate's pre-encode
 # decision over a connected inproc node pair (publish_object), proving metadata-only forces no
 # encode, payload forces one, wire degrades to payload, both decimation mechanisms drop the

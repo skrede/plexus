@@ -2,7 +2,7 @@
 
 using namespace message_forwarder_fixture;
 
-TEST_CASE("attach refcount gate emits exactly one subscribe on 0->1", "[forwarder]")
+TEST_CASE("attach set gate emits exactly one subscribe on 0->1", "[forwarder]")
 {
     for(int iter = 0; iter < 100; ++iter)
     {
@@ -15,7 +15,7 @@ TEST_CASE("attach refcount gate emits exactly one subscribe on 0->1", "[forwarde
         plexus::log::null_logger sink;
         forwarder fwd{sink};
         REQUIRE(fwd.attach(peer, "alpha"));       // 0->1
-        REQUIRE_FALSE(fwd.attach(peer, "alpha")); // 1->2, no emit
+        REQUIRE_FALSE(fwd.attach(peer, "alpha")); // already held, no emit
         ex.drain();
 
         REQUIRE(count_subscribes(cap) == 1);

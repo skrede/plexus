@@ -482,9 +482,9 @@ TEST_CASE("shm.coordinator the forwarder emits the demand 0->1/1->0 exactly once
         fwd.on_demand_transition([&edges](std::string_view, std::string_view fqn, demand_transition d, demand_role r) { edges.push_back({std::string{fqn}, d, r}); });
 
         REQUIRE(fwd.attach(peer, "alpha"));       // 0->1: up
-        REQUIRE_FALSE(fwd.attach(peer, "alpha")); // 1->2: no emit
-        REQUIRE_FALSE(fwd.detach(peer, "alpha")); // 2->1: no emit
+        REQUIRE_FALSE(fwd.attach(peer, "alpha")); // already held: no emit
         REQUIRE(fwd.detach(peer, "alpha"));       // 1->0: down
+        REQUIRE_FALSE(fwd.detach(peer, "alpha")); // nothing held: no emit
         ex.drain();
 
         REQUIRE(edges.size() == 2);

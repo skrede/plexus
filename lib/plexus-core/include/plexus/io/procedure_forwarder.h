@@ -160,7 +160,7 @@ public:
         detail::arm_deadline(*this, key, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
     }
 
-    // Per-(peer, fqn) refcount gate: on 0->1 it emits a subscribe. A call() needs no prior attach.
+    // Per-(peer, fqn) set gate: only the attach that inserts the pair emits a subscribe. A call() needs no prior attach.
     bool attach(const peer &p, std::string_view fqn)
     {
         if(!m_endpoint.subscribe_gate(p.node_name, fqn))
@@ -183,7 +183,7 @@ public:
         return true;
     }
 
-    // Per-(peer, fqn) refcount gate: on 1->0 it emits an unsubscribe.
+    // Per-(peer, fqn) set gate: only the detach that erases the pair emits an unsubscribe.
     bool detach(const peer &p, std::string_view fqn)
     {
         if(!m_endpoint.unsubscribe_gate(p.node_name, fqn))

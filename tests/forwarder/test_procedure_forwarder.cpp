@@ -2,7 +2,7 @@
 
 using namespace procedure_forwarder_fixture;
 
-TEST_CASE("attach refcount gate emits exactly one procedure subscribe on 0->1", "[procedure]")
+TEST_CASE("attach set gate emits exactly one procedure subscribe on 0->1", "[procedure]")
 {
     for(int iter = 0; iter < 100; ++iter)
     {
@@ -15,7 +15,7 @@ TEST_CASE("attach refcount gate emits exactly one procedure subscribe on 0->1", 
         plexus::log::null_logger sink;
         procedure_forwarder fwd{ex, k_long_deadline, sink};
         REQUIRE(fwd.attach(peer, "svc"));       // 0->1
-        REQUIRE_FALSE(fwd.attach(peer, "svc")); // 1->2, no emit
+        REQUIRE_FALSE(fwd.attach(peer, "svc")); // already held, no emit
         ex.drain();
 
         REQUIRE(count_subscribes(cap) == 1);

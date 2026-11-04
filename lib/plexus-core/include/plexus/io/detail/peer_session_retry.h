@@ -105,7 +105,7 @@ void settle_subscribe(Session &s, const unacked_subscribe &entry)
     exhaust_subscribe(s, entry);
 }
 
-// The re-send bypasses attach(): its subscribe gate counts demand, so a second attach emits nothing.
+// The re-send bypasses attach(): its subscribe gate holds demand as a set, so a second attach emits nothing.
 template<typename Session>
 void resend_subscribe(Session &s, unacked_subscribe &entry)
 {
