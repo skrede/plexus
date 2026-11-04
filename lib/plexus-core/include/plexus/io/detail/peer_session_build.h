@@ -52,11 +52,11 @@ template<typename Registry, typename Slot>
 void wire_observer(Registry &reg, Slot &slot)
 {
     slot.session->on_lifecycle(
-            [&reg, &record = slot.record](const lifecycle_event &ev)
+            [&reg, &slot](const lifecycle_event &ev)
             {
-                detail::track_identity_claim(reg, record, ev);
                 if(reg.m_build.on_lifecycle)
                     reg.m_build.on_lifecycle(ev);
+                detail::track_identity_claim(reg, slot, ev);
             });
     slot.session->on_stamp_seen(
             [&reg](const node_id &id)

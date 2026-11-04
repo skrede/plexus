@@ -2,7 +2,6 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_FILING_H
 
 #include "plexus/io/node_name.h"
-#include "plexus/io/peer_kind.h"
 
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_reclaim.h"
@@ -37,20 +36,12 @@ struct slot_filing
     }
 
     template<typename Registry, typename Slot>
-    static bool uncontested(Registry &reg, Slot &slot, const node_id &proven)
-    {
-        bool other = false;
-        reg.for_each_connected([&](const node_id &, const typename Registry::session_type &s) { other = other || (&s != &*slot.session && s.peer_identity() == proven); });
-        return !other;
-    }
-
-    template<typename Registry, typename Slot>
-    static Slot *crossed_incumbent(Registry &reg, Slot &slot, const node_id &proven, peer_kind kind)
+    static Slot *incumbent(Registry &reg, Slot &slot, const node_id &proven)
     {
         for(auto &[key, other] : reg.m_slots)
         {
             const auto &s = other->session;
-            if(other.get() != &slot && s && s->is_complete() && s->peer_identity() == proven && session_kind(*s) != kind)
+            if(other.get() != &slot && s && s->is_complete() && s->peer_identity() == proven)
                 return other.get();
         }
         return nullptr;

@@ -37,9 +37,8 @@ TEST_CASE("dialed identity redial: a demand after a rejection does not dial unti
     manual_clock::reset();
     misdirected_card t;
     REQUIRE(t.rec.for_peer(t.advertised).rejected == 1);
-    auto &driver = t.net.a.registry().driver_for(t.advertised);
     t.net.a.subscribe(t.advertised, k_topic);
-    CHECK(driver.redial_denied());
+    CHECK(t.net.a.registry().slot_count() == 0);
     t.net.drive();
     t.net.a.reach(t.advertised);
     t.net.drive();
@@ -48,10 +47,10 @@ TEST_CASE("dialed identity redial: a demand after a rejection does not dial unti
     CHECK(t.rec.for_peer(t.advertised).rejected == 1);
     t.net.a.note_peer(t.advertised, t.net.ep_b);
     t.net.a.subscribe(t.advertised, k_topic);
-    CHECK(!driver.redial_denied());
+    CHECK(t.net.a.registry().slot_count() == 1);
     t.net.drive();
     CHECK(t.rec.for_peer(t.advertised).rejected == 2);
-    CHECK(driver.redial_denied());
+    CHECK(t.net.a.registry().slot_count() == 0);
 }
 
 TEST_CASE("dialed identity redial: under eager dialing each card dials once and a demand between cards dials nothing", "[integration][dialed_identity]")

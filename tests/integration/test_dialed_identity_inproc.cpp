@@ -25,13 +25,10 @@ TEST_CASE("dialed identity: a rejected dialed slot is not redialed by its backof
     manual_clock::reset();
     misdirected_card t;
     REQUIRE(t.rec.for_peer(t.advertised).rejected == 1);
-    auto &driver      = t.net.a.registry().driver_for(t.advertised);
-    const auto before = t.net.a.attempt_count(t.advertised);
-    CHECK(driver.redial_denied());
-    driver.on_channel_dropped();
+    CHECK(t.net.a.registry().slot_count() == 0);
     t.net.advance(k_ceiling);
     t.net.advance(k_ceiling);
-    CHECK(t.net.a.attempt_count(t.advertised) == before);
+    CHECK(t.net.a.registry().slot_count() == 0);
     CHECK(t.rec.for_peer(t.advertised).rejected == 1);
 }
 
@@ -62,10 +59,10 @@ TEST_CASE("dialed identity: a rejected slot releases its endpoint to the identit
     CHECK(c.connected == 1);
     CHECK(c.rejected == 0);
     CHECK(t.net.a.is_connected(t.net.id_b));
-    CHECK(t.net.a.registry().driver_for(t.advertised).redial_denied());
+    CHECK(t.net.a.registry().slot_count() == 1);
 }
 
-TEST_CASE("dialed identity: a fresh card for the rejected identity dials its own slot, not the one now connected", "[integration][dialed_identity]")
+TEST_CASE("dialed identity: a fresh card for the rejected identity at an endpoint another identity holds dials nothing and leaves that session alone", "[integration][dialed_identity]")
 {
     manual_clock::reset();
     misdirected_card t;
@@ -76,7 +73,7 @@ TEST_CASE("dialed identity: a fresh card for the rejected identity dials its own
     t.net.a.note_peer(t.advertised, t.net.ep_b);
     t.net.a.reach(t.advertised);
     t.net.drive();
-    CHECK(t.rec.for_peer(t.advertised).rejected == 2);
+    CHECK(t.rec.for_peer(t.advertised).rejected == 1);
     const auto &c = t.rec.for_peer(t.net.id_b);
     CHECK(c.connected == 1);
     CHECK(c.disconnected == 0);

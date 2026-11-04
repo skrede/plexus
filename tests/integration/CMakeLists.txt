@@ -2201,3 +2201,17 @@ target_sources(test_proven_identity_inproc PRIVATE
     test_crossed_dial_common.cpp
     test_proven_identity_crossed_inproc.cpp)
 catch_discover_tests(test_proven_identity_inproc TEST_PREFIX "integration.")
+
+# Two sessions of one kind for one identity keep the newer.
+add_executable(test_same_kind_duplicate_inproc
+    test_crossed_dial_common.cpp
+    test_same_kind_duplicate_inproc.cpp)
+target_link_libraries(test_same_kind_duplicate_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_same_kind_duplicate_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_same_kind_duplicate_inproc TEST_PREFIX "integration.")

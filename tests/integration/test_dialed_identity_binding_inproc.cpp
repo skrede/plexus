@@ -10,6 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -108,4 +109,30 @@ TEST_CASE("dialed identity binding: a session proving the id serves demand and i
     t.net.a.subscribe(t.advertised, k_topic);
     t.net.drive();
     CHECK(t.rec.for_peer(t.advertised).rejected == 1);
+}
+
+TEST_CASE("dialed identity binding: a slot rejected for its identity is erased once drained and the next card dials through a fresh slot", "[integration][dialed_identity]")
+{
+    manual_clock::reset();
+    two_node net;
+    recording_observer rec;
+    net.a.add_observer(rec);
+    const auto stale        = make_id(0xC3);
+    const std::size_t slots = net.a.registry().slot_count();
+    net.a.note_peer(stale, net.ep_b);
+    net.a.reach(stale);
+    net.drive();
+    REQUIRE(rec.for_peer(stale).rejected == 1);
+    CHECK(net.a.registry().slot_count() == slots);
+
+    net.a.subscribe(stale, k_topic);
+    net.drive();
+    CHECK(rec.for_peer(stale).rejected == 1);
+    CHECK(net.a.registry().slot_count() == slots);
+
+    net.a.note_peer(stale, net.ep_b);
+    net.a.reach(stale);
+    net.drive();
+    CHECK(rec.for_peer(stale).rejected == 2);
+    CHECK(net.a.registry().slot_count() == slots);
 }

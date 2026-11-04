@@ -4,6 +4,8 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/lifecycle_event.h"
 
+#include "plexus/io/detail/peer_session_filing.h"
+
 #include "plexus/node_id.h"
 
 #include <ranges>
@@ -11,17 +13,17 @@
 
 namespace plexus::io::detail {
 
-// A dialed slot whose peer proved an identity other than its card's waits for a fresh card, not for its backoff, and
-// leaves its endpoint to whichever identity answers there until it completes again.
-template<typename Registry, typename Record>
-void track_identity_claim(Registry &reg, Record &record, const lifecycle_event &ev)
+// A dialed slot whose peer proved an identity other than its card's leaves service and releases its endpoint to
+// whichever identity answers there. Its card waits for a fresh one, which dials through a fresh slot.
+template<typename Registry, typename Slot>
+void track_identity_claim(Registry &reg, Slot &slot, const lifecycle_event &ev)
 {
     if(ev.edge == lifecycle_edge::connected || ev.edge == lifecycle_edge::reconnected)
-        record.claim_released = false;
+        slot.record.claim_released = false;
     if(!detail::is_misidentified_dial(ev))
         return;
-    record.claim_released = true;
-    reg.deny_redial(ev.id);
+    slot.record.claim_released = true;
+    slot_filing::leave_service(reg, slot);
 }
 
 template<typename Registry>
