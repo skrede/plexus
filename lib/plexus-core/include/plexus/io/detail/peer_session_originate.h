@@ -27,7 +27,7 @@ void originate_if_pubsub(Session &s, const wire::frame_header &hdr, std::span<co
         return;
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
     auto uni                       = wire::decode_unidirectional(body, has_source_identity);
-    // The forwarder already decoded these bytes and counted a failure, so this check is unreachable.
+    // This runs only after the forwarder decoded these same bytes, so this check is unreachable.
     if(!uni)
         return;
     const std::vector<std::byte> header_on_inner = wire::encode_frame(hdr, body);
