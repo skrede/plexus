@@ -278,6 +278,8 @@ private:
     template<typename S>
     friend void detail::on_subscribe_received(S &, std::span<const std::byte>);
     template<typename S>
+    friend void detail::on_heartbeat_received(S &, std::span<const std::byte>);
+    template<typename S>
     friend bool detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
     template<typename S>
     friend bool detail::deliver_data_with_source(S &, const wire::frame_header &, std::span<const std::byte>, const node_id &);

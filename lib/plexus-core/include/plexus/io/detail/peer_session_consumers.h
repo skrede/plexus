@@ -56,6 +56,8 @@ void on_unidirectional_received(Session &s, const wire::frame_header &hdr, std::
 {
     if(!deliver_session_data(s, hdr, inner))
         return report_malformed(s);
+    if(!s.is_complete())
+        return;
     originate_if_pubsub(s, hdr, inner);
 }
 
@@ -73,6 +75,22 @@ void on_rpc_response_received(Session &s, Procedures &procedures, std::span<cons
         report_malformed(s);
 }
 
+template<typename Session>
+void on_heartbeat_received(Session &s, std::span<const std::byte> inner)
+{
+    const auto hb = wire::decode_heartbeat(inner);
+    if(!hb)
+        return report_malformed(s);
+    if(s.m_on_stamp_seen_cb)
+        s.m_on_stamp_seen_cb(s.m_ctx.peer_id);
+    if(!s.is_complete())
+        return;
+    // The relay honor points key on the handshake-proven identity (m_reported, the broadcast
+    // self-skip), not the provisional context id a dialed/accepted slot carries.
+    if(s.m_on_decline_seen_cb)
+        s.m_on_decline_seen_cb(s.peer_identity(), (hb->reserved & wire::k_heartbeat_relay_decline_flag) != 0);
+}
+
 template<typename Session, typename Procedures>
 void register_data_consumers(Session &s, frame_router &router, Procedures &procedures)
 {
@@ -88,19 +106,7 @@ void register_session_consumers(Session &s)
     register_control_consumers(s, s.m_router, s.m_messages);
     register_data_consumers(s, s.m_router, s.m_procedures);
     // A heartbeat stamps this pinned peer's last-seen only — presence, never a topic deadline.
-    s.m_router.on_heartbeat(
-            [&s](std::span<const std::byte> inner)
-            {
-                const auto hb = wire::decode_heartbeat(inner);
-                if(!hb)
-                    return report_malformed(s);
-                if(s.m_on_stamp_seen_cb)
-                    s.m_on_stamp_seen_cb(s.m_ctx.peer_id);
-                // The relay honor points key on the handshake-proven identity (m_reported, the broadcast
-                // self-skip), not the provisional context id a dialed/accepted slot carries.
-                if(s.m_on_decline_seen_cb)
-                    s.m_on_decline_seen_cb(s.peer_identity(), (hb->reserved & wire::k_heartbeat_relay_decline_flag) != 0);
-            });
+    s.m_router.on_heartbeat([&s](std::span<const std::byte> inner) { on_heartbeat_received(s, inner); });
 }
 
 }

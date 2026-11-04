@@ -79,7 +79,7 @@ struct teardown_acceptor : established_acceptor
 
 }
 
-TEST_CASE("session teardown: a message callback that tears the session down stops the re-origination", "[integration][session_teardown][!shouldfail]")
+TEST_CASE("session teardown: a message callback that tears the session down stops the re-origination", "[integration][session_teardown]")
 {
     teardown_acceptor f;
     f.messages.on_forward_refan([](auto &&...) {});
@@ -92,7 +92,7 @@ TEST_CASE("session teardown: a message callback that tears the session down stop
     f.check_torn_down();
 }
 
-TEST_CASE("session teardown: a message callback that tears the session down stops the forwarded re-fan", "[integration][session_teardown][!shouldfail]")
+TEST_CASE("session teardown: a message callback that tears the session down stops the forwarded re-fan", "[integration][session_teardown]")
 {
     teardown_acceptor f;
     f.messages.on_forward_refan([&f](auto &&...) { ++f.refans; });
@@ -104,7 +104,7 @@ TEST_CASE("session teardown: a message callback that tears the session down stop
     f.check_torn_down();
 }
 
-TEST_CASE("session teardown: a stamp callback that tears the session down stops the decline callback", "[integration][session_teardown][!shouldfail]")
+TEST_CASE("session teardown: a stamp callback that tears the session down stops the decline callback", "[integration][session_teardown]")
 {
     teardown_acceptor f;
     f.subject->on_stamp_seen([&f](const plexus::node_id &) { f.subject->tear_down(); });
@@ -116,7 +116,7 @@ TEST_CASE("session teardown: a stamp callback that tears the session down stops 
     f.check_torn_down();
 }
 
-TEST_CASE("session teardown: a degraded subscribe callback that tears the session down stops note_offer", "[integration][session_teardown][!shouldfail]")
+TEST_CASE("session teardown: a degraded subscribe callback that tears the session down stops note_offer", "[integration][session_teardown]")
 {
     teardown_acceptor f;
     plexus::io::detail::companion_hooks<inproc_channel<>> hooks;

@@ -99,6 +99,8 @@ void deliver_forwarded_frame(Session &s, const node_id &arrival_relay, std::span
         return report_malformed(s);
     if(!dispatch_forwarded_inner(s, *ff, *hdr))
         return report_malformed(s);
+    if(!s.is_complete())
+        return;
     refan_if_pubsub(s, *ff, *hdr);
 }
 

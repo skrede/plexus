@@ -57,6 +57,8 @@ void on_subscribe_response_received(Session &s, std::span<const std::byte> inner
     if(s.m_outstanding_subscribes == 0)
         return s.m_logger.warn("plexus: subscribe_response with no outstanding match");
     surface_subscribe_outcome(s, *resp);
+    if(!s.is_complete())
+        return;
     note_offer(s, s.m_messages, *resp);
     --s.m_outstanding_subscribes;
     s.maybe_fire_ready();
