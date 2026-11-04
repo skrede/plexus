@@ -75,7 +75,9 @@ private:
         const auto header = plexus::stream::encode_serial_header(wire_header);
         auto owner        = std::make_shared<const envelope>(envelope{header, plexus::stream::crc_trailer(header, payload)});
         plexus::wire_bytes<> head{std::span<const std::byte>{owner->header}, owner};
-        plexus::wire_bytes<> tail{std::span<const std::byte>{owner->trailer}, std::move(owner)};
+        // MSVC may move owner into the by-value parameter before reading owner->trailer, so take the view first.
+        const std::span<const std::byte> trailer_view{owner->trailer};
+        plexus::wire_bytes<> tail{trailer_view, std::move(owner)};
         std::array<plexus::wire_bytes<>, 3> nodes{std::move(head), std::move(payload), std::move(tail)};
         c.enqueue_egress_unit(nodes);
     }
