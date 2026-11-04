@@ -49,19 +49,36 @@ void register_handshake_consumers(Session &s)
             });
 }
 
+// The plain unidirectional receive: deliver locally, then (relay-only) re-originate as a forwarded
+// envelope so a directly-attached publisher's publish transits onward to remote subscribers.
+template<typename Session>
+void on_unidirectional_received(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
+{
+    if(!deliver_session_data(s, hdr, inner))
+        return report_malformed(s);
+    originate_if_pubsub(s, hdr, inner);
+}
+
+template<typename Session, typename Procedures>
+void on_rpc_request_received(Session &s, Procedures &procedures, std::span<const std::byte> inner)
+{
+    if(!procedures.deliver_request(s.rpc_peer(), inner, s.session_id()))
+        report_malformed(s);
+}
+
+template<typename Session, typename Procedures>
+void on_rpc_response_received(Session &s, Procedures &procedures, std::span<const std::byte> inner)
+{
+    if(!procedures.deliver_response(s.rpc_peer(), inner))
+        report_malformed(s);
+}
+
 template<typename Session, typename Procedures>
 void register_data_consumers(Session &s, frame_router &router, Procedures &procedures)
 {
-    // The plain unidirectional receive: deliver locally, then (relay-only) re-originate as a forwarded
-    // envelope so a directly-attached publisher's publish transits onward to remote subscribers.
-    router.on_unidirectional(
-            [&s](const wire::frame_header &hdr, std::span<const std::byte> inner)
-            {
-                deliver_session_data(s, hdr, inner);
-                originate_if_pubsub(s, hdr, inner);
-            });
-    router.on_rpc_request([&s, &procedures](std::span<const std::byte> inner) { procedures.deliver_request(s.rpc_peer(), inner, s.session_id()); });
-    router.on_rpc_response([&s, &procedures](std::span<const std::byte> inner) { procedures.deliver_response(s.rpc_peer(), inner); });
+    router.on_unidirectional([&s](const wire::frame_header &hdr, std::span<const std::byte> inner) { on_unidirectional_received(s, hdr, inner); });
+    router.on_rpc_request([&s, &procedures](std::span<const std::byte> inner) { on_rpc_request_received(s, procedures, inner); });
+    router.on_rpc_response([&s, &procedures](std::span<const std::byte> inner) { on_rpc_response_received(s, procedures, inner); });
 }
 
 template<typename Session>

@@ -29,30 +29,37 @@ void stamp_received(Forwarder &f, const node_id &source_node_id, std::uint64_t t
 }
 
 template<typename Forwarder, typename OnMessage>
-void forwarder_deliver(Forwarder &f, std::span<const std::byte> inner, const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
+bool forwarder_deliver(Forwarder &f, std::span<const std::byte> inner, const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
 {
     auto decoded = wire::decode_unidirectional(inner, has_source_identity);
     if(!decoded)
-        return forwarder_drop(f, "plexus: forwarder unidirectional_decode_failed");
+        return false;
 
     auto fqn = f.m_endpoint.registry().fqn_for(decoded->header.topic_hash);
     if(fqn.empty())
-        return forwarder_drop(f, "plexus: forwarder topic_unknown_for_data");
+    {
+        forwarder_drop(f, "plexus: forwarder topic_unknown_for_data");
+        return true;
+    }
 
     stamp_received(f, source_node_id, decoded->header.topic_hash);
     on_message(fqn, decoded->data);
+    return true;
 }
 
 template<typename Forwarder, typename OnMessage>
-void forwarder_deliver(Forwarder &f, std::span<const std::byte> inner, message_info info, const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
+bool forwarder_deliver(Forwarder &f, std::span<const std::byte> inner, message_info info, const node_id &source_node_id, bool has_source_identity, OnMessage &&on_message)
 {
     auto decoded = wire::decode_unidirectional(inner, has_source_identity);
     if(!decoded)
-        return forwarder_drop(f, "plexus: forwarder unidirectional_decode_failed");
+        return false;
 
     auto fqn = f.m_endpoint.registry().fqn_for(decoded->header.topic_hash);
     if(fqn.empty())
-        return forwarder_drop(f, "plexus: forwarder topic_unknown_for_data");
+    {
+        forwarder_drop(f, "plexus: forwarder topic_unknown_for_data");
+        return true;
+    }
 
     info.publication_sequence = decoded->header.sequence;
     if(decoded->endpoint_counter)
@@ -60,6 +67,7 @@ void forwarder_deliver(Forwarder &f, std::span<const std::byte> inner, message_i
 
     stamp_received(f, source_node_id, decoded->header.topic_hash);
     on_message(fqn, decoded->data, info);
+    return true;
 }
 
 }

@@ -71,7 +71,7 @@ TEST_CASE("no-subscriber publish sends nothing (demand-driven)", "[forwarder]")
     REQUIRE_FALSE(bus.has_pending_packets()); // nothing was ever enqueued
 }
 
-TEST_CASE("receive tail reports an undecodable payload and leaves its warning to the caller", "[forwarder][!shouldfail]")
+TEST_CASE("receive tail reports an undecodable payload and leaves its warning to the caller", "[forwarder]")
 {
     counting_logger log;
     inproc_bus<> bus;
@@ -87,7 +87,7 @@ TEST_CASE("receive tail reports an undecodable payload and leaves its warning to
     std::vector<std::byte> garbage(8, std::byte{0xAB});
 
     bool fired = false;
-    fwd.deliver(peer, garbage, plexus::node_id{}, /*has_source_identity=*/false, [&](std::string_view, std::span<const std::byte>) { fired = true; });
+    REQUIRE_FALSE(fwd.deliver(peer, garbage, plexus::node_id{}, /*has_source_identity=*/false, [&](std::string_view, std::span<const std::byte>) { fired = true; }));
 
     REQUIRE_FALSE(fired);
     REQUIRE(log.count == 0);

@@ -32,7 +32,7 @@ static_assert(k_decoding_consumers.size() == 17);
 
 }
 
-TEST_CASE("session malformed: an inner payload that fails to decode is counted", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: an inner payload that fails to decode is counted", "[integration][session_malformed]")
 {
     for(const wire::msg_type type : k_decoding_consumers)
     {

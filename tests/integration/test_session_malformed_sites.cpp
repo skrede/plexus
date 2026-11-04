@@ -54,7 +54,7 @@ TEST_CASE("session malformed: a truncated peer report is counted once", "[integr
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a forwarded envelope whose inner frame has no header is counted once", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a forwarded envelope whose inner frame has no header is counted once", "[integration][session_malformed]")
 {
     established_acceptor f;
 
@@ -63,7 +63,7 @@ TEST_CASE("session malformed: a forwarded envelope whose inner frame has no head
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a forwarded data body consumed locally is counted once", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a forwarded data body consumed locally is counted once", "[integration][session_malformed]")
 {
     established_acceptor f;
 
@@ -72,7 +72,7 @@ TEST_CASE("session malformed: a forwarded data body consumed locally is counted 
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a forwarded data body a relay re-fans without consuming is counted once", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a forwarded data body a relay re-fans without consuming is counted once", "[integration][session_malformed]")
 {
     established_acceptor f;
     f.messages.set_consume_relayed(false);
@@ -83,7 +83,7 @@ TEST_CASE("session malformed: a forwarded data body a relay re-fans without cons
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a forwarded data body that is consumed and re-fanned is counted once, not twice", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a forwarded data body that is consumed and re-fanned is counted once, not twice", "[integration][session_malformed]")
 {
     established_acceptor f;
     install_refan(f);
@@ -93,7 +93,7 @@ TEST_CASE("session malformed: a forwarded data body that is consumed and re-fann
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a forwarded rpc request with an undecodable body is counted once", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a forwarded rpc request with an undecodable body is counted once", "[integration][session_malformed]")
 {
     established_acceptor f;
 
@@ -102,7 +102,7 @@ TEST_CASE("session malformed: a forwarded rpc request with an undecodable body i
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a forwarded rpc response with an undecodable body is counted once", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a forwarded rpc response with an undecodable body is counted once", "[integration][session_malformed]")
 {
     established_acceptor f;
 
@@ -111,7 +111,7 @@ TEST_CASE("session malformed: a forwarded rpc response with an undecodable body 
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a plain data body on a re-fanning session is counted once, not twice", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a plain data body on a re-fanning session is counted once, not twice", "[integration][session_malformed]")
 {
     established_acceptor f;
     install_refan(f);
@@ -121,7 +121,7 @@ TEST_CASE("session malformed: a plain data body on a re-fanning session is count
     check_counted_once(f);
 }
 
-TEST_CASE("session malformed: a flood of undecodable data or rpc payloads logs one line", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a flood of undecodable data or rpc payloads logs one line", "[integration][session_malformed]")
 {
     for(const wire::msg_type type : std::array{wire::msg_type::unidirectional, wire::msg_type::rpc_request, wire::msg_type::rpc_response})
     {
@@ -137,7 +137,7 @@ TEST_CASE("session malformed: a flood of undecodable data or rpc payloads logs o
     }
 }
 
-TEST_CASE("session malformed: an engine's observer and logger see an undecodable data frame", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: an engine's observer and logger see an undecodable data frame", "[integration][session_malformed]")
 {
     engine_clock::reset();
     drop_recorder recorder;

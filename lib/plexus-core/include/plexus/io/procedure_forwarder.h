@@ -221,9 +221,9 @@ public:
     // Resolve a local provider by topic_hash and dispatch to it over the opaque param bytes. An
     // unserved hash replies no_handler, unless the subscriber registry knows the fqn from a prior
     // attach (a known topic whose provider is gone), which replies topic_not_found instead.
-    void deliver_request(const peer &p, std::span<const std::byte> inner, std::uint64_t session_id = 0, const node_id *reply_origin = nullptr)
+    bool deliver_request(const peer &p, std::span<const std::byte> inner, std::uint64_t session_id = 0, const node_id *reply_origin = nullptr)
     {
-        detail::deliver_request(*this, p, inner, session_id, reply_origin);
+        return detail::deliver_request(*this, p, inner, session_id, reply_origin);
     }
 
     // Find the pending entry for this peer by correlation_id, move it out + erase it, and fire its
@@ -231,9 +231,9 @@ public:
     // key_override addresses the pending table by an identity other than the arrival session's peer: a
     // forwarded reply arrives over whatever relay re-resolution chose, so it keys on the responder ORIGIN
     // (carried by the forwarded envelope) rather than the via, matching forward_call's origin-keyed entry.
-    void deliver_response(const peer &p, std::span<const std::byte> inner, const std::string *key_override = nullptr)
+    bool deliver_response(const peer &p, std::span<const std::byte> inner, const std::string *key_override = nullptr)
     {
-        detail::deliver_response(*this, p, inner, key_override);
+        return detail::deliver_response(*this, p, inner, key_override);
     }
 
     // Every pending call completes once with canceled, and so does every later call; pending() settles once the canceled
@@ -314,9 +314,9 @@ private:
     template<typename F>
     friend void detail::close_forwarder(F &);
     template<typename F, typename P>
-    friend void detail::deliver_request(F &, const P &, std::span<const std::byte>, std::uint64_t, const node_id *);
+    friend bool detail::deliver_request(F &, const P &, std::span<const std::byte>, std::uint64_t, const node_id *);
     template<typename F, typename P>
-    friend void detail::deliver_response(F &, const P &, std::span<const std::byte>, const std::string *);
+    friend bool detail::deliver_response(F &, const P &, std::span<const std::byte>, const std::string *);
 
     wire::bidirectional_header request_header(std::string_view fqn, std::uint64_t corr_id)
     {

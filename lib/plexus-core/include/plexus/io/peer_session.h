@@ -278,15 +278,15 @@ private:
     template<typename S>
     friend void detail::on_subscribe_received(S &, std::span<const std::byte>);
     template<typename S>
-    friend void detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
+    friend bool detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
     template<typename S>
-    friend void detail::deliver_data_with_source(S &, const wire::frame_header &, std::span<const std::byte>, const node_id &);
+    friend bool detail::deliver_data_with_source(S &, const wire::frame_header &, std::span<const std::byte>, const node_id &);
     template<typename S>
     friend void detail::deliver_forwarded_frame(S &, const node_id &, std::span<const std::byte>);
     template<typename S>
-    friend void detail::dispatch_forwarded_inner(S &, const wire::forwarded_frame &);
+    friend bool detail::dispatch_forwarded_inner(S &, const wire::forwarded_frame &, const wire::frame_header &);
     template<typename S>
-    friend void detail::refan_if_pubsub(S &, const wire::forwarded_frame &);
+    friend void detail::refan_if_pubsub(S &, const wire::forwarded_frame &, const wire::frame_header &);
     template<typename S>
     friend void detail::originate_if_pubsub(S &, const wire::frame_header &, std::span<const std::byte>);
     template<typename S>

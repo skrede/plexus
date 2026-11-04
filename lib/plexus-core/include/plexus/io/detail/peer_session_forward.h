@@ -4,6 +4,7 @@
 #include "plexus/io/node_name.h"
 
 #include "plexus/io/detail/forward_gate.h"
+#include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 
 #include "plexus/node_id.h"
@@ -28,17 +29,14 @@ namespace plexus::io::detail {
 // receive seam is capability-probed for an inbound frame owner, and the default pooled copy is taken
 // (owner nullptr) when the probe is absent, so the byte layout is identical without it.
 template<typename Session>
-void refan_if_pubsub(Session &s, const wire::forwarded_frame &ff)
+void refan_if_pubsub(Session &s, const wire::forwarded_frame &ff, const wire::frame_header &hdr)
 {
-    if(!s.m_messages.wants_refan())
-        return;
-    auto hdr = wire::decode_header(ff.inner);
-    if(!hdr || hdr->type != wire::msg_type::unidirectional)
+    if(!s.m_messages.wants_refan() || hdr.type != wire::msg_type::unidirectional)
         return;
     const auto body = std::span<const std::byte>{ff.inner}.subspan(wire::header_size);
-    auto uni        = wire::decode_unidirectional(body, (hdr->flags & wire::k_flag_source_identity) != 0);
+    auto uni        = wire::decode_unidirectional(body, (hdr.flags & wire::k_flag_source_identity) != 0);
     if(!uni)
-        return;
+        return report_malformed(s);
     const wire::shared_bytes *owner = nullptr;
     if constexpr(requires(typename Session::channel_type &c) { c.last_frame_owner(); })
         owner = s.m_channel.last_frame_owner();
@@ -54,24 +52,24 @@ void refan_if_pubsub(Session &s, const wire::forwarded_frame &ff)
 // reply that re-resolved through a different relay still matches. Exactly one call per admitted frame.
 template<typename Session>
 // NOLINTNEXTLINE(readability-function-size)
-void dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff)
+bool dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff, const wire::frame_header &hdr)
 {
-    auto hdr = wire::decode_header(ff.inner);
-    if(!hdr)
-        return;
     const auto body      = std::span<const std::byte>{ff.inner}.subspan(wire::header_size);
     const bool elsewhere = ff.destination != node_id{} && ff.destination != s.m_fsm_cfg.self_id;
-    if(elsewhere && (hdr->type == wire::msg_type::rpc_request || hdr->type == wire::msg_type::rpc_response) && s.m_messages.forward_rpc_installed())
-        return (void)s.m_messages.forward_rpc(ff.origin, ff.destination, ff.hop, std::span<const std::byte>{ff.inner});
-    switch(hdr->type)
+    if(elsewhere && (hdr.type == wire::msg_type::rpc_request || hdr.type == wire::msg_type::rpc_response) && s.m_messages.forward_rpc_installed())
+    {
+        s.m_messages.forward_rpc(ff.origin, ff.destination, ff.hop, std::span<const std::byte>{ff.inner});
+        return true;
+    }
+    switch(hdr.type)
     {
         case wire::msg_type::unidirectional:
             // A relayed publish addressed here is consumed only when the node uses relayed routes AND no
             // live direct session to this origin supersedes the relayed one; either posture drops it after
             // admission so a re-fanning relay still sees a sequenced frame and re-arm stays gap-free.
             if(!s.m_messages.consumes_relayed_from(ff.origin))
-                return;
-            return deliver_data_with_source(s, *hdr, body, ff.origin);
+                return true;
+            return deliver_data_with_source(s, hdr, body, ff.origin);
         case wire::msg_type::rpc_request:
             return s.m_procedures.deliver_request(s.m_rpc_peer, body, s.m_session_id, &ff.origin);
         case wire::msg_type::rpc_response:
@@ -80,7 +78,7 @@ void dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff)
                 return s.m_procedures.deliver_response(s.m_rpc_peer, body, &key);
             }
         default:
-            return;
+            return true;
     }
 }
 
@@ -93,11 +91,15 @@ void deliver_forwarded_frame(Session &s, const node_id &arrival_relay, std::span
 {
     auto ff = wire::decode_forwarded_frame(inner);
     if(!ff)
-        return;
+        return report_malformed(s);
     if(s.m_messages.admit_forwarded(*ff, s.m_fsm_cfg.self_id, arrival_relay) != forward_admission::admit)
         return;
-    dispatch_forwarded_inner(s, *ff);
-    refan_if_pubsub(s, *ff);
+    auto hdr = wire::decode_header(ff->inner);
+    if(!hdr)
+        return report_malformed(s);
+    if(!dispatch_forwarded_inner(s, *ff, *hdr))
+        return report_malformed(s);
+    refan_if_pubsub(s, *ff, *hdr);
 }
 
 }

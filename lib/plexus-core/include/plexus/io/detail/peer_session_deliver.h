@@ -33,37 +33,32 @@ message_info assemble_message_info(Session &s, const wire::frame_header &hdr)
 // honor has_source_identity to land the data span correctly, and attributes the passed source
 // (never a node_id read from the frame body). None set = silent drop.
 template<typename Session>
-void deliver_data_with_source(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner, const node_id &source)
+bool deliver_data_with_source(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner, const node_id &source)
 {
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
     if(s.m_on_message_with_info_cb)
     {
         const message_info info = assemble_message_info(s, hdr);
-        s.m_messages.deliver(s.m_msg_peer, inner, info, source, has_source_identity,
-                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_with_info_cb(fqn, data, mi); });
-        return;
+        return s.m_messages.deliver(s.m_msg_peer, inner, info, source, has_source_identity,
+                                    [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_with_info_cb(fqn, data, mi); });
     }
     if(s.m_on_message_cb)
-    {
-        s.m_messages.deliver(s.m_msg_peer, inner, source, has_source_identity, [&s](std::string_view fqn, std::span<const std::byte> data) { s.m_on_message_cb(fqn, data); });
-        return;
-    }
+        return s.m_messages.deliver(s.m_msg_peer, inner, source, has_source_identity, [&s](std::string_view fqn, std::span<const std::byte> data) { s.m_on_message_cb(fqn, data); });
     if(s.m_on_message_route_cb)
     {
         const message_info info = assemble_message_info(s, hdr);
-        s.m_messages.deliver(s.m_msg_peer, inner, info, source, has_source_identity,
-                             [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_route_cb(fqn, data, mi); });
-        return;
+        return s.m_messages.deliver(s.m_msg_peer, inner, info, source, has_source_identity,
+                                    [&s](std::string_view fqn, std::span<const std::byte> data, const message_info &mi) { s.m_on_message_route_cb(fqn, data, mi); });
     }
-    s.m_messages.deliver(s.m_msg_peer, inner, source, has_source_identity, [](std::string_view, std::span<const std::byte>) {});
+    return s.m_messages.deliver(s.m_msg_peer, inner, source, has_source_identity, [](std::string_view, std::span<const std::byte>) {});
 }
 
 // The plain unidirectional path: pins the source to m_ctx.peer_id — the anti-spoofing invariant. An
 // ordinary frame's delivered source is always the session peer, never a node_id lifted from the frame.
 template<typename Session>
-void deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
+bool deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
 {
-    deliver_data_with_source(s, hdr, inner, s.m_ctx.peer_id);
+    return deliver_data_with_source(s, hdr, inner, s.m_ctx.peer_id);
 }
 
 // Every path releases the carrier reference the channel delivered: an unresolvable hash is
