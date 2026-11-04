@@ -12,42 +12,10 @@
 #include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
 
-#include <string>
-#include <system_error>
-
 namespace ptls = plexus::tls;
 namespace pio  = plexus::io;
 
 using namespace transport_dial_cancel;
-
-namespace {
-
-// It accepts the dial's connection and never answers the ClientHello, so the dial waits in its client handshake.
-struct silent_tcp_peer
-{
-    ::asio::ip::tcp::acceptor acceptor;
-    ::asio::ip::tcp::socket accepted;
-
-    explicit silent_tcp_peer(::asio::io_context &io)
-            : acceptor(io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0})
-            , accepted(io)
-    {
-        acceptor.async_accept(accepted, [](std::error_code) {});
-    }
-
-    std::string address() const
-    {
-        return "127.0.0.1:" + std::to_string(acceptor.local_endpoint().port());
-    }
-
-    bool heard() const
-    {
-        std::error_code ec;
-        return accepted.available(ec) > 0 && !ec;
-    }
-};
-
-}
 
 TEST_CASE("transport_dial_cancel: a TLS dial still connecting when its transport closes reports one aborted failure and is never dialed", "[integration][transport][tls][dial_cancel]")
 {

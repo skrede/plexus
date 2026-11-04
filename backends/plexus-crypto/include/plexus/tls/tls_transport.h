@@ -8,6 +8,7 @@
 #include "plexus/tls/detail/tls_context.h"
 #include "plexus/tls/detail/tls_transport_accept.h"
 
+#include "plexus/asio/detail/dial_deadline.h"
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
 
@@ -26,6 +27,7 @@
 #include <asio/io_context.hpp>
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <cstddef>
 #include <cstdint>
@@ -59,6 +61,8 @@ public:
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
             , m_pending()
+            , m_dial_timeout(0)
+            , m_deadline(io)
     {
         m_listener.on_accepted([this](std::unique_ptr<tls_channel> ch) { m_pending.deliver_or_retire(m_on_accepted_cb, std::move(ch)); });
         m_listener.on_error(
@@ -105,6 +109,12 @@ public:
         return m_listener.port();
     }
 
+    // Applies to later dials and covers the TCP connect and the client handshake; zero leaves a dial unbounded.
+    void set_dial_timeout(std::chrono::nanoseconds timeout) noexcept
+    {
+        m_dial_timeout = timeout;
+    }
+
     void dial(const io::endpoint &ep)
     {
         std::error_code pec;
@@ -114,12 +124,14 @@ public:
         auto ch   = std::make_unique<tls_channel>(m_io, m_cred, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
         m_pending.insert(raw, std::move(ch), ep);
+        m_deadline.arm(raw, m_dial_timeout, [this, ep, raw] { detail::tls_fail_dial(*this, ep, raw, io::io_error::timed_out); });
         raw->begin_op();
         raw->socket().async_connect(target, [this, ep, raw](std::error_code ec) { detail::tls_finish_connect(*this, ep, raw, ec); });
     }
 
     void close()
     {
+        m_deadline.cancel_all();
         m_pending.retire_all(m_on_dial_failed_cb);
         m_listener.stop();
     }
@@ -145,6 +157,8 @@ private:
     io::egress_capacity m_egress_capacity;
     plexus::asio::stream_socket_options m_socket_options;
     io::pending_dial_registry<tls_channel> m_pending; // transport-owned half-open dials
+    std::chrono::nanoseconds m_dial_timeout;
+    plexus::asio::detail::dial_deadline<tls_channel> m_deadline;
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> m_on_dialed_cb;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;

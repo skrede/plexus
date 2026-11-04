@@ -15,6 +15,7 @@
 #include "plexus/io/observation_events.h"
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <cstddef>
 #include <cstdint>
@@ -43,6 +44,16 @@ struct subscription
     plexus::detail::move_only_function<void(std::span<const std::byte>, const io::message_info &)> cb;
     object_entry obj{};
 };
+
+// A member of a multiplexing transport the caller composed itself is reached through for_each_member.
+template<typename Transport>
+void apply_dial_timeout(Transport &t, std::chrono::nanoseconds timeout)
+{
+    if constexpr(requires { t.set_dial_timeout(timeout); })
+        t.set_dial_timeout(timeout);
+    else if constexpr(requires { t.for_each_member([](auto &) {}); })
+        t.for_each_member([timeout](auto &m) { apply_dial_timeout(m, timeout); });
+}
 
 // A peer-ready edge re-fans every standing demand toward that peer; remember_demand dedups per
 // (peer, fqn), so the re-fan is idempotent. The fan-out runs posted on the borrowed executor, so

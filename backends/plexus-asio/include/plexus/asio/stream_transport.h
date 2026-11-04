@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_STREAM_TRANSPORT_H
 
 #include "plexus/asio/stream_channel.h"
+#include "plexus/asio/detail/dial_deadline.h"
 #include "plexus/asio/detail/asio_error_map.h"
 
 #include "plexus/stream/stream_inbound.h"
@@ -15,6 +16,7 @@
 
 #include <asio/io_context.hpp>
 
+#include <chrono>
 #include <memory>
 #include <cstddef>
 #include <utility>
@@ -56,6 +58,12 @@ public:
         m_listener.start(ep);
     }
 
+    // Applies to later dials; zero leaves a dial to the OS connect timeout.
+    void set_dial_timeout(std::chrono::nanoseconds timeout) noexcept
+    {
+        m_dial_timeout = timeout;
+    }
+
     // The dialed endpoint rides the async closure so on_dialed / on_dial_failed carry it back:
     // the engine correlates each completion to its slot by endpoint, not by arrival order
     // (concurrent dials over one transport reorder).
@@ -68,12 +76,21 @@ public:
         auto ch   = std::make_unique<Channel>(m_io, m_cfg, m_congestion, m_egress_capacity, m_socket_options);
         auto *raw = ch.get();
         m_pending.insert(raw, std::move(ch), ep);
+        m_deadline.arm(raw, m_dial_timeout,
+                       [this, ep, raw]
+                       {
+                           if(!m_pending.is_pending(raw))
+                               return;
+                           m_pending.fail(raw);
+                           report_dial_fail(ep, io::io_error::timed_out);
+                       });
         raw->begin_op();
         raw->socket().async_connect(target, [this, ep, raw](std::error_code ec) { finish_dial(ep, raw, ec); });
     }
 
     void close()
     {
+        m_deadline.cancel_all();
         m_pending.retire_all(m_on_dial_failed_cb);
         m_listener.stop();
     }
@@ -90,6 +107,8 @@ protected:
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
             , m_pending()
+            , m_dial_timeout(0)
+            , m_deadline(io)
     {
         m_listener.on_accepted([this](std::unique_ptr<Channel> ch) { m_pending.deliver_or_retire(m_on_accepted_cb, std::move(ch)); });
         m_listener.on_error(
@@ -110,9 +129,10 @@ protected:
     }
 
 private:
-    // A dial close() already retired is reported by the registry when its channel settles, so its own completion stays silent.
+    // A dial close() or its deadline already retired is reported by that path, so its own completion stays silent.
     void finish_dial(const io::endpoint &ep, Channel *raw, std::error_code ec)
     {
+        m_deadline.disarm(raw);
         raw->end_op();
         if(!m_pending.is_pending(raw))
             return;
@@ -141,6 +161,8 @@ private:
     io::egress_capacity m_egress_capacity;
     stream_socket_options m_socket_options;
     io::pending_dial_registry<Channel> m_pending;
+    std::chrono::nanoseconds m_dial_timeout;
+    detail::dial_deadline<Channel> m_deadline;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed_cb;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;

@@ -1185,6 +1185,20 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     endif()
     catch_discover_tests(test_transport_dial_cancel TEST_PREFIX "integration.")
 
+    # A dial that does not complete within its timeout fails.
+    add_executable(test_dial_deadline_asio test_dial_deadline_asio.cpp)
+    target_link_libraries(test_dial_deadline_asio PRIVATE
+        plexus::plexus
+        plexus::asio
+        plexus::discovery
+        Catch2::Catch2WithMain)
+    if(PLEXUS_ENABLE_CRYPTO_BACKEND)
+        target_sources(test_dial_deadline_asio PRIVATE test_dial_deadline_tls.cpp
+            $<TARGET_OBJECTS:plexus-crypto>)
+        target_link_libraries(test_dial_deadline_asio PRIVATE plexus::crypto)
+    endif()
+    catch_discover_tests(test_dial_deadline_asio TEST_PREFIX "integration.")
+
     # A transport or listener with no consumer installed retires the channel it would have handed over instead of
     # destroying it under its pending read, handshake wait or posted delivery. Stream families (TCP, AF_UNIX, TLS,
     # serial) in one binary; datagram, inproc, shared-memory and the core wrappers in the other.

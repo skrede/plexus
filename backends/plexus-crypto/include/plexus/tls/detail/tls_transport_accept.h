@@ -35,14 +35,19 @@ template<typename T>
 void tls_resolve_dial(T &t, const io::endpoint &ep, tls_channel *raw)
 {
     const io::endpoint dialed = ep;
+    t.m_deadline.disarm(raw);
     t.m_pending.deliver_or_retire(t.m_on_dialed_cb, t.m_pending.resolve(raw), dialed);
 }
 
-// A handshake/verify failure: retire the dial in the registry, then report on_dial_failed. Copy ep
-// before fail() erases the entry.
+// A handshake/verify failure or the dial's deadline: retire the dial in the registry, then report on_dial_failed. A
+// channel the deadline or close() already retired may still error, which is not a second failure. Copy ep before fail()
+// erases the entry.
 template<typename T>
 void tls_fail_dial(T &t, const io::endpoint &ep, tls_channel *raw, io::io_error e)
 {
+    t.m_deadline.disarm(raw);
+    if(!t.m_pending.is_pending(raw))
+        return;
     const io::endpoint failed = ep;
     t.m_pending.fail(raw);
     tls_report_dial_fail(t, failed, e);

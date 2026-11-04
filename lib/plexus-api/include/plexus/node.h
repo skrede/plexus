@@ -235,6 +235,7 @@ public:
             , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout, opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
                        opts.max_message_bytes, opts.liveliness, opts.routes, opts.report, io::forward_options{}, opts.subscribe_retry)
     {
+        (detail::apply_dial_timeout(transports, opts.dial_timeout), ...);
         // The routes are installed and the card advertised synchronously in the ctor turn, before
         // any session is built (the set-before-listen contract).
         m_engine.on_message_route([this](std::string_view fqn, std::span<const std::byte> bytes, const io::message_info &info) { dispatch_message(fqn, bytes, info); });

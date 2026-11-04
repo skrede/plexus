@@ -61,6 +61,31 @@ struct full_backlog
     }
 };
 
+// It accepts the dial's connection and never answers the ClientHello, so the dial waits in its client handshake.
+struct silent_tcp_peer
+{
+    ::asio::ip::tcp::acceptor acceptor;
+    ::asio::ip::tcp::socket accepted;
+
+    explicit silent_tcp_peer(::asio::io_context &io)
+            : acceptor(io, ::asio::ip::tcp::endpoint{::asio::ip::make_address("127.0.0.1"), 0})
+            , accepted(io)
+    {
+        acceptor.async_accept(accepted, [](std::error_code) {});
+    }
+
+    std::string address() const
+    {
+        return "127.0.0.1:" + std::to_string(acceptor.local_endpoint().port());
+    }
+
+    bool heard() const
+    {
+        std::error_code ec;
+        return accepted.available(ec) > 0 && !ec;
+    }
+};
+
 // A bound UDP socket that never reads, so a dial to it sends its first handshake flight and hears nothing back.
 struct silent_udp_peer
 {
