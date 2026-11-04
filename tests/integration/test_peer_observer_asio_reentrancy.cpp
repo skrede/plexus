@@ -21,7 +21,7 @@ TEST_CASE("observer over asio: an accepted (inbound) peer fires connected/discon
 
         a.eng.note_peer(id_b, b.listen_ep());
         a.eng.reach(id_b);
-        const auto inbound = inbound_slot(1);
+        const auto inbound = make_id(0xA1);
         plexus::testing::pump_until(io, [&] { return rec.for_peer(inbound).connected == 1 && rec.for_peer(inbound).ready == 1; }, k_pump_bound);
         {
             const auto &c = rec.for_peer(inbound);

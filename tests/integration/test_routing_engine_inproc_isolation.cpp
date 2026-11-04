@@ -17,11 +17,9 @@ TEST_CASE("inproc routing: a published message resolves to its own engine's rece
     auto *a_to_b = net.a.session_for(net.id_b);
     REQUIRE(a_to_b != nullptr);
 
-    // B accepted one inbound slot; find it and wire its sink. The inbound session is
-    // the one B holds with a complete handshake.
-    plexus::node_id inbound = make_id(0x00);
-    inbound[15]             = std::byte{1};
-    auto *b_inbound         = net.b.session_for(inbound);
+    // B accepted one session from A, filed under A's proven id; wire its sink. The inbound
+    // session is the one B holds with a complete handshake.
+    auto *b_inbound = net.b.session_for(net.id_a);
     REQUIRE(b_inbound != nullptr);
     REQUIRE(b_inbound->is_complete());
 

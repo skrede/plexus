@@ -121,14 +121,14 @@ TEST_CASE("crossed dial: a drop on a demoted loser closes it at once without a r
     const std::uint32_t dialing_b = net.b.e.attempt_count(net.id_a);
     REQUIRE(!closed(net.b.e, net.id_a));
 
-    net.a.e.session_for(inbound_slot(1))->tear_down();
+    net.a.e.session_for(net.id_b)->tear_down();
     net.drive();
     CHECK(closed(net.b.e, net.id_a));
     CHECK(net.b.e.registry().driver_for(net.id_a).redial_denied());
     net.advance_by(k_past_ceiling);
     CHECK(net.b.e.attempt_count(net.id_a) == dialing_b);
     CHECK(net.b.edges.for_peer(net.id_a).disconnected == 0);
-    CHECK(net.a.edges.for_peer(inbound_slot(1)).disconnected == 0);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
     CHECK(complete_sessions_for(net.a.e, net.id_b) == 1);
     CHECK(complete_sessions_for(net.b.e, net.id_a) == 1);
 }

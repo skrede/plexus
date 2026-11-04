@@ -78,13 +78,6 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline plexus::node_id inbound_slot(std::uint8_t n)
-{
-    plexus::node_id id = make_id(0x00);
-    id[15]             = std::byte{n};
-    return id;
-}
-
 inline reconnect_config forever_cfg()
 {
     return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};

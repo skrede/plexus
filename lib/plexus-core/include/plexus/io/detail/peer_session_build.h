@@ -23,30 +23,28 @@
 
 namespace plexus::io::detail {
 
-// Routed by id through the registry: the session must not hold the driver directly. Set only
-// on dialed slots — an accepted slot owns no redial.
+// Set only on dialed slots — an accepted slot owns no redial. The slot outlives the session that holds
+// this closure, and keeps its address when it is re-filed under another key.
 template<typename Registry, typename Slot>
-void wire_drop(Registry &reg, Slot &slot, const node_id &id)
+void wire_drop(Registry &reg, Slot &slot)
 {
     slot.session->on_transport_drop(
-            [&reg, id]
+            [&reg, &slot]
             {
-                auto it = reg.m_slots.find(id);
-                if(it != reg.m_slots.end() && !detail::close_if_superseded(reg, id, peer_kind::dialed))
-                    it->second->driver.on_channel_dropped();
+                if(!detail::close_if_superseded(reg, slot, peer_kind::dialed))
+                    slot.driver.on_channel_dropped();
             });
 }
 
 // An accepted slot's drop tears down with no redial — the dialer owns reconnection.
 template<typename Registry, typename Slot>
-void wire_inbound_drop(Registry &reg, Slot &slot, const node_id &id)
+void wire_inbound_drop(Registry &reg, Slot &slot)
 {
     slot.session->on_transport_drop(
-            [&reg, id]
+            [&reg, &slot]
             {
-                auto it = reg.m_slots.find(id);
-                if(it != reg.m_slots.end() && it->second->session && !detail::close_if_superseded(reg, id, peer_kind::accepted))
-                    it->second->session->tear_down();
+                if(slot.session && !detail::close_if_superseded(reg, slot, peer_kind::accepted))
+                    slot.session->tear_down();
             });
 }
 
@@ -126,40 +124,36 @@ void wire_security(Registry &reg, Slot &slot)
     }
 }
 
-template<typename Registry, typename Slot>
-void wire_redial(Registry &reg, Slot &slot, const node_id &id)
+template<typename Slot>
+void wire_redial(Slot &slot)
 {
     slot.driver.on_redial(
-            [&reg, id]
+            [&slot]
             {
-                auto it = reg.m_slots.find(id);
-                if(it != reg.m_slots.end() && it->second->session)
-                    it->second->session->tear_down();
+                if(slot.session)
+                    slot.session->tear_down();
             });
 }
 
 // The session may already be torn down, so the slot owns this edge.
 template<typename Registry, typename Slot>
-void fire_dead(Registry &reg, Slot &slot, const node_id &id)
+void fire_dead(Registry &reg, Slot &slot)
 {
     if(!reg.m_build.on_lifecycle)
         return;
-    reg.m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, id, slot.record.node_name, peer_kind::dialed, handshake_outcome::none});
+    reg.m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, slot.record.peer_id, slot.record.node_name, peer_kind::dialed, handshake_outcome::none});
 }
 
 // on_dead fires from the driver's own report_dead stack frame while it lives in the slot, so
 // the slot is marked dead, never erased here — erasing would free the driver mid-callback.
 template<typename Registry, typename Slot>
-void wire_dead(Registry &reg, Slot &slot, const node_id &id)
+void wire_dead(Registry &reg, Slot &slot)
 {
     slot.driver.on_dead(
-            [&reg, id]
+            [&reg, &slot]
             {
-                auto it = reg.m_slots.find(id);
-                if(it == reg.m_slots.end())
-                    return;
-                it->second->dead = true;
-                fire_dead(reg, *it->second, id);
+                slot.dead = true;
+                fire_dead(reg, slot);
             });
 }
 
@@ -170,11 +164,11 @@ void emplace_session(Registry &reg, Build &build, Slot &slot, bool inbound)
     fsm_cfg.expected_peer_id     = detail::expected_identity(slot.record, inbound);
     slot.session.emplace(slot.record, build.executor, fsm_cfg, build.handshake_timeout, build.messages, build.procedures, inbound, build.logger);
     if(inbound)
-        detail::wire_inbound_drop(reg, slot, slot.record.peer_id);
+        detail::wire_inbound_drop(reg, slot);
     else
-        detail::wire_drop(reg, slot, slot.record.peer_id);
+        detail::wire_drop(reg, slot);
     detail::wire_observer(reg, slot);
-    detail::wire_admit_complete(reg, build, slot, slot.record.peer_id);
+    detail::wire_admit_complete(reg, build, slot);
     detail::wire_frame_drops(build, slot);
     detail::wire_message_route(reg, slot);
     detail::wire_object_route(reg, slot);

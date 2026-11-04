@@ -42,10 +42,10 @@ namespace plexus::testing::graph_change_fixture {
 
 struct manual_clock
 {
-    using duration                  = std::chrono::nanoseconds;
-    using rep                       = duration::rep;
-    using period                    = duration::period;
-    using time_point                = std::chrono::time_point<manual_clock>;
+    using duration                                   = std::chrono::nanoseconds;
+    using rep                                        = duration::rep;
+    using period                                     = duration::period;
+    using time_point                                 = std::chrono::time_point<manual_clock>;
     [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};
@@ -77,8 +77,7 @@ using engine      = plexus::io::routing_engine<manual_policy, transport_t, manua
 
 // The bounded-profile engine: the fixed-capacity peer + topic twins the MCU path selects. The
 // zero-alloc gate proves its coarse graph path allocation-free; the host edge-log is structurally absent.
-using bounded_engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock,
-                                                  plexus::io::fixed_peer_storage<8>, plexus::graph::fixed_topic_storage<8>>;
+using bounded_engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock, plexus::io::fixed_peer_storage<8>, plexus::graph::fixed_topic_storage<8>>;
 
 constexpr auto k_long_timeout  = std::chrono::hours(1);
 constexpr auto k_ceiling       = std::chrono::milliseconds(10001);
@@ -95,13 +94,6 @@ inline plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{seed};
-    return id;
-}
-
-inline plexus::node_id inbound_slot(std::uint8_t n)
-{
-    plexus::node_id id = make_id(0x00);
-    id[15]             = std::byte{n};
     return id;
 }
 

@@ -20,13 +20,8 @@ TEST_CASE("deadline liveliness: a data gap beyond the requested deadline fires e
 
         // A's subscribe already drove B's on_subscribe -> attach_for_fanout, so B fans
         // "topic" back to A. Resolve B's accepted slot to drive the publishes.
-        const plexus::node_id b_inbound = []
-        {
-            auto id = make_id(0x00);
-            id[15]  = std::byte{1};
-            return id;
-        }();
-        auto *b_to_a = n.b.session_for(b_inbound);
+        const plexus::node_id b_inbound = n.id_a;
+        auto *b_to_a                    = n.b.session_for(b_inbound);
         REQUIRE(b_to_a != nullptr);
 
         // A first data frame stamps the deadline clock.
@@ -84,13 +79,8 @@ TEST_CASE("deadline liveliness: a heartbeat lapse beyond the lease fires exactly
 
         // Now silence the peer: tear B's accepted slot down so no heartbeat AND no data
         // reaches A. (A's own tick keeps firing but stamps nothing for B once silent.)
-        const plexus::node_id b_inbound = []
-        {
-            auto id = make_id(0x00);
-            id[15]  = std::byte{1};
-            return id;
-        }();
-        auto *b_to_a = n.b.session_for(b_inbound);
+        const plexus::node_id b_inbound = n.id_a;
+        auto *b_to_a                    = n.b.session_for(b_inbound);
         REQUIRE(b_to_a != nullptr);
         b_to_a->tear_down();
         n.drive();

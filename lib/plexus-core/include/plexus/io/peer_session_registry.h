@@ -18,6 +18,7 @@
 
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
+#include "plexus/io/detail/peer_session_filing.h"
 #include "plexus/io/detail/peer_session_retire.h"
 #include "plexus/io/detail/peer_session_rebuild.h"
 #include "plexus/io/detail/peer_session_reclaim.h"
@@ -54,18 +55,22 @@ public:
 
     // Returns whether a slot for id exists after the call: false when the endpoint is already claimed
     // by another peer (no slot is created), so callers must not reach for the driver in that case.
+    // A torn-down accepted slot still filed under id is moved aside first, since it will never dial.
     bool ensure_slot(const node_id &id, const endpoint &ep, const std::string &node_name)
     {
-        if(m_slots.find(id) != m_slots.end())
+        auto held = m_slots.find(id);
+        if(held != m_slots.end() && (m_reclaims.closing() || !detail::slot_filing::out_of_service(*held->second)))
             return true;
         if(detail::endpoint_claimed(*this, id, ep))
         {
             m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
             return false;
         }
+        if(held != m_slots.end())
+            detail::slot_filing::vacate(*this, *held->second);
         auto slot = std::make_unique<slot_block>(m_transport, m_build, id, ep, node_name);
-        detail::wire_redial(*this, *slot, id);
-        detail::wire_dead(*this, *slot, id);
+        detail::wire_redial(*slot);
+        detail::wire_dead(*this, *slot);
         m_slots.emplace(id, std::move(slot));
         return true;
     }
@@ -189,10 +194,6 @@ private:
     std::map<node_id, std::unique_ptr<slot_block>> m_slots;
 
     template<typename R, typename S>
-    friend void detail::wire_drop(R &, S &, const node_id &);
-    template<typename R, typename S>
-    friend void detail::wire_inbound_drop(R &, S &, const node_id &);
-    template<typename R, typename S>
     friend void detail::wire_observer(R &, S &);
     template<typename R, typename S>
     friend void detail::wire_message_route(R &, S &);
@@ -201,11 +202,7 @@ private:
     template<typename R, typename S>
     friend void detail::wire_security(R &, S &);
     template<typename R, typename S>
-    friend void detail::wire_redial(R &, S &, const node_id &);
-    template<typename R, typename S>
-    friend void detail::wire_dead(R &, S &, const node_id &);
-    template<typename R, typename S>
-    friend void detail::fire_dead(R &, S &, const node_id &);
+    friend void detail::fire_dead(R &, S &);
     template<typename R, typename S>
     friend void detail::build_session_into(R &, S &, std::unique_ptr<typename R::channel_type>, bool);
     template<typename R>
@@ -221,6 +218,7 @@ private:
     template<typename R>
     friend void detail::hang_up_slot(R &, const node_id &);
     friend struct detail::slot_reclaim;
+    friend struct detail::slot_filing;
 };
 
 }

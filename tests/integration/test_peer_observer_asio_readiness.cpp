@@ -35,7 +35,7 @@ TEST_CASE("observer over asio: on_peer_ready over the REAL loop, then the awaite
         std::vector<std::string> a_received;
         a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
-        auto *b_inbound = b.eng.session_for(inbound_slot(1));
+        auto *b_inbound = b.eng.session_for(make_id(0xA1));
         REQUIRE(b_inbound != nullptr);
         settle(io); // let B's producer-side fanout settle from A's subscribe
         b.eng.messages().publish("topic", as_bytes(payload), b_inbound->session_id());
@@ -70,7 +70,7 @@ TEST_CASE("observer over asio: ready fires EXACTLY once per cycle across a real 
 
         // Real socket drop + re-dial: the fresh incarnation re-arms and resurrects the
         // remembered subscribe through the counted path, firing ready a SECOND time.
-        b.eng.session_for(inbound_slot(1))->tear_down();
+        b.eng.session_for(make_id(0xA1))->tear_down();
         plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).ready == 2; }, k_pump_bound);
 
         const auto &c = rec.for_peer(id_b);
@@ -117,7 +117,7 @@ TEST_CASE("observer over asio: premature-ready window - ready stays 1 across the
         // already have advanced to 2 by the time the reconnected predicate settles; the
         // load-bearing assertion is that it never OVERSHOOTS 2 (a bypass of the counted
         // path would fire ready more than once per resurrected cycle).
-        b.eng.session_for(inbound_slot(1))->tear_down();
+        b.eng.session_for(make_id(0xA1))->tear_down();
         plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).reconnected == 1; }, k_pump_bound);
         REQUIRE(rec.for_peer(id_b).reconnected == 1);
         REQUIRE(rec.for_peer(id_b).ready <= 2); // never premature past the cycle count

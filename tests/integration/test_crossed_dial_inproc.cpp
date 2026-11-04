@@ -21,6 +21,12 @@ node_id dialed_by_a(const crossed_net &net, crossing order)
     return order == crossing::incumbent_loses ? endpoint_id(net.ep_b) : net.id_b;
 }
 
+// When a dials first, b's accepted session completes before b dials, so it is uncontested and filed under a's proven id.
+node_id accepted_by_b(const crossed_net &net, crossing order)
+{
+    return order == crossing::newcomer_loses ? net.id_a : inbound_slot(1);
+}
+
 bool fired_nothing(const recording_observer::counts &c)
 {
     return c.connected == 0 && c.ready == 0 && c.disconnected == 0 && c.reconnected == 0 && c.dead == 0 && c.rejected == 0;
@@ -50,7 +56,7 @@ TEST_CASE("crossed dial: the higher id keeps the session it dialed and the lower
         net.cross(order);
 
         CHECK(kept_slot(net.a.e, net.id_b) == std::optional<node_id>{dialed_by_a(net, order)});
-        CHECK(kept_slot(net.b.e, net.id_a) == std::optional<node_id>{inbound_slot(1)});
+        CHECK(kept_slot(net.b.e, net.id_a) == std::optional<node_id>{accepted_by_b(net, order)});
     }
 }
 
@@ -63,7 +69,7 @@ TEST_CASE("crossed dial: a session that loses on completion fires no lifecycle e
     CHECK(fired_nothing(net.a.edges.for_peer(inbound_slot(1))));
     CHECK(fired_nothing(net.b.edges.for_peer(endpoint_id(net.ep_a))));
     CHECK(net.a.edges.for_peer(net.id_b).connected == 1);
-    CHECK(net.b.edges.for_peer(inbound_slot(1)).connected == 1);
+    CHECK(net.b.edges.for_peer(net.id_a).connected == 1);
     CHECK(net.b.e.registry().driver_for(endpoint_id(net.ep_a)).redial_denied());
 }
 
@@ -74,9 +80,9 @@ TEST_CASE("crossed dial: an incumbent that loses closes without a disconnected e
     net.cross(crossing::incumbent_loses);
 
     CHECK(!net.b.e.is_connected(net.id_a));
-    CHECK(!net.a.e.is_connected(inbound_slot(1)));
+    CHECK(!net.a.e.is_connected(net.id_b));
     CHECK(net.b.edges.for_peer(net.id_a).disconnected == 0);
-    CHECK(net.a.edges.for_peer(inbound_slot(1)).disconnected == 0);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
     CHECK(net.b.e.registry().driver_for(net.id_a).redial_denied());
 
     auto *survivor = net.b.e.session_for(inbound_slot(1));

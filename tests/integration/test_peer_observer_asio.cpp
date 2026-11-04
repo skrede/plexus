@@ -57,7 +57,7 @@ TEST_CASE("observer over asio: a real socket drop+redial fires reconnected (NOT 
         // A REAL transport drop: close B's accepted socket so A observes the drop and
         // re-dials over a fresh socket, re-handshaking. reconnected fires (not a second
         // connected); the dead session's tear_down fires disconnected.
-        b.eng.session_for(inbound_slot(1))->tear_down();
+        b.eng.session_for(make_id(0xA1))->tear_down();
         plexus::testing::pump_until(io, [&] { return rec.for_peer(id_b).reconnected == 1 && a.eng.is_connected(id_b); }, k_pump_bound);
 
         const auto &c = rec.for_peer(id_b);

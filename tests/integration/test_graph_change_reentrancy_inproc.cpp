@@ -23,10 +23,12 @@ namespace {
 std::size_t known_count(engine &eng, const plexus::node_id &id)
 {
     std::size_t n = 0;
-    eng.known().for_each([&](const plexus::node_id &k, const plexus::io::endpoint &) {
-        if(k == id)
-            ++n;
-    });
+    eng.known().for_each(
+            [&](const plexus::node_id &k, const plexus::io::endpoint &)
+            {
+                if(k == id)
+                    ++n;
+            });
     return n;
 }
 
@@ -52,7 +54,7 @@ TEST_CASE("graph change reentrancy: dropping a peer mid-redial with a graph obse
 
         // A REAL transport drop: close B's accepted end so A observes on_error and arms its redial
         // backoff — the dialing session is mid-rebuild.
-        net.b.session_for(inbound_slot(1))->tear_down();
+        net.b.session_for(net.id_a)->tear_down();
         net.drive();
 
         // Drop the peer WHILE the redial is in flight: forget its awareness and tear down A's dialing

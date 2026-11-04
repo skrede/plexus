@@ -53,23 +53,12 @@ TEST_CASE("routing over asio: one node dialing TWO peers near-simultaneously res
         a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_b.emplace_back(to_string(d)); });
         a_to_c->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_c.emplace_back(to_string(d)); });
 
-        const auto inbound1 = []
-        {
-            auto id = make_id(0x00);
-            id[15]  = std::byte{1};
-            return id;
-        }();
-        const auto inbound2 = []
-        {
-            auto id = make_id(0x00);
-            id[15]  = std::byte{2};
-            return id;
-        }();
-        auto *b_in = b.eng.session_for(inbound1);
-        auto *c_in = c.eng.session_for(inbound1); // each remote keys its sole inbound at index 1
+        // Each remote files its sole accepted session under A's proven id.
+        const auto inbound = make_id(0xA1);
+        auto *b_in         = b.eng.session_for(inbound);
+        auto *c_in         = c.eng.session_for(inbound);
         REQUIRE(b_in != nullptr);
         REQUIRE(c_in != nullptr);
-        (void)inbound2;
 
         // A's two demand subscribes closed each loop over the real path: B's and C's
         // on_subscribe attached their producer-side fanout to A, so the manual attaches
@@ -149,14 +138,9 @@ TEST_CASE("routing over asio: a dial that completes OUT OF ORDER is correlated t
         a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_b.emplace_back(to_string(d)); });
         a_to_c->on_message([&](std::string_view, std::span<const std::byte> d) { a_from_c.emplace_back(to_string(d)); });
 
-        const auto inbound = []
-        {
-            auto id = make_id(0x00);
-            id[15]  = std::byte{1};
-            return id;
-        }();
-        auto *b_in = b.eng.session_for(inbound);
-        auto *c_in = c.eng.session_for(inbound);
+        const auto inbound = make_id(0xA1);
+        auto *b_in         = b.eng.session_for(inbound);
+        auto *c_in         = c.eng.session_for(inbound);
         REQUIRE(b_in != nullptr);
         REQUIRE(c_in != nullptr);
 

@@ -141,7 +141,7 @@ TEST_CASE("relay emitter: a TTL age-out of the origin's awareness withdraws it d
 
     // Drop the origin's accepted end so the relay's dialer session sees a bare drop; with a slow redial
     // the disconnect teardown is deferred, so the awareness sweep at the next tick is the live-path loss.
-    net.o.session_for(inbound_slot(1))->tear_down();
+    net.o.session_for(make_id(0xA1))->tear_down();
     net.advance(std::chrono::milliseconds(100));
 
     REQUIRE_FALSE(net.r.reports_origin(net.id_o));

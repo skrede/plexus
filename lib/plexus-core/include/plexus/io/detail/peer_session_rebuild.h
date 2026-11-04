@@ -7,6 +7,7 @@
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
 #include "plexus/io/detail/peer_session_claim.h"
+#include "plexus/io/detail/peer_session_filing.h"
 #include "plexus/io/detail/peer_session_reclaim.h"
 
 #include "plexus/node_id.h"
@@ -100,10 +101,8 @@ void build_session_into(Registry &reg, Slot &slot, std::unique_ptr<typename Regi
 template<typename Registry>
 typename Registry::slot_block &emplace_inbound_slot(Registry &reg)
 {
-    node_id id = detail::inbound_slot_id(reg.m_next_inbound++);
-    while(reg.m_slots.contains(id))
-        id = detail::inbound_slot_id(reg.m_next_inbound++);
-    auto slot = std::make_unique<typename Registry::slot_block>(reg.m_transport, reg.m_build, id, endpoint{}, node_name_of(id));
+    const node_id id = detail::slot_filing::fresh_key(reg);
+    auto slot        = std::make_unique<typename Registry::slot_block>(reg.m_transport, reg.m_build, id, endpoint{}, node_name_of(id));
     return *reg.m_slots.emplace(id, std::move(slot)).first->second;
 }
 

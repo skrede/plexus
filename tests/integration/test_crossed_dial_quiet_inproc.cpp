@@ -35,8 +35,8 @@ struct roles
 roles roles_of(const crossed_net &net, crossing order)
 {
     if(order == crossing::newcomer_loses)
-        return {inbound_slot(1), endpoint_id(net.ep_a), net.id_b, inbound_slot(1), net.id_b, endpoint_id(net.ep_a)};
-    return {inbound_slot(1), net.id_a, endpoint_id(net.ep_b), inbound_slot(1), endpoint_id(net.ep_b), net.id_a};
+        return {inbound_slot(1), endpoint_id(net.ep_a), net.id_b, net.id_a, net.id_b, endpoint_id(net.ep_a)};
+    return {net.id_b, net.id_a, endpoint_id(net.ep_b), inbound_slot(1), endpoint_id(net.ep_b), net.id_a};
 }
 
 node_side &publisher_of(crossed_net &net, crossing order)

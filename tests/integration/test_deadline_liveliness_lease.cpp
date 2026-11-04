@@ -19,13 +19,8 @@ TEST_CASE("deadline liveliness: a heartbeat refreshes the lease but not the dead
         n.drive();
         REQUIRE(n.a.is_connected(n.id_b));
 
-        const plexus::node_id b_inbound = []
-        {
-            auto id = make_id(0x00);
-            id[15]  = std::byte{1};
-            return id;
-        }();
-        auto *b_to_a = n.b.session_for(b_inbound);
+        const plexus::node_id b_inbound = n.id_a;
+        auto *b_to_a                    = n.b.session_for(b_inbound);
         REQUIRE(b_to_a != nullptr);
 
         // One data frame stamps the deadline; then ONLY heartbeats flow (the tick emits

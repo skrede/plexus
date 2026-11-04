@@ -2184,3 +2184,17 @@ target_include_directories(test_crossed_dial_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_crossed_dial_inproc TEST_PREFIX "integration.")
+
+# An accepted peer is known only by the identity it proved.
+add_executable(test_proven_identity_inproc
+    test_proven_identity_common.cpp
+    test_proven_identity_inproc.cpp)
+target_link_libraries(test_proven_identity_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_proven_identity_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_proven_identity_inproc TEST_PREFIX "integration.")

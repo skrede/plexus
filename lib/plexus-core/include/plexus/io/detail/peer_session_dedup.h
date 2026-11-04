@@ -7,6 +7,7 @@
 
 #include "plexus/io/detail/warn_line.h"
 #include "plexus/io/detail/handshake_resolve.h"
+#include "plexus/io/detail/peer_session_filing.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_lifecycle.h"
 
@@ -53,17 +54,31 @@ void supersede(Registry &reg, Build &build, const node_id &id, Session &incumben
     detail::demote_loser(incumbent);
 }
 
+// An accepted session takes the identity its peer proved as its key and label, unless another session proves it too;
+// such a pair is left to the crossed-pair resolution below.
+template<typename Registry, typename Slot>
+bool file_if_uncontested(Registry &reg, Slot &slot, const node_id &proven, peer_kind kind)
+{
+    if(kind != peer_kind::accepted || !slot_filing::uncontested(reg, slot, proven))
+        return false;
+    slot_filing::relabel(reg, slot, proven);
+    slot_filing::file_under_identity(reg, slot, proven);
+    return true;
+}
+
 // A crossed pair is two channels for one proven identity, so the session that completes second asks the registry
 // for the other. Two sessions of the same kind are not a crossed pair and are left alone.
 template<typename Registry, typename Build, typename Slot>
-bool admit_complete(Registry &reg, Build &build, Slot &slot, const node_id &slot_id, const node_id &proven, peer_kind kind)
+bool admit_complete(Registry &reg, Build &build, Slot &slot, const node_id &proven, peer_kind kind)
 {
+    if(detail::file_if_uncontested(reg, slot, proven, kind))
+        return true;
     typename Registry::session_type *incumbent = nullptr;
     node_id incumbent_id{};
     reg.for_each_connected(
             [&](const node_id &id, typename Registry::session_type &s)
             {
-                if(id == slot_id || s.peer_identity() != proven || session_kind(s) == kind)
+                if(&s == &*slot.session || s.peer_identity() != proven || session_kind(s) == kind)
                     return;
                 incumbent    = &s;
                 incumbent_id = id;
@@ -75,40 +90,40 @@ bool admit_complete(Registry &reg, Build &build, Slot &slot, const node_id &slot
     if(kept == kind)
         detail::supersede(reg, build, incumbent_id, *incumbent, slot.record.node_name);
     else if(kind == peer_kind::dialed)
-        reg.deny_redial(slot_id);
+        slot.driver.deny_redial();
     return kept == kind;
 }
 
-template<typename Registry>
-bool superseded(Registry &reg, const node_id &slot_id)
+template<typename Registry, typename Slot>
+bool superseded(Registry &reg, Slot &slot)
 {
-    const typename Registry::session_type *s = reg.session_for(slot_id);
-    if(s == nullptr)
+    if(!slot.session)
         return false;
-    if(detail::is_demoted(*s))
+    const typename Registry::session_type &s = *slot.session;
+    if(detail::is_demoted(s))
         return true;
     bool other = false;
-    if(s->is_complete())
-        reg.for_each_connected([&](const node_id &id, const typename Registry::session_type &o) { other = other || (id != slot_id && o.peer_identity() == s->peer_identity()); });
+    if(s.is_complete())
+        reg.for_each_connected([&](const node_id &, const typename Registry::session_type &o) { other = other || (&o != &s && o.peer_identity() == s.peer_identity()); });
     return other;
 }
 
 // The remote's close of a crossed pair's loser is no failure, so its drop is closed quietly instead of redialed.
-template<typename Registry>
-bool close_if_superseded(Registry &reg, const node_id &slot_id, peer_kind kind)
+template<typename Registry, typename Slot>
+bool close_if_superseded(Registry &reg, Slot &slot, peer_kind kind)
 {
-    if(!detail::superseded(reg, slot_id))
+    if(!detail::superseded(reg, slot))
         return false;
     if(kind == peer_kind::dialed)
-        reg.deny_redial(slot_id);
-    detail::quiet_tear_down(*reg.session_for(slot_id));
+        slot.driver.deny_redial();
+    detail::quiet_tear_down(*slot.session);
     return true;
 }
 
 template<typename Registry, typename Build, typename Slot>
-void wire_admit_complete(Registry &reg, Build &build, Slot &slot, const node_id &slot_id)
+void wire_admit_complete(Registry &reg, Build &build, Slot &slot)
 {
-    slot.session->on_admit_complete([&reg, &build, &slot, slot_id](const node_id &proven, peer_kind kind) { return detail::admit_complete(reg, build, slot, slot_id, proven, kind); });
+    slot.session->on_admit_complete([&reg, &build, &slot](const node_id &proven, peer_kind kind) { return detail::admit_complete(reg, build, slot, proven, kind); });
 }
 
 }

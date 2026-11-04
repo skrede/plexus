@@ -127,7 +127,7 @@ TEST_CASE("relay refresh: a downstream degrades origins via a relay whose sessio
     // D's only path to O is via R. Tearing down D's session to R degrades O to UNREACHABLE-NOT-DEAD: the
     // dead relay can no longer withdraw O, but O's identity and its via edge are RETAINED (distinguishable
     // from a peer that genuinely left) so the path recovers if R returns — never conflated with disappeared.
-    net.d.session_for(inbound_slot(1))->tear_down();
+    net.d.session_for(net.id_r)->tear_down();
     net.drive();
 
     REQUIRE(net.downstream_sees_origin() == 1); // the row is kept, not retired

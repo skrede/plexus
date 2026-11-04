@@ -198,16 +198,6 @@ std::vector<std::byte> make_unknown_topic_frame(std::uint64_t session_id)
     return plexus::wire::encode_frame(hdr, body);
 }
 
-// The inbound slot B keys an accepted session on: inbound ids are minted in arrival
-// order from 1 (the registry's synthetic inbound identity). The n-th accept yields
-// id[15] = n; the dialer's real node_id never reaches B's slot map here.
-plexus::node_id inbound_slot(std::uint8_t n)
-{
-    plexus::node_id id = make_id(0x00);
-    id[15]             = std::byte{n};
-    return id;
-}
-
 // The trivial discovery STUB: it feeds (node_id, endpoint) directly into note_peer,
 // the awareness seam at its locked node_id->endpoint shape.
 struct discovery_stub
@@ -414,7 +404,7 @@ TEST_CASE("inproc drop seam: a REAL partner-end close drives an automatic re-dia
         // Induce a REAL transport drop by closing B's ACCEPTED end: A's dialer
         // observes on_error from its own receive path and the production drop seam
         // routes that to A's slot-B driver — no hand-injected established-drop call.
-        auto *b_inbound = net.b.session_for(inbound_slot(1));
+        auto *b_inbound = net.b.session_for(net.id_a);
         REQUIRE(b_inbound != nullptr);
         b_inbound->tear_down();
         net.drive();
@@ -497,11 +487,11 @@ TEST_CASE("inproc drop seam: crossing a surrender bound marks is_dead and re-dia
         REQUIRE(a.is_connected(id_c));
 
         // Each real drop on B's current accepted end advances A's slot-B attempt
-        // counter by 1; B mints the next inbound slot on each re-dial's re-accept.
+        // counter by 1; B files each re-dial's re-accept under A's proven id.
         // Cross the bound: the last drop reports B dead and arms no further backoff.
         for(std::uint8_t n = 1; n <= k_max_attempts; ++n)
         {
-            auto *b_inbound = b.session_for(inbound_slot(n));
+            auto *b_inbound = b.session_for(make_id(0xA1));
             REQUIRE(b_inbound != nullptr);
             b_inbound->tear_down();
             ex.drain();

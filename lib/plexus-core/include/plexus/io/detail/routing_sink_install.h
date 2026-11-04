@@ -114,6 +114,7 @@ void install_routing_sinks(Engine &e)
     e.m_transport.on_dial_failed([&e](const endpoint &ep, io_error) { e.m_registry.notify_dial_failed(ep); });
     e.m_build.on_lifecycle          = [&e](const lifecycle_event &ev) { detail::dispatch_lifecycle(e, ev); };
     e.m_build.on_frame_dropped      = make_drop_sink(e);
+    e.m_build.on_relabel            = [&e](channel_type &ch, const node_id &id) { detail::wire_channel_capture(e, ch, id); };
     e.m_build.on_session_superseded = [&e](const node_id &id, std::string_view node_name)
     {
         e.m_monitor.deregister_endpoint(id);

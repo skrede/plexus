@@ -48,8 +48,7 @@ struct arb_net
     plexus::node_id slot_b{endpoint_id(ep_b)};
 
     explicit arb_net(combine policy, std::uint8_t a_compatible = 1)
-            : a(transport_a, ex, cfg_for(0xA1, a_compatible), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes,
-                opts(policy))
+            : a(transport_a, ex, cfg_for(0xA1, a_compatible), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, opts(policy))
     {
         b.emplace(transport_b, ex, cfg_for(0xB2, 1), k_long_timeout, forever_cfg(), k_seed + 1, sink, false);
         b->listen(ep_b);
@@ -69,7 +68,7 @@ struct arb_net
     // A REAL transport drop: close B's accepted end so A observes on_error from its own receive path.
     void drop_b()
     {
-        auto *inbound = b->session_for(inbound_slot(1));
+        auto *inbound = b->session_for(make_id(0xA1));
         REQUIRE(inbound != nullptr);
         inbound->tear_down();
         ex.drain();

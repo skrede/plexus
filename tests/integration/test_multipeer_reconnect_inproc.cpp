@@ -62,10 +62,10 @@ namespace {
 // Policy — identical in shape to the routing + drop-seam oracles' manual_clock.
 struct manual_clock
 {
-    using duration                  = std::chrono::nanoseconds;
-    using rep                       = duration::rep;
-    using period                    = duration::period;
-    using time_point                = std::chrono::time_point<manual_clock>;
+    using duration                                   = std::chrono::nanoseconds;
+    using rep                                        = duration::rep;
+    using period                                     = duration::period;
+    using time_point                                 = std::chrono::time_point<manual_clock>;
     [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};
@@ -150,15 +150,6 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
     return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), max_attempts, std::nullopt};
 }
 
-// A peer engine keys each accepted session on a synthetic inbound identity minted in
-// arrival order from 1; a fresh peer engine's FIRST (and only) accept is id[15]=n.
-plexus::node_id inbound_slot(std::uint8_t n)
-{
-    plexus::node_id id = make_id(0x00);
-    id[15]             = std::byte{n};
-    return id;
-}
-
 // A trivial discovery stub feeding (node_id, endpoint) straight into note_peer.
 struct discovery_stub
 {
@@ -235,13 +226,13 @@ struct multipeer_net
         return *peers[i];
     }
 
-    // The injection-free real drop verb: close the i-th peer engine's FIRST accepted
-    // inbound session, so A's dialer observes the partner close from its own receive
+    // The injection-free real drop verb: close the i-th peer engine's accepted session
+    // from A, so A's dialer observes the partner close from its own receive
     // path and the production on_transport_drop seam routes it to A's slot driver — the
     // registry wires that seam on every dialed slot, so the test injects nothing.
     void drop_peer(std::size_t i)
     {
-        auto *inbound = peers[i]->eng.session_for(inbound_slot(1));
+        auto *inbound = peers[i]->eng.session_for(make_id(0xA1));
         REQUIRE(inbound != nullptr);
         inbound->tear_down();
     }
@@ -323,11 +314,11 @@ TEST_CASE("multipeer inproc: one peer crossing a surrender bound is is_dead whil
             REQUIRE(net.a.is_connected(net.peer(i).id));
 
         // Each real drop on peer 0's current accepted end advances A's slot-0 attempt
-        // counter by 1; the peer mints the next inbound slot on each re-dial's accept.
+        // counter by 1; the peer files each re-dial's accept under A's proven id.
         // Cross the bound: the last drop reports the slot dead and arms no backoff.
         for(std::uint8_t n = 1; n <= k_max_attempts; ++n)
         {
-            auto *inbound = net.peer(0).eng.session_for(inbound_slot(n));
+            auto *inbound = net.peer(0).eng.session_for(make_id(0xA1));
             REQUIRE(inbound != nullptr);
             inbound->tear_down();
             net.drive();
@@ -390,7 +381,7 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         // epoch with a real publish from the peer's reconnected inbound session. The
         // gate compares an incoming frame's session_id against THIS latched peer epoch.
         a_to_p->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(std::string{reinterpret_cast<const char *>(d.data()), d.size()}); });
-        auto *p_inbound = p.eng.session_for(inbound_slot(2)); // the re-accept is slot 2
+        auto *p_inbound = p.eng.session_for(make_id(0xA1));
         REQUIRE(p_inbound != nullptr);
         const auto live_epoch = p_inbound->session_id();
         REQUIRE(net.a.messages().attach_for_fanout(a_to_p->msg_peer(), "topic"));

@@ -46,10 +46,10 @@ namespace {
 
 struct manual_clock
 {
-    using duration                  = std::chrono::nanoseconds;
-    using rep                       = duration::rep;
-    using period                    = duration::period;
-    using time_point                = std::chrono::time_point<manual_clock>;
+    using duration                                   = std::chrono::nanoseconds;
+    using rep                                        = duration::rep;
+    using period                                     = duration::period;
+    using time_point                                 = std::chrono::time_point<manual_clock>;
     [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};
@@ -94,15 +94,6 @@ plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{seed};
-    return id;
-}
-
-// B keys an accepted session on a synthetic inbound identity minted in arrival order
-// from 1; the n-th accept yields id[15] = n.
-plexus::node_id inbound_slot(std::uint8_t n)
-{
-    plexus::node_id id = make_id(0x00);
-    id[15]             = std::byte{n};
     return id;
 }
 
@@ -168,7 +159,7 @@ TEST_CASE("reconnect_observer inproc: an observer installed once survives a reco
         // A REAL transport drop: close B's accepted end so A observes on_error. Driving
         // the backoff tears down the dead session and re-handshakes through the SAME
         // build context the single add_observer wired.
-        net.b.session_for(inbound_slot(1))->tear_down();
+        net.b.session_for(make_id(0xA1))->tear_down();
         net.drive();
         net.advance(k_ceiling);
 

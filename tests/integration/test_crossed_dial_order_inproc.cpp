@@ -41,7 +41,7 @@ void step_and_mark(crossed_net &net, step_marks &marks, std::int32_t &n)
         ++n;
         if(!marks.completed && net.a.e.is_connected(endpoint_id(net.ep_b)))
             marks.completed = n;
-        if(!marks.closed && closed(net.a.e, inbound_slot(1)))
+        if(!marks.closed && closed(net.a.e, net.id_b))
             marks.closed = n;
     }
 }
@@ -69,7 +69,7 @@ TEST_CASE("crossed dial: the remote's survivor completes before the loser's clos
     REQUIRE(marks.closed.has_value());
     CHECK(*marks.completed < *marks.closed);
     CHECK(closed(net.b.e, net.id_a));
-    CHECK(net.a.edges.for_peer(inbound_slot(1)).disconnected == 0);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
     CHECK(net.a.edges.for_peer(endpoint_id(net.ep_b)).disconnected == 0);
     CHECK(net.b.edges.for_peer(net.id_a).disconnected == 0);
     CHECK(net.b.edges.for_peer(inbound_slot(1)).disconnected == 0);
@@ -95,7 +95,7 @@ TEST_CASE("crossed dial: a loser end torn down early outside the protocol is an 
 
     net.b.e.session_for(net.id_a)->tear_down();
     net.drive();
-    CHECK(net.a.edges.for_peer(inbound_slot(1)).disconnected == 1);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 1);
     CHECK(net.a.e.is_connected(endpoint_id(net.ep_b)));
     CHECK(complete_sessions_for(net.a.e, net.id_b) == 1);
     CHECK(complete_sessions_for(net.b.e, net.id_a) == 1);

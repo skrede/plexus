@@ -47,6 +47,7 @@
 
 #include <span>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <cstdint>
 #include <utility>
@@ -207,8 +208,8 @@ public:
         return m_forwarders_installed;
     }
 
-    // The identity the peer proved in the handshake. It differs from the slot's key on an accepted
-    // session, whose provisional id was minted before the peer spoke.
+    // The identity the peer proved in the handshake. It differs from the slot's key on a dial by
+    // endpoint, and on an accepted session until that session is filed under this identity.
     const node_id &peer_identity() const noexcept
     {
         return m_fsm.last_seen_peer_id();
@@ -318,6 +319,8 @@ private:
     friend peer_kind detail::session_kind(const S &) noexcept;
     template<typename S>
     friend void detail::fire_lifecycle(S &, lifecycle_edge, handshake_outcome);
+    template<typename S>
+    friend void detail::adopt_peer_name(S &, const std::string &);
     template<typename S>
     friend void detail::fire_security(S &, security_kind, security_cause);
     template<typename S>

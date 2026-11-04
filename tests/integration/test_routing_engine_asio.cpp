@@ -62,13 +62,8 @@ TEST_CASE("routing over asio: a demand subscribe carries a real published messag
         std::vector<std::string> a_received;
         a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
-        const auto inbound = []
-        {
-            auto id = make_id(0x00);
-            id[15]  = std::byte{1};
-            return id;
-        }();
-        auto *b_inbound = b.eng.session_for(inbound);
+        const auto inbound = make_id(0xA1);
+        auto *b_inbound    = b.eng.session_for(inbound);
         REQUIRE(b_inbound != nullptr);
         settle(io); // drain the subscribe round-trip so B's fanout to A is wired
 

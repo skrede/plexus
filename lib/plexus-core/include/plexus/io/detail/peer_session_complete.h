@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_COMPLETE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_COMPLETE_H
 
+#include "plexus/io/node_name.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
@@ -12,6 +13,10 @@
 #include "plexus/wire/frame.h"
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/topic_declaration.h"
+
+#include "plexus/node_id.h"
+
+#include <string>
 
 namespace plexus::io::detail {
 
@@ -28,12 +33,24 @@ peer_kind session_kind(const Session &s) noexcept
     return s.m_is_inbound_bootstrap ? peer_kind::accepted : peer_kind::dialed;
 }
 
+// An accepted session's slot key is provisional until its identity is proven, so its rejected edge names the
+// identity the handshake recorded instead, which is node_id{} for every refusal before completion.
 template<typename Session>
 void fire_lifecycle(Session &s, lifecycle_edge edge, handshake_outcome reason = handshake_outcome::none)
 {
     if(!s.m_on_lifecycle_cb)
         return;
-    s.m_on_lifecycle_cb(lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason});
+    if(edge != lifecycle_edge::rejected || session_kind(s) == peer_kind::dialed)
+        return s.m_on_lifecycle_cb(lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason});
+    const node_id &proven = s.peer_identity();
+    s.m_on_lifecycle_cb(lifecycle_event{edge, proven, proven == node_id{} ? std::string{} : node_name_of(proven), peer_kind::accepted, reason});
+}
+
+template<typename Session>
+void adopt_peer_name(Session &s, const std::string &name)
+{
+    s.m_msg_peer.node_name = name;
+    s.m_rpc_peer.node_name = name;
 }
 
 template<typename Session>

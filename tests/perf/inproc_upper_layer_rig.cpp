@@ -129,9 +129,7 @@ struct rig
         ex.drain();
         a_to_b = a.session_for(id_b);
 
-        plexus::node_id inbound = make_id(0x00);
-        inbound[15]             = std::byte{1};
-        auto *b_inbound         = b.session_for(inbound);
+        auto *b_inbound = b.session_for(make_id(0xA1));
         b_inbound->on_message([this](std::string_view, std::span<const std::byte>) { ++received; });
 
         b.messages().attach_for_fanout(b_inbound->msg_peer(), "topic");

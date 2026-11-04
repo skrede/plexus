@@ -28,10 +28,13 @@ void register_endpoint(Engine &e, const node_id &id, const std::string &node_nam
 
 // A rejected handshake is an un-established session: tear_down's prior-complete guard suppresses
 // the disconnected edge, so a dead/disconnected feed is NOT guaranteed to follow. Mapping rejected
-// to session-down settles the peer as not-alive rather than leaving a stuck session state.
+// to session-down settles the peer as not-alive rather than leaving a stuck session state. An
+// accepted session refused before it proved an identity names node_id{}, which no table tracks.
 template<typename Engine>
 void feed_liveliness_session(Engine &e, const lifecycle_event &ev)
 {
+    if(ev.id == node_id{})
+        return;
     switch(ev.edge)
     {
         case lifecycle_edge::ready:

@@ -59,10 +59,10 @@ namespace {
 
 struct manual_clock
 {
-    using duration                  = std::chrono::nanoseconds;
-    using rep                       = duration::rep;
-    using period                    = duration::period;
-    using time_point                = std::chrono::time_point<manual_clock>;
+    using duration                                   = std::chrono::nanoseconds;
+    using rep                                        = duration::rep;
+    using period                                     = duration::period;
+    using time_point                                 = std::chrono::time_point<manual_clock>;
     [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};
@@ -120,13 +120,6 @@ plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0] = std::byte{seed};
-    return id;
-}
-
-plexus::node_id inbound_slot(std::uint8_t n)
-{
-    plexus::node_id id = make_id(0x00);
-    id[15]             = std::byte{n};
     return id;
 }
 
@@ -241,7 +234,7 @@ TEST_CASE("inproc observer: a drop+redial fires reconnected (NOT a second connec
         // A REAL transport drop: close B's accepted end so A observes on_error. The
         // dialer's disconnected fires when the redial tears down the dead session, so
         // it lands after the backoff fires (below), not on the bare drop.
-        net.b.session_for(inbound_slot(1))->tear_down();
+        net.b.session_for(net.id_a)->tear_down();
         net.drive();
 
         // Drive the backoff: A tears down the dead session (disconnected) then re-dials
@@ -298,7 +291,7 @@ TEST_CASE("inproc observer: dead fires once when the driver surrenders, and the 
 
         for(std::uint8_t n = 1; n <= k_max_attempts; ++n)
         {
-            b.session_for(inbound_slot(n))->tear_down();
+            b.session_for(make_id(0xA1))->tear_down();
             ex.drain();
             if(n < k_max_attempts)
             {
@@ -376,7 +369,7 @@ TEST_CASE("inproc observer: on_peer_ready over the REAL loop, then the awaited p
         std::vector<std::string> a_received;
         a_to_b->on_message([&](std::string_view, std::span<const std::byte> d) { a_received.emplace_back(to_string(d)); });
 
-        auto *b_inbound = net.b.session_for(inbound_slot(1));
+        auto *b_inbound = net.b.session_for(net.id_a);
         REQUIRE(b_inbound != nullptr);
         net.drive(); // let B's producer-side fanout settle from A's subscribe
         net.b.messages().publish("topic", as_bytes(payload), b_inbound->session_id());
@@ -409,7 +402,7 @@ TEST_CASE("inproc observer: ready fires EXACTLY once per cycle across a reconnec
 
         // Drop + redial: the fresh incarnation re-arms the latch, resurrects the
         // subscribe through the counted path, and fires ready a SECOND time once acked.
-        net.b.session_for(inbound_slot(1))->tear_down();
+        net.b.session_for(net.id_a)->tear_down();
         net.drive();
         net.advance(k_ceiling);
         REQUIRE(net.a.is_connected(net.id_b));
@@ -454,7 +447,7 @@ TEST_CASE("inproc observer: premature-ready window - ready stays 1 while the res
         // handshake completes runs on_complete -> resubscribe_all (counter now N) ->
         // maybe_fire_ready (held back, count N > 0), but NOT yet the resurrected
         // subscribe_responses (still in flight). The cycle-2 ready cannot have fired.
-        net.b.session_for(inbound_slot(1))->tear_down();
+        net.b.session_for(net.id_a)->tear_down();
         net.drive();
         manual_clock::advance(k_ceiling);
         while(net.ex.step() && !net.a.is_connected(net.id_b))
@@ -487,7 +480,7 @@ TEST_CASE("inproc observer: an accepted (inbound) peer fires connected/disconnec
         net.a.note_peer(net.id_b, net.ep_b);
         net.a.reach(net.id_b);
         net.drive();
-        const auto inbound = inbound_slot(1);
+        const auto inbound = net.id_a;
         {
             const auto &c = rec.for_peer(inbound);
             REQUIRE(c.connected == 1);
@@ -635,7 +628,7 @@ TEST_CASE("inproc observer: a forged subscribe_response with no outstanding matc
 
         // A second connection cycle proves ready is reachable again: drop+redial and
         // assert ready re-fires (count 2) — impossible if the counter had wrapped.
-        net.b.session_for(inbound_slot(1))->tear_down();
+        net.b.session_for(net.id_a)->tear_down();
         net.drive();
         net.advance(k_ceiling);
         REQUIRE(net.a.is_connected(net.id_b));
