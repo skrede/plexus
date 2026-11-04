@@ -41,7 +41,7 @@ void check_counted_once(const established_acceptor &f)
 
 }
 
-TEST_CASE("session malformed: a truncated peer report is counted once", "[integration][session_malformed][!shouldfail]")
+TEST_CASE("session malformed: a truncated peer report is counted once", "[integration][session_malformed]")
 {
     established_acceptor f;
     wire::peer_report pr{};

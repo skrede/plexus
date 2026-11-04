@@ -81,7 +81,8 @@ void on_declare_received(Session &s, std::span<const std::byte> inner)
 template<typename Session, typename Forwarder>
 void on_peer_report_received(Session &s, Forwarder &messages, std::span<const std::byte> inner)
 {
-    ingest_peer_report_frame(messages, s.peer_identity(), inner);
+    if(!ingest_peer_report_frame(messages, s.peer_identity(), inner))
+        report_malformed(s);
 }
 
 // The sending relay is the proven identity the admission gate keys on, distinct from the trailer

@@ -29,12 +29,16 @@ inline bool report_universe_admits(const report_universe_ctx &local, const wire:
 // The always-compiled receive seam: decode off the untrusted session frame and, only on a clean
 // decode, hand the borrowed report to the engine fold. The gate chain (origin-universe, self, hop,
 // dedup) runs engine-side, against the receiving node's own universe and route table — the reporter
-// is the handshake-proven sender identity, distinct from the report's origin.
+// is the handshake-proven sender identity, distinct from the report's origin. An undecodable report
+// is the caller's to count: this returns false and counts nothing.
 template<typename Forwarder>
-void ingest_peer_report_frame(Forwarder &forwarder, const node_id &reporter, std::span<const std::byte> inner)
+bool ingest_peer_report_frame(Forwarder &forwarder, const node_id &reporter, std::span<const std::byte> inner)
 {
-    if(auto pr = wire::decode_peer_report(inner))
-        forwarder.note_peer_report(reporter, *pr);
+    auto pr = wire::decode_peer_report(inner);
+    if(!pr)
+        return false;
+    forwarder.note_peer_report(reporter, *pr);
+    return true;
 }
 
 }
