@@ -6,6 +6,7 @@
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/host_fingerprint.h"
+#include "plexus/io/disconnect_cause.h"
 #include "plexus/io/handshake_protocol.h"
 
 #include "plexus/io/detail/peer_session_handshake.h"
@@ -40,10 +41,11 @@ void fire_lifecycle(Session &s, lifecycle_edge edge, handshake_outcome reason = 
 {
     if(!s.m_on_lifecycle_cb)
         return;
+    const disconnect_cause cause = edge == lifecycle_edge::disconnected ? s.m_disconnect_cause : disconnect_cause::unspecified;
     if(edge != lifecycle_edge::rejected || session_kind(s) == peer_kind::dialed)
-        return s.m_on_lifecycle_cb(lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason});
+        return s.m_on_lifecycle_cb(lifecycle_event{edge, s.m_ctx.peer_id, s.m_ctx.node_name, session_kind(s), reason, cause});
     const node_id &proven = s.peer_identity();
-    s.m_on_lifecycle_cb(lifecycle_event{edge, proven, proven == node_id{} ? std::string{} : node_name_of(proven), peer_kind::accepted, reason});
+    s.m_on_lifecycle_cb(lifecycle_event{edge, proven, proven == node_id{} ? std::string{} : node_name_of(proven), peer_kind::accepted, reason, cause});
 }
 
 template<typename Session>
@@ -180,6 +182,7 @@ void on_complete(Session &s)
         return demote_loser(s);
     if(!s.m_negotiator.install_on_accept(channel_is_self_securing(s)))
         return refuse_posture(s);
+    s.m_last_admitted        = Session::clock_type::now();
     s.m_forwarders_installed = true;
     fire_connect_edge(s);
     resubscribe_all(s);

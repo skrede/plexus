@@ -13,6 +13,7 @@
 #include "plexus/io/peer_session.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/disconnect_cause.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/session_build_context.h"
 
@@ -186,6 +187,11 @@ public:
         detail::hang_up_slot(*this, id);
     }
 
+    void tear_down_stale(const node_id &id, disconnect_cause cause)
+    {
+        detail::tear_down_stale_slot(*this, id, cause);
+    }
+
 private:
     using slot_block = detail::session_slot<Policy, Transport, Clock>;
 
@@ -219,6 +225,8 @@ private:
     friend void detail::close_slots(R &, detail::pending_ops &);
     template<typename R>
     friend void detail::hang_up_slot(R &, const node_id &);
+    template<typename R>
+    friend void detail::tear_down_stale_slot(R &, const node_id &, disconnect_cause);
     friend struct detail::slot_reclaim;
     friend struct detail::slot_filing;
 };

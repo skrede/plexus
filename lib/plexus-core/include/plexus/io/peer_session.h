@@ -15,6 +15,7 @@
 #include "plexus/io/security_seam.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/disconnect_cause.h"
 #include "plexus/io/attach_negotiator.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/handshake_protocol.h"
@@ -85,11 +86,13 @@ public:
             , m_ready_latched_this_cycle(false)
             , m_peer_session_id(0)
             , m_closed_for_protocol_error(false)
+            , m_disconnect_cause(disconnect_cause::unspecified)
             , m_messages(messages)
             , m_outstanding_subscribes(0)
             , m_procedures(procedures)
             , m_retry()
             , m_handshake_timeout(handshake_timeout)
+            , m_last_admitted()
             , m_msg_peer{m_channel, ctx.node_name}
             , m_malformed_warning(detail::k_malformed_warning_interval)
             , m_rpc_peer{m_channel, ctx.node_name}
@@ -258,6 +261,7 @@ private:
     bool m_ready_latched_this_cycle;
     std::uint64_t m_peer_session_id;
     bool m_closed_for_protocol_error;
+    disconnect_cause m_disconnect_cause;
     message_forwarder<Policy> &m_messages;
     attach_negotiator<Policy> m_negotiator;
     std::vector<std::byte> m_frame_scratch;
@@ -266,6 +270,7 @@ private:
     procedure_forwarder<Policy> &m_procedures;
     io::detail::subscribe_retry_state m_retry;
     std::chrono::nanoseconds m_handshake_timeout;
+    typename clock_type::time_point m_last_admitted;
     typename message_forwarder<Policy>::peer m_msg_peer;
     io::detail::rate_limited_warning<clock_type> m_malformed_warning;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
@@ -337,6 +342,10 @@ private:
     friend void detail::send_handshake_response(S &, handshake_outcome);
     template<typename S>
     friend void detail::tear_down_session(S &);
+    template<typename S>
+    friend void detail::tear_down_with_cause(S &, disconnect_cause);
+    template<typename S>
+    friend bool detail::session_silent(const S &, std::chrono::nanoseconds);
     template<typename S>
     friend void detail::quiet_tear_down(S &);
     template<typename S>

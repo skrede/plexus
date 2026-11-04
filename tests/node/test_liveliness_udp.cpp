@@ -24,8 +24,16 @@ TEST_CASE("liveliness over udp: a connected peer is reported alive", "[node][liv
     REQUIRE(pair.pump_until([&] { return pair.first_alive_after(t0).has_value(); }, 2s));
 }
 
-// A datagram session is not torn down when its peer falls silent, so under the default fusion the live session keeps the
-// peer alive; only a policy that requires a fresh heartbeat turns the missed heartbeats into a lost verdict.
+TEST_CASE("liveliness over udp: a peer that stops is reported lost within the miss window under the default policy", "[node][liveliness]")
+{
+    udp_pair pair{"udp"};
+    const clock_type::time_point t0 = pair.dial();
+    REQUIRE(pair.pump_until([&] { return pair.first_alive_after(t0).has_value(); }, 2s));
+
+    pair.close_b();
+    REQUIRE(pair.pump_until([&] { return pair.lost_seen(); }, lost_bound()));
+}
+
 TEST_CASE("liveliness over udp: a peer that stops is reported lost within the miss window when heartbeats are required", "[node][liveliness]")
 {
     udp_pair pair{"udp", plexus::io::combine::all_required};

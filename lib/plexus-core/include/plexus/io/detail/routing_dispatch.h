@@ -69,6 +69,12 @@ void post_rejected(Engine &e, const lifecycle_event &ev)
 }
 
 template<typename Engine>
+void post_disconnected(Engine &e, const lifecycle_event &ev)
+{
+    post_counted(e, [ev](Engine &eng) { fan_out(eng, [&](observer &o) { o.on_peer_disconnected_with_cause(ev.id, ev.node_name, ev.kind, ev.cause); }); });
+}
+
+template<typename Engine>
 void post_lifecycle_edge(Engine &e, const lifecycle_event &ev)
 {
     switch(ev.edge)
@@ -76,7 +82,7 @@ void post_lifecycle_edge(Engine &e, const lifecycle_event &ev)
         case lifecycle_edge::connected:
             return detail::post_edge(e, ev, &observer::on_peer_connected);
         case lifecycle_edge::disconnected:
-            return detail::post_edge(e, ev, &observer::on_peer_disconnected);
+            return detail::post_disconnected(e, ev);
         case lifecycle_edge::reconnected:
             return detail::post_edge(e, ev, &observer::on_peer_reconnected);
         case lifecycle_edge::dead:

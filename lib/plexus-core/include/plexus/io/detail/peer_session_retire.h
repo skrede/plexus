@@ -1,8 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_RETIRE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_RETIRE_H
 
+#include "plexus/io/peer_kind.h"
+#include "plexus/io/disconnect_cause.h"
+
 #include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/peer_session_dedup.h"
 #include "plexus/io/detail/peer_session_rebuild.h"
+#include "plexus/io/detail/peer_session_lifecycle.h"
 
 #include "plexus/node_id.h"
 
@@ -70,6 +75,23 @@ void hang_up_slot(Registry &reg, const node_id &id)
         return;
     it->second->driver.deny_redial();
     withdraw_slot(reg, reg.m_build, *it->second);
+}
+
+// A duplicate of a surviving session closes quietly. Otherwise the stale session is torn down at once, so its
+// disconnected edge precedes the redial its dialed slot then schedules.
+template<typename Registry>
+void tear_down_stale_slot(Registry &reg, const node_id &key, disconnect_cause cause)
+{
+    auto it = reg.m_slots.find(key);
+    if(it == reg.m_slots.end() || !it->second->session || !it->second->session->is_complete())
+        return;
+    auto &slot           = *it->second;
+    const peer_kind kind = detail::session_kind(*slot.session);
+    if(detail::close_if_superseded(reg, slot, kind))
+        return;
+    detail::tear_down_with_cause(*slot.session, cause);
+    if(kind == peer_kind::dialed)
+        slot.driver.on_channel_dropped();
 }
 
 // Every slot's redial is denied before any session is torn down, so no teardown can arm a redial. Each slot is then

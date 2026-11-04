@@ -71,7 +71,8 @@ void deliver_session_object(Session &s, const object_carrier &c)
         detail::report_drop(s, drop_cause::unestablished, c.topic_hash);
         return release(c);
     }
-    auto fqn = s.m_messages.fqn_for(c.topic_hash);
+    s.m_last_admitted = Session::clock_type::now();
+    auto fqn          = s.m_messages.fqn_for(c.topic_hash);
     if(fqn.empty())
     {
         s.m_logger.warn("plexus: peer_session object_topic_unknown");

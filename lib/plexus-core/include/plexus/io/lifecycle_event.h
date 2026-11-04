@@ -5,6 +5,7 @@
 
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/disconnect_cause.h"
 
 #include <string>
 
@@ -29,6 +30,7 @@ struct lifecycle_event
     std::string node_name;
     peer_kind kind;
     handshake_outcome reason; // meaningful only on the rejected edge
+    disconnect_cause cause;   // meaningful only on the disconnected edge
 };
 
 }

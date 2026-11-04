@@ -3,6 +3,7 @@
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/io/disconnect_cause.h"
 
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
@@ -43,6 +44,7 @@ void start_session(Session &s)
     s.m_torn_down                 = false;
     s.m_quiet_teardown            = false;
     s.m_closed_for_protocol_error = false;
+    s.m_disconnect_cause          = disconnect_cause::unspecified;
     s.m_negotiator.prime();
     wire_channel_seams(s);
     detail::register_session_consumers(s);

@@ -7,6 +7,7 @@
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/disconnect_cause.h"
 #include "plexus/io/handshake_protocol.h"
 #include "plexus/io/reliability_requirement.h"
 
@@ -141,7 +142,8 @@ void fire_dead(Registry &reg, Slot &slot)
 {
     if(!reg.m_build.on_lifecycle)
         return;
-    reg.m_build.on_lifecycle(lifecycle_event{lifecycle_edge::dead, slot.record.peer_id, slot.record.node_name, peer_kind::dialed, handshake_outcome::none});
+    reg.m_build.on_lifecycle(
+            lifecycle_event{lifecycle_edge::dead, slot.record.peer_id, slot.record.node_name, peer_kind::dialed, handshake_outcome::none, disconnect_cause::unspecified});
 }
 
 // on_dead fires from the driver's own report_dead stack frame while it lives in the slot, so

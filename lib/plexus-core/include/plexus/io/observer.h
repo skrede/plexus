@@ -7,6 +7,7 @@
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/security_event.h"
+#include "plexus/io/disconnect_cause.h"
 #include "plexus/io/observation_events.h"
 #include "plexus/io/peer_liveliness_event.h"
 
@@ -33,6 +34,11 @@ public:
     }
     virtual void on_peer_disconnected(const node_id &, std::string_view, peer_kind)
     {
+    }
+    // The engine reports a disconnect only through this entry, so an observer overriding either form sees it once.
+    virtual void on_peer_disconnected_with_cause(const node_id &id, std::string_view node_name, peer_kind kind, disconnect_cause)
+    {
+        on_peer_disconnected(id, node_name, kind);
     }
     virtual void on_peer_reconnected(const node_id &, std::string_view, peer_kind)
     {

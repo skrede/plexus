@@ -3,6 +3,7 @@
 
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/disconnect_cause.h"
 #include "plexus/io/handshake_protocol.h"
 
 #include "plexus/io/detail/peer_session_gate.h"
@@ -38,6 +39,19 @@ void tear_down_session(Session &s)
     s.m_channel.close();
     if(was_complete && !s.m_quiet_teardown)
         detail::fire_lifecycle(s, lifecycle_edge::disconnected);
+}
+
+template<typename Session>
+void tear_down_with_cause(Session &s, disconnect_cause cause)
+{
+    s.m_disconnect_cause = cause;
+    tear_down_session(s);
+}
+
+template<typename Session>
+bool session_silent(const Session &s, std::chrono::nanoseconds window)
+{
+    return Session::clock_type::now() - s.m_last_admitted > window;
 }
 
 template<typename Session>
@@ -99,6 +113,7 @@ void note_admitted(Session &s, const wire::frame_header &hdr)
 {
     if(!s.is_complete())
         return;
+    s.m_last_admitted = Session::clock_type::now();
     if(hdr.session_id != 0 && s.m_peer_session_id == 0)
         s.m_peer_session_id = hdr.session_id;
     if(hdr.type != wire::msg_type::handshake_req && hdr.type != wire::msg_type::handshake_resp)
