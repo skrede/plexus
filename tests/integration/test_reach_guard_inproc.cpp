@@ -3,6 +3,7 @@
 #include "test_reach_guard_common.h"
 
 #include "plexus/io/endpoint_id.h"
+
 #include "plexus/io/detail/peer_session_slot.h"
 
 #include "plexus/node_id.h"
