@@ -33,8 +33,8 @@ node_id id_of(std::uint8_t base)
 constexpr std::uint8_t k_hop_budget = 8;
 constexpr std::size_t k_depth       = 32;
 
-const node_id k_local = id_of(0x01);
-const node_id k_relay = id_of(0x20);
+const node_id k_local  = id_of(0x01);
+const node_id k_relay  = id_of(0x20);
 const node_id k_origin = id_of(0xB0);
 
 wire::forwarded_frame frame_from(const node_id &origin, std::uint8_t hop, std::uint16_t seq)
@@ -51,6 +51,18 @@ wire::forwarded_frame frame_from(const node_id &origin, std::uint8_t hop, std::u
 forward_admission gate(forward_dedup_table &t, const wire::forwarded_frame &ff, const node_id &relay = k_relay)
 {
     return forward_gate(ff, k_local, relay, k_hop_budget, k_depth, t);
+}
+
+const node_id k_other_origin = id_of(0xC0);
+const node_id k_other_relay  = id_of(0x40);
+
+forward_dedup_table three_windows()
+{
+    forward_dedup_table table;
+    table.admit(k_origin, k_relay, 1, k_depth);
+    table.admit(k_other_origin, k_relay, 1, k_depth);
+    table.admit(k_origin, k_other_relay, 1, k_depth);
+    return table;
 }
 
 }
@@ -113,4 +125,24 @@ TEST_CASE("forward_gate: the (origin, arrival-relay) key discriminates independe
     REQUIRE(gate(table, frame_from(k_origin, 1, 43), relay_b) == forward_admission::admit);
 
     REQUIRE(table.tracked() == 2); // one window per (origin, relay) pair
+}
+
+TEST_CASE("forward_gate: reset_via drops every window that arrived through one relay and keeps the others", "[forwarder][forward_gate]")
+{
+    forward_dedup_table table = three_windows();
+    REQUIRE(table.tracked() == 3);
+    CHECK(table.reset_via(k_relay) == 2);
+    CHECK(table.tracked() == 1);
+    CHECK(table.reset_via(k_relay) == 0);
+    CHECK(gate(table, frame_from(k_origin, 1, 1), k_other_relay) == forward_admission::drop_duplicate);
+}
+
+TEST_CASE("forward_gate: reset_origin drops every window of one origin", "[forwarder][forward_gate]")
+{
+    forward_dedup_table table = three_windows();
+    REQUIRE(table.tracked() == 3);
+    CHECK(table.reset_origin(k_origin) == 2);
+    CHECK(table.tracked() == 1);
+    CHECK(table.reset_origin(k_origin) == 0);
+    CHECK(gate(table, frame_from(k_other_origin, 1, 1)) == forward_admission::drop_duplicate);
 }

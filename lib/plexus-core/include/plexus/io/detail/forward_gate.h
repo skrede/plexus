@@ -55,6 +55,16 @@ public:
         return m_windows.erase(forward_dedup_key{origin, arrival_relay}) != 0;
     }
 
+    std::size_t reset_via(const node_id &arrival_relay)
+    {
+        return std::erase_if(m_windows, [&](const auto &entry) { return entry.first.arrival_relay == arrival_relay; });
+    }
+
+    std::size_t reset_origin(const node_id &origin)
+    {
+        return std::erase_if(m_windows, [&](const auto &entry) { return entry.first.origin == origin; });
+    }
+
     std::size_t tracked() const noexcept
     {
         return m_windows.size();

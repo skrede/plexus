@@ -60,7 +60,8 @@ void feed_liveliness_session(Engine &e, const lifecycle_event &ev)
 
 // Topic knowledge is scoped to the sessions that carried it, so a peer's records leave with the
 // last of them — mirroring how the registry drops its fan-out entries. Awareness is untouched:
-// a peer that goes down stays discovered, it just stops asserting topics.
+// a peer that goes down stays discovered, it just stops asserting topics. The dedup windows of
+// frames it relayed leave too, because a relay that returns restarts its splice sequence at 0.
 template<typename Engine>
 void forget_topics_on_teardown(Engine &e, const lifecycle_event &ev)
 {
@@ -74,6 +75,7 @@ void forget_topics_on_teardown(Engine &e, const lifecycle_event &ev)
         e.m_emitter.clear_decline(who);
         mark_reports_via_unreachable(e, who);
         e.m_messages.resume_relayed_from(who);
+        e.m_messages.forward_dedup().reset_via(who);
         const bool changed = e.m_topics.remove_node(who);
         e.bump_graph_generation(changed, who, graph::change_kind::disappeared);
     }

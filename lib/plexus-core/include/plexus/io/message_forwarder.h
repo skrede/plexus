@@ -509,13 +509,9 @@ public:
         m_relayed_suppressed.erase(origin);
     }
 
-    // The data-plane counterpart to the control-plane window re-arm: a relay returning under the same
-    // identity restarts its forwarding splice sequence at 0 while this node's per-(origin, relay) dedup
-    // window is still anchored high from the dead incarnation. Drop that window so the first re-forwarded
-    // frame re-anchors and delivery resumes contiguously instead of dropping as too_old.
-    void reset_forward_dedup(const node_id &origin, const node_id &arrival_relay)
+    detail::forward_dedup_table &forward_dedup() noexcept
     {
-        m_forward_dedup.reset(origin, arrival_relay);
+        return m_forward_dedup;
     }
 
     bool consumes_relayed_from(const node_id &origin) const noexcept

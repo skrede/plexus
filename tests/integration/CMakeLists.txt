@@ -2162,6 +2162,16 @@ target_include_directories(test_forward_pubsub PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_forward_pubsub TEST_PREFIX "integration.")
 
+add_executable(test_forward_dedup_pruning_inproc test_forward_dedup_pruning_inproc.cpp)
+target_link_libraries(test_forward_dedup_pruning_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_forward_dedup_pruning_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_forward_dedup_pruning_inproc TEST_PREFIX "integration.")
+
 add_executable(test_forward_reply_reresolve test_forward_reply_reresolve.cpp)
 target_link_libraries(test_forward_reply_reresolve PRIVATE
     plexus::core

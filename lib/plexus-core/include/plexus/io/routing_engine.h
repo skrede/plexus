@@ -259,6 +259,7 @@ public:
         const bool changed = m_known_peers.forget(id);
         m_registry.deny_redial(id);
         m_peer_liveliness.note_awareness_lost(id);
+        m_messages.forward_dedup().reset_origin(id);
         detail::relay_withdraw(*this, id);
         m_emitter.clear_decline(id);
         if(m_reported.erase(id) != 0)

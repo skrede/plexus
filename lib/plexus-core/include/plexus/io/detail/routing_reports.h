@@ -37,7 +37,7 @@ void recover_reachable_via(Engine &e, const node_id &origin, const node_id &via)
 {
     if(!e.m_known_peers.mark_reachable_via(origin, via))
         return;
-    e.m_messages.reset_forward_dedup(origin, via);
+    e.m_messages.forward_dedup().reset(origin, via);
     e.bump_graph_generation(true, origin, graph::change_kind::reachable);
 }
 

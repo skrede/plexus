@@ -57,6 +57,7 @@ void sweep_aged_awareness(Engine &e)
                                       {
                                           detail::release_all_reporter_load(e, id);
                                           e.m_peer_liveliness.note_awareness_lost(id);
+                                          e.m_messages.forward_dedup().reset_origin(id);
                                           detail::relay_withdraw(e, id);
                                           if(e.m_reported.erase(id) != 0)
                                               e.m_topics.remove_node(id);
