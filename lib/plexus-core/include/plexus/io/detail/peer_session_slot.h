@@ -8,6 +8,7 @@
 #include "plexus/io/peer_session.h"
 #include "plexus/io/session_build_context.h"
 
+#include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/channel_graveyard.h"
 
 #include "plexus/node_id.h"
@@ -25,7 +26,8 @@ namespace plexus::io::detail {
 // The member order encodes the destruction discipline: session is destroyed first, so the record (whose channel/epoch
 // it borrows), the retired cell and the driver outlive every incarnation. A rebuild waits in parked until the old
 // session's waits have completed and retired is empty. A denied or closing slot retires instead of building, and runs
-// on_emptied_cb once it holds nothing and its driver has settled.
+// on_emptied_cb once it holds nothing and its driver has settled. posts counts the resumes queued against the slot, so
+// an erase waits until none is queued.
 template<typename Policy, typename Transport, typename Clock>
 struct session_slot
 {
@@ -36,6 +38,7 @@ struct session_slot
             : record()
             , retired()
             , driver(transport, build.executor, build.redial, ep, build.redial_seed)
+            , posts()
             , parked()
             , session()
             , dead(false)
@@ -49,6 +52,7 @@ struct session_slot
     peer_context<Policy> record;
     channel_graveyard<channel_type, 1> retired;
     reconnect<Policy, Transport, Clock> driver;
+    pending_ops posts;
     std::unique_ptr<channel_type> parked;
     std::optional<peer_session<Policy>> session;
     bool dead;

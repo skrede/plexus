@@ -20,6 +20,7 @@
 #include "plexus/io/detail/peer_session_build.h"
 #include "plexus/io/detail/peer_session_retire.h"
 #include "plexus/io/detail/peer_session_rebuild.h"
+#include "plexus/io/detail/peer_session_reclaim.h"
 
 #include "plexus/log/logger.h"
 
@@ -46,6 +47,7 @@ public:
     peer_session_registry(Transport &transport, session_build_context<Policy> &build)
             : m_transport(transport)
             , m_next_inbound(1)
+            , m_reclaims()
             , m_build(build)
     {
     }
@@ -145,7 +147,8 @@ public:
 
     std::uint32_t attempt_count(const node_id &id) const
     {
-        return m_slots.at(id)->driver.attempt_count();
+        auto it = m_slots.find(id);
+        return it == m_slots.end() ? 0 : it->second->driver.attempt_count();
     }
 
     bool is_dead(const node_id &id) const
@@ -181,6 +184,7 @@ private:
 
     Transport &m_transport;
     std::uint64_t m_next_inbound;
+    detail::pending_ops m_reclaims;
     session_build_context<Policy> &m_build;
     std::map<node_id, std::unique_ptr<slot_block>> m_slots;
 
@@ -216,6 +220,7 @@ private:
     friend void detail::close_slots(R &, detail::pending_ops &);
     template<typename R>
     friend void detail::hang_up_slot(R &, const node_id &);
+    friend struct detail::slot_reclaim;
 };
 
 }

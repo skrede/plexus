@@ -16,7 +16,7 @@ TEST_CASE("node_close a closed node's sessions drop at its peer and its slots ho
     net.ex.drain();
     REQUIRE(net.b_sessions() == 0);
     REQUIRE_FALSE(net.a.router().has_session(net.dialed_slot));
-    REQUIRE(net.live_channels() == 1);
+    REQUIRE(net.live_channels() == 0);
 }
 
 TEST_CASE("node_close a closed node arms no redial however long its executor runs", "[node][node_close]")

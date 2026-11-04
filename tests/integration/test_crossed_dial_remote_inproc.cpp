@@ -34,7 +34,7 @@ node_id dialed_on_b(const crossed_net &net, crossing order)
 bool closed(engine &e, const node_id &slot)
 {
     auto *s = e.session_for(slot);
-    return s != nullptr && s->pending().closing();
+    return s == nullptr || s->pending().closing();
 }
 
 void publish(crossed_net &net, node_side &side, const std::string &payload)

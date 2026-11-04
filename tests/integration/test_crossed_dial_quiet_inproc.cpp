@@ -58,7 +58,7 @@ bool open_and_idle(engine &e, const node_id &loser)
 bool closed(engine &e, const node_id &loser)
 {
     auto *s = e.session_for(loser);
-    return s != nullptr && s->pending().closing();
+    return s == nullptr || s->pending().closing();
 }
 
 bool no_teardown_edge(const recording_observer::counts &c)

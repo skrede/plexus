@@ -31,7 +31,7 @@ TEST_CASE("hang_up a hung-up endpoint's session drops at its peer and is never r
     net.ex.drain();
     REQUIRE(net.b_sessions() == 0);
     REQUIRE_FALSE(net.a.router().has_session(net.dialed_slot));
-    REQUIRE(net.live_channels() == 1);
+    REQUIRE(net.live_channels() == 0);
 
     const std::uint64_t before = net.mint_key();
     net.run_for(k_backoff * 20);
@@ -74,5 +74,5 @@ TEST_CASE("hang_up of a dial still in flight retires its late channel and builds
     net.ex.drain();
     REQUIRE_FALSE(net.a.router().has_session(net.dialed_slot));
     REQUIRE(net.b_sessions() == 0);
-    REQUIRE(net.live_channels() == 1);
+    REQUIRE(net.live_channels() == 0);
 }

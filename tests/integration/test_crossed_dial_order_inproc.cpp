@@ -17,7 +17,7 @@ constexpr auto k_past_ceiling = k_window + std::chrono::milliseconds(2000) + k_s
 bool closed(engine &e, const node_id &slot)
 {
     auto *s = e.session_for(slot);
-    return s != nullptr && s->pending().closing();
+    return s == nullptr || s->pending().closing();
 }
 
 void dial_incumbent_loses(crossed_net &net)

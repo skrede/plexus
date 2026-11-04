@@ -28,6 +28,12 @@ void release_session(Registry &reg, Build &build, Slot &slot)
     slot.session->pending().on_settled([&reg, &build, &slot] { post_resume(reg, build, slot); });
 }
 
+template<typename Slot>
+bool holds_nothing(Slot &slot)
+{
+    return slot.retired.empty() && !slot.parked && !slot.session && !slot.record.channel && slot.driver.pending().settled();
+}
+
 // A denied or closing slot builds nothing: its session goes first, then its channel and a parked one leave through the
 // cell one at a time, each erase posting the next step.
 template<typename Registry, typename Build, typename Slot>
@@ -67,7 +73,8 @@ void hang_up_slot(Registry &reg, const node_id &id)
 }
 
 // Every slot's redial is denied before any session is torn down, so no teardown can arm a redial. Each slot is then
-// one operation of the owner until it holds nothing and its driver has settled.
+// one operation of the owner until it holds nothing and its driver has settled; a slot already reclaimed waits as one of
+// the registry's posted erases instead.
 template<typename Registry>
 void close_slots(Registry &reg, pending_ops &owner)
 {
@@ -75,11 +82,15 @@ void close_slots(Registry &reg, pending_ops &owner)
         slot->driver.close();
     for(auto &[id, slot] : reg.m_slots)
     {
+        if(slot->posts.closing() && holds_nothing(*slot))
+            continue;
         owner.begin();
         slot->on_emptied_cb = [&owner] { owner.end(); };
         slot->driver.pending().on_settled([&reg, &build = reg.m_build, &s = *slot] { post_resume(reg, build, s); });
         withdraw_slot(reg, reg.m_build, *slot);
     }
+    hold_until_settled(owner, reg.m_reclaims);
+    reg.m_reclaims.close();
 }
 
 }

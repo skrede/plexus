@@ -2076,6 +2076,17 @@ target_include_directories(test_dialed_identity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_dialed_identity TEST_PREFIX "integration.")
 
+# An accepted or unclaimed slot is erased once it drains.
+add_executable(test_slot_reclaim_inproc test_slot_reclaim_inproc.cpp)
+target_link_libraries(test_slot_reclaim_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_slot_reclaim_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_slot_reclaim_inproc TEST_PREFIX "integration.")
+
 # Subscribes and declarations on a link that reorders and loses frames, recovered by the bounded re-send.
 add_executable(test_subscribe_retry_inproc test_subscribe_retry_inproc.cpp)
 target_link_libraries(test_subscribe_retry_inproc PRIVATE

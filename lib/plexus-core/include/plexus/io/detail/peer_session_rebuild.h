@@ -7,6 +7,7 @@
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
 #include "plexus/io/detail/peer_session_claim.h"
+#include "plexus/io/detail/peer_session_reclaim.h"
 
 #include "plexus/node_id.h"
 
@@ -40,7 +41,13 @@ void resume_parked(Registry &reg, Build &build, Slot &slot)
 template<typename Registry, typename Build, typename Slot>
 void post_resume(Registry &reg, Build &build, Slot &slot)
 {
-    Slot::policy_type::post(build.executor, [&reg, &build, &slot] { resume_parked(reg, build, slot); });
+    slot.posts.begin();
+    Slot::policy_type::post(build.executor,
+                            [&reg, &build, &slot]
+                            {
+                                slot.posts.end();
+                                resume_parked(reg, build, slot);
+                            });
 }
 
 // A slot rebuilds in place only once its old session's waits have completed and its last retired channel has been
@@ -80,6 +87,7 @@ void rebuild_session(Registry &reg, Build &build, Slot &slot, std::unique_ptr<ty
     slot.record.channel = std::move(channel);
     slot.driver.mark_dial_settled();
     emplace_session(reg, build, slot, inbound);
+    slot.session->pending().on_settled([&reg, &build, &slot] { post_resume(reg, build, slot); });
 }
 
 template<typename Registry, typename Slot>
@@ -104,7 +112,7 @@ template<typename Registry>
 void retire_unclaimed(Registry &reg, std::unique_ptr<typename Registry::channel_type> channel)
 {
     auto &slot = emplace_inbound_slot(reg);
-    slot.driver.deny_redial();
+    detail::slot_reclaim::arm(reg, slot);
     rebuild_session(reg, reg.m_build, slot, std::move(channel), false);
 }
 
@@ -124,6 +132,7 @@ node_id accept_into_slot(Registry &reg, std::unique_ptr<typename Registry::chann
     if constexpr(!std::is_null_pointer_v<std::decay_t<PreBuild>>)
         pre_build(*channel, slot.record.peer_id);
     detail::build_session_into(reg, slot, std::move(channel), true);
+    detail::slot_reclaim::arm(reg, slot);
     return slot.record.peer_id;
 }
 
