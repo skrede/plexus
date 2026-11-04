@@ -8,6 +8,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_backoff.h"
 
 #include "plexus/io/detail/pending_ops.h"
 
@@ -15,23 +16,9 @@
 #include <random>
 #include <cstdint>
 #include <utility>
-#include <algorithm>
 #include <system_error>
 
 namespace plexus::io {
-
-// Full-jitter exponential backoff: delay = uniform(0, min(max_delay, min_delay * 2^attempt)).
-// The shift is capped at 20 so the 64-bit scale cannot overflow.
-template<typename Rng>
-std::chrono::milliseconds compute_backoff(const reconnect_config &cfg, std::uint32_t attempt, Rng &rng)
-{
-    const auto shift = std::min(attempt, std::uint32_t{20});
-    auto ceiling     = cfg.min_delay * (std::uint64_t{1} << shift);
-    if(ceiling > cfg.max_delay)
-        ceiling = cfg.max_delay;
-    std::uniform_int_distribution<std::int64_t> dist{0, static_cast<std::int64_t>(ceiling.count())};
-    return std::chrono::milliseconds{dist(rng)};
-}
 
 template<typename Policy, typename Transport, typename Clock = std::chrono::steady_clock>
     requires plexus::Policy<Policy>
@@ -162,7 +149,7 @@ private:
 
     bool surrendered() const noexcept
     {
-        return (m_cfg.max_attempts.has_value() && m_attempt >= *m_cfg.max_attempts) || (m_cfg.max_elapsed.has_value() && elapsed() >= *m_cfg.max_elapsed);
+        return surrender_reached(m_cfg, m_attempt, elapsed());
     }
 
     std::chrono::milliseconds elapsed() const noexcept

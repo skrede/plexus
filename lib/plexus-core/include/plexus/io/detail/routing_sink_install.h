@@ -11,12 +11,12 @@
 #include "plexus/io/peer_liveliness_event.h"
 
 #include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/routing_tick.h"
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_lifecycle.h"
 #include "plexus/io/detail/routing_relay_emit.h"
 #include "plexus/io/detail/routing_forward_rpc.h"
-#include "plexus/io/detail/routing_graph_change.h"
 
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"
@@ -158,26 +158,7 @@ void install_routing_sinks(Engine &e)
                                 { return detail::forward_rpc(e, origin, destination, hop, frame); });
     e.m_messages.set_on_data_stamp([&e](const node_id &ep, std::uint64_t topic_hash) { e.m_monitor.stamp_data(ep, topic_hash); });
     install_heartbeat_hooks(e);
-    // The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
-    // the configured interval has elapsed (the default equals the tick cadence, so emission is
-    // per-tick and wire-identical) and, on the same cadence, re-assert every held relay report so a
-    // still-live-but-idle reported origin refreshes downstream before it ages out at awareness_ttl
-    // (a relay-only no-op on a non-relay node); then sweep the awareness table for peers past their
-    // discovery TTL and settle the fused verdicts so a TTL expiry lands in the same tick's evaluation.
-    e.m_monitor.on_tick_action(
-            [&e, last_emit_ns = std::uint64_t{0}]() mutable
-            {
-                const std::uint64_t now      = e.now_for_aging();
-                const std::uint64_t interval = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(e.m_liveliness.heartbeat_interval).count());
-                if(now - last_emit_ns >= interval)
-                {
-                    e.m_registry.for_each_connected([](const node_id &, session_type &s) { s.emit_heartbeat(); });
-                    detail::relay_reassert(e);
-                    last_emit_ns = now;
-                }
-                detail::sweep_aged_awareness(e);
-                e.m_peer_liveliness.evaluate(now);
-            });
+    e.m_monitor.on_tick_action([&e, last_emit_ns = std::uint64_t{0}]() mutable { detail::engine_tick(e, last_emit_ns); });
     e.m_monitor.start();
 }
 

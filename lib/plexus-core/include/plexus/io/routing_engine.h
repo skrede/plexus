@@ -7,7 +7,6 @@
 #include "plexus/io/locality.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/node_name.h"
-#include "plexus/io/endpoint_id.h"
 #include "plexus/io/known_peers.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/capture_policy.h"
@@ -35,7 +34,9 @@
 #include "plexus/graph/vector_graph_change_log.h"
 
 #include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/routing_tick.h"
 #include "plexus/io/detail/routing_close.h"
+#include "plexus/io/detail/routing_reach.h"
 #include "plexus/io/detail/routing_sinks.h"
 #include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/routing_reports.h"
@@ -209,12 +210,7 @@ public:
     // reach uses. The real peer id arrives in the handshake; the slot stays under the provisional id.
     void dial(const endpoint &ep)
     {
-        const auto id = endpoint_id(ep);
-        if(m_registry.is_connected(id))
-            return;
-        if(!m_registry.ensure_slot(id, ep, node_name_of(id)))
-            return;
-        m_registry.driver_for(id).start();
+        detail::dial_endpoint(*this, ep);
     }
 
     void hang_up(const endpoint &ep)
@@ -286,14 +282,7 @@ public:
 
     void reach(const node_id &id)
     {
-        if(m_registry.is_connected(id) || detail::any_session_for(*this, id))
-            return;
-        auto ep = m_known_peers.dial_target(id);
-        if(!ep)
-            return;
-        if(!m_registry.ensure_slot(id, *ep, node_name_of(id)))
-            return;
-        m_registry.driver_for(id).start();
+        detail::reach_peer(*this, id);
     }
 
     void subscribe(const node_id &id, std::string_view fqn, locality reach_mask = locality::any, reliability_requirement require = reliability_requirement::any)
@@ -548,6 +537,15 @@ private:
 
     template<typename E>
     friend void detail::install_heartbeat_hooks(E &);
+
+    template<typename E>
+    friend void detail::engine_tick(E &, std::uint64_t &);
+
+    template<typename E>
+    friend void detail::reach_peer(E &, const node_id &);
+
+    template<typename E>
+    friend void detail::dial_endpoint(E &, const endpoint &);
 
     template<typename E>
     friend auto detail::make_drop_sink(E &);

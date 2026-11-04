@@ -26,6 +26,7 @@
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/session_hooks.h"
 #include "plexus/io/detail/peer_session_retry.h"
+#include "plexus/io/detail/peer_session_start.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_consumers.h"

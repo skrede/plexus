@@ -27,6 +27,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <optional>
@@ -151,6 +152,11 @@ public:
     {
         auto it = m_slots.find(id);
         return it != m_slots.end() && it->second->dead;
+    }
+
+    std::size_t slot_count() const noexcept
+    {
+        return m_slots.size();
     }
 
     void notify_dial_failed(const endpoint &ep)

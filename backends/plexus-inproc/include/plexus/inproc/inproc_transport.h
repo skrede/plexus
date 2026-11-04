@@ -14,6 +14,7 @@
 
 #include <chrono>
 #include <memory>
+#include <cstddef>
 #include <utility>
 
 namespace plexus::inproc {
@@ -76,6 +77,11 @@ public:
     void close()
     {
         m_bus.deregister_listener(m_listen_ep);
+    }
+
+    std::size_t retiring_size() const noexcept
+    {
+        return m_retiring.size();
     }
 
 private:
