@@ -2037,6 +2037,17 @@ target_include_directories(test_session_identity PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_session_identity TEST_PREFIX "integration.")
 
+# A callback that tears the session down stops the rest of its consumer.
+add_executable(test_session_teardown_in_callback test_session_teardown_in_callback.cpp)
+target_link_libraries(test_session_teardown_in_callback PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_session_teardown_in_callback PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_session_teardown_in_callback TEST_PREFIX "integration.")
+
 # Every inbound decode failure counted and its warning rate-limited, with an alloc gate over the malformed path.
 add_executable(test_session_malformed_logging test_session_malformed_logging.cpp test_session_malformed_clock.cpp test_session_malformed_sites.cpp)
 target_link_libraries(test_session_malformed_logging PRIVATE
