@@ -549,8 +549,8 @@ private:
         detail::provision_same_host_ring(*this, fqn, subscriber_effective_bytes(qos), std::nullopt);
         m_engine.note_local_topic(fqn, type_name, type_id, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_registered, wire::fqn_topic_hash(fqn), type_id});
-        for(const auto &peer : m_known_peers)
-            m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id, type_name);
+        detail::for_each_demand_target(*this, [&](const plexus::node_id &peer)
+                                       { m_engine.subscribe(peer, fqn, qos, io::locality::any, io::reliability_requirement::any, type_id, type_name); });
         return rid;
     }
 
@@ -567,8 +567,9 @@ private:
         self_detach(fqn);
         m_engine.forget_local_topic(fqn, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
-        for(const auto &peer : m_known_peers)
-            m_engine.unsubscribe(peer, fqn);
+        detail::for_each_demand_target(*this, [&](const plexus::node_id &peer) { m_engine.unsubscribe(peer, fqn); });
+        // A peer whose session is down is no target, and its remembered demand would replay on its reconnect.
+        m_engine.messages().forget_remembered_demand(fqn);
     }
 
     // The declaration persists for the node's life (stable identity for subscriber correlation);
@@ -750,7 +751,6 @@ private:
     // Declared BEFORE the engine (which captures &m_peer_watch and a `this`-bound route) so the
     // engine is destroyed FIRST, leaving no dangling observer/route reference during teardown.
     peer_watch m_peer_watch{*this};
-    std::vector<plexus::node_id> m_known_peers;
     detail::subscription_table m_subscriptions;
 
     std::vector<std::string> m_served_fqns;
@@ -778,8 +778,8 @@ private:
 
     engine_type m_engine;
 
-    template<typename N>
-    friend void detail::note_known_peer(N &, const plexus::node_id &);
+    template<typename N, typename F>
+    friend void detail::for_each_demand_target(N &, F &&);
     template<typename N>
     friend void detail::fan_demands_to(N &, const plexus::node_id &);
     template<typename N>

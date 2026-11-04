@@ -7,23 +7,36 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/locality.h"
+#include "plexus/io/route_candidate.h"
 #include "plexus/io/reliability_requirement.h"
 
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
 
 #include <string>
-#include <vector>
 #include <algorithm>
 
 namespace plexus::detail {
 
-// Insertion order is awareness order, which also feeds caller target resolution.
-template<typename Node>
-void note_known_peer(Node &n, const plexus::node_id &id)
+// Direct awareness entries in the awareness table's order, then the keys of complete sessions that have no direct entry,
+// in the session table's order. Caller target resolution takes the first of these with a complete session. A
+// transitively reported origin is never a target.
+template<typename Node, typename Fn>
+void for_each_demand_target(Node &n, Fn &&fn)
 {
-    if(std::find(n.m_known_peers.begin(), n.m_known_peers.end(), id) == n.m_known_peers.end())
-        n.m_known_peers.push_back(id);
+    const auto &known = n.m_engine.known();
+    known.for_each_candidate(
+            [&](const plexus::node_id &id, const auto &reach, const auto &)
+            {
+                if(!reach.via)
+                    fn(id);
+            });
+    n.m_engine.registry().for_each_connected(
+            [&](const plexus::node_id &id, const auto &)
+            {
+                if(std::ranges::none_of(known.candidates(id), [](const io::route_candidate &c) { return c.is_direct(); }))
+                    fn(id);
+            });
 }
 
 // Idempotent per (peer, fqn).
@@ -56,13 +69,11 @@ void note_from_card(Node &n, const discovery::service_info &peer)
     if(const auto ep = plexus::detail::first_port_endpoint(peer.metadata, host))
     {
         n.m_engine.note_peer(*peer_id, *ep);
-        note_known_peer(n, *peer_id);
         fan_demands_to(n, *peer_id);
     }
 }
 
-// A goodbye removes awareness only (engine forget + local mirror erase), mirroring
-// note_from_card's id/self guards; an unknown or self id is a harmless no-op.
+// A goodbye removes awareness only, mirroring note_from_card's id/self guards; an unknown or self id is a harmless no-op.
 template<typename Node>
 void forget_from_card(Node &n, const discovery::service_info &peer)
 {
@@ -70,7 +81,6 @@ void forget_from_card(Node &n, const discovery::service_info &peer)
     if(!peer_id || *peer_id == n.m_id)
         return;
     n.m_engine.forget(*peer_id);
-    std::erase(n.m_known_peers, *peer_id);
 }
 
 }

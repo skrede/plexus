@@ -69,7 +69,6 @@ struct peer_watch : io::observer
 
     void on_peer_ready(const plexus::node_id &id, std::string_view, io::peer_kind) override
     {
-        note_known_peer(owner, id);
         fan_demands_to(owner, id);
     }
 

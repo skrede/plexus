@@ -43,6 +43,19 @@ void forget_remote_topic(Forwarder &f, const std::string &node_name, std::string
 }
 
 template<typename Forwarder>
+void forget_remote_topic_everywhere(Forwarder &f, std::string_view fqn)
+{
+    for(auto it = f.m_remote_topics.begin(); it != f.m_remote_topics.end();)
+    {
+        std::erase_if(it->second, [&](const remembered_demand &d) { return d.fqn == fqn; });
+        if(it->second.empty())
+            it = f.m_remote_topics.erase(it);
+        else
+            ++it;
+    }
+}
+
+template<typename Forwarder>
 const std::vector<remembered_demand> &remembered_topics(const Forwarder &f, const std::string &node_name)
 {
     auto it = f.m_remote_topics.find(node_name);

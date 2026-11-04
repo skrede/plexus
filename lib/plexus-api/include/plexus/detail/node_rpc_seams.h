@@ -3,7 +3,9 @@
 
 #include "plexus/detail/fail_closed.h"
 #include "plexus/detail/call_origination.h"
+#include "plexus/detail/node_discovery_glue.h"
 
+#include "plexus/node_id.h"
 #include "plexus/publisher_gid.h"
 
 #include "plexus/io/endpoint_seam.h"
@@ -20,8 +22,8 @@
 
 namespace plexus::detail {
 
-// Routes to the first connection-order peer with a complete session and issues the plain direct
-// call. The consumer has no served-fqn signal to pre-decide direct-vs-forward, so resolution is
+// Routes to the first demand target with a complete session and issues the plain direct call. The
+// consumer has no served-fqn signal to pre-decide direct-vs-forward, so resolution is
 // EX-POST: only when that direct answer is rpc_status::no_handler does the wrapper resolve a
 // reported via-relay origin and re-issue the request ONCE as a forwarded call. With NO connected
 // provider the completion is POSTED with an absent status (the out-of-band no_provider verdict,
@@ -31,13 +33,18 @@ template<typename Node, typename OnReply>
 void call_seam(Node &n, std::string_view fqn, std::span<const std::byte> param, OnReply on_reply, std::optional<std::chrono::nanoseconds> deadline)
 {
     const bool with_fallback = n.m_engine.route_opts().usage != io::route_usage::never && detail::first_via_relay_origin(n.m_engine, n.m_id).has_value();
-    for(const auto &peer : n.m_known_peers)
+    std::optional<plexus::node_id> target;
+    detail::for_each_demand_target(n,
+                                   [&](const plexus::node_id &peer)
+                                   {
+                                       const auto *session = n.m_engine.registry().session_for(peer);
+                                       if(!target && session != nullptr && session->is_complete())
+                                           target = peer;
+                                   });
+    if(target)
     {
-        auto *session = n.m_engine.registry().session_for(peer);
-        if(session == nullptr || !session->is_complete())
-            continue;
-        const std::optional<publisher_gid> provider{publisher_gid{peer, 0}};
-        detail::issue_direct_call(n.m_engine, n.m_id, *session, fqn, param, std::move(on_reply), provider, deadline, with_fallback);
+        const std::optional<publisher_gid> provider{publisher_gid{*target, 0}};
+        detail::issue_direct_call(n.m_engine, n.m_id, *n.m_engine.registry().session_for(*target), fqn, param, std::move(on_reply), provider, deadline, with_fallback);
         return;
     }
     Node::policy_type::post(n.m_executor, [on_reply = std::move(on_reply)]() mutable { on_reply(std::nullopt, {}, std::nullopt); });

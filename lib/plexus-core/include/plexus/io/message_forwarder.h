@@ -138,6 +138,11 @@ public:
         detail::forget_remote_topic(*this, node_name, fqn);
     }
 
+    void forget_remembered_demand(std::string_view fqn)
+    {
+        detail::forget_remote_topic_everywhere(*this, fqn);
+    }
+
     void declare(std::string_view fqn, topic_qos qos, std::optional<std::uint64_t> producer_type_id = std::nullopt, bool emit_source_identity = false,
                  std::string_view producer_type_name = {}, std::uint64_t schema_hint = 0)
     {
@@ -584,6 +589,8 @@ private:
     friend void detail::record_remote_topic(F &, const std::string &, std::string_view, const subscriber_qos &, std::optional<std::uint64_t>, std::string_view);
     template<typename F>
     friend void detail::forget_remote_topic(F &, const std::string &, std::string_view);
+    template<typename F>
+    friend void detail::forget_remote_topic_everywhere(F &, std::string_view);
     template<typename F>
     friend const std::vector<remembered_demand> &detail::remembered_topics(const F &, const std::string &);
     template<typename F, typename P>

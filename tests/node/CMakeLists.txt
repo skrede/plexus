@@ -99,6 +99,15 @@ target_link_libraries(test_node_discovery_aging PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_discovery_aging TEST_PREFIX "node.")
 
+# The node's demand targets follow the engine's awareness and sessions.
+add_executable(test_known_peer_pruning test_known_peer_pruning.cpp)
+target_link_libraries(test_known_peer_pruning PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_known_peer_pruning TEST_PREFIX "node.")
+
 # The pub/sub endpoint handles: move-only RAII semantics + ctor-canonical registration,
 # and the end-to-end bytes family including the standing-demand fan.
 add_executable(test_handles test_handles.cpp test_handles_retire.cpp)
