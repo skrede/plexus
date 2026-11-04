@@ -40,13 +40,8 @@ void sweep_stale_sessions(Registry &reg, std::chrono::nanoseconds window)
         reg.tear_down_stale(id, disconnect_cause::heartbeat_timeout);
 }
 
-// The single per-tick action (NOT a second timer): emit a heartbeat to every connected peer when
-// the configured interval has elapsed (the default equals the tick cadence, so emission is
-// per-tick and wire-identical) and, on the same cadence, re-assert every held relay report so a
-// still-live-but-idle reported origin refreshes downstream before it ages out at awareness_ttl
-// (a relay-only no-op on a non-relay node); then sweep the awareness table for peers past their
-// discovery TTL and tear down the sessions silent past the miss window, and settle the fused
-// verdicts so a TTL expiry or a stale teardown lands in the same tick's evaluation.
+// The single per-tick action, not a second timer. The verdicts settle last so a TTL expiry or a stale teardown
+// lands in the same tick's evaluation.
 template<typename Engine>
 void engine_tick(Engine &e, std::uint64_t &last_emit_ns)
 {

@@ -2,8 +2,8 @@
 #include "test_session_stale_common.h"
 
 #include "plexus/io/observer.h"
-#include "plexus/io/message_info.h"
 #include "plexus/io/endpoint_id.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/peer_liveliness_event.h"
 

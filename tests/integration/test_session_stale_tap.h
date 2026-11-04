@@ -3,8 +3,8 @@
 
 #include "test_routing_engine_inproc_common.h"
 
-#include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/object_carrier.h"
 
 #include "plexus/wire/frame.h"

@@ -1,5 +1,3 @@
-// Two sessions of one kind for one proven identity keep the newer; the older closes quietly and its entries leave.
-
 #include "test_crossed_dial_common.h"
 
 #include "plexus/io/endpoint.h"
@@ -8,6 +6,7 @@
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/reconnect_config.h"
+
 #include "plexus/io/detail/peer_session_complete.h"
 
 #include "plexus/log/logger.h"

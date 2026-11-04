@@ -6,6 +6,7 @@
 #include "plexus/io/observer.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/handshake_protocol.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include "plexus/log/logger.h"
