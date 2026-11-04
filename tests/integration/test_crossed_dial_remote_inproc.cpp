@@ -26,11 +26,6 @@ node_id dialed_on_a(const crossed_net &net, crossing order)
     return order == crossing::incumbent_loses ? endpoint_id(net.ep_b) : net.id_b;
 }
 
-node_id dialed_on_b(const crossed_net &net, crossing order)
-{
-    return order == crossing::newcomer_loses ? endpoint_id(net.ep_a) : net.id_a;
-}
-
 bool closed(engine &e, const node_id &slot)
 {
     auto *s = e.session_for(slot);
@@ -62,15 +57,19 @@ TEST_CASE("crossed dial: neither end redials after the pair resolves", "[integra
         crossed_net net;
         net.cross(order);
         const std::uint32_t dialing_a = net.a.e.attempt_count(dialed_on_a(net, order));
-        const std::uint32_t dialing_b = net.b.e.attempt_count(dialed_on_b(net, order));
+        // b keeps its accepted session in every order, so its dialed slot loses and leaves service under the second
+        // provisional key.
+        const std::uint32_t dialing_b = net.b.e.attempt_count(inbound_slot(2));
 
         net.advance_by(k_past_ceiling);
         CHECK(net.a.e.attempt_count(dialed_on_a(net, order)) == dialing_a);
-        CHECK(net.b.e.attempt_count(dialed_on_b(net, order)) == dialing_b);
+        CHECK(net.b.e.attempt_count(inbound_slot(2)) == dialing_b);
         CHECK(complete_sessions_for(net.a.e, net.id_b) == 1);
         CHECK(complete_sessions_for(net.b.e, net.id_a) == 1);
         CHECK(!net.a.e.has_session(inbound_slot(2)));
         CHECK(!net.b.e.has_session(inbound_slot(2)));
+        CHECK(net.a.e.registry().slot_count() == 1);
+        CHECK(net.b.e.registry().slot_count() == 1);
         CHECK(net.a.edges.for_peer(*kept_slot(net.a.e, net.id_b)).disconnected == 0);
         CHECK(net.b.edges.for_peer(*kept_slot(net.b.e, net.id_a)).disconnected == 0);
     }
@@ -87,7 +86,7 @@ TEST_CASE("crossed dial: a later reach for the peer does not dial again", "[inte
     net.advance_by(k_past_ceiling);
     net.b.e.reach(net.id_a);
     net.drive();
-    CHECK(!net.a.e.has_session(inbound_slot(2)));
+    CHECK(net.a.e.registry().slot_count() == 1);
     CHECK(resolution_lines(net.b.log).size() == 1);
     CHECK(net.b.e.registry().driver_for(net.id_a).redial_denied());
     CHECK(complete_sessions_for(net.a.e, net.id_b) == 1);
@@ -118,15 +117,16 @@ TEST_CASE("crossed dial: a drop on a demoted loser closes it at once without a r
     manual_clock::reset();
     crossed_net net;
     net.cross(crossing::incumbent_loses);
-    const std::uint32_t dialing_b = net.b.e.attempt_count(net.id_a);
-    REQUIRE(!closed(net.b.e, net.id_a));
+    const std::uint32_t dialing_b = net.b.e.attempt_count(inbound_slot(2));
+    REQUIRE(!closed(net.b.e, inbound_slot(2)));
+    REQUIRE(net.b.e.registry().driver_for(inbound_slot(2)).redial_denied());
 
-    net.a.e.session_for(net.id_b)->tear_down();
+    net.a.e.session_for(inbound_slot(2))->tear_down();
     net.drive();
-    CHECK(closed(net.b.e, net.id_a));
-    CHECK(net.b.e.registry().driver_for(net.id_a).redial_denied());
+    CHECK(closed(net.b.e, inbound_slot(2)));
+    CHECK(net.b.e.registry().slot_count() == 1);
     net.advance_by(k_past_ceiling);
-    CHECK(net.b.e.attempt_count(net.id_a) == dialing_b);
+    CHECK(net.b.e.attempt_count(inbound_slot(2)) == dialing_b);
     CHECK(net.b.edges.for_peer(net.id_a).disconnected == 0);
     CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
     CHECK(complete_sessions_for(net.a.e, net.id_b) == 1);

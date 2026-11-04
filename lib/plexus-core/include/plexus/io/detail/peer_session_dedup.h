@@ -1,6 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_DEDUP_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_DEDUP_H
 
+#include "plexus/io/node_name.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/remembered_demand.h"
 #include "plexus/io/handshake_protocol.h"
@@ -43,55 +44,54 @@ void fold_demand(Build &build, const std::string &from, const std::string &to)
         build.messages.remember_demand(to, d.fqn, d.qos, d.type_id, d.type_name);
 }
 
-template<typename Registry, typename Build, typename Session>
-void supersede(Registry &reg, Build &build, const node_id &id, Session &incumbent, const std::string &survivor_name)
+// The loser is retired under its own label and leaves service under a fresh one before the survivor reports, so the
+// survivor writes its entries after the loser's are gone, and the loser's delayed teardown cannot reach a shared name.
+template<typename Registry, typename Build, typename Slot>
+void supersede(Registry &reg, Build &build, Slot &incumbent, const std::string &survivor_name)
 {
-    detail::fold_demand(build, incumbent.msg_peer().node_name, survivor_name);
-    if(session_kind(incumbent) == peer_kind::dialed)
-        reg.deny_redial(id);
+    typename Registry::session_type &loser = *incumbent.session;
+    detail::fold_demand(build, loser.msg_peer().node_name, survivor_name);
     if(build.on_session_superseded)
-        build.on_session_superseded(id, incumbent.msg_peer().node_name);
-    detail::demote_loser(incumbent);
+        build.on_session_superseded(incumbent.record.peer_id, loser.msg_peer().node_name);
+    detail::demote_loser(loser);
+    slot_filing::leave_service(reg, incumbent);
 }
 
-// An accepted session takes the identity its peer proved as its key and label, unless another session proves it too;
-// such a pair is left to the crossed-pair resolution below.
+// An accepted session takes the identity its peer proved as its label, and its key once no slot in service holds it,
+// unless another session proves the identity too; such a pair is left to the crossed-pair resolution below.
 template<typename Registry, typename Slot>
 bool file_if_uncontested(Registry &reg, Slot &slot, const node_id &proven, peer_kind kind)
 {
     if(kind != peer_kind::accepted || !slot_filing::uncontested(reg, slot, proven))
         return false;
-    slot_filing::relabel(reg, slot, proven);
-    slot_filing::file_under_identity(reg, slot, proven);
+    slot_filing::take_identity(reg, slot, proven);
     return true;
 }
 
 // A crossed pair is two channels for one proven identity, so the session that completes second asks the registry
-// for the other. Two sessions of the same kind are not a crossed pair and are left alone.
+// for the other. Two sessions of the same kind are not a crossed pair and are left alone. A dialed session is never
+// relabeled: its key is what hang_up and the expected identity read.
 template<typename Registry, typename Build, typename Slot>
 bool admit_complete(Registry &reg, Build &build, Slot &slot, const node_id &proven, peer_kind kind)
 {
     if(detail::file_if_uncontested(reg, slot, proven, kind))
         return true;
-    typename Registry::session_type *incumbent = nullptr;
-    node_id incumbent_id{};
-    reg.for_each_connected(
-            [&](const node_id &id, typename Registry::session_type &s)
-            {
-                if(&s == &*slot.session || s.peer_identity() != proven || session_kind(s) == kind)
-                    return;
-                incumbent    = &s;
-                incumbent_id = id;
-            });
+    Slot *incumbent = slot_filing::crossed_incumbent(reg, slot, proven, kind);
     if(incumbent == nullptr)
         return true;
     const peer_kind kept = kept_kind(build.fsm_cfg.self_id, proven);
     warn_resolution(build.logger, proven, kept);
-    if(kept == kind)
-        detail::supersede(reg, build, incumbent_id, *incumbent, slot.record.node_name);
-    else if(kind == peer_kind::dialed)
-        slot.driver.deny_redial();
-    return kept == kind;
+    if(kept != kind)
+    {
+        if(kind == peer_kind::dialed)
+            slot_filing::leave_service(reg, slot);
+        return false;
+    }
+    const bool accepted = kind == peer_kind::accepted;
+    detail::supersede(reg, build, *incumbent, accepted ? node_name_of(proven) : slot.record.node_name);
+    if(accepted)
+        slot_filing::take_identity(reg, slot, proven);
+    return true;
 }
 
 template<typename Registry, typename Slot>

@@ -30,6 +30,7 @@ void register_endpoint(Engine &e, const node_id &id, const std::string &node_nam
 // the disconnected edge, so a dead/disconnected feed is NOT guaranteed to follow. Mapping rejected
 // to session-down settles the peer as not-alive rather than leaving a stuck session state. An
 // accepted session refused before it proved an identity names node_id{}, which no table tracks.
+// A down edge leaves the tables alone while another complete session for the identity survives.
 template<typename Engine>
 void feed_liveliness_session(Engine &e, const lifecycle_event &ev)
 {
@@ -45,11 +46,15 @@ void feed_liveliness_session(Engine &e, const lifecycle_event &ev)
             return e.m_peer_liveliness.note_session_up(ev.id);
         case lifecycle_edge::disconnected:
         case lifecycle_edge::dead:
+            if(any_session_for(e, ev.id))
+                return;
             e.m_monitor.deregister_endpoint(ev.id);
             e.m_coordinator.on_peer_dead(ev.node_name);
             return e.m_peer_liveliness.note_session_down(ev.id, e.now_for_aging());
         case lifecycle_edge::rejected:
-            return e.m_peer_liveliness.note_session_down(ev.id, e.now_for_aging());
+            if(!any_session_for(e, ev.id))
+                e.m_peer_liveliness.note_session_down(ev.id, e.now_for_aging());
+            return;
     }
 }
 
@@ -62,9 +67,9 @@ void forget_topics_on_teardown(Engine &e, const lifecycle_event &ev)
     if(ev.edge != lifecycle_edge::disconnected && ev.edge != lifecycle_edge::dead)
         return;
     typename Engine::session_type *torn = e.m_registry.session_for(ev.id);
-    if(torn != nullptr && !any_session_for(e, torn->peer_identity()))
+    const node_id who                   = torn != nullptr && torn->peer_identity() != node_id{} ? torn->peer_identity() : ev.id;
+    if(!any_session_for(e, who))
     {
-        const node_id who = torn->peer_identity();
         detail::relay_withdraw(e, who);
         e.m_emitter.clear_decline(who);
         mark_reports_via_unreachable(e, who);
@@ -80,12 +85,12 @@ inline bool is_session_live_edge(lifecycle_edge edge) noexcept
 }
 
 // A direct session to a currently-reported (relayed) origin just went live: retire its relayed
-// delivery so the dual-homed consumer stops double-delivering. The lifecycle event carries the slot's
-// provisional endpoint id, so the proven identity is read off the session the way relay_on_ready does.
+// delivery so the dual-homed consumer stops double-delivering. A dial by endpoint reports under the
+// endpoint's id, so the proven identity is read off the session the way relay_on_ready does.
 template<typename Engine>
 void arm_relayed_suppression(Engine &e, const node_id &slot_id)
 {
-    typename Engine::session_type *s = e.m_registry.session_for(slot_id);
+    typename Engine::session_type *s = detail::live_session_for(e, slot_id);
     if(s == nullptr)
         return;
     const node_id proven = s->peer_identity();

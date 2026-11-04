@@ -2197,4 +2197,7 @@ target_link_libraries(test_proven_identity_inproc PRIVATE
 target_include_directories(test_proven_identity_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
+target_sources(test_proven_identity_inproc PRIVATE
+    test_crossed_dial_common.cpp
+    test_proven_identity_crossed_inproc.cpp)
 catch_discover_tests(test_proven_identity_inproc TEST_PREFIX "integration.")

@@ -123,18 +123,20 @@ public:
 
     session_type *session_for_name(std::string_view node_name)
     {
+        session_type *found = nullptr;
         for(auto &[id, slot] : m_slots)
-            if(slot->record.node_name == node_name)
-                return slot->session.has_value() ? &*slot->session : nullptr;
-        return nullptr;
+            if(slot->record.node_name == node_name && slot->session && (found == nullptr || slot->session->is_complete()))
+                found = &*slot->session;
+        return found;
     }
 
     bool same_host_for(std::string_view node_name) const
     {
+        std::optional<bool> same;
         for(const auto &[id, slot] : m_slots)
-            if(slot->record.node_name == node_name)
-                return slot->session.has_value() && slot->session->same_host();
-        return false;
+            if(slot->record.node_name == node_name && slot->session && (!same || slot->session->is_complete()))
+                same = slot->session->same_host();
+        return same.value_or(false);
     }
 
     template<typename Fn>

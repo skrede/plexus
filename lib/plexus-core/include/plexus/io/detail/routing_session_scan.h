@@ -30,7 +30,7 @@ typename Engine::session_type *session_by_identity(Engine &e, const node_id &pro
     return found;
 }
 
-// An accepted survivor is keyed by a provisional id, so the slot of a peer's own id may hold the closed loser of a crossed pair.
+// An accepted survivor waits under a provisional key while a dialed slot still in service holds its identity's key.
 template<typename Engine>
 typename Engine::session_type *live_session_for(Engine &e, const node_id &id)
 {

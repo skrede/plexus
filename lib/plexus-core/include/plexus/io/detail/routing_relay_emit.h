@@ -62,7 +62,7 @@ void relay_reassert(Engine &e)
 template<typename Engine>
 void relay_on_ready(Engine &e, const node_id &id)
 {
-    typename Engine::session_type *fresh = e.m_registry.session_for(id);
+    typename Engine::session_type *fresh = detail::live_session_for(e, id);
     if(fresh == nullptr)
         return;
     const node_id peer = fresh->peer_identity();

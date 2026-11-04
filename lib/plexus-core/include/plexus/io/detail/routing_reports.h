@@ -116,7 +116,7 @@ void fold_report_topics(Engine &e, const wire::peer_report &pr)
     for(const wire::topic_declaration &td : pr.topics)
     {
         const std::optional<std::uint64_t> tid = td.state == wire::type_state::undeclared ? std::nullopt : std::optional{td.type_id};
-        const bool changed = e.m_topics.upsert(graph::topic_edge{pr.origin, td.fqn, td.type_name, tid, graph::topic_role::publisher}).changed;
+        const bool changed                     = e.m_topics.upsert(graph::topic_edge{pr.origin, td.fqn, td.type_name, tid, graph::topic_role::publisher}).changed;
         e.bump_graph_generation(changed, pr.origin, graph::change_kind::appeared);
     }
 }
@@ -154,7 +154,7 @@ void retire_reported_if_fresh(Engine &e, const node_id &origin, const node_id &v
 template<typename Engine>
 void reset_windows_for_reporter(Engine &e, const node_id &id)
 {
-    if(typename Engine::session_type *s = e.m_registry.session_for(id))
+    if(typename Engine::session_type *s = detail::live_session_for(e, id))
         e.m_known_peers.reset_reported_windows(s->peer_identity());
 }
 
