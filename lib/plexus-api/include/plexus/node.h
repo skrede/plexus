@@ -542,7 +542,10 @@ private:
         const bool first_for_fqn  = !m_subscriptions.any_for(fqn);
         const registration_id rid = m_subscriptions.add(subscription{std::string{fqn}, qos, type_id, std::string{type_name}, std::move(cb), std::move(obj)});
         if(first_for_fqn)
+        {
             self_attach(fqn, qos, type_id);
+            m_engine.coordinator().on_local_subscriber(fqn, true);
+        }
         if(capture)
             m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
         m_engine.coordinator().set_topic_hint(fqn, qos.dispatch);
@@ -565,6 +568,7 @@ private:
     void retire_fqn_demand(std::string_view fqn)
     {
         self_detach(fqn);
+        m_engine.coordinator().on_local_subscriber(fqn, false);
         m_engine.forget_local_topic(fqn, graph::topic_role::subscriber);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::subscriber_retired, wire::fqn_topic_hash(fqn), std::nullopt});
         detail::for_each_demand_target(*this, [&](const plexus::node_id &peer) { m_engine.unsubscribe(peer, fqn); });

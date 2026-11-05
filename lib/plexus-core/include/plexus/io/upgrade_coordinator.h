@@ -77,6 +77,12 @@ public:
         detail::upgrade_offers::publish(*this, fqn, present);
     }
 
+    // The node's subscriber count for the fqn crossed zero; while one remains, no peer's departure forgets its hint.
+    void on_local_subscriber(std::string_view fqn, bool present)
+    {
+        detail::upgrade_offers::subscribe(*this, fqn, present);
+    }
+
     void on_companion(std::string_view node_name, std::string_view fqn, companion_event event, reader_claim reader = k_no_reader)
     {
         detail::upgrade_lanes::hear(*this, node_name, fqn, event, reader);

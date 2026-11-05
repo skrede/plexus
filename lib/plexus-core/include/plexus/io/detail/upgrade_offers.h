@@ -19,8 +19,8 @@
 
 namespace plexus::io::detail {
 
-// The topics this node publishes, and every co-host peer whose subscribe to one of this node's topics was admitted,
-// published or not, so a lane that appears later reaches the peers already answered.
+// The topics this node publishes or subscribes to, and every co-host peer whose subscribe to one of this node's
+// topics was admitted, published or not, so a lane that appears later reaches the peers already answered.
 class offer_table
 {
 public:
@@ -35,6 +35,19 @@ public:
             m_published.emplace(fqn);
         else
             m_published.erase(std::string{fqn});
+    }
+
+    bool subscribed(std::string_view fqn) const
+    {
+        return m_subscribed.contains(fqn);
+    }
+
+    void subscribe(std::string_view fqn, bool present)
+    {
+        if(present)
+            m_subscribed.emplace(fqn);
+        else
+            m_subscribed.erase(std::string{fqn});
     }
 
     void remember(std::string_view node_name, std::string_view fqn)
@@ -62,6 +75,7 @@ public:
 
 private:
     std::set<std::string, std::less<>> m_published;
+    std::set<std::string, std::less<>> m_subscribed;
     std::set<std::pair<std::string, std::string>> m_demand;
 };
 
@@ -88,15 +102,22 @@ struct upgrade_offers
             upgrade_lanes::up(c, node_name, fqn, role);
     }
 
-    // A churn of distinct topic names cannot grow the hint table without bound; a topic published here keeps its
-    // publisher's hint for its next subscriber.
     template<typename Coordinator>
     static void down(Coordinator &c, std::string_view node_name, std::string_view fqn, demand_role role)
     {
         if(role == demand_role::publisher)
             c.m_offers.forget(node_name, fqn);
         upgrade_lanes::down(c, node_name, fqn, role);
-        if(!c.m_offers.published(fqn) && !any_receive_lane(c.m_receive, fqn) && find_send_lane(c.m_send, fqn) == nullptr)
+        forget_unheld_hint(c, fqn);
+    }
+
+    // A churn of distinct topic names cannot grow the hint table without bound; a topic with a local publisher or
+    // subscriber here keeps its hint for the next peer.
+    template<typename Coordinator>
+    static void forget_unheld_hint(Coordinator &c, std::string_view fqn)
+    {
+        const bool local = c.m_offers.published(fqn) || c.m_offers.subscribed(fqn);
+        if(!local && !any_receive_lane(c.m_receive, fqn) && find_send_lane(c.m_send, fqn) == nullptr)
             upgrade_hints::forget(c, fqn);
     }
 
@@ -113,6 +134,14 @@ struct upgrade_offers
         for(const std::string &node_name : c.m_offers.peers_for(fqn))
             if(!offered(c.m_send, node_name, fqn))
                 offer_late(c, node_name, fqn);
+    }
+
+    template<typename Coordinator>
+    static void subscribe(Coordinator &c, std::string_view fqn, bool present)
+    {
+        c.m_offers.subscribe(fqn, present);
+        if(!present)
+            forget_unheld_hint(c, fqn);
     }
 
     // A transient decline defers the peer, and the mint that later serves it offers it.

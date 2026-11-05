@@ -452,6 +452,19 @@ target_include_directories(test_unsubscribe_e2e_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_unsubscribe_e2e_inproc TEST_PREFIX "integration.")
 
+# A topic keeps its dispatch hint while the node holds a local endpoint for it.
+add_executable(test_dispatch_hint_retention_inproc test_dispatch_hint_retention_inproc.cpp)
+target_link_libraries(test_dispatch_hint_retention_inproc PRIVATE
+    plexus::plexus
+    plexus::wire
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+target_include_directories(test_dispatch_hint_retention_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_dispatch_hint_retention_inproc TEST_PREFIX "integration.")
+
 # Data nobody demands is dropped and its unsubscribe re-sent at a bounded rate.
 add_executable(test_unsolicited_data_inproc test_unsolicited_data_inproc.cpp)
 target_link_libraries(test_unsolicited_data_inproc PRIVATE
