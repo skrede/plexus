@@ -82,6 +82,8 @@ struct teardown_acceptor : established_acceptor
 TEST_CASE("session teardown: a message callback that tears the session down stops the re-origination", "[integration][session_teardown]")
 {
     teardown_acceptor f;
+    REQUIRE(f.messages.attach(f.subject->msg_peer(), k_topic));
+    f.settle();
     f.messages.on_forward_refan([](auto &&...) {});
     f.messages.on_originate([&f](auto &&...) { ++f.originations; });
     f.tear_down_on_message();

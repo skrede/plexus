@@ -93,6 +93,7 @@ TEST_CASE("serial oversize: a publish over the leg ceiling is refused at the sen
         plexus::testing::pump_until(link.io, [&] { return link.complete(); }, k_pump_bound);
         REQUIRE(link.complete());
         REQUIRE(link.sender_messages.attach_for_fanout(serial_msg_fwd::peer{link.sender.msg_peer().channel, "receiver"}, "sized"));
+        REQUIRE(link.receiver_messages.attach(link.receiver.msg_peer(), "sized"));
 
         link.publish(k_oversize_body);
         link.publish(k_fitting_body);

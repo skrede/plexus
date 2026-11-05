@@ -45,6 +45,7 @@ void start_session(Session &s)
     s.m_quiet_teardown            = false;
     s.m_closed_for_protocol_error = false;
     s.m_disconnect_cause          = disconnect_cause::unspecified;
+    s.m_unsolicited.clear();
     s.m_negotiator.prime();
     wire_channel_seams(s);
     detail::register_session_consumers(s);

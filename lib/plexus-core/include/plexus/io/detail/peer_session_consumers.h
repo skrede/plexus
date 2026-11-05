@@ -54,9 +54,10 @@ void register_handshake_consumers(Session &s)
 template<typename Session>
 void on_unidirectional_received(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
 {
-    if(!deliver_session_data(s, hdr, inner))
+    const deliver_verdict verdict = deliver_session_data(s, hdr, inner);
+    if(verdict == deliver_verdict::undecodable)
         return report_malformed(s);
-    if(!s.is_complete())
+    if(verdict == deliver_verdict::unsolicited || !s.is_complete())
         return;
     originate_if_pubsub(s, hdr, inner);
 }

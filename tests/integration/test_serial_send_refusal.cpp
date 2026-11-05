@@ -145,6 +145,7 @@ TEST_CASE("serial send refusal: a refused send keeps both sessions and the fitti
         plexus::testing::pump_until(link.io, [&] { return link.complete(); }, k_pump_bound);
         REQUIRE(link.complete());
         REQUIRE(link.sender_messages.attach_for_fanout(serial_msg_fwd::peer{link.sender.msg_peer().channel, "receiver"}, "sized"));
+        REQUIRE(link.receiver_messages.attach(link.receiver.msg_peer(), "sized"));
 
         link.sender_ctx.channel->send(frame_of(stream::k_serial_default_max_payload + 1));
         const std::vector<std::byte> body(k_fitting_body, std::byte{0x22});

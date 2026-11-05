@@ -26,9 +26,9 @@ TEST_CASE("inproc routing: a published message resolves to its own engine's rece
     std::vector<std::string> b_received;
     b_inbound->on_message([&](std::string_view, std::span<const std::byte> d) { b_received.emplace_back(to_string(d)); });
 
-    // B subscribes to A's topic (producer-side fanout), A publishes. The message
-    // resolves through B's OWN node-shared forwarder to B's sink.
-    REQUIRE(net.b.messages().attach_for_fanout(b_inbound->msg_peer(), "topic"));
+    // B subscribes to A's topic, A admits B and publishes. The message resolves through
+    // B's OWN node-shared forwarder to B's sink.
+    REQUIRE(net.b.messages().attach(b_inbound->msg_peer(), "topic"));
     REQUIRE(net.a.messages().attach_for_fanout(a_to_b->msg_peer(), "topic"));
     net.drive();
     net.a.messages().publish("topic", as_bytes(std::string{"hello-b"}), a_to_b->session_id());

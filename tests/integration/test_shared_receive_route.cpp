@@ -53,10 +53,10 @@ namespace {
 
 struct manual_clock
 {
-    using duration                  = std::chrono::nanoseconds;
-    using rep                       = duration::rep;
-    using period                    = duration::period;
-    using time_point                = std::chrono::time_point<manual_clock>;
+    using duration                                   = std::chrono::nanoseconds;
+    using rep                                        = duration::rep;
+    using period                                     = duration::period;
+    using time_point                                 = std::chrono::time_point<manual_clock>;
     [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};
@@ -162,13 +162,13 @@ struct route_net
         return found;
     }
 
-    // Bring A connected to B and wire the producer-side fanout both ways so a B
-    // publish reaches A. Returns once both ends carry a complete session.
+    // Connect A to B, give A the demand a rebuild replays, and wire the fanout both ways so a B publish reaches A.
     void connect_and_wire(const std::string &topic)
     {
         a.note_peer(id_b, ep_b);
         drive();
         REQUIRE(a.is_connected(id_b));
+        REQUIRE(a.messages().attach(a.session_for(id_b)->msg_peer(), topic));
         rewire_fanout(topic);
     }
 

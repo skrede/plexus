@@ -28,7 +28,8 @@ enum class mute : std::uint8_t
 {
     none,
     all,
-    heartbeats
+    heartbeats,
+    unsubscribes
 };
 
 struct sent_frame
@@ -73,8 +74,24 @@ private:
         const auto hdr  = plexus::wire::decode_header(f);
         const auto type = hdr ? hdr->type : plexus::wire::msg_type{};
         m_sent.push_back(sent_frame{manual_clock::now(), type});
-        if(m_mode == mute::none || (m_mode == mute::heartbeats && type != plexus::wire::msg_type::heartbeat))
+        if(passes(type))
             m_channel.send(f);
+    }
+
+    bool passes(plexus::wire::msg_type type) const noexcept
+    {
+        switch(m_mode)
+        {
+            case mute::none:
+                return true;
+            case mute::all:
+                return false;
+            case mute::heartbeats:
+                return type != plexus::wire::msg_type::heartbeat;
+            case mute::unsubscribes:
+                return type != plexus::wire::msg_type::unsubscribe;
+        }
+        return true;
     }
 
     void forward(const plexus::io::object_carrier &c)

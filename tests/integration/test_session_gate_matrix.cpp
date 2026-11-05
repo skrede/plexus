@@ -149,6 +149,8 @@ TEST_CASE("session gate: an established session runs every observable consumer",
     {
         established_acceptor f;
         REQUIRE(f.subject->is_complete());
+        REQUIRE(f.messages.attach(f.subject->msg_peer(), k_topic));
+        f.settle();
         INFO("msg_type " << static_cast<std::uint32_t>(type));
         f.inject(frame_for(type));
         CHECK(observed(f, type) == 1);

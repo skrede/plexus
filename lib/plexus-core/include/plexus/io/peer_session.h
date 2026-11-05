@@ -33,6 +33,7 @@
 #include "plexus/io/detail/peer_session_consumers.h"
 #include "plexus/io/detail/peer_session_handshake.h"
 #include "plexus/io/detail/peer_session_lifecycle.h"
+#include "plexus/io/detail/peer_session_unsolicited.h"
 
 #include "plexus/io/security/attach_policy.h"
 
@@ -94,6 +95,7 @@ public:
             , m_handshake_timeout(handshake_timeout)
             , m_last_admitted()
             , m_msg_peer{m_channel, ctx.node_name}
+            , m_unsolicited()
             , m_malformed_warning(detail::k_malformed_warning_interval)
             , m_rpc_peer{m_channel, ctx.node_name}
     {
@@ -272,6 +274,7 @@ private:
     std::chrono::nanoseconds m_handshake_timeout;
     typename clock_type::time_point m_last_admitted;
     typename message_forwarder<Policy>::peer m_msg_peer;
+    io::detail::unsolicited_resend<clock_type> m_unsolicited;
     io::detail::rate_limited_warning<clock_type> m_malformed_warning;
     typename procedure_forwarder<Policy>::peer m_rpc_peer;
     bool m_declines_relay = false;
@@ -287,7 +290,11 @@ private:
     template<typename S>
     friend void detail::on_heartbeat_received(S &, std::span<const std::byte>);
     template<typename S>
-    friend bool detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
+    friend detail::deliver_verdict detail::deliver_session_data(S &, const wire::frame_header &, std::span<const std::byte>);
+    template<typename R, typename S, typename D>
+    friend R detail::deliver_to_sink(S &, const wire::frame_header &, D &&);
+    template<typename S>
+    friend void detail::note_unsolicited(S &, std::uint64_t);
     template<typename S>
     friend bool detail::deliver_data_with_source(S &, const wire::frame_header &, std::span<const std::byte>, const node_id &);
     template<typename S>

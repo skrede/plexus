@@ -34,6 +34,8 @@ enum class drop_cause : std::uint8_t
     foreign_session,
     // A subscribe whose bounded re-sends all went unanswered; the session is kept.
     unacknowledged,
+    // Data for a topic this node no longer demands from that peer; the unsubscribe is re-sent.
+    unsolicited,
 };
 
 struct drop_event

@@ -380,7 +380,7 @@ TEST_CASE("multipeer inproc: a reconnected peer's previous-epoch straggler is dr
         auto *p_inbound = p.eng.session_for(make_id(0xA1));
         REQUIRE(p_inbound != nullptr);
         const auto live_epoch = p_inbound->session_id();
-        REQUIRE(net.a.messages().attach_for_fanout(a_to_p->msg_peer(), "topic"));
+        REQUIRE(net.a.messages().attach(a_to_p->msg_peer(), "topic"));
         REQUIRE(p.eng.messages().attach_for_fanout(p_inbound->msg_peer(), "topic"));
         net.drive();
         p.eng.messages().publish("topic", as_bytes(std::string{"live"}), live_epoch);

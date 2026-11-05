@@ -452,6 +452,18 @@ target_include_directories(test_unsubscribe_e2e_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_unsubscribe_e2e_inproc TEST_PREFIX "integration.")
 
+# Data nobody demands is dropped and its unsubscribe re-sent at a bounded rate.
+add_executable(test_unsolicited_data_inproc test_unsolicited_data_inproc.cpp)
+target_link_libraries(test_unsolicited_data_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_unsolicited_data_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_unsolicited_data_inproc TEST_PREFIX "integration.")
+
 # The per-topic capture-gate oracle: a counting encode thunk witnesses the gate's pre-encode
 # decision over a connected inproc node pair (publish_object), proving metadata-only forces no
 # encode, payload forces one, wire degrades to payload, both decimation mechanisms drop the
