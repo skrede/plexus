@@ -46,6 +46,20 @@ TEST_CASE("liveliness over udp: a peer that stops is reported lost within the mi
     REQUIRE(pair.pump_until([&] { return pair.lost_seen(); }, lost_bound()));
 }
 
+// A datagram session to a vanished peer ends only at the teardown timeout; a's redial then has to reach the new b.
+TEST_CASE("liveliness over udp: a restarted peer on a fixed port reconnects", "[node][liveliness]")
+{
+    udp_pair pair{"udp"};
+    const clock_type::time_point t0 = pair.dial();
+    REQUIRE(pair.pump_until([&] { return pair.first_alive_after(t0).has_value(); }, 2s));
+
+    const clock_type::time_point restarted = clock_type::now();
+    REQUIRE(pair.restart_b());
+    const auto bound = lost_bound() + pair_options(0, plexus::io::combine::any_signal_alive).reconnect.max_delay + 2s;
+    REQUIRE(pair.pump_until([&] { return pair.first_alive_after(restarted).has_value(); }, bound));
+    CHECK(pair.lost_seen());
+}
+
 TEST_CASE("liveliness over udp: time to the first alive verdict", "[.][liveliness_timing]")
 {
     udp_pair pair{"udp"};

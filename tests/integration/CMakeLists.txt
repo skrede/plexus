@@ -2139,6 +2139,21 @@ target_include_directories(test_slot_reclaim_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_slot_reclaim_inproc TEST_PREFIX "integration.")
 
+# Connect/disconnect cycles leave every count at baseline (PLEXUS_SOAK_CYCLES overrides the default 1,000).
+add_executable(test_session_soak_inproc test_session_soak_inproc.cpp)
+target_link_libraries(test_session_soak_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_session_soak_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# std::getenv is portable, but MSVC's CRT deprecates it (C4996).
+if(MSVC)
+    target_compile_definitions(test_session_soak_inproc PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+catch_discover_tests(test_session_soak_inproc TEST_PREFIX "integration.")
+
 # Subscribes and declarations on a link that reorders and loses frames, recovered by the bounded re-send.
 add_executable(test_subscribe_retry_inproc test_subscribe_retry_inproc.cpp)
 target_link_libraries(test_subscribe_retry_inproc PRIVATE

@@ -182,7 +182,7 @@ jobs:
         run: >-
           cmake --build build --parallel 4 --target
           test_stream_retire_drain test_udp_retire_drain test_udp_server_retire_drain test_transport_dial_cancel
-          test_unclaimed_retire_stream test_unclaimed_retire_wrap test_node_close_asio
+          test_unclaimed_retire_stream test_unclaimed_retire_wrap test_node_close_asio test_session_soak_inproc
 
       # The real-multicast-loopback discovery tests cannot run on the GitHub macOS or Windows runners:
       # macOS 15 blocks multicast for the unprivileged runner process (Local Network Privacy;
@@ -202,7 +202,7 @@ jobs:
         if: matrix.asan
         run: >-
           ctest --test-dir build --output-on-failure --no-tests=error
-          -R "retire_drain|transport_dial_cancel|unclaimed_retire|node_close" -E "_NOT_BUILT"
+          -R "retire_drain|transport_dial_cancel|unclaimed_retire|node_close|session soak" -E "_NOT_BUILT"
 
   # Coverage is informational (see codecov.yml) — a single gcc leg is enough signal. Skipped on
   # milestone pushes to keep WIP feedback fast; runs on develop, master, PRs, and dispatch.

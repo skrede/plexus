@@ -85,22 +85,34 @@ class node_pair
 {
     using node_type = plexus::node<Policy, Transport>;
 
+    struct listener
+    {
+        listener(::asio::io_context &io, plexus::discovery::static_discovery &disc, plexus::io::combine policy)
+                : transport(io)
+                , node(io, disc, make_id(0x0B), transport, pair_options(0xBEEFu, policy))
+        {
+        }
+
+        Transport transport;
+        node_type node;
+    };
+
 public:
     explicit node_pair(std::string_view scheme, plexus::io::combine policy = plexus::io::combine::any_signal_alive)
-            : m_io()
+            : m_policy(policy)
+            , m_io()
             , m_recorder()
             , m_disc_a({})
             , m_disc_b({})
             , m_ta(m_io)
-            , m_tb(m_io)
             , m_a(m_io, m_disc_a, make_id(0x0A), m_ta, pair_options(0xC0FFEEu, policy))
-            , m_b(m_io, m_disc_b, make_id(0x0B), m_tb, pair_options(0xBEEFu, policy))
+            , m_b(std::in_place, m_io, m_disc_b, policy)
             , m_ep_b{std::string{scheme}, ""}
     {
         m_a.router().add_observer(m_recorder);
-        m_b.listen({std::string{scheme}, "127.0.0.1:0"});
-        pump_until([this] { return m_tb.port() != 0; }, 2s);
-        m_ep_b.address = "127.0.0.1:" + std::to_string(m_tb.port());
+        m_b->node.listen({std::string{scheme}, "127.0.0.1:0"});
+        pump_until([this] { return m_b->transport.port() != 0; }, 2s);
+        m_ep_b.address = "127.0.0.1:" + std::to_string(m_b->transport.port());
     }
 
     clock_type::time_point dial()
@@ -112,7 +124,21 @@ public:
 
     void close_b()
     {
-        m_b.close();
+        m_b->node.close();
+    }
+
+    // The new b listens on the endpoint a dialed, so a's redial reaches it on the same port.
+    bool restart_b()
+    {
+        bool closed = false;
+        m_b->node.on_closed([&closed] { closed = true; });
+        m_b->node.close();
+        if(!pump_until([&closed] { return closed; }, 2s))
+            return false;
+
+        m_b.emplace(m_io, m_disc_b, m_policy);
+        m_b->node.listen(m_ep_b);
+        return pump_until([this] { return m_b->transport.port() != 0; }, 2s) && m_ep_b.address == "127.0.0.1:" + std::to_string(m_b->transport.port());
     }
 
     template<typename Pred>
@@ -135,14 +161,14 @@ public:
     }
 
 private:
+    plexus::io::combine m_policy;
     ::asio::io_context m_io;
     verdict_recorder m_recorder;
     plexus::discovery::static_discovery m_disc_a;
     plexus::discovery::static_discovery m_disc_b;
     Transport m_ta;
-    Transport m_tb;
     node_type m_a;
-    node_type m_b;
+    std::optional<listener> m_b;
     endpoint m_ep_b;
 
     bool is_b(const stamped_verdict &v, liveliness_verdict verdict) const
