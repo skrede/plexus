@@ -35,6 +35,15 @@ struct slot_filing
         return slot.driver.pending().closing() && !(slot.session && slot.session->is_complete());
     }
 
+    // A slot in service with nothing pending reaches its peer again only when a reach restarts it, so an accepted
+    // session from that peer takes its key.
+    template<typename Slot>
+    static bool idle(Slot &slot)
+    {
+        auto &ops = slot.driver.pending();
+        return !ops.closing() && !slot.driver.dialing() && ops.count() == 0 && (!slot.session || slot.session->pending().closing());
+    }
+
     template<typename Registry, typename Slot>
     static Slot *incumbent(Registry &reg, Slot &slot, const node_id &proven)
     {
@@ -68,14 +77,19 @@ struct slot_filing
         hand_on(reg, key);
     }
 
-    // A slot still in service keeps the key: the newcomer waits under its provisional key with the proven labels until
-    // that slot leaves service.
+    // A slot still in service keeps the key unless it is idle: the newcomer waits under its provisional key with the
+    // proven labels until that slot leaves service.
     template<typename Registry, typename Slot>
     static void file_under_identity(Registry &reg, Slot &slot, const node_id &proven)
     {
         auto held = reg.m_slots.find(proven);
-        if(held != reg.m_slots.end() && held->second.get() != &slot && out_of_service(*held->second))
-            vacate(reg, *held->second);
+        if(held != reg.m_slots.end() && held->second.get() != &slot)
+        {
+            if(out_of_service(*held->second))
+                vacate(reg, *held->second);
+            else if(idle(*held->second))
+                leave_service(reg, *held->second);
+        }
         if(!reg.m_slots.contains(proven))
             move_to(reg, slot, proven);
     }

@@ -7,7 +7,6 @@
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
-#include "plexus/io/disconnect_cause.h"
 #include "plexus/io/handshake_protocol.h"
 #include "plexus/io/reliability_requirement.h"
 
@@ -15,6 +14,7 @@
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_claim.h"
 #include "plexus/io/detail/peer_session_dedup.h"
+#include "plexus/io/detail/peer_session_redial.h"
 
 #include "plexus/node_id.h"
 
@@ -23,19 +23,6 @@
 #include <string_view>
 
 namespace plexus::io::detail {
-
-// Set only on dialed slots — an accepted slot owns no redial. The slot outlives the session that holds
-// this closure, and keeps its address when it is re-filed under another key.
-template<typename Registry, typename Slot>
-void wire_drop(Registry &reg, Slot &slot)
-{
-    slot.session->on_transport_drop(
-            [&reg, &slot]
-            {
-                if(!detail::close_if_superseded(reg, slot, peer_kind::dialed))
-                    slot.driver.on_channel_dropped();
-            });
-}
 
 // An accepted slot's drop tears down with no redial — the dialer owns reconnection.
 template<typename Registry, typename Slot>
@@ -47,15 +34,6 @@ void wire_inbound_drop(Registry &reg, Slot &slot)
                 if(slot.session && !detail::close_if_superseded(reg, slot, peer_kind::accepted))
                     slot.session->tear_down();
             });
-}
-
-template<typename Slot>
-void note_dial_connected(Slot &slot, const lifecycle_event &ev)
-{
-    if(ev.kind != peer_kind::dialed || (ev.edge != lifecycle_edge::connected && ev.edge != lifecycle_edge::reconnected))
-        return;
-    slot.dead = false;
-    slot.driver.note_connected();
 }
 
 template<typename Registry, typename Slot>
@@ -133,40 +111,6 @@ void wire_security(Registry &reg, Slot &slot)
         channel_type &lower = *slot.record.channel;
         slot.session->on_install_security([&reg, &lower](const security_negotiation &neg) { reg.m_build.install_security_factory(lower, neg); });
     }
-}
-
-template<typename Slot>
-void wire_redial(Slot &slot)
-{
-    slot.driver.on_redial(
-            [&slot]
-            {
-                if(slot.session)
-                    slot.session->tear_down();
-            });
-}
-
-// The session may already be torn down, so the slot owns this edge.
-template<typename Registry, typename Slot>
-void fire_dead(Registry &reg, Slot &slot)
-{
-    if(!reg.m_build.on_lifecycle)
-        return;
-    reg.m_build.on_lifecycle(
-            lifecycle_event{lifecycle_edge::dead, slot.record.peer_id, slot.record.node_name, peer_kind::dialed, handshake_outcome::none, disconnect_cause::unspecified});
-}
-
-// on_dead fires from the driver's own report_dead stack frame while it lives in the slot, so
-// the slot is marked dead, never erased here — erasing would free the driver mid-callback.
-template<typename Registry, typename Slot>
-void wire_dead(Registry &reg, Slot &slot)
-{
-    slot.driver.on_dead(
-            [&reg, &slot]
-            {
-                slot.dead = true;
-                fire_dead(reg, slot);
-            });
 }
 
 template<typename Registry, typename Build, typename Slot>

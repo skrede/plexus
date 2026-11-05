@@ -2305,3 +2305,17 @@ target_include_directories(test_reach_guard_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_reach_guard_inproc TEST_PREFIX "integration.")
+
+# A dialed slot that will not redial ends its session, and an idle one yields its identity to an accepted session.
+add_executable(test_idle_dialed_slot_inproc
+    test_idle_dialed_slot_inproc.cpp
+    test_idle_dialed_slot_accept_inproc.cpp)
+target_link_libraries(test_idle_dialed_slot_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_idle_dialed_slot_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_idle_dialed_slot_inproc TEST_PREFIX "integration.")

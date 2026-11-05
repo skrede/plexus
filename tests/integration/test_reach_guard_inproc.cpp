@@ -78,7 +78,8 @@ TEST_CASE("reach guard: a slot that surrendered on a handshake's drop dials agai
     accepted->tear_down();
     net.ex.drain();
     REQUIRE(net.a.is_dead(net.id_b));
-    REQUIRE_FALSE(s->pending().closing());
+    auto *left = net.a.session_for(net.id_b);
+    REQUIRE((left == nullptr || left->pending().closing()));
 
     net.a.note_peer(net.id_b, net.ep_b);
     net.a.reach(net.id_b);
