@@ -128,7 +128,7 @@ TEST_CASE("crossed dial: a drop on a demoted loser closes it at once without a r
     net.advance_by(k_past_ceiling);
     CHECK(net.b.e.attempt_count(inbound_slot(2)) == dialing_b);
     CHECK(net.b.edges.for_peer(net.id_a).disconnected == 0);
-    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 1);
     CHECK(complete_sessions_for(net.a.e, net.id_b) == 1);
     CHECK(complete_sessions_for(net.b.e, net.id_a) == 1);
 }

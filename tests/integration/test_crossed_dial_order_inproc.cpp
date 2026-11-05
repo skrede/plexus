@@ -69,7 +69,7 @@ TEST_CASE("crossed dial: the remote's survivor completes before the loser's clos
     REQUIRE(marks.closed.has_value());
     CHECK(*marks.completed < *marks.closed);
     CHECK(closed(net.b.e, inbound_slot(2)));
-    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 1);
     CHECK(net.a.edges.for_peer(endpoint_id(net.ep_b)).disconnected == 0);
     CHECK(net.b.edges.for_peer(net.id_a).disconnected == 0);
     CHECK(net.b.edges.for_peer(inbound_slot(2)).disconnected == 0);

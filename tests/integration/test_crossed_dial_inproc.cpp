@@ -76,7 +76,7 @@ TEST_CASE("crossed dial: an incumbent that loses closes without a disconnected e
     CHECK(!net.b.e.is_connected(inbound_slot(2)));
     CHECK(!net.a.e.is_connected(inbound_slot(2)));
     CHECK(net.b.edges.for_peer(net.id_a).disconnected == 0);
-    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 1);
     CHECK(net.b.e.registry().driver_for(inbound_slot(2)).redial_denied());
 
     auto *survivor = net.b.e.session_for(net.id_a);

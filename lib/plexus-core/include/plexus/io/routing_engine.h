@@ -42,6 +42,7 @@
 #include "plexus/io/detail/routing_reports.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/routing_lifecycle.h"
+#include "plexus/io/detail/peer_announcements.h"
 #include "plexus/io/detail/routing_relay_emit.h"
 #include "plexus/io/detail/routing_forward_rpc.h"
 #include "plexus/io/detail/routing_graph_change.h"
@@ -145,6 +146,7 @@ public:
                       subscribe_retry}
             , m_ops()
             , m_registry(transport, m_build)
+            , m_announced()
             , m_monitor(m_executor)
             , m_peer_liveliness(m_liveliness)
             , m_coordinator(m_registry)
@@ -516,6 +518,7 @@ private:
     graph::basic_topic_type_table<TopicStorage> m_topics;
     std::set<node_id> m_reported;
     std::map<node_id, std::size_t> m_reporter_load;
+    detail::peer_announcements m_announced;
     std::size_t m_report_dropped{0};
     std::size_t m_forward_rpc_dropped{0};
     std::uint16_t m_forward_rpc_seq{0};
@@ -643,6 +646,9 @@ private:
 
     template<typename E>
     friend void detail::dispatch_lifecycle(E &, const lifecycle_event &);
+
+    template<typename E>
+    friend void detail::retire_superseded(E &, const node_id &, std::string_view, std::string_view);
 
     template<typename E>
     friend void detail::fan_liveness(E &, const liveness_event &);

@@ -22,8 +22,6 @@ constexpr auto k_lease         = std::chrono::milliseconds(800);
 constexpr auto k_past_miss     = std::chrono::milliseconds(600);
 constexpr auto k_past_window   = k_window + k_step;
 
-// A loser that left service is filed under the second provisional key. When b's incumbent loses, it and b's survivor
-// share a's id, so that id carries a connected edge from each.
 struct roles
 {
     node_id loser_on_a;
@@ -32,14 +30,13 @@ struct roles
     node_id kept_on_b;
     node_id dialed_on_a;
     node_id dialed_on_b;
-    std::int32_t connects_on_b;
 };
 
 roles roles_of(const crossed_net &net, crossing order)
 {
     if(order == crossing::newcomer_loses)
-        return {inbound_slot(1), inbound_slot(2), net.id_b, net.id_a, net.id_b, inbound_slot(2), 1};
-    return {inbound_slot(2), inbound_slot(2), endpoint_id(net.ep_b), net.id_a, endpoint_id(net.ep_b), inbound_slot(2), 2};
+        return {inbound_slot(1), inbound_slot(2), net.id_b, net.id_a, net.id_b, inbound_slot(2)};
+    return {inbound_slot(2), inbound_slot(2), endpoint_id(net.ep_b), net.id_a, endpoint_id(net.ep_b), inbound_slot(2)};
 }
 
 node_side &publisher_of(crossed_net &net, crossing order)
@@ -64,9 +61,9 @@ bool closed(engine &e, const node_id &loser)
     return s == nullptr || s->pending().closing();
 }
 
-bool no_teardown_edge(const recording_observer::counts &c, std::int32_t connects = 1)
+bool no_teardown_edge(const recording_observer::counts &c)
 {
-    return c.disconnected == 0 && c.dead == 0 && c.reconnected == 0 && c.rejected == 0 && c.connected <= connects;
+    return c.disconnected == 0 && c.dead == 0 && c.reconnected == 0 && c.rejected == 0 && c.connected <= 1;
 }
 
 std::size_t liveness_for(const node_side &side, const node_id &id)
@@ -148,7 +145,9 @@ TEST_CASE("crossed dial: no liveliness verdict or dead edge follows a resolution
             CHECK(no_teardown_edge(net.a.edges.for_peer(r.loser_on_a)));
             CHECK(no_teardown_edge(net.b.edges.for_peer(r.loser_on_b)));
             CHECK(no_teardown_edge(net.a.edges.for_peer(r.kept_on_a)));
-            CHECK(no_teardown_edge(net.b.edges.for_peer(r.kept_on_b), r.connects_on_b));
+            CHECK(no_teardown_edge(net.b.edges.for_peer(r.kept_on_b)));
+            CHECK(net.a.edges.for_peer(r.kept_on_a).connected == 1);
+            CHECK(net.b.edges.for_peer(r.kept_on_b).connected == 1);
             CHECK(last_alive(net.a.verdicts, r.kept_on_a));
             CHECK(last_alive(net.b.verdicts, r.kept_on_b));
             net.publish_from(publisher_of(net, order));

@@ -5,11 +5,8 @@
 #include "plexus/io/endpoint_id.h"
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/subscriber_qos.h"
-#include "plexus/io/reconnect_config.h"
 
 #include "plexus/io/detail/peer_session_complete.h"
-
-#include "plexus/log/logger.h"
 
 #include "plexus/node_id.h"
 
@@ -27,25 +24,9 @@ using plexus::io::peer_kind;
 
 namespace {
 
-constexpr std::uint8_t k_restarted = 0x99;
-constexpr auto k_past_window       = k_window + 2 * k_step;
-constexpr auto k_deadline          = std::chrono::milliseconds(500);
-constexpr crossing k_orders[]      = {crossing::newcomer_loses, crossing::incumbent_loses};
-
-// A restarted process never redials its previous incarnation's session, so each one surrenders at its first redial.
-struct incarnation
-{
-    explicit incarnation(crossed_net &net)
-            : transport(net.ex, net.bus)
-            , log()
-            , e(transport, net.ex, make_cfg(k_restarted), k_window, reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), 1, std::nullopt}, k_seed, log)
-    {
-    }
-
-    transport_t transport;
-    plexus::log::null_logger log;
-    engine e;
-};
+constexpr auto k_past_window  = k_window + 2 * k_step;
+constexpr auto k_deadline     = std::chrono::milliseconds(500);
+constexpr crossing k_orders[] = {crossing::newcomer_loses, crossing::incumbent_loses};
 
 std::size_t duplicate_lines(const recording_logger &log)
 {
@@ -147,7 +128,7 @@ TEST_CASE("same-kind duplicate: a dial to a second endpoint of a host reached by
     CHECK(net.b.e.registry().slot_count() == slots_b + 1);
     CHECK(net.a.e.is_connected(endpoint_id(ep_b2)));
     CHECK(net.a.edges.for_peer(endpoint_id(ep_b2)).disconnected == 0);
-    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 0);
+    CHECK(net.a.edges.for_peer(net.id_b).disconnected == 1);
     net.publish_from(net.b);
     CHECK(net.a.received.size() == 1);
 }

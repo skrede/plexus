@@ -58,7 +58,7 @@ void supersede(Registry &reg, Build &build, Slot &incumbent, const std::string &
     typename Registry::session_type &loser = *incumbent.session;
     detail::fold_demand(build, loser.msg_peer().node_name, survivor_name);
     if(build.on_session_superseded)
-        build.on_session_superseded(incumbent.record.peer_id, loser.msg_peer().node_name);
+        build.on_session_superseded(incumbent.record.peer_id, loser.msg_peer().node_name, survivor_name);
     detail::demote_loser(loser);
     slot_filing::leave_service(reg, incumbent);
 }

@@ -1,11 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_LIFECYCLE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_LIFECYCLE_H
 
+#include "plexus/io/peer_kind.h"
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/disconnect_cause.h"
+#include "plexus/io/handshake_protocol.h"
 
 #include "plexus/io/detail/routing_reports.h"
 #include "plexus/io/detail/routing_dispatch.h"
+#include "plexus/io/detail/peer_announcements.h"
 #include "plexus/io/detail/routing_relay_emit.h"
 #include "plexus/io/detail/routing_session_scan.h"
 
@@ -16,6 +20,8 @@
 #include "plexus/node_id.h"
 
 #include <string>
+#include <optional>
+#include <string_view>
 
 namespace plexus::io::detail {
 
@@ -100,6 +106,63 @@ void arm_relayed_suppression(Engine &e, const node_id &slot_id)
         e.m_messages.suppress_relayed_from(proven);
 }
 
+// Matched by label, not key: an accepted survivor waiting under a provisional key carries its label.
+template<typename Engine>
+bool carries_label(Engine &e, std::string_view node_name)
+{
+    bool found = false;
+    e.registry().for_each_connected([&](const node_id &, typename Engine::session_type &s) { found = found || s.msg_peer().node_name == node_name; });
+    return found;
+}
+
+template<typename Engine>
+void release_identity(Engine &e, peer_announcements &announced, const node_id &id, std::string_view node_name)
+{
+    const std::optional<peer_kind> kind = announced.note_down(id);
+    if(kind)
+        post_disconnected(e, lifecycle_event{lifecycle_edge::disconnected, id, std::string{node_name}, *kind, handshake_outcome::none, disconnect_cause::unspecified});
+}
+
+// An observer sees an id go up when its first live session completes and down when its last one ends, so a handover
+// between two sessions of one id posts nothing; the engine's own handlers still see every session's edge.
+template<typename Engine>
+void post_identity_edge(Engine &e, peer_announcements &announced, const lifecycle_event &ev)
+{
+    switch(ev.edge)
+    {
+        case lifecycle_edge::connected:
+        case lifecycle_edge::reconnected:
+            if(announced.note_up(ev.id, ev.kind))
+                post_lifecycle_edge(e, ev);
+            return;
+        case lifecycle_edge::ready:
+            if(announced.note_ready(ev.id))
+                post_lifecycle_edge(e, ev);
+            return;
+        case lifecycle_edge::disconnected:
+            if(!carries_label(e, ev.node_name) && announced.note_down(ev.id))
+                post_lifecycle_edge(e, ev);
+            return;
+        case lifecycle_edge::rejected:
+            if(ev.id != node_id{} && announced.is_up(ev.id) && !carries_label(e, ev.node_name))
+                release_identity(e, announced, ev.id, ev.node_name);
+            return post_lifecycle_edge(e, ev);
+        case lifecycle_edge::dead:
+            return post_lifecycle_edge(e, ev);
+    }
+}
+
+// The loser closes without an edge, so an id its survivor does not carry is announced down here.
+template<typename Engine>
+void retire_superseded(Engine &e, const node_id &id, std::string_view node_name, std::string_view survivor_name)
+{
+    e.m_monitor.deregister_endpoint(id);
+    e.m_coordinator.on_peer_dead(node_name);
+    e.m_peer_liveliness.retire_session(id);
+    if(node_name != survivor_name)
+        release_identity(e, e.m_announced, id, node_name);
+}
+
 template<typename Engine>
 void dispatch_lifecycle(Engine &e, const lifecycle_event &ev)
 {
@@ -114,7 +177,7 @@ void dispatch_lifecycle(Engine &e, const lifecycle_event &ev)
     }
     if(is_session_live_edge(ev.edge))
         arm_relayed_suppression(e, ev.id);
-    post_lifecycle_edge(e, ev);
+    post_identity_edge(e, e.m_announced, ev);
 }
 
 template<typename Engine>

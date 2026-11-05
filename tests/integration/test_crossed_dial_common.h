@@ -24,8 +24,9 @@ namespace crossed_dial_fixture {
 using namespace liveliness_inproc;
 using plexus::node_id;
 
-constexpr auto k_window = std::chrono::seconds(2);
-constexpr auto k_step   = std::chrono::milliseconds(100);
+constexpr std::uint8_t k_restarted = 0x99;
+constexpr auto k_window            = std::chrono::seconds(2);
+constexpr auto k_step              = std::chrono::milliseconds(100);
 constexpr std::string_view k_topic{"crossed"};
 
 enum class crossing : std::uint8_t
@@ -87,6 +88,16 @@ struct crossed_net
     node_side a;
     node_side b;
     node_side c;
+};
+
+// A restarted process never redials its previous incarnation's session, so each one surrenders at its first redial.
+struct incarnation
+{
+    explicit incarnation(crossed_net &net);
+
+    transport_t transport;
+    plexus::log::null_logger log;
+    engine e;
 };
 
 }

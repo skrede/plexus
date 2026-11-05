@@ -2278,6 +2278,20 @@ target_include_directories(test_same_kind_duplicate_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_same_kind_duplicate_inproc TEST_PREFIX "integration.")
 
+# Each reported id is announced up and down once per live-session transition.
+add_executable(test_identity_edges_inproc
+    test_crossed_dial_common.cpp
+    test_identity_edges_inproc.cpp)
+target_link_libraries(test_identity_edges_inproc PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_identity_edges_inproc PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR})
+catch_discover_tests(test_identity_edges_inproc TEST_PREFIX "integration.")
+
 # A peer silent for the heartbeat miss window is torn down.
 add_executable(test_session_stale_inproc
     test_session_stale_inproc.cpp
