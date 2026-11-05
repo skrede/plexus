@@ -9,10 +9,42 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <vector>
+#include <cstdint>
 #include <optional>
 
 using namespace plexus::testing::graph_change_fixture;
 using plexus::graph::topic_role;
+
+// Declares a second topic from inside its first on_graph_delta, so the engine appends a delta while
+// the wakeup is still fanning the batch that caused it. emitted_at is the delta count at that moment.
+struct nesting_graph_observer final : public plexus::io::observer
+{
+    explicit nesting_graph_observer(engine &eng)
+            : eng(eng)
+            , emitted_at(-1)
+            , deltas()
+    {
+    }
+
+    void on_graph_delta(const plexus::graph::graph_change &change) override
+    {
+        deltas.push_back(change);
+        if(emitted_at >= 0)
+            return;
+        emitted_at = static_cast<std::int32_t>(deltas.size());
+        eng.note_local_topic("topic/nested", "", std::nullopt, topic_role::publisher);
+    }
+
+    bool observes_graph() const override
+    {
+        return true;
+    }
+
+    engine &eng;
+    std::int32_t emitted_at;
+    std::vector<plexus::graph::graph_change> deltas;
+};
 
 TEST_CASE("graph change coalescing: a burst of distinct mutations before one drain fires the coarse "
           "signal exactly once at the final generation",
@@ -85,7 +117,8 @@ TEST_CASE("graph change coalescing: each coalescing edge class fires the coarse 
     net.eng.add_observer(rec);
 
     int expected = 0;
-    auto step    = [&](auto mutate) {
+    auto step    = [&](auto mutate)
+    {
         const auto before = net.eng.graph_generation();
         mutate();
         net.drain();
@@ -93,11 +126,31 @@ TEST_CASE("graph change coalescing: each coalescing edge class fires the coarse 
         REQUIRE(net.eng.graph_generation() > before);
     };
 
-    step([&] { net.eng.note_peer(make_id(0xB2), ep_for("node-b")); });                              // participant add
-    step([&] { net.eng.note_local_topic("topic/a", "", std::nullopt, topic_role::publisher); });    // topic add
-    step([&] { net.eng.note_local_topic("topic/a", "", std::nullopt, topic_role::subscriber); });   // pub/sub count change
-    step([&] { net.eng.note_local_topic("topic/a", "pkg/T", 1u, topic_role::publisher); });         // type absent->known
-    step([&] { net.eng.note_peer(make_id(0xB2), ep_for("node-b2")); });                             // reachability change
-    step([&] { net.eng.forget_local_topic("topic/a", topic_role::subscriber); });                   // topic remove
-    step([&] { net.eng.forget(make_id(0xB2)); });                                                   // participant remove
+    step([&] { net.eng.note_peer(make_id(0xB2), ep_for("node-b")); });                            // participant add
+    step([&] { net.eng.note_local_topic("topic/a", "", std::nullopt, topic_role::publisher); });  // topic add
+    step([&] { net.eng.note_local_topic("topic/a", "", std::nullopt, topic_role::subscriber); }); // pub/sub count change
+    step([&] { net.eng.note_local_topic("topic/a", "pkg/T", 1u, topic_role::publisher); });       // type absent->known
+    step([&] { net.eng.note_peer(make_id(0xB2), ep_for("node-b2")); });                           // reachability change
+    step([&] { net.eng.forget_local_topic("topic/a", topic_role::subscriber); });                 // topic remove
+    step([&] { net.eng.forget(make_id(0xB2)); });                                                 // participant remove
+}
+
+TEST_CASE("graph change coalescing: a delta emitted from inside on_graph_delta is delivered in the same "
+          "drain, after the batch that caused it",
+          "[graph][change][coalescing]")
+{
+    one_node net;
+    nesting_graph_observer rec{net.eng};
+    net.eng.add_observer(rec);
+
+    net.eng.note_local_topic("topic/a", "", std::nullopt, topic_role::publisher);
+    net.drain();
+
+    REQUIRE(rec.emitted_at == 1);
+    REQUIRE(rec.deltas.size() == 2);
+    REQUIRE(rec.deltas.back().who == net.self);
+    REQUIRE(rec.deltas.back().kind == plexus::graph::change_kind::appeared);
+
+    net.drain();
+    REQUIRE(rec.deltas.size() == 2);
 }

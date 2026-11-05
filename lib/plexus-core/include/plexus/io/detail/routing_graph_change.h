@@ -17,11 +17,12 @@
 namespace plexus::io::detail {
 
 // The posted wakeup: fires the coarse edge once at the FINAL generation, then drains the host
-// delta log to the opt-in observers. It walks the live observer list by index, not through
-// detail::fan_out: fan_out's snapshot copy would allocate on every wakeup and the coarse path must
-// stay allocation-free (the [this] closure fits move_only_function's SBO), while indexing survives
-// a callback that (un)registers an observer. It re-reads known_peers/topic_table only, never
-// slot_block, so a peer torn down before the drain cannot be re-entered.
+// delta log to the opt-in observers until a drain comes back empty, so a delta a callback emits is
+// fanned in this wakeup after the batch that caused it. It walks the live observer list by index,
+// not through detail::fan_out: fan_out's snapshot copy would allocate on every wakeup and the coarse
+// path must stay allocation-free (the [this] closure fits move_only_function's SBO), while indexing
+// survives a callback that (un)registers an observer. It re-reads known_peers/topic_table only,
+// never slot_block, so a peer torn down before the drain cannot be re-entered.
 template<typename Engine>
 void fire_graph_wakeup(Engine &e)
 {
@@ -29,17 +30,14 @@ void fire_graph_wakeup(Engine &e)
     const std::uint64_t gen  = e.m_graph_generation;
     for(std::size_t i = 0; i < e.m_observers.size(); ++i)
         e.m_observers[i].get().on_graph_changed(gen);
-    const auto deltas = e.m_graph_log.drain();
-    if(deltas.empty())
-        return;
-    for(std::size_t i = 0; i < e.m_observers.size(); ++i)
-    {
-        observer &o = e.m_observers[i].get();
-        if(o.observes_graph())
-            for(const graph::graph_change &delta : deltas)
-                o.on_graph_delta(delta);
-    }
-    e.m_graph_log.clear();
+    for(auto deltas = e.m_graph_log.drain(); !deltas.empty(); deltas = e.m_graph_log.drain())
+        for(std::size_t i = 0; i < e.m_observers.size(); ++i)
+        {
+            observer &o = e.m_observers[i].get();
+            if(o.observes_graph())
+                for(const graph::graph_change &delta : deltas)
+                    o.on_graph_delta(delta);
+        }
 }
 
 // Awareness-only removal on the existing tick: forgets a peer that stopped re-announcing and was

@@ -8,13 +8,13 @@
 #include <span>
 #include <vector>
 
-namespace plexus::graph
-{
+namespace plexus::graph {
 
 // The host edge-log: appended {who, kind} deltas that an observes_graph() observer drains as a span
-// after each coalesced wakeup, then clears. It grows once like the other heap-backed tables and is
-// maintained only while an observer declares interest. The bounded profile substitutes
-// null_graph_change_log, whose identical append/drain/clear surface holds nothing.
+// after each coalesced wakeup. drain() swaps two buffers, so a delta appended while the previous batch
+// is being fanned lands in the other buffer and the span stays valid; both keep their capacity, so a
+// warmed drain allocates nothing. It is maintained only while an observer declares interest. The
+// bounded profile substitutes null_graph_change_log, whose identical append/drain surface holds nothing.
 class vector_graph_change_log
 {
 public:
@@ -28,18 +28,16 @@ public:
         m_log.push_back(change);
     }
 
-    std::span<const graph_change> drain() const noexcept
+    std::span<const graph_change> drain() noexcept
     {
-        return std::span<const graph_change>{m_log};
-    }
-
-    void clear() noexcept
-    {
-        m_log.clear();
+        m_draining.clear();
+        m_draining.swap(m_log);
+        return std::span<const graph_change>{m_draining};
     }
 
 private:
     std::vector<graph_change> m_log;
+    std::vector<graph_change> m_draining;
 };
 
 }
