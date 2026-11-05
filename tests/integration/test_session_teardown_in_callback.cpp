@@ -32,13 +32,11 @@ std::vector<std::byte> admitted_envelope(std::vector<std::byte> inner)
     return frame_of(wire::msg_type::forwarded, wire::encode_forwarded_frame(ff));
 }
 
-std::vector<std::byte> degraded_response()
+std::vector<std::byte> subscribe_response_frame(wire::subscribe_status status)
 {
-    const wire::subscribe_response resp{.topic_hash     = wire::fqn_topic_hash(k_topic),
-                                        .status         = wire::subscribe_status::subscribed_degraded,
-                                        .offer          = wire::offer_state::offered,
-                                        .has_degraded   = true,
-                                        .degraded_flags = 1};
+    const bool degraded = status == wire::subscribe_status::subscribed_degraded;
+    const wire::subscribe_response resp{
+            .topic_hash = wire::fqn_topic_hash(k_topic), .status = status, .offer = wire::offer_state::offered, .has_degraded = degraded, .degraded_flags = degraded};
     return frame_of(wire::msg_type::subscribe_response, wire::encode_subscribe_response(resp));
 }
 
@@ -54,14 +52,30 @@ struct teardown_acceptor : established_acceptor
     {
     }
 
+    std::size_t count_since(std::size_t from, lifecycle_edge edge) const
+    {
+        return static_cast<std::size_t>(std::count(edges.begin() + static_cast<std::ptrdiff_t>(from), edges.end(), edge));
+    }
+
     bool saw(lifecycle_edge edge) const
     {
-        return std::find(edges.begin() + static_cast<std::ptrdiff_t>(edges_before), edges.end(), edge) != edges.end();
+        return count_since(edges_before, edge) != 0;
     }
 
     void tear_down_on_message()
     {
         subject->on_message([this](std::string_view, std::span<const std::byte>) { subject->tear_down(); });
+    }
+
+    void count_companion_events(std::uint32_t tear_down_on = 0)
+    {
+        plexus::io::detail::companion_hooks<inproc_channel<>> hooks;
+        hooks.event_cb = [this, tear_down_on](auto &&...)
+        {
+            if(++companion_events == tear_down_on)
+                subject->tear_down();
+        };
+        messages.on_companion(std::move(hooks));
     }
 
     void check_torn_down() const
@@ -121,15 +135,36 @@ TEST_CASE("session teardown: a stamp callback that tears the session down stops 
 TEST_CASE("session teardown: a degraded subscribe callback that tears the session down stops note_offer", "[integration][session_teardown]")
 {
     teardown_acceptor f;
-    plexus::io::detail::companion_hooks<inproc_channel<>> hooks;
-    hooks.event_cb = [&f](auto &&...) { ++f.companion_events; };
-    f.messages.on_companion(std::move(hooks));
+    f.count_companion_events();
     f.subject->subscribe(k_topic);
     f.settle();
     f.subject->on_subscribe_degraded([&f](std::uint64_t, std::uint8_t) { f.subject->tear_down(); });
 
-    f.inject(degraded_response());
+    f.inject(subscribe_response_frame(wire::subscribe_status::subscribed_degraded));
 
     CHECK(f.companion_events == 0);
     f.check_torn_down();
+}
+
+TEST_CASE("session teardown: a companion hook that tears the session down leaves the restarted session's ready waiting on its subscribe", "[integration][session_teardown]")
+{
+    teardown_acceptor f;
+    f.count_companion_events(1);
+    f.subject->subscribe(k_topic);
+    f.settle();
+
+    f.inject(subscribe_response_frame(wire::subscribe_status::subscribed));
+    f.check_torn_down();
+
+    const std::size_t restart = f.edges.size();
+    const std::uint32_t warns = f.sink.lines;
+    f.subject->start();
+    f.inject(handshake_request_frame());
+    REQUIRE(f.subject->is_complete());
+    CHECK(f.count_since(restart, lifecycle_edge::ready) == 0);
+
+    f.inject(subscribe_response_frame(wire::subscribe_status::subscribed));
+    CHECK(f.count_since(restart, lifecycle_edge::ready) == 1);
+    CHECK(f.companion_events == 2);
+    CHECK(f.sink.lines == warns);
 }

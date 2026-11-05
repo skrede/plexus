@@ -42,10 +42,10 @@ void note_offer(const Session &s, Forwarder &messages, const wire::subscribe_res
         messages.note_companion(s.msg_peer(), resp.topic_hash, offer_event_of(resp.offer));
 }
 
-// The anti-wrap guard stays first: a response with no outstanding match is a
-// stray/duplicate/forged frame, dropped before anything else so it can never fire a callback
-// nor wrap m_outstanding_subscribes (which would make ready unreachable for the cycle). A
-// retrying session matches by topic, and a re-send makes a duplicate expected, so it is quiet.
+// The anti-wrap guard stays first: a response with no outstanding match is a stray/duplicate/forged frame, dropped
+// before any callback. Both injected hooks (the outcome callback, the companion hook in note_offer) may tear the
+// session down, which zeroes m_outstanding_subscribes, so the decrement waits for both. A retrying session matches by
+// topic, and a re-send makes a duplicate expected, so it is quiet.
 template<typename Session>
 void on_subscribe_response_received(Session &s, std::span<const std::byte> inner)
 {
@@ -60,6 +60,8 @@ void on_subscribe_response_received(Session &s, std::span<const std::byte> inner
     if(!s.is_complete())
         return;
     note_offer(s, s.m_messages, *resp);
+    if(!s.is_complete())
+        return;
     --s.m_outstanding_subscribes;
     s.maybe_fire_ready();
 }
