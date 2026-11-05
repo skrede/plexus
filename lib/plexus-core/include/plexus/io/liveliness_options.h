@@ -21,7 +21,7 @@ enum class combine : std::uint8_t
 // tick without a second timer. heartbeat_interval and heartbeat_miss_limit are validated against an
 // on-target detection-latency sweep. session_teardown_timeout bounds how long a complete session may stay
 // silent before it is torn down; it is kept apart from the miss window so a short pause (a debugger
-// breakpoint) keeps the session while the heartbeat verdict reads lost. Zero disables the teardown.
+// breakpoint) keeps the session while the heartbeat signal reads lost. Zero disables the teardown.
 struct liveliness_options
 {
     liveliness_options()

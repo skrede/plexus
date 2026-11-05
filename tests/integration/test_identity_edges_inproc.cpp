@@ -1,10 +1,5 @@
 #include "test_identity_edges_common.h"
 
-#include "plexus/io/endpoint.h"
-#include "plexus/io/endpoint_id.h"
-
-#include "plexus/node_id.h"
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>

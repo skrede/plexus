@@ -10,13 +10,14 @@
 #include "plexus/node_id.h"
 
 #include <vector>
+#include <cstdint>
 #include <string_view>
 
 namespace idle_slot_fixture {
 
 using namespace reach_guard_fixture;
 
-enum class edge
+enum class edge : std::uint8_t
 {
     connected,
     disconnected,

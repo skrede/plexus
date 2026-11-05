@@ -7,8 +7,6 @@
 #include "plexus/io/node_name.h"
 #include "plexus/io/peer_kind.h"
 
-#include "plexus/node_id.h"
-
 #include <vector>
 #include <cstdint>
 #include <algorithm>

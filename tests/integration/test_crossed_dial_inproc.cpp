@@ -67,7 +67,7 @@ TEST_CASE("crossed dial: a session that loses on completion fires no lifecycle e
     CHECK(net.b.e.registry().driver_for(inbound_slot(2)).redial_denied());
 }
 
-TEST_CASE("crossed dial: an incumbent that loses closes without a disconnected edge and its demand moves to the survivor", "[integration][crossed_dial]")
+TEST_CASE("crossed dial: an incumbent that loses closes with its retired id reported down once and its demand moves to the survivor", "[integration][crossed_dial]")
 {
     manual_clock::reset();
     crossed_net net;
