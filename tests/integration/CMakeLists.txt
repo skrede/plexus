@@ -2292,10 +2292,11 @@ target_include_directories(test_identity_edges_inproc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
 catch_discover_tests(test_identity_edges_inproc TEST_PREFIX "integration.")
 
-# A peer silent for the heartbeat miss window is torn down.
+# A peer silent for the session teardown timeout is torn down.
 add_executable(test_session_stale_inproc
     test_session_stale_inproc.cpp
-    test_session_stale_edge_inproc.cpp)
+    test_session_stale_edge_inproc.cpp
+    test_session_stale_timeout_inproc.cpp)
 target_link_libraries(test_session_stale_inproc PRIVATE
     plexus::core
     plexus::wire

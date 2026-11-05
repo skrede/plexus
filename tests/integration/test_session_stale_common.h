@@ -24,6 +24,24 @@ inline std::chrono::nanoseconds miss_window(const plexus::io::liveliness_options
     return std::chrono::duration_cast<std::chrono::nanoseconds>(live.heartbeat_interval) * live.heartbeat_miss_limit;
 }
 
+inline plexus::io::liveliness_options with_policy(plexus::io::combine policy)
+{
+    plexus::io::liveliness_options live{};
+    live.policy = policy;
+    return live;
+}
+
+inline plexus::io::liveliness_options with_teardown(std::chrono::nanoseconds timeout, plexus::io::liveliness_options live = {})
+{
+    live.session_teardown_timeout = timeout;
+    return live;
+}
+
+inline plexus::io::liveliness_options teardown_at_miss_window(const plexus::io::liveliness_options &live = {})
+{
+    return with_teardown(miss_window(live), live);
+}
+
 struct stale_pair
 {
     explicit stale_pair(const plexus::io::liveliness_options &live = {})

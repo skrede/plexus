@@ -67,7 +67,7 @@ void tear_down_b(stale_pair &net, const recording_observer &rec)
 TEST_CASE("session stale: the disconnect names the heartbeat timeout and is reported once", "[integration][session_stale]")
 {
     manual_clock::reset();
-    stale_pair net;
+    stale_pair net(teardown_at_miss_window());
     recording_observer rec;
     cause_log causes_a;
     cause_log causes_b;
@@ -88,7 +88,7 @@ TEST_CASE("session stale: the disconnect names the heartbeat timeout and is repo
 TEST_CASE("session stale: nothing is sent to the silent peer at the teardown", "[integration][session_stale]")
 {
     manual_clock::reset();
-    stale_pair net;
+    stale_pair net(teardown_at_miss_window());
     recording_observer rec;
     net.a.add_observer(rec);
     tear_down_b(net, rec);
@@ -111,7 +111,7 @@ TEST_CASE("session stale: nothing is sent to the silent peer at the teardown", "
 TEST_CASE("session stale: a request issued after the teardown is answered without reaching the torn session", "[integration][session_stale]")
 {
     manual_clock::reset();
-    stale_pair net;
+    stale_pair net(teardown_at_miss_window());
     recording_observer rec;
     net.a.add_observer(rec);
     tear_down_b(net, rec);

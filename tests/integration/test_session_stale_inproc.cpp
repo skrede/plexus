@@ -48,19 +48,12 @@ struct lost_count final : plexus::io::observer
     plexus::node_id watched;
 };
 
-plexus::io::liveliness_options with_policy(combine policy)
-{
-    plexus::io::liveliness_options live{};
-    live.policy = policy;
-    return live;
 }
 
-}
-
-TEST_CASE("session stale: a dialed peer that falls silent is torn down within the miss window and redialed", "[integration][session_stale]")
+TEST_CASE("session stale: a dialed peer that falls silent is torn down within the teardown timeout and redialed", "[integration][session_stale]")
 {
     manual_clock::reset();
-    stale_pair net;
+    stale_pair net(teardown_at_miss_window());
     recording_observer rec;
     net.a.add_observer(rec);
     net.connect();
@@ -79,7 +72,7 @@ TEST_CASE("session stale: a dialed peer that falls silent is torn down within th
 TEST_CASE("session stale: an accepted peer that falls silent is torn down and its slot reclaimed", "[integration][session_stale]")
 {
     manual_clock::reset();
-    stale_pair net;
+    stale_pair net(teardown_at_miss_window());
     recording_observer rec;
     net.b.add_observer(rec);
     const auto baseline = net.b.registry().slot_count();
@@ -100,7 +93,7 @@ TEST_CASE("session stale: every fusion policy reads the silent peer lost once it
     for(const combine policy : {combine::any_signal_alive, combine::session_authoritative, combine::all_required})
     {
         manual_clock::reset();
-        stale_pair net(with_policy(policy));
+        stale_pair net(teardown_at_miss_window(with_policy(policy)));
         const plexus::node_id key = plexus::io::endpoint_id(net.ep_b);
         lost_count probe(key);
         recording_observer rec;
@@ -121,7 +114,7 @@ TEST_CASE("session stale: every fusion policy reads the silent peer lost once it
 TEST_CASE("session stale: a peer that keeps sending data but whose heartbeats are lost is not torn down", "[integration][session_stale]")
 {
     manual_clock::reset();
-    stale_pair net;
+    stale_pair net(teardown_at_miss_window());
     recording_observer rec;
     std::int32_t received = 0;
     net.a.add_observer(rec);

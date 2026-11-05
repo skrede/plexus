@@ -75,9 +75,9 @@ struct node_options
     std::size_t max_message_bytes{io::global_default_max_message_bytes};
 
     // The node-scoped liveliness policy group: awareness-aging deadline, heartbeat interval,
-    // heartbeat miss limit, and the fusion policy. Consumer-tunable; each default's provenance
-    // (the carried aging deadline vs the swept heartbeat values) is documented at the
-    // liveliness_options definition.
+    // heartbeat miss limit, session teardown timeout, and the fusion policy. Consumer-tunable;
+    // each default's provenance (the carried aging deadline vs the swept heartbeat values) is
+    // documented at the liveliness_options definition.
     io::liveliness_options liveliness{};
 
     // The node's own control-plane universe stamp and the loop-safety bounds an inbound peer_report is

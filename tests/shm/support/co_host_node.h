@@ -52,13 +52,11 @@ inline std::string co_host_region(const std::string &prefix)
     return prefix + std::to_string(process_id()) + "-" + std::to_string(next.fetch_add(1));
 }
 
-// A case leaves a node unread for seconds on purpose, so the heartbeat miss window must outlast that stall.
 inline plexus::node_options co_host_options(const std::string &name)
 {
     plexus::node_options opts;
-    opts.name                            = name;
-    opts.handshake.local_fingerprint     = plexus::native::read_machine_fingerprint();
-    opts.liveliness.heartbeat_miss_limit = 300;
+    opts.name                        = name;
+    opts.handshake.local_fingerprint = plexus::native::read_machine_fingerprint();
     return opts;
 }
 

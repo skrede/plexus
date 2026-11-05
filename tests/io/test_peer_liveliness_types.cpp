@@ -66,6 +66,7 @@ TEST_CASE("peer_liveliness types options default to the carried and swept values
     REQUIRE(opts.awareness_ttl == std::chrono::seconds(15));
     REQUIRE(opts.heartbeat_interval == std::chrono::milliseconds(100));
     REQUIRE(opts.heartbeat_miss_limit == 5u);
+    REQUIRE(opts.session_teardown_timeout == std::chrono::seconds(10));
     REQUIRE(opts.policy == combine::any_signal_alive);
 }
 
@@ -90,7 +91,7 @@ TEST_CASE("peer_liveliness types overridden observer round-trips the event uncha
     REQUIRE(obs.observes_liveliness());
 
     node_id id{};
-    id[0] = std::byte{0x2a};
+    id[0]                                = std::byte{0x2a};
     const liveliness_signal contributing = liveliness_signal::heartbeat | liveliness_signal::session;
     const peer_liveliness_event ev{id, liveliness_verdict::lost, contributing};
 
