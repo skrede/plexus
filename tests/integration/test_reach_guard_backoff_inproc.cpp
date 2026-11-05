@@ -37,7 +37,7 @@ TEST_CASE("reach guard: the surrender bound measures the outage, not the session
     net.ex.drain();
     REQUIRE(net.a.is_connected(net.id_b));
     const auto epoch = net.a.session_for(net.id_b)->session_id();
-    for(int i = 0; i < 100; ++i)
+    for(std::int32_t i = 0; i < 100; ++i)
         net.advance(k_tick);
     REQUIRE(net.a.is_connected(net.id_b));
 
@@ -85,7 +85,7 @@ TEST_CASE("reach guard: a session a reach completes during a backoff wait outliv
     net.ex.drain();
     REQUIRE(net.a.is_connected(net.id_b));
     const auto epoch = net.a.session_for(net.id_b)->session_id();
-    for(int i = 0; i < 30; ++i)
+    for(std::int32_t i = 0; i < 30; ++i)
         net.advance(k_tick);
     REQUIRE(net.a.is_connected(net.id_b));
     REQUIRE(net.a.session_for(net.id_b)->session_id() == epoch);

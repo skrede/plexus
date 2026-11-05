@@ -56,7 +56,7 @@ struct guarded_pair
     template<typename Done>
     void advance_until(Done done)
     {
-        for(int i = 0; i < 10 && !done(); ++i)
+        for(std::int32_t i = 0; i < 10 && !done(); ++i)
             advance(k_ceiling);
     }
 

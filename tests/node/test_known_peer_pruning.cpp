@@ -48,7 +48,7 @@ public:
 
     void browse(const resolved_callback &on_resolved) override
     {
-        m_resolved = on_resolved;
+        m_resolved_cb = on_resolved;
     }
 
     void stop() override
@@ -57,22 +57,22 @@ public:
 
     void on_withdrawn(const withdrawn_callback &on_withdrawn) override
     {
-        m_withdrawn = on_withdrawn;
+        m_withdrawn_cb = on_withdrawn;
     }
 
     void announce(const service_info &card)
     {
-        m_resolved(card);
+        m_resolved_cb(card);
     }
 
     void goodbye(const service_info &card)
     {
-        m_withdrawn(card);
+        m_withdrawn_cb(card);
     }
 
 private:
-    resolved_callback m_resolved;
-    withdrawn_callback m_withdrawn;
+    resolved_callback m_resolved_cb;
+    withdrawn_callback m_withdrawn_cb;
 };
 
 plexus::node_id make_id(std::uint8_t seed)
