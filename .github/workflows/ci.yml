@@ -261,5 +261,7 @@ jobs:
         uses: codecov/codecov-action@fdcc8476540edceab3de004e990f80d881c6cc00 # v5.5.0
         with:
           files: coverage.xml
+          disable_search: true
+          plugins: noop
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
