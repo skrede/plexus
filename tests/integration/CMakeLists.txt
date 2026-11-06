@@ -2116,6 +2116,17 @@ target_include_directories(test_session_teardown_in_callback PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_session_teardown_in_callback TEST_PREFIX "integration.")
 
+# A subscribe response refusing an undeclared type, or carrying a status outside the wire set, attaches nothing.
+add_executable(test_subscribe_refusal_set test_subscribe_refusal_set.cpp)
+target_link_libraries(test_subscribe_refusal_set PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_subscribe_refusal_set PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_subscribe_refusal_set TEST_PREFIX "integration.")
+
 # Every inbound decode failure counted and its warning rate-limited, with an alloc gate over the malformed path.
 add_executable(test_session_malformed_logging test_session_malformed_logging.cpp test_session_malformed_clock.cpp test_session_malformed_sites.cpp)
 target_link_libraries(test_session_malformed_logging PRIVATE

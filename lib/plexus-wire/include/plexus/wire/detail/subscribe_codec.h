@@ -159,8 +159,9 @@ inline std::optional<subscribe_response> decode_subscribe_response(std::span<con
 {
     if(payload.size() < subscribe_response_size || wire::detail::read_u8(payload.data() + 9) > static_cast<uint8_t>(offer_state::withheld))
         return std::nullopt;
+    // type_undeclared is the last status on the wire; unacknowledged above it is local-only.
     const auto status = static_cast<subscribe_status>(wire::detail::read_u8(payload.data() + 8));
-    if(status == subscribe_status::unacknowledged)
+    if(status < subscribe_status::subscribed || status > subscribe_status::type_undeclared)
         return std::nullopt;
     subscribe_response resp{.topic_hash = wire::detail::read_u64(payload.data()), .status = status, .offer = static_cast<offer_state>(wire::detail::read_u8(payload.data() + 9))};
     if(payload.size() > subscribe_response_size)
