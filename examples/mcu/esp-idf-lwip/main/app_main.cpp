@@ -15,11 +15,14 @@
 #include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
+#include "plexus/freertos/detail/null_acceptor.h"
 #include "plexus/freertos/detail/lwip_socket_io.h"
 #include "plexus/freertos/detail/lwip_acceptor_io.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+
+#include "esp_log.h"
 
 #include <span>
 #include <array>
@@ -28,14 +31,26 @@
 #include <cstdint>
 #include <cstddef>
 #include <optional>
+#include <cinttypes>
 #include <system_error>
 
 namespace {
 
-using lwip_socket = plexus::freertos::detail::lwip_socket;
-using lwip_acceptor = plexus::freertos::detail::lwip_acceptor;
-using lwip_policy = plexus::freertos::lwip_policy<lwip_socket>;
-using lwip_transport = plexus::freertos::lwip_transport<lwip_socket>;
+#ifndef PLEXUS_PUBLISH_PERIOD_MS
+    #define PLEXUS_PUBLISH_PERIOD_MS 1000
+#endif
+
+// A dial to a dead endpoint stays pending through lwIP's SYN retries, so it needs a client slot beside the host dial's.
+#ifdef PLEXUS_DEAD_ENDPOINT
+constexpr std::size_t k_max_clients = 2;
+#else
+constexpr std::size_t k_max_clients = 1;
+#endif
+
+using lwip_socket    = plexus::freertos::detail::lwip_socket;
+using lwip_acceptor  = plexus::freertos::detail::lwip_acceptor;
+using lwip_policy    = plexus::freertos::lwip_policy<lwip_socket>;
+using lwip_transport = plexus::freertos::lwip_transport<lwip_socket, plexus::freertos::detail::null_acceptor<lwip_socket>, k_max_clients>;
 
 // This dialing example uses the dial-only transport (the default null_acceptor); naming the server
 // transport AND driving its listen/poll forces the ESP-gated acceptor leaf (bind/listen/accept) and
@@ -58,7 +73,9 @@ static_assert(plexus::io::transport_backend<lwip_server_transport, lwip_policy>,
 #endif
 constexpr const char *k_host_endpoint = PLEXUS_HOST_ENDPOINT;
 
-constexpr std::size_t k_max_payload_bytes  = 256;
+constexpr const char *k_log_tag = "plexus-liveness";
+constexpr std::chrono::milliseconds k_publish_period{PLEXUS_PUBLISH_PERIOD_MS};
+constexpr std::size_t k_max_payload_bytes   = 256;
 constexpr std::uint32_t k_plexus_task_stack = 8192; // bytes (ESP-IDF xTaskCreate takes bytes)
 constexpr UBaseType_t k_plexus_task_prio    = 5;
 constexpr std::uint32_t k_rx_task_stack     = 4096; // bytes; the RX task parks in a blocking recv
@@ -83,12 +100,30 @@ struct publish_loop
 
     void arm()
     {
-        timer.expires_after(std::chrono::milliseconds{1000});
+        timer.expires_after(k_publish_period);
         timer.async_wait(
             [this](std::error_code)
             {
                 const auto reading = source.next();
                 topic.publish(std::span<const std::byte>{reading});
+                arm();
+            });
+    }
+};
+
+// The smoke reads executor liveness from the gaps between these lines' log timestamps.
+struct liveness_loop
+{
+    plexus::freertos::freertos_timer &timer;
+    std::uint32_t ticks{0};
+
+    void arm()
+    {
+        timer.expires_after(std::chrono::seconds{1});
+        timer.async_wait(
+            [this](std::error_code)
+            {
+                ESP_LOGI(k_log_tag, "tick %" PRIu32, ++ticks);
                 arm();
             });
     }
@@ -115,6 +150,9 @@ void plexus_task(void *)
 
     auto node = std::make_unique<plexus::node<lwip_policy, lwip_transport>>(ex, disc, "esp32-lwip-telemetry", transport, opts);
     node->dial({"tcp", k_host_endpoint});
+#ifdef PLEXUS_DEAD_ENDPOINT
+    node->dial({"tcp", PLEXUS_DEAD_ENDPOINT});
+#endif
 
     plexus::publisher<void> telemetry{*node, "telemetry"};
 
@@ -122,6 +160,10 @@ void plexus_task(void *)
     plexus::freertos::freertos_timer timer(ex);
     publish_loop loop{timer, telemetry, source};
     loop.arm();
+
+    plexus::freertos::freertos_timer tick_timer(ex);
+    liveness_loop liveness{tick_timer};
+    liveness.arm();
 
     plexus::freertos::run(ex, transport);
 }
