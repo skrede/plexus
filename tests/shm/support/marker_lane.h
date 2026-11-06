@@ -21,6 +21,7 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -72,11 +73,26 @@ struct marker_lane
         return member.registry().channel_for(fqn, plexus::shm::ring_direction::request, member.self_id())->send(bytes);
     }
 
-    // Runs every wake the ring has posted.
-    void pump()
+    // The ring's wake can arrive from another thread, so a single poll may run before it.
+    bool pump_until(std::size_t count, std::chrono::milliseconds budget)
     {
-        io.restart();
-        io.poll();
+        const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + budget;
+        while(delivered.size() < count && std::chrono::steady_clock::now() < deadline)
+        {
+            io.restart();
+            io.run_one_for(std::chrono::milliseconds{1});
+        }
+        return delivered.size() >= count;
+    }
+
+    void quiet_for(std::chrono::milliseconds window)
+    {
+        const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + window;
+        while(std::chrono::steady_clock::now() < deadline)
+        {
+            io.restart();
+            io.run_one_for(std::chrono::milliseconds{1});
+        }
     }
 
     std::uint64_t reader_position()

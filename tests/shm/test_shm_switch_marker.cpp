@@ -115,13 +115,13 @@ TEST_CASE("switch_marker a receive companion takes nothing and gates nothing bef
     const std::uint32_t written = 2 * lane.cells();
     for(std::uint32_t index = 0; index < written; ++index)
         REQUIRE(lane.publish(index) == loan_status::ok);
-    lane.pump();
+    lane.quiet_for(50ms);
     CHECK_FALSE(cursor_holds_position(lane.reader_position()));
 
     REQUIRE(lane.place());
     lane.publish(written);
     lane.resume();
-    lane.pump();
+    REQUIRE(lane.pump_until(2, 2s));
     CHECK(lane.delivered == std::vector<std::uint32_t>{written - 1, written});
 }
 
@@ -140,7 +140,7 @@ TEST_CASE("switch_marker a placed reader gates the ring from its placement and d
     CHECK(lane.publish(k_before + lane.cells()) == loan_status::congested);
 
     lane.resume();
-    lane.pump();
+    REQUIRE(lane.pump_until(lane.cells(), 2s));
     REQUIRE(lane.delivered.size() == lane.cells());
     for(std::uint32_t i = 0; i < lane.delivered.size(); ++i)
         CHECK(lane.delivered[i] == k_before - 1 + i);
@@ -155,7 +155,7 @@ TEST_CASE("switch_marker a reader resumed with no placement, as the node's own r
     lane.resume();
     lane.publish(1);
     lane.publish(2);
-    lane.pump();
+    REQUIRE(lane.pump_until(2, 2s));
     CHECK(lane.delivered == std::vector<std::uint32_t>{1, 2});
 }
 

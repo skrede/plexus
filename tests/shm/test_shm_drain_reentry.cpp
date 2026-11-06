@@ -110,7 +110,7 @@ TEST_CASE("drain_reentry a receive companion released inside its own sink closes
     lane.send.reset();
     resume_releasing(lane);
     publish_queued(lane);
-    lane.pump();
+    REQUIRE(lane.pump_until(1, 2s));
     CHECK(lane.delivered == std::vector<std::uint32_t>{0});
     CHECK_FALSE(lane.receive);
     CHECK(lane.member.registry().live_count() == 0);
@@ -122,7 +122,7 @@ TEST_CASE("drain_reentry a receive companion released inside its own sink while 
     lane.attach();
     resume_releasing(lane);
     publish_queued(lane);
-    lane.pump();
+    REQUIRE(lane.pump_until(1, 2s));
     CHECK(lane.delivered == std::vector<std::uint32_t>{0});
     CHECK(lane.member.registry().live_count() == 1);
     for(std::uint32_t index = 0; index < lane.cells() + 1; ++index)
