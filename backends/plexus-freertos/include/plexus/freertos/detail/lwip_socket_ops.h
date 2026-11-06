@@ -5,11 +5,14 @@
 
     #include "lwip/sockets.h"
 
+    #include <cerrno>
     #include <chrono>
     #include <string>
     #include <cstdint>
     #include <charconv>
+    #include <optional>
     #include <string_view>
+    #include <system_error>
 
 namespace plexus::freertos::detail {
 
@@ -30,6 +33,36 @@ inline host_port parse_host_port(std::string_view address)
     const auto tail    = address.substr(colon + 1);
     std::from_chars(tail.data(), tail.data() + tail.size(), port);
     return {std::string{address.substr(0, colon)}, port};
+}
+
+inline sockaddr_in ipv4_address(const host_port &parsed)
+{
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port   = lwip_htons(parsed.port);
+    inet_pton(AF_INET, parsed.host.c_str(), &addr.sin_addr);
+    return addr;
+}
+
+// lwIP clears the pending error when SO_ERROR is read, so a caller must keep the first value.
+inline std::optional<std::error_code> poll_connect(int fd)
+{
+    fd_set writable;
+    fd_set failed;
+    FD_ZERO(&writable);
+    FD_ZERO(&failed);
+    FD_SET(fd, &writable);
+    FD_SET(fd, &failed);
+    timeval zero{};
+    if(lwip_select(fd + 1, nullptr, &writable, &failed, &zero) <= 0)
+        return std::nullopt;
+    int err       = 0;
+    socklen_t len = sizeof(err);
+    if(lwip_getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) < 0)
+        err = errno;
+    if(err != 0)
+        return std::error_code{err, std::generic_category()};
+    return std::error_code{};
 }
 
 inline void set_fd_blocking(int fd, bool blocking)

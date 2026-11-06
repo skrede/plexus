@@ -37,7 +37,8 @@ namespace {
 // provides integrity — the CRC layer is UART-only).
 std::vector<std::byte> on_wire(std::span<const std::byte> payload)
 {
-    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
+    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                      payload);
 }
 
 std::vector<std::byte> bytes_of(std::initializer_list<int> vs)
@@ -123,8 +124,8 @@ TEST_CASE("lwip_channel surfaces a peer close as on_error, never on_protocol_clo
 
     plexus::test::poll_until([&] { receiver.poll(); }, [&] { return !(errors == 0); });
 
-    REQUIRE(errors == 1);             // the hard-drop seam fired
-    REQUIRE_FALSE(protocol_close);    // DISTINCT from the framing-violation seam
+    REQUIRE(errors == 1);          // the hard-drop seam fired
+    REQUIRE_FALSE(protocol_close); // DISTINCT from the framing-violation seam
 }
 
 TEST_CASE("lwip_transport dials a real loopback listener and delivers one channel", "[seam]")
@@ -144,18 +145,25 @@ TEST_CASE("lwip_transport dials a real loopback listener and delivers one channe
     plexus::freertos::lwip_transport<host_tcp_socket> transport{ex};
 
     std::unique_ptr<lwip_channel> dialed;
-    plexus::io::endpoint           dialed_ep;
-    transport.on_dialed([&](std::unique_ptr<lwip_channel> ch, const plexus::io::endpoint &ep)
-                        {
-                            dialed    = std::move(ch);
-                            dialed_ep = ep;
-                        });
+    plexus::io::endpoint dialed_ep;
+    transport.on_dialed(
+            [&](std::unique_ptr<lwip_channel> ch, const plexus::io::endpoint &ep)
+            {
+                dialed    = std::move(ch);
+                dialed_ep = ep;
+            });
 
     const plexus::io::endpoint target{"tcp", address};
     transport.dial(target);
-
-    REQUIRE(dialed != nullptr);     // the dial produced exactly one channel
-    REQUIRE(dialed_ep == target);   // the endpoint rode back as the correlation key
+    REQUIRE(dialed == nullptr);
+    REQUIRE(plexus::test::poll_until(
+            [&]
+            {
+                transport.poll();
+                ex.drain();
+            },
+            [&] { return dialed != nullptr; }));
+    REQUIRE(dialed_ep == target); // the endpoint rode back as the correlation key
     ::close(::accept(listener, nullptr, nullptr));
     ::close(listener);
 }
@@ -166,16 +174,26 @@ TEST_CASE("lwip_transport reports a refused dial through on_dial_failed with the
     plexus::freertos::lwip_transport<host_tcp_socket> transport{ex};
 
     plexus::io::endpoint failed_ep;
-    bool                 failed = false;
-    transport.on_dial_failed([&](const plexus::io::endpoint &ep, plexus::io::io_error)
-                             {
-                                 failed    = true;
-                                 failed_ep = ep;
-                             });
+    plexus::io::io_error failed_error = plexus::io::io_error::unknown;
+    bool failed                       = false;
+    transport.on_dial_failed(
+            [&](const plexus::io::endpoint &ep, plexus::io::io_error e)
+            {
+                failed       = true;
+                failed_ep    = ep;
+                failed_error = e;
+            });
 
     const plexus::io::endpoint target{"tcp", "127.0.0.1:1"}; // nothing listens on port 1
     transport.dial(target);
-
-    REQUIRE(failed);
+    REQUIRE_FALSE(failed);
+    REQUIRE(plexus::test::poll_until(
+            [&]
+            {
+                transport.poll();
+                ex.drain();
+            },
+            [&] { return failed; }));
     REQUIRE(failed_ep == target); // the failed endpoint rode back as the correlation key
+    REQUIRE(failed_error == plexus::io::io_error::connection_refused);
 }

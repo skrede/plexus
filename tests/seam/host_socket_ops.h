@@ -6,6 +6,7 @@
     #include <fcntl.h>
     #include <netinet/in.h>
     #include <sys/time.h>
+    #include <sys/select.h>
     #include <sys/socket.h>
     #include <arpa/inet.h>
     #include <unistd.h>
@@ -18,7 +19,9 @@
     #include <cstdint>
     #include <utility>
     #include <charconv>
+    #include <optional>
     #include <string_view>
+    #include <system_error>
 
 namespace plexus::test {
 
@@ -47,6 +50,26 @@ inline void set_fd_blocking(int fd, bool blocking)
 {
     const int flags = ::fcntl(fd, F_GETFL, 0);
     ::fcntl(fd, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+}
+
+inline std::optional<std::error_code> poll_connect(int fd)
+{
+    fd_set writable;
+    fd_set failed;
+    FD_ZERO(&writable);
+    FD_ZERO(&failed);
+    FD_SET(fd, &writable);
+    FD_SET(fd, &failed);
+    timeval zero{};
+    if(::select(fd + 1, nullptr, &writable, &failed, &zero) <= 0)
+        return std::nullopt;
+    int err       = 0;
+    socklen_t len = sizeof(err);
+    if(::getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) < 0)
+        err = errno;
+    if(err != 0)
+        return std::error_code{err, std::generic_category()};
+    return std::error_code{};
 }
 
 inline void close_fd(int fd, std::atomic<std::thread::id> *witness)

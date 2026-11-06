@@ -26,6 +26,7 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <system_error>
 
 using plexus::test::host_tcp_socket;
 using plexus::test::host_tcp_listener;
@@ -41,13 +42,15 @@ namespace {
 
 std::vector<std::byte> on_wire(std::span<const std::byte> payload)
 {
-    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
+    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                      payload);
 }
 
 host_tcp_socket dial_loopback(const plexus::io::endpoint &ep)
 {
     host_tcp_socket client;
     client.connect(ep);
+    plexus::test::poll_until([] {}, [&client] { return client.connect_outcome() == std::error_code{}; });
     return client;
 }
 
@@ -57,7 +60,7 @@ TEST_CASE("lwip_transport accepts a loopback client and delivers one poll-able c
 {
     plexus::freertos::freertos_executor ex;
     accept_transport<> transport{ex};
-    host_tcp_listener  probe;
+    host_tcp_listener probe;
     // Borrow the listener's bind to learn the ephemeral port the transport then binds.
     REQUIRE_FALSE(probe.bind_and_listen(plexus::io::endpoint{"tcp", "127.0.0.1:0"}));
     const auto address = probe.local_endpoint();
@@ -85,7 +88,7 @@ TEST_CASE("lwip_transport accepts two clients under cap 2 and refuses a third un
 {
     plexus::freertos::freertos_executor ex;
     accept_transport<2> two{ex};
-    host_tcp_listener   probe;
+    host_tcp_listener probe;
     REQUIRE_FALSE(probe.bind_and_listen(plexus::io::endpoint{"tcp", "127.0.0.1:0"}));
     const auto address = probe.local_endpoint();
     probe.close();
@@ -93,7 +96,12 @@ TEST_CASE("lwip_transport accepts two clients under cap 2 and refuses a third un
 
     std::int32_t accepts = 0;
     std::vector<std::unique_ptr<lwip_channel>> kept;
-    two.on_accepted([&](std::unique_ptr<lwip_channel> ch) { ++accepts; kept.push_back(std::move(ch)); });
+    two.on_accepted(
+            [&](std::unique_ptr<lwip_channel> ch)
+            {
+                ++accepts;
+                kept.push_back(std::move(ch));
+            });
 
     host_tcp_socket a = dial_loopback(address);
     host_tcp_socket b = dial_loopback(address);
@@ -102,15 +110,21 @@ TEST_CASE("lwip_transport accepts two clients under cap 2 and refuses a third un
 
     plexus::freertos::freertos_executor ex1;
     accept_transport<1> one{ex1};
-    host_tcp_listener   probe1;
+    host_tcp_listener probe1;
     REQUIRE_FALSE(probe1.bind_and_listen(plexus::io::endpoint{"tcp", "127.0.0.1:0"}));
     const auto address1 = probe1.local_endpoint();
     probe1.close();
     one.listen(address1);
 
-    std::int32_t                  accepts1 = 0;
+    std::int32_t accepts1 = 0;
     std::unique_ptr<lwip_channel> first;
-    one.on_accepted([&](std::unique_ptr<lwip_channel> ch) { ++accepts1; if(!first) first = std::move(ch); });
+    one.on_accepted(
+            [&](std::unique_ptr<lwip_channel> ch)
+            {
+                ++accepts1;
+                if(!first)
+                    first = std::move(ch);
+            });
 
     host_tcp_socket c = dial_loopback(address1);
     host_tcp_socket d = dial_loopback(address1);
@@ -125,7 +139,7 @@ TEST_CASE("lwip_transport clears an accepted channel's view on close so poll nev
 {
     plexus::freertos::freertos_executor ex;
     accept_transport<> transport{ex};
-    host_tcp_listener  probe;
+    host_tcp_listener probe;
     REQUIRE_FALSE(probe.bind_and_listen(plexus::io::endpoint{"tcp", "127.0.0.1:0"}));
     const auto address = probe.local_endpoint();
     probe.close();
@@ -152,7 +166,7 @@ TEST_CASE("lwip_transport leaves a closed channel's close notification to the ow
 {
     plexus::freertos::freertos_executor ex;
     accept_transport<> transport{ex};
-    host_tcp_listener  probe;
+    host_tcp_listener probe;
     REQUIRE_FALSE(probe.bind_and_listen(plexus::io::endpoint{"tcp", "127.0.0.1:0"}));
     const auto address = probe.local_endpoint();
     probe.close();

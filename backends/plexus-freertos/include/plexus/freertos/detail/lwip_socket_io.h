@@ -20,12 +20,14 @@
     #include <cerrno>
     #include <chrono>
     #include <cstddef>
+    #include <optional>
     #include <system_error>
 
 namespace plexus::freertos::detail {
 
-// The on-target connected TCP socket. Non-blocking by default, so the channel's poll() drains recv() inside the
-// cooperative loop; the receive-task policy makes it blocking, so recv() parks for the receive timeout. send() never parks.
+// The on-target TCP socket. connect() starts a non-blocking connect that connect_outcome() resolves; the socket then
+// receives in the mode the policy picks: non-blocking for the channel's cooperative poll(), blocking for the receive
+// task, whose recv() parks for the receive timeout. send() never parks.
 class lwip_socket
 {
 public:
@@ -35,6 +37,7 @@ public:
             : m_fd(-1)
             , m_closed(false)
             , m_blocking(false)
+            , m_connect_outcome(std::nullopt)
     {
     }
 
@@ -44,6 +47,7 @@ public:
             : m_fd(fd)
             , m_closed(false)
             , m_blocking(false)
+            , m_connect_outcome(std::nullopt)
     {
         set_nonblocking();
     }
@@ -60,6 +64,7 @@ public:
             : m_fd(other.m_fd)
             , m_closed(other.m_closed.load())
             , m_blocking(other.m_blocking)
+            , m_connect_outcome(other.m_connect_outcome)
     {
         other.m_fd = -1;
         other.m_closed.store(true);
@@ -72,8 +77,9 @@ public:
             close();
             m_fd = other.m_fd;
             m_closed.store(other.m_closed.load());
-            m_blocking = other.m_blocking;
-            other.m_fd = -1;
+            m_blocking        = other.m_blocking;
+            m_connect_outcome = other.m_connect_outcome;
+            other.m_fd        = -1;
             other.m_closed.store(true);
         }
         return *this;
@@ -81,11 +87,22 @@ public:
 
     std::error_code connect(endpoint_type ep)
     {
-        const auto parsed = parse_host_port(ep.address);
-        if(std::error_code ec = open_and_dial(parsed); ec)
-            return ec;
+        m_fd = ::lwip_socket(AF_INET, SOCK_STREAM, 0); // the BSD opener; the class name shadows it unqualified here
+        if(m_fd < 0)
+            return std::make_error_code(std::errc::too_many_files_open);
+        set_nonblocking();
+        const sockaddr_in addr = ipv4_address(parse_host_port(ep.address));
+        if(lwip_connect(m_fd, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) < 0 && errno != EINPROGRESS)
+            return std::error_code{errno, std::generic_category()};
         m_closed.store(false);
         return {};
+    }
+
+    std::optional<std::error_code> connect_outcome()
+    {
+        if(!m_connect_outcome)
+            m_connect_outcome = poll_connect(m_fd);
+        return m_connect_outcome;
     }
 
     std::size_t send(std::span<const std::byte> bytes)
@@ -129,22 +146,6 @@ public:
     }
 
 private:
-    std::error_code open_and_dial(const host_port &parsed)
-    {
-        m_fd = ::lwip_socket(AF_INET, SOCK_STREAM, 0); // the BSD opener; the class name shadows it unqualified here
-        if(m_fd < 0)
-            return std::make_error_code(std::errc::too_many_files_open);
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port   = lwip_htons(parsed.port);
-        inet_pton(AF_INET, parsed.host.c_str(), &addr.sin_addr);
-        const int rc = lwip_connect(m_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
-        if(rc < 0 && errno != EINPROGRESS)
-            return std::make_error_code(std::errc::connection_refused);
-        set_nonblocking();
-        return {};
-    }
-
     void set_nonblocking()
     {
         set_fd_blocking(m_fd, false);
@@ -167,6 +168,7 @@ private:
     int m_fd;
     std::atomic<bool> m_closed;
     bool m_blocking;
+    std::optional<std::error_code> m_connect_outcome;
 };
 
 }

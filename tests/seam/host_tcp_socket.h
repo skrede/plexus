@@ -21,6 +21,7 @@
     #include <chrono>
     #include <thread>
     #include <cstddef>
+    #include <optional>
     #include <system_error>
 
 namespace plexus::test {
@@ -38,6 +39,7 @@ public:
             , m_stall(nullptr)
             , m_fault(nullptr)
             , m_close_witness(nullptr)
+            , m_connect_outcome(std::nullopt)
     {
     }
 
@@ -47,6 +49,7 @@ public:
             , m_stall(nullptr)
             , m_fault(nullptr)
             , m_close_witness(nullptr)
+            , m_connect_outcome(std::nullopt)
     {
         suppress_sigpipe(m_fd);
         set_blocking(false);
@@ -66,6 +69,7 @@ public:
             , m_stall(other.m_stall)
             , m_fault(other.m_fault)
             , m_close_witness(other.m_close_witness)
+            , m_connect_outcome(other.m_connect_outcome)
     {
         other.m_fd = -1;
         other.m_closed.store(true);
@@ -78,10 +82,11 @@ public:
             close();
             m_fd = other.m_fd;
             m_closed.store(other.m_closed.load());
-            m_stall         = other.m_stall;
-            m_fault         = other.m_fault;
-            m_close_witness = other.m_close_witness;
-            other.m_fd      = -1;
+            m_stall           = other.m_stall;
+            m_fault           = other.m_fault;
+            m_close_witness   = other.m_close_witness;
+            m_connect_outcome = other.m_connect_outcome;
+            other.m_fd        = -1;
             other.m_closed.store(true);
         }
         return *this;
@@ -93,11 +98,18 @@ public:
         if(m_fd < 0)
             return std::make_error_code(std::errc::too_many_files_open);
         suppress_sigpipe(m_fd);
-        if(connect_ipv4(m_fd, ep.address) < 0)
-            return std::make_error_code(std::errc::connection_refused);
         set_blocking(false);
+        if(connect_ipv4(m_fd, ep.address) < 0 && errno != EINPROGRESS)
+            return std::error_code{errno, std::generic_category()};
         m_closed.store(false);
         return {};
+    }
+
+    std::optional<std::error_code> connect_outcome()
+    {
+        if(!m_connect_outcome)
+            m_connect_outcome = poll_connect(m_fd);
+        return m_connect_outcome;
     }
 
     std::size_t send(std::span<const std::byte> bytes)
@@ -177,6 +189,7 @@ private:
     const bool *m_stall;
     const bool *m_fault;
     std::atomic<std::thread::id> *m_close_witness;
+    std::optional<std::error_code> m_connect_outcome;
 };
 
 }

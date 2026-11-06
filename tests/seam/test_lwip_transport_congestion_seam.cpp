@@ -5,6 +5,7 @@
 // the same send via would_block and never sheds (transport.dropped() == 0). Additive to the host suite.
 
 #include "host_tcp_socket.h" // MUST precede lwip_transport.h: declares the host POSIX stream_socket
+#include "host_loopback_pair.h"
 
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
@@ -55,6 +56,10 @@ public:
     std::error_code connect(endpoint_type ep)
     {
         return m_inner.connect(std::move(ep));
+    }
+    std::optional<std::error_code> connect_outcome()
+    {
+        return m_inner.connect_outcome();
     }
     std::size_t send(std::span<const std::byte> bytes)
     {
@@ -127,6 +132,17 @@ std::vector<std::byte> filler(std::size_t n)
     return std::vector<std::byte>(n, std::byte{0x5A});
 }
 
+bool dialed(transport_type &transport, plexus::freertos::freertos_executor &ex, const std::unique_ptr<channel_type> &channel)
+{
+    return plexus::test::poll_until(
+            [&]
+            {
+                transport.poll();
+                ex.drain();
+            },
+            [&channel] { return channel != nullptr; });
+}
+
 }
 
 TEST_CASE("lwip_transport forwards drop_newest to its channels and folds the shed count", "[seam]")
@@ -143,7 +159,7 @@ TEST_CASE("lwip_transport forwards drop_newest to its channels and folds the she
 
     g_stall = true; // keep the first frame resident so the second overflows the cap
     transport.dial(plexus::io::endpoint{"tcp", listener->address});
-    REQUIRE(channel != nullptr);
+    REQUIRE(dialed(transport, ex, channel));
 
     channel->send(frame); // admitted, stalls resident (the cap now near-full)
     channel->send(frame); // over cap -> drop_newest -> shed + count
@@ -166,7 +182,7 @@ TEST_CASE("lwip_transport forwards block to its channels: no shed, would_block s
 
     g_stall = true;
     transport.dial(plexus::io::endpoint{"tcp", listener->address});
-    REQUIRE(channel != nullptr);
+    REQUIRE(dialed(transport, ex, channel));
 
     int errors = 0;
     channel->on_error([&](plexus::io::io_error) { ++errors; });

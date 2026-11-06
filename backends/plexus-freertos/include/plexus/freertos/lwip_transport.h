@@ -45,7 +45,7 @@ public:
             : m_executor(ex)
             , m_acceptor()
             , m_views()
-            , m_dialer()
+            , m_dialer(ex)
             , m_rx_task(std::nullopt)
             , m_listening(false)
             , m_read_buffer(read_buffer)
@@ -87,28 +87,20 @@ public:
         m_listening = !m_acceptor.bind_and_listen(ep);
     }
 
-    // The dialed endpoint rides back through on_dialed / on_dial_failed so the engine correlates the
-    // completion to its slot by endpoint. The dialed channel's view joins the set too, so poll-all
-    // and the P2 RX path are uniform across dial and accept.
+    // The dial completes from poll(); a connect to a host that never answers stays pending until lwIP's SYN
+    // retransmission limit aborts it.
     void dial(const plexus::io::endpoint &ep)
     {
-        if(m_views.full())
-            return m_dialer.report(ep, plexus::io::io_error::would_block);
-        m_dialer.dial(ep,
-                      [this, &ep](Socket socket)
-                      {
-                          if(m_on_dialed_cb)
-                              m_on_dialed_cb(adopt(std::move(socket), ep), ep);
-                      });
+        m_dialer.dial(ep);
     }
 
-    // The cooperative RX step the super-loop drives: drain the acceptor, then poll-all the live
-    // views (P1 only — P2 receives on the RX task). The transport keeps NON-OWNING views to the
-    // engine-owned channels; each is cleared on close, so poll-all never touches a dangling view.
+    // The super-loop's step: drain the acceptor, complete parked dials, then poll-all the live views (P1 only; P2
+    // receives on the RX task). The views are non-owning and cleared on close, so poll-all never touches a dangling one.
     void poll()
     {
         if(m_listening)
             accept_pending();
+        m_dialer.complete_each([this](Socket socket, const plexus::io::endpoint &ep) { deliver_dialed(std::move(socket), ep); });
         if(!m_rx_task)
             m_views.poll_each([](channel_type &ch) { ch.poll(); });
     }
@@ -123,6 +115,7 @@ public:
 
     void close()
     {
+        m_dialer.abort_all();
         m_acceptor.close();
         m_listening = false;
     }
@@ -138,6 +131,15 @@ private:
         if(m_views.full() || !m_on_accepted_cb)
             return;
         m_on_accepted_cb(adopt(std::move(*socket), plexus::io::endpoint{"tcp", {}}));
+    }
+
+    // A dialed channel past a full view set would never be polled, so the dial fails and its socket closes.
+    void deliver_dialed(Socket socket, const plexus::io::endpoint &ep)
+    {
+        if(m_views.full())
+            return m_dialer.report(ep, plexus::io::io_error::would_block);
+        if(m_on_dialed_cb)
+            m_on_dialed_cb(adopt(std::move(socket), ep), ep);
     }
 
     // The view-invalidation hook is armed before the channel is handed out, so no window exists where the engine owns
@@ -162,7 +164,7 @@ private:
     freertos_executor &m_executor;
     Acceptor m_acceptor;
     detail::lwip_channel_views<channel_type, MaxClients> m_views;
-    detail::lwip_dialer<Socket> m_dialer;
+    detail::lwip_dialer<Socket, MaxClients> m_dialer;
     std::optional<rx_task_options> m_rx_task;
     bool m_listening;
     std::size_t m_read_buffer;

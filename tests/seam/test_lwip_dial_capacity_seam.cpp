@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <optional>
 
 using plexus::test::host_tcp_socket;
 using plexus::test::host_tcp_listener;
@@ -56,6 +57,18 @@ void accept_one_client(accept_transport<MaxClients> &transport, host_tcp_socket 
     plexus::test::poll_until([&transport] { transport.poll(); }, [&accepted] { return accepted != nullptr; });
 }
 
+template<std::size_t MaxClients, typename Ready>
+bool pump_until(accept_transport<MaxClients> &transport, plexus::freertos::freertos_executor &ex, Ready ready)
+{
+    return plexus::test::poll_until(
+            [&]
+            {
+                transport.poll();
+                ex.drain();
+            },
+            ready);
+}
+
 template<std::size_t MaxClients>
 void record_dials(accept_transport<MaxClients> &transport, dial_outcomes &out)
 {
@@ -79,12 +92,16 @@ TEST_CASE("lwip_transport refuses a dial while its view set is full and reports 
     dial_outcomes out;
     record_dials(transport, out);
     transport.dial(target.local_endpoint());
+    REQUIRE(pump_until(transport, ex, [&out] { return !out.failed.empty(); }));
 
     REQUIRE(out.dialed.empty());
     REQUIRE(out.failed.size() == 1);
     REQUIRE(out.failed[0].first == target.local_endpoint());
     REQUIRE(out.failed[0].second == plexus::io::io_error::would_block);
-    REQUIRE_FALSE(target.accept_one().has_value());
+    std::optional<host_tcp_socket> peer;
+    REQUIRE(plexus::test::poll_until([&] { peer = target.accept_one(); }, [&peer] { return peer.has_value(); }));
+    std::byte scratch[1];
+    REQUIRE(plexus::test::poll_until([&] { peer->recv(scratch); }, [&peer] { return peer->closed(); }));
 
     std::vector<std::byte> received;
     accepted->on_data([&received](std::span<const std::byte> frame) { received.assign(frame.begin(), frame.end()); });
@@ -108,6 +125,7 @@ TEST_CASE("lwip_transport dials normally while a view slot is free", "[seam]")
     dial_outcomes out;
     record_dials(transport, out);
     transport.dial(target.local_endpoint());
+    REQUIRE(pump_until(transport, ex, [&out] { return !out.dialed.empty(); }));
 
     REQUIRE(out.failed.empty());
     REQUIRE(out.dialed.size() == 1);

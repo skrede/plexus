@@ -4,7 +4,9 @@
 #include "plexus/io/endpoint.h"
 
 #include <span>
+#include <chrono>
 #include <cstddef>
+#include <optional>
 #include <system_error>
 
 namespace plexus::freertos::detail {
@@ -33,6 +35,16 @@ struct null_stream_socket
         return false;
     }
     void close()
+    {
+    }
+    std::optional<std::error_code> connect_outcome()
+    {
+        return std::error_code{};
+    }
+    void set_blocking(bool)
+    {
+    }
+    void set_receive_timeout(std::chrono::milliseconds)
     {
     }
 };
