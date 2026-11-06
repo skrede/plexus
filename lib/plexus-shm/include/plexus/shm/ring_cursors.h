@@ -84,21 +84,24 @@ inline void unregister_cursor(control_header_t &h, std::uint64_t consumer_capaci
     h.cursors[index].active.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
 }
 
-// Frees cursor `index` when owner_alive(index) proves its owner dead; an inactive or already reclaimed index is left.
+// Frees cursor `index` when owner_alive(index) proves its owner dead and returns the waiter tag that owner published,
+// read while the cursor is still reclaiming so no newcomer's tag can be. An inactive, already reclaimed or live cursor is
+// left and yields nullopt.
 template<typename Alive>
-bool reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, Alive &owner_alive) noexcept
+std::optional<std::uint32_t> reclaim_cursor(control_header_t &h, std::uint64_t consumer_capacity, std::uint32_t index, Alive &owner_alive) noexcept
 {
     std::uint32_t expected = 1;
     if(!cursor_in_range(consumer_capacity, index) || !h.cursors[index].active.compare_exchange_strong(expected, k_cursor_reclaiming, std::memory_order_acq_rel))
-        return false;
+        return std::nullopt;
     if(owner_alive(index))
     {
         h.cursors[index].active.store(1, std::memory_order_release);
-        return false;
+        return std::nullopt;
     }
+    const std::uint32_t waiter_tag = h.cursors[index].waiter_tag.load(std::memory_order_acquire);
     h.cursors[index].position.store(k_cursor_idle, std::memory_order_release);
     h.cursors[index].active.store(0, std::memory_order_release);
-    return true;
+    return waiter_tag;
 }
 
 // Places claim generation's waiting reader at position; false when the slot does not hold that waiting word. A release

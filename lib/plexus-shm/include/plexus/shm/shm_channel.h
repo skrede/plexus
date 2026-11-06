@@ -34,8 +34,9 @@ template<typename Notifier>
 class shm_channel
 {
 public:
-    using deliver_fn      = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
-    using cursor_alive_fn = plexus::detail::move_only_function<bool(std::uint32_t)>;
+    using deliver_fn          = plexus::detail::move_only_function<void(::plexus::wire_bytes<shm_slot_owner>)>;
+    using cursor_alive_fn     = plexus::detail::move_only_function<bool(std::uint32_t)>;
+    using cursor_reclaimed_fn = plexus::detail::move_only_function<void(std::uint32_t slot, std::uint32_t waiter_tag)>;
 
     // spin_budget is the consumer-sovereign adaptive spin-then-park knob (required-WITH-default, the swept knee): an
     // engaged subscriber spins up to the budget on an empty take before a drain returns and the notifier parks.
@@ -46,6 +47,7 @@ public:
             , m_spin_budget(spin_budget)
             , m_subscriber()
             , m_cursor_alive_cb()
+            , m_cursor_reclaimed_cb()
     {
     }
 
@@ -141,10 +143,11 @@ public:
         return io::reader_claim{*slot, m_subscriber->cursor_generation()};
     }
 
-    // Unbound, a congested reliable send reclaims no cursor.
-    void bind_cursor_liveness(cursor_alive_fn alive) noexcept
+    // Unbound, a congested reliable send reclaims no cursor; reclaimed hears each reclaimed slot whose waiter left a tag.
+    void bind_cursor_liveness(cursor_alive_fn alive, cursor_reclaimed_fn reclaimed = {}) noexcept
     {
-        m_cursor_alive_cb = std::move(alive);
+        m_cursor_alive_cb     = std::move(alive);
+        m_cursor_reclaimed_cb = std::move(reclaimed);
     }
 
 private:
@@ -154,6 +157,7 @@ private:
     std::uint32_t m_spin_budget;
     std::optional<slot_subscriber> m_subscriber;
     cursor_alive_fn m_cursor_alive_cb;
+    cursor_reclaimed_fn m_cursor_reclaimed_cb;
 
     // Cursor liveness is probed only once a reliable blocking loan is congested: right away, then after each whole
     // no-progress window, until a pass reclaims nothing.
@@ -177,8 +181,12 @@ private:
         const std::optional<std::uint32_t> own = waiter_slot();
         bool reclaimed                         = false;
         for(std::uint32_t i = 0; i < m_ring.registered_high_water(); ++i)
-            if(own != i && m_ring.reclaim_cursor(i, m_cursor_alive_cb))
-                reclaimed = true;
+        {
+            const std::optional<std::uint32_t> tag = own == i ? std::nullopt : m_ring.reclaim_cursor(i, m_cursor_alive_cb);
+            if(tag && *tag != 0 && m_cursor_reclaimed_cb)
+                m_cursor_reclaimed_cb(i, *tag);
+            reclaimed = reclaimed || tag;
+        }
         return reclaimed;
     }
 };

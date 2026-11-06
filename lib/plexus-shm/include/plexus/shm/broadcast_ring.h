@@ -99,8 +99,9 @@ public:
         detail::unregister_cursor(*m_header, m_consumer_capacity, index);
     }
 
+    // The reclaimed cursor's waiter tag; nullopt when the cursor was not reclaimed.
     template<typename Alive>
-    bool reclaim_cursor(std::uint32_t index, Alive &owner_alive) noexcept
+    std::optional<std::uint32_t> reclaim_cursor(std::uint32_t index, Alive &owner_alive) noexcept
     {
         return detail::reclaim_cursor(*m_header, m_consumer_capacity, index, owner_alive);
     }

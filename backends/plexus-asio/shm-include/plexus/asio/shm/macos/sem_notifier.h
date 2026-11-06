@@ -7,9 +7,12 @@
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/waiter_park.h"
+#include "plexus/shm/doorbell_naming.h"
 #include "plexus/shm/detail/notifier_bridge.h"
 
 #include "plexus/detail/compat.h"
+
+#include <semaphore.h>
 
 #include <atomic>
 #include <memory>
@@ -107,6 +110,13 @@ public:
         ::plexus::shm::park_clear(s.header, s.slot);
         s.header.cursors[s.slot].waiter_tag.store(0, std::memory_order_release);
         s.doorbell.close();
+    }
+
+    // A waiter that died without its disarm left its semaphore named; the reclaim of its cursor unlinks the name.
+    void forget_waiter(std::uint32_t slot, std::uint32_t tag) noexcept
+    {
+        ::sem_unlink(::plexus::shm::format_doorbell_name(::plexus::shm::k_semaphore_doorbell_prefix, m_region, slot, tag).c_str());
+        m_bells.forget(slot);
     }
 
 private:

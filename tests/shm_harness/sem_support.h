@@ -37,6 +37,16 @@ struct posix_sem_leg
     }
 };
 
+// A reclaim waiter stores the cursor slot it armed on and the waiter tag it published, then ready; it leaves once the
+// parent stores leave.
+struct sem_reclaim_block
+{
+    std::atomic<std::uint32_t> ready;
+    std::atomic<std::uint32_t> slot;
+    std::atomic<std::uint32_t> tag;
+    std::atomic<std::uint32_t> leave;
+};
+
 inline bool wait_parked(const plexus::shm::control_header_t &header, std::uint32_t slot)
 {
     const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);

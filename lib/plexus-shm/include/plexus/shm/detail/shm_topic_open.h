@@ -170,7 +170,12 @@ shm::acquire_failure topic_bind(Registry &r, Entry &e, shm::ring_role role, shm:
 {
     r.m_bind_notifier(e.notify, e.ring.header(), e.ctrl_name);
     e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
-    e.channel->bind_cursor_liveness([&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); });
+    auto alive = [&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); };
+    // Only a notifier whose doorbells outlive their waiter has names to reclaim.
+    if constexpr(requires(typename Entry::notifier_type &n, std::uint32_t v) { n.forget_waiter(v, v); })
+        e.channel->bind_cursor_liveness(alive, [&notify = *e.notify](std::uint32_t slot, std::uint32_t tag) { notify.forget_waiter(slot, tag); });
+    else
+        e.channel->bind_cursor_liveness(alive);
     e.verdict = verdict;
     e.hold(role);
     if(role == shm::ring_role::producer)

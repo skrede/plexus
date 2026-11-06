@@ -144,6 +144,16 @@ public:
         }
     }
 
+    // A reclaimed slot's waiter is gone, so its handle is dropped rather than kept for a name that no longer exists.
+    void forget(std::uint32_t slot) noexcept
+    {
+        const std::lock_guard<std::mutex> lock(m_mutex);
+        if(slot >= m_entries.size())
+            return;
+        close(m_entries[slot]);
+        m_entries[slot].tag = 0;
+    }
+
 private:
     std::mutex m_mutex;
     std::array<entry, ::plexus::shm::k_max_consumers> m_entries;

@@ -87,9 +87,10 @@ plexus_add_shm_xproc_test(test_shm_slot_liveness liveness_roles.cpp test_shm_slo
 plexus_add_shm_xproc_test(test_shm_ring_adoption liveness_roles.cpp test_shm_ring_adoption.cpp)
 
 # The POSIX-semaphore notifier, macOS's own and a second notifier on Linux: a disarm while another process's waiter is
-# parked on the ring, a burst of wakes while the reactor is stalled, a semaphore name already taken, and a notifier
-# destroyed with a drain pending. The burst case exercises the wake pipe, which the Windows event notifier does not
-# have. A case that can hang runs its hanging side in a child the parent kills after a bound.
+# parked on the ring, a burst of wakes while the reactor is stalled, a semaphore name already taken, a notifier
+# destroyed with a drain pending, and a killed waiter's semaphore unlinked when its cursor is reclaimed. The burst case
+# exercises the wake pipe, which the Windows event notifier does not have. A case that can hang runs its hanging side in
+# a child the parent kills after a bound.
 if(NOT WIN32)
     plexus_add_shm_xproc_test(test_shm_sem_notifier
         three_process_roles.cpp
@@ -97,7 +98,8 @@ if(NOT WIN32)
         test_shm_sem_teardown.cpp
         test_shm_sem_pipe.cpp
         test_shm_sem_adoption.cpp
-        test_shm_sem_pending.cpp)
+        test_shm_sem_pending.cpp
+        test_shm_sem_reclaim.cpp)
 endif()
 
 # The event notifier on Windows: a disarm while another process's waiter is parked on the ring, and an event name
