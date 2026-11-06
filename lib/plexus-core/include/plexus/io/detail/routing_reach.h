@@ -11,9 +11,9 @@
 
 namespace plexus::io::detail {
 
-// A session not yet torn down owns the slot, so starting the driver would tear it down. A forget during an armed
-// backoff denies the redial but leaves the dropped session open, so a driver that will not redial leaves the slot to a
-// fresh start.
+// A session not yet torn down owns the slot, so starting the driver would tear it down. A driver that will not redial
+// yields the slot to a fresh start; a forget reaches this only mid-handshake, since both callers stop first on a
+// complete session.
 template<typename Engine>
 bool has_live_session(Engine &e, const node_id &id)
 {

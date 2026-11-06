@@ -87,3 +87,33 @@ TEST_CASE("reach guard: a slot that surrendered on a handshake's drop dials agai
     REQUIRE(net.a.is_connected(net.id_b));
     REQUIRE_FALSE(net.a.is_dead(net.id_b));
 }
+
+TEST_CASE("reach guard: a forgotten slot whose handshake is in flight dials again on a fresh card", "[integration][reach_guard]")
+{
+    manual_clock::reset();
+    guarded_pair net;
+    net.a.note_peer(net.id_b, net.ep_b);
+    net.a.reach(net.id_b);
+    auto *s = net.step_into_handshake(net.id_b);
+    REQUIRE(s != nullptr);
+    net.a.forget(net.id_b);
+    REQUIRE_FALSE(s->pending().closing());
+    REQUIRE_FALSE(s->is_complete());
+    const auto accepted = net.b.registry().slot_count();
+
+    net.a.note_peer(net.id_b, net.ep_b);
+    net.a.reach(net.id_b);
+    REQUIRE(net.b.registry().slot_count() == accepted + 1);
+    net.advance_until([&] { return net.a.is_connected(net.id_b); });
+    REQUIRE(net.a.is_connected(net.id_b));
+    const auto attempts = net.a.attempt_count(net.id_b);
+
+    auto *served = net.b.session_for(net.id_a);
+    REQUIRE(served != nullptr);
+    served->tear_down();
+    net.ex.drain();
+    REQUIRE(net.a.attempt_count(net.id_b) == attempts + 1);
+    net.advance_until([&] { return net.b.is_connected(net.id_a); });
+    REQUIRE(net.a.is_connected(net.id_b));
+    REQUIRE(net.b.is_connected(net.id_a));
+}
