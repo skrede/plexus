@@ -19,10 +19,8 @@
 #include <span>
 #include <string>
 #include <cstdint>
-#include <stdexcept>
 
-namespace
-{
+namespace {
 
 using plexus::node_id;
 using plexus::graph::observation;
@@ -145,8 +143,8 @@ TEST_CASE("fixed twin lookup surfaces the direct endpoint only, never a via cand
     const node_id peer = id_with(1);
 
     store.admit(peer, relayed_via(20), 10, opts);
-    REQUIRE(store.has(peer));                    // the identity exists
-    REQUIRE_FALSE(store.get(peer).has_value());  // but no direct endpoint is surfaced
+    REQUIRE(store.has(peer));                   // the identity exists
+    REQUIRE_FALSE(store.get(peer).has_value()); // but no direct endpoint is surfaced
 
     store.admit(peer, direct_with(1), 11, opts);
     REQUIRE(store.get(peer) == ep_with(1));
@@ -205,7 +203,7 @@ TEST_CASE("fixed twin marks a via row unreachable in place, keeping the row and 
     REQUIRE_FALSE(store.mark_unreachable_via(id_with(2), via));
 }
 
-TEST_CASE("fixed twin fails closed on a direct peer past identity capacity but never on a transitive flood", "[graph][route][fixed_peer_storage]")
+TEST_CASE("fixed twin rejects and counts a new identity past capacity, direct or transitive", "[graph][route][fixed_peer_storage]")
 {
     fixed_peer_storage<2, 4> store;
     const route_options opts{};
@@ -213,13 +211,13 @@ TEST_CASE("fixed twin fails closed on a direct peer past identity capacity but n
     store.admit(id_with(1), direct_with(1), 10, opts);
     store.admit(id_with(2), direct_with(2), 10, opts);
 
-    // A transitive report about a new identity when the table is full is rejected-and-counted, never
-    // an abort — the guard against a transitive-report flood exhausting the table.
+    // A full table refuses a new identity whatever its kind, so neither a transitive-report flood nor
+    // a discovered card can exhaust the table or abort the node.
     REQUIRE_FALSE(store.admit(id_with(3), relayed_via(3), 20, opts));
     REQUIRE(store.dropped() == 1);
     REQUIRE_FALSE(store.has(id_with(3)));
 
-    // A direct peer past the identity capacity is the DEFINED refusal (fail_closed throws under the
-    // exception-enabled PC build).
-    REQUIRE_THROWS_AS(store.admit(id_with(4), direct_with(4), 20, opts), std::runtime_error);
+    REQUIRE_FALSE(store.admit(id_with(4), direct_with(4), 20, opts));
+    REQUIRE(store.dropped() == 2);
+    REQUIRE_FALSE(store.has(id_with(4)));
 }

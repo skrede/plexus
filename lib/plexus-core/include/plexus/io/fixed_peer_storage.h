@@ -19,8 +19,8 @@ namespace plexus::io {
 
 // The constrained-target (MCU) awareness backend: a dep-free, fixed-capacity flat array, a linear
 // scan over N. Each identity holds a bounded, inline candidate list (never a heap container) with
-// direct-first partitioning. The (N+1)-th DISTINCT identity calls plexus::detail::fail_closed — a
-// DEFINED refusal, never an out-of-bounds write, a silent drop, or an undefined terminate.
+// direct-first partitioning. The (N+1)-th DISTINCT identity is refused and counted in dropped(),
+// never an out-of-bounds write, an eviction, or an abort.
 template<std::size_t N, std::size_t Candidates = 4>
 class fixed_peer_storage
 {
@@ -145,7 +145,7 @@ public:
         return false;
     }
 
-    // Transitive candidates refused for want of a non-reserved row.
+    // Candidates refused for want of a free identity slot or a non-reserved row.
     std::size_t dropped() const noexcept
     {
         return m_dropped;

@@ -8,18 +8,13 @@
 
 #include "plexus/node_id.h"
 
-#include "plexus/detail/fail_closed.h"
-
 #include <cstddef>
 #include <cstdint>
 
 namespace plexus::io::detail {
 
-// A new identity takes a free slot. When the identity array is full a DIRECT peer fails closed
-// (the target is sized below its direct peer count); a TRANSITIVE report is rejected by the caller
-// and counted, never allowed to exhaust the table or abort.
 template<typename Slots>
-typename Slots::value_type *claim_identity_slot(Slots &slots, const node_id &id, bool is_direct)
+typename Slots::value_type *claim_identity_slot(Slots &slots, const node_id &id)
 {
     for(auto &e : slots)
         if(!e.occupied)
@@ -30,20 +25,18 @@ typename Slots::value_type *claim_identity_slot(Slots &slots, const node_id &id,
             e.binding_invalid = false;
             return &e;
         }
-    if(is_direct)
-        plexus::detail::fail_closed("fixed_peer_storage: capacity exceeded");
     return nullptr;
 }
 
-// Direct-first candidate admission: a direct row is never reject-and-counted, a transitive row is
-// admitted only into the non-reserved region and otherwise rejected-and-tallied — never displacing
-// a direct row under either protection scheme.
+// A direct candidate is never displaced from or rejected by an identity's candidate rows, while a
+// transitive one takes only a non-reserved row. A new identity on a full table is rejected and
+// counted whatever its kind, so an announced card can neither abort the node nor evict a peer.
 template<typename S>
 bool admit_identity_candidate(S &s, const node_id &id, const route_candidate &cand, std::uint64_t now, const route_options &opts)
 {
     auto *slot = s.find(id);
     if(slot == nullptr)
-        slot = detail::claim_identity_slot(s.m_slots, id, cand.is_direct());
+        slot = detail::claim_identity_slot(s.m_slots, id);
     if(slot == nullptr)
     {
         ++s.m_dropped;
@@ -56,14 +49,14 @@ bool admit_identity_candidate(S &s, const node_id &id, const route_candidate &ca
     return r.changed;
 }
 
-// Reported (via-only) admission: a new origin claims a free slot without fail_closed (a transitive
-// report never aborts the table), and the seq dedups against the row's embedded window.
+// Reported (via-only) admission: a new origin claims a free slot or is counted, and the seq dedups
+// against the row's embedded window.
 template<typename S>
 detail::report_admit note_identity_report(S &s, const node_id &id, const route_candidate &cand, std::uint16_t seq, std::uint64_t now, const route_options &opts)
 {
     auto *slot = s.find(id);
     if(slot == nullptr)
-        slot = detail::claim_identity_slot(s.m_slots, id, false);
+        slot = detail::claim_identity_slot(s.m_slots, id);
     if(slot == nullptr)
         return (++s.m_dropped, detail::report_admit::dropped);
     const auto r = detail::note_reported_row(slot->candidates.data(), slot->count, slot->candidates.size(), slot->last_refreshed, cand, seq, now, opts);

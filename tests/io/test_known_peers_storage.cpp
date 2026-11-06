@@ -1,9 +1,8 @@
 // The known_peers storage-policy oracle: proves basic_known_peers<Storage> keeps the
 // 4-verb awareness contract (note_peer / lookup / contains / forget) byte-for-byte across
 // the std::map default (the PC type) and a dep-free flat fixed-capacity variant, and that
-// the fixed variant fails closed on over-capacity (the N+1-th distinct identity aborts via
-// fail_closed, never an out-of-bounds write or a silent drop). No socket, no backend —
-// header-only core, linked against plexus::core + Catch2's main only.
+// the fixed variant refuses the N+1-th distinct identity while keeping the ones it holds.
+// No socket, no backend — header-only core, linked against plexus::core + Catch2's main only.
 
 #include "plexus/io/known_peers.h"
 #include "plexus/io/route_options.h"
@@ -90,7 +89,7 @@ void exercise_unreachable_marking(Table &table)
     REQUIRE(reach_status_via(table, origin, relay) == reachability::reachable);
     REQUIRE_FALSE(table.mark_reachable_via(origin, relay));
 
-    REQUIRE_FALSE(table.mark_unreachable_via(id_of(std::byte{0x99}), relay)); // unknown origin
+    REQUIRE_FALSE(table.mark_unreachable_via(id_of(std::byte{0x99}), relay));  // unknown origin
     REQUIRE_FALSE(table.mark_unreachable_via(origin, id_of(std::byte{0x98}))); // unknown via
 }
 
@@ -211,18 +210,17 @@ TEST_CASE("known_peers_storage fixed variant fills to capacity and overwrites in
     REQUIRE(table.contains(id_of(std::byte{0x09})));
 }
 
-TEST_CASE("known_peers_storage fixed variant fails closed on over-capacity", "[io][known_peers]")
+TEST_CASE("known_peers_storage fixed variant rejects and counts an over-capacity identity", "[io][known_peers]")
 {
     constexpr std::size_t cap = 2;
     basic_known_peers<fixed_peer_storage<cap>> table;
 
     table.note_peer(id_of(std::byte{0x01}), ep_of("a"));
     table.note_peer(id_of(std::byte{0x02}), ep_of("b"));
-
-    // The (cap+1)-th DISTINCT identity has no matching and no free slot: fail closed.
-    // Under exceptions (the PC build) fail_closed throws std::runtime_error; it is NEVER a
-    // silent drop, an out-of-bounds write, or an unconditional terminate.
-    REQUIRE_THROWS_AS(table.note_peer(id_of(std::byte{0x03}), ep_of("c")), std::runtime_error);
+    REQUIRE_FALSE(table.note_peer(id_of(std::byte{0x03}), ep_of("c")));
+    REQUIRE_FALSE(table.contains(id_of(std::byte{0x03})));
+    REQUIRE(table.lookup(id_of(std::byte{0x01})) == ep_of("a"));
+    REQUIRE(table.lookup(id_of(std::byte{0x02})) == ep_of("b"));
 }
 
 TEST_CASE("known_peers_storage default twin marks a reported row unreachable in place and recovers it", "[io][known_peers]")
@@ -254,10 +252,12 @@ template<typename Table>
 std::vector<enum_row> direct_only_rows(const Table &table, const node_id &want)
 {
     std::vector<enum_row> rows;
-    table.for_each_candidate([&](const node_id &id, const route &reach, const provenance &origin) {
-        if(id == want)
-            rows.push_back(enum_row{id, reach.via, origin.how, origin.reach_status});
-    });
+    table.for_each_candidate(
+            [&](const node_id &id, const route &reach, const provenance &origin)
+            {
+                if(id == want)
+                    rows.push_back(enum_row{id, reach.via, origin.how, origin.reach_status});
+            });
     return rows;
 }
 

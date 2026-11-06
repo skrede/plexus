@@ -162,6 +162,15 @@ target_link_libraries(test_graph_change_payload PRIVATE
 target_include_directories(test_graph_change_payload PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_graph_change_payload TEST_PREFIX "graph.")
 
+# A bounded engine refuses and counts a card past its peer capacity; drives support/graph_change_inproc.h.
+add_executable(test_bounded_card_refusal test_bounded_card_refusal.cpp)
+target_link_libraries(test_bounded_card_refusal PRIVATE
+    plexus::plexus
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_bounded_card_refusal PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_bounded_card_refusal TEST_PREFIX "graph.")
+
 # The public query surface the propagation feeds. It drives a three-node topology (two rival
 # publishers must both be remote to the node enumerating them), so it is its own executable rather
 # than a widening of the two-node propagation oracle.

@@ -70,8 +70,8 @@ int main()
     (void)engine.known();
 
     // The constrained-target peer table: instantiate basic_known_peers over the dep-free
-    // fixed-capacity storage and drive its four verbs so the over-capacity fail-closed path
-    // (plexus::detail::fail_closed) is compiled under -fno-exceptions. The routing_engine
+    // fixed-capacity storage and drive its four verbs so its admission path, the per-identity
+    // plexus::detail::fail_closed included, is compiled under -fno-exceptions. The routing_engine
     // threads PeerStorage as a defaulted template param, so a fixed-storage engine compiles
     // on the same MCU floor.
     plexus::io::basic_known_peers<plexus::io::fixed_peer_storage<8>> bounded;
