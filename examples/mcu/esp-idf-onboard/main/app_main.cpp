@@ -155,9 +155,7 @@ void plexus_task(void *)
     // Dial the per-message ceiling DOWN for the target — the self-route payload is a 4-byte
     // counter; a PC-sized default would over-provision the loan pools the engine carries.
     opts.max_message_bytes = 64;
-    // reconnect / redial_seed are required by node_options even though the self-route never dials
-    // or reconnects; set them explicitly so the config is fully specified (fail-closed), never an
-    // accidental zero default.
+    // The self-route never dials, so this cadence and seed are inert; they stay to show the knobs.
     opts.reconnect   = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed = 0x0B0AC0DEu;
 

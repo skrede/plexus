@@ -18,6 +18,7 @@
 #include <string>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 
 namespace plexus {
 
@@ -37,9 +38,9 @@ struct handshake_options
 struct node_options
 {
     // Empty falls back to io::node_name_of(id) for the discovery service name.
-    std::string name;
+    std::string name{};
 
-    handshake_options handshake;
+    handshake_options handshake{};
 
     std::chrono::nanoseconds handshake_timeout{std::chrono::seconds(5)};
 
@@ -51,16 +52,13 @@ struct node_options
     // directly-dialed point-to-point host (no card to redial off) needs it set; it is node-WIDE.
     std::uint32_t handshake_retry{0};
 
-    // REQUIRED: the reconnect backoff/surrender cadence is tuned per deployment, so a zeroed
-    // default would silently ship an un-tuned cadence.
-    io::reconnect_config reconnect;
+    io::reconnect_config reconnect{};
 
     // Applied only on best-effort datagram legs; ordered and reliable legs never re-send a subscribe.
     io::subscribe_retry_config subscribe_retry{};
 
-    // REQUIRED, distinct per node — a shared seed phase-locks redial jitter across nodes,
-    // defeating the decorrelation the jitter exists to provide.
-    std::uint64_t redial_seed{};
+    // Empty derives the seed from the node id, so co-started nodes do not phase-lock their redial jitter.
+    std::optional<std::uint64_t> redial_seed{};
 
     // false is LAZY (note_peer records awareness, dials on demand); true dials off note_peer.
     bool dial_eagerly{false};

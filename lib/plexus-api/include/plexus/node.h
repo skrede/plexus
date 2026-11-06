@@ -44,7 +44,6 @@
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/node_close.h"
-#include "plexus/detail/fail_closed.h"
 #include "plexus/detail/graph_sweep.h"
 #include "plexus/detail/address_parse.h"
 #include "plexus/detail/node_identity.h"
@@ -60,6 +59,7 @@
 #include "plexus/detail/node_discovery_glue.h"
 #include "plexus/detail/node_upgrade_wiring.h"
 #include "plexus/detail/node_object_dispatch.h"
+#include "plexus/detail/node_options_resolve.h"
 #include "plexus/detail/node_self_carrier_sync.h"
 
 #include <span>
@@ -232,8 +232,8 @@ public:
             , m_glue(transports..., io::transport_selector{}, detail::resolve_hook(transports...))
             , m_leaf(engine_leaf(transports...))
             , m_self_channel(executor, m_service_name)
-            , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout, opts.reconnect, opts.redial_seed, resolve_logger(opts), opts.dial_eagerly,
-                       opts.max_message_bytes, opts.liveliness, opts.routes, opts.report, io::forward_options{}, opts.subscribe_retry)
+            , m_engine(m_leaf, executor, make_fsm_cfg(id, opts), opts.handshake_timeout, detail::checked_reconnect(opts), detail::resolved_redial_seed(id, opts), resolve_logger(opts),
+                       opts.dial_eagerly, opts.max_message_bytes, opts.liveliness, opts.routes, opts.report, io::forward_options{}, opts.subscribe_retry)
     {
         (detail::apply_dial_timeout(transports, opts.dial_timeout), ...);
         // The routes are installed and the card advertised synchronously in the ctor turn, before

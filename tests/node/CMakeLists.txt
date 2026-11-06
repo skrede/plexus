@@ -77,6 +77,15 @@ target_link_libraries(test_node_construction PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_node_construction TEST_PREFIX "node.")
 
+# The node_options reconnect defaults, the construction-time refusal of a degenerate range and the seed derivation.
+add_executable(test_node_options_defaults test_node_options_defaults.cpp)
+target_link_libraries(test_node_options_defaults PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_node_options_defaults TEST_PREFIX "node.")
+
 add_executable(test_node_discovery test_node_discovery.cpp test_node_discovery_awareness.cpp)
 target_link_libraries(test_node_discovery PRIVATE
     plexus::plexus

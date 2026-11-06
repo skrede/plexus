@@ -11,10 +11,10 @@ namespace plexus::io {
 // surrender bound does not apply; with neither set the driver retries forever.
 struct reconnect_config
 {
-    std::chrono::milliseconds min_delay;
-    std::chrono::milliseconds max_delay;
-    std::optional<std::uint32_t> max_attempts;
-    std::optional<std::chrono::milliseconds> max_elapsed;
+    std::chrono::milliseconds min_delay{100};
+    std::chrono::milliseconds max_delay{10000};
+    std::optional<std::uint32_t> max_attempts{};
+    std::optional<std::chrono::milliseconds> max_elapsed{};
 };
 
 }

@@ -37,8 +37,8 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-// redial_seed is required-distinct; awareness here is lazy (dial_eagerly defaults false), so a
-// noted peer is recorded in known() without a dial — the value is inert for this awareness proof.
+// Awareness here is lazy (dial_eagerly defaults false), so a noted peer is recorded in known()
+// without a dial and the seed is inert for this awareness proof.
 inline plexus::node_options make_opts()
 {
     plexus::node_options opts;
