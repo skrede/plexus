@@ -138,6 +138,15 @@ target_link_libraries(test_handle_move_assign PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_handle_move_assign TEST_PREFIX "node.")
 
+# Every public member of a moved-from handle is inert in a build without the single-executor check.
+add_executable(test_handle_moved_from test_handle_moved_from.cpp test_handle_moved_from_call.cpp test_handle_moved_from_recorder.cpp)
+target_link_libraries(test_handle_moved_from PRIVATE
+    plexus::plexus
+    plexus::inproc
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_handle_moved_from TEST_PREFIX "node.")
+
 add_executable(test_bytes_pubsub test_bytes_pubsub.cpp test_bytes_pubsub_fan.cpp)
 target_link_libraries(test_bytes_pubsub PRIVATE
     plexus::plexus

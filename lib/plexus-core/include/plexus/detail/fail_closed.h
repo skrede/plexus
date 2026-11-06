@@ -39,6 +39,13 @@ inline void affinity_trip(const char *member) noexcept
     std::abort();
 }
 
+// A use after move is a bug in the caller as well, so it aborts the same way.
+inline void moved_from_trip(const char *member) noexcept
+{
+    std::fprintf(stderr, "plexus: %s called on a moved-from handle\n", member);
+    std::abort();
+}
+
 }
 
 #endif

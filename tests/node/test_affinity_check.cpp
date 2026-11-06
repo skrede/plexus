@@ -39,12 +39,17 @@ child_result run_child(const std::string &role)
     return result;
 }
 
-void require_trip(const std::string &role, const std::string &member)
+void require_abort(const std::string &role, const std::string &message)
 {
     const child_result result = run_child(role);
     INFO("stdout: " << result.out << "\nstderr: " << result.err);
     CHECK(result.status != 0);
-    CHECK(result.err.find("plexus: " + member + " called off the node's executor thread") != std::string::npos);
+    CHECK(result.err.find(message) != std::string::npos);
+}
+
+void require_trip(const std::string &role, const std::string &member)
+{
+    require_abort(role, "plexus: " + member + " called off the node's executor thread");
 }
 
 void require_ok(const std::string &role)
@@ -61,6 +66,11 @@ void require_ok(const std::string &role)
 TEST_CASE("affinity_check foreign_publish aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_publish", "publish");
+}
+
+TEST_CASE("affinity_check moved_from_publish aborts with a message naming the member", "[node]")
+{
+    require_abort("moved_from_publish", "plexus: publish called on a moved-from handle");
 }
 
 TEST_CASE("affinity_check foreign_member aborts with a message naming the member", "[node]")

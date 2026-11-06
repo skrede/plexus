@@ -7,6 +7,7 @@
 #include "plexus/io/endpoint_seam.h"
 
 #include "plexus/detail/loan_pool.h"
+#include "plexus/detail/affinity_check.h"
 #include "plexus/detail/publisher_publish.h"
 
 #include "plexus/typed_codec.h"
@@ -31,7 +32,8 @@ template<typename Codec>
 class publisher;
 
 // LIFETIME: a publisher must NOT outlive its node (member-init aggregation, node ref first, so
-// reverse destruction retires the handle before the node). A moved-from handle is inert.
+// reverse destruction retires the handle before the node). A moved-from handle is inert, and under
+// PLEXUS_AFFINITY_CHECKS a call on it aborts.
 template<>
 class publisher<void>
 {
@@ -47,6 +49,8 @@ public:
 
     void publish(std::span<const std::byte> bytes)
     {
+        if(!detail::live_or_trip(m_seam, "publish"))
+            return;
         m_seam.publish(m_seam.ctx, m_fqn, bytes);
     }
 
@@ -105,21 +109,29 @@ public:
     template<typename... Args>
     detail::loan<value_type> borrow(Args &&...args)
     {
+        if(!detail::live_or_trip(m_seam, "borrow"))
+            return {};
         return m_pool.try_borrow(std::forward<Args>(args)...);
     }
 
     void publish(detail::loan<value_type> &&held)
     {
+        if(!detail::live_or_trip(m_seam, "publish"))
+            return;
         detail::publish_loan(*this, std::move(held));
     }
     void publish(const value_type &value)
     {
+        if(!detail::live_or_trip(m_seam, "publish"))
+            return;
         detail::publish_value(*this, value);
     }
 
     // Publishes that degraded to the serialize path.
     std::size_t loan_exhausted() const noexcept
     {
+        if(!detail::live_or_trip(m_seam, "loan_exhausted"))
+            return 0;
         return m_loan_exhausted;
     }
 

@@ -12,6 +12,7 @@
 #include <thread>
 #include <cstddef>
 #include <cstdlib>
+#include <utility>
 #include <optional>
 #include <string_view>
 
@@ -34,6 +35,19 @@ void foreign_publish()
     std::optional<plexus::publisher<>> pub;
     on_driver(rig.node, [&] { pub.emplace(rig.node, "affinity/topic"); });
     pub->publish(k_payload);
+}
+
+// Every call runs on the driver, so only the moved-from check can fire.
+void moved_from_publish()
+{
+    asio_rig rig;
+    on_driver(rig.node,
+              [&]
+              {
+                  plexus::publisher<> source{rig.node, "affinity/topic"};
+                  plexus::publisher<> target{std::move(source)};
+                  source.publish(k_payload);
+              });
 }
 
 void foreign_member()
@@ -112,6 +126,8 @@ role_outcome run_misuse(std::string_view role)
 {
     if(role == "foreign_publish")
         foreign_publish();
+    else if(role == "moved_from_publish")
+        moved_from_publish();
     else if(role == "foreign_member")
         foreign_member();
     else if(role == "second_runner")

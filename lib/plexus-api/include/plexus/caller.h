@@ -16,6 +16,7 @@
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/caller_call.h"
+#include "plexus/detail/affinity_check.h"
 
 #include <span>
 #include <chrono>
@@ -47,7 +48,8 @@ class caller;
 //
 // LIFETIME: a caller must NOT outlive its node. Dropping the handle does NOT cancel an in-flight
 // call — a completion already handed to the forwarder runs to resolution (the asio convention:
-// the operation owns its completion).
+// the operation owns its completion). A call on a moved-from caller starts no operation, so it is dropped and its
+// completion never runs; under PLEXUS_AFFINITY_CHECKS it aborts.
 template<>
 class caller<void, no_codec, no_codec>
 {
@@ -73,8 +75,18 @@ public:
         dispatch(param, std::forward<Completion>(completion), opts.deadline);
     }
 
-    caller(caller &&) noexcept            = default;
-    caller &operator=(caller &&) noexcept = default;
+    caller(caller &&other) noexcept
+            : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
+            , m_fqn(std::move(other.m_fqn))
+    {
+    }
+
+    caller &operator=(caller &&other) noexcept
+    {
+        m_seam = std::exchange(other.m_seam, io::endpoint_seam{});
+        m_fqn  = std::move(other.m_fqn);
+        return *this;
+    }
 
     caller(const caller &)            = delete;
     caller &operator=(const caller &) = delete;
@@ -85,6 +97,8 @@ private:
     template<typename Completion>
     void dispatch(std::span<const std::byte> param, Completion &&completion, std::optional<std::chrono::nanoseconds> deadline)
     {
+        if(!detail::live_or_trip(m_seam, "call"))
+            return;
         detail::dispatch_bytes_call(m_seam, m_fqn, param, std::forward<Completion>(completion), deadline);
     }
 
@@ -126,8 +140,22 @@ public:
         dispatch(request, std::forward<Completion>(completion), opts.deadline);
     }
 
-    caller(caller &&) noexcept            = default;
-    caller &operator=(caller &&) noexcept = default;
+    caller(caller &&other) noexcept
+            : m_seam(std::exchange(other.m_seam, io::endpoint_seam{}))
+            , m_req_codec(std::move(other.m_req_codec))
+            , m_res_codec(std::move(other.m_res_codec))
+            , m_fqn(std::move(other.m_fqn))
+    {
+    }
+
+    caller &operator=(caller &&other) noexcept
+    {
+        m_seam      = std::exchange(other.m_seam, io::endpoint_seam{});
+        m_req_codec = std::move(other.m_req_codec);
+        m_res_codec = std::move(other.m_res_codec);
+        m_fqn       = std::move(other.m_fqn);
+        return *this;
+    }
 
     caller(const caller &)            = delete;
     caller &operator=(const caller &) = delete;
@@ -138,6 +166,8 @@ private:
     template<typename Completion>
     void dispatch(const Req &request, Completion &&completion, std::optional<std::chrono::nanoseconds> deadline)
     {
+        if(!detail::live_or_trip(m_seam, "call"))
+            return;
         const wire_bytes<> encoded = m_req_codec.encode(request);
         detail::dispatch_typed_call<Res>(m_seam, m_fqn, static_cast<std::span<const std::byte>>(encoded), m_res_codec, std::forward<Completion>(completion), deadline);
     }

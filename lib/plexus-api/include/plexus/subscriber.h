@@ -12,6 +12,7 @@
 #include "plexus/recording_qos.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/affinity_check.h"
 #include "plexus/detail/subscriber_callback.h"
 
 #include <span>
@@ -129,6 +130,8 @@ public:
     // Inbound frames whose decode failed — dropped, never a partial T.
     std::size_t decode_failed() const noexcept
     {
+        if(!plexus::detail::live_or_trip(m_seam, "decode_failed"))
+            return 0;
         m_seam.affine(m_seam.ctx, "decode_failed");
         return m_state->decode_failed;
     }

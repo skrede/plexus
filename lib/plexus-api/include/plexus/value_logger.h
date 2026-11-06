@@ -11,6 +11,8 @@
 #include "plexus/typed_codec.h"
 #include "plexus/value_projection.h"
 #include "plexus/value_logger_options.h"
+
+#include "plexus/detail/affinity_check.h"
 #include "plexus/detail/value_logger_project.h"
 
 #include <span>
@@ -68,6 +70,8 @@ public:
     // Inbound frames whose decode failed — dropped, never a partial line.
     std::size_t decode_failed() const noexcept
     {
+        if(!detail::live_or_trip(m_seam, "decode_failed"))
+            return 0;
         m_seam.affine(m_seam.ctx, "decode_failed");
         return m_state->decode_failed;
     }
