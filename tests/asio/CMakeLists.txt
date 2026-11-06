@@ -188,3 +188,11 @@ target_link_libraries(test_udp_multicast_socket PRIVATE
     plexus::asio
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_multicast_socket TEST_PREFIX "asio.")
+
+# The accept-loop error policy: which accept errors stop, re-arm at once or back off, and the doubling capped backoff
+# schedule over a real io_context. Header-only inside plexus::asio; the `asio.` ctest prefix selects it.
+add_executable(test_accept_retry test_accept_retry.cpp)
+target_link_libraries(test_accept_retry PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_accept_retry TEST_PREFIX "asio.")

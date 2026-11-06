@@ -20,6 +20,24 @@ target_link_libraries(test_tls_seam PRIVATE
 
 catch_discover_tests(test_tls_seam TEST_PREFIX "tls.")
 
+# The TLS listener keeps accepting after an EMFILE accept once descriptors free; the exhaustion lowers RLIMIT_NOFILE,
+# which is POSIX-only.
+if(NOT WIN32)
+add_executable(test_tls_accept_retry test_tls_accept_retry.cpp $<TARGET_OBJECTS:plexus-crypto>)
+
+target_link_libraries(test_tls_accept_retry PRIVATE
+    plexus::crypto
+    Catch2::Catch2WithMain)
+target_include_directories(test_tls_accept_retry PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+# UBSan's vptr check opens a pipe on a type-cache miss, which aborts inside the exhausted table.
+if(CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
+    target_compile_options(test_tls_accept_retry PRIVATE -fno-sanitize=vptr)
+endif()
+
+catch_discover_tests(test_tls_accept_retry TEST_PREFIX "tls.")
+endif()
+
 # The live trust-model proof: mutual cross-pinning accepts and delivers; an
 # unpinned dialer (accepter-side reject) and an unpinned accepter (dialer-side
 # reject) BOTH fail closed; a wrong-digest pin rejects; an empty (no-pin) policy

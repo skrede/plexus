@@ -1607,6 +1607,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::asio
         Catch2::Catch2WithMain)
     catch_discover_tests(test_unix_permissions TEST_PREFIX "integration.")
+
+    # The asio and unix listeners keep accepting after an EMFILE accept once descriptors free; the exhaustion lowers
+    # RLIMIT_NOFILE, which is POSIX-only.
+    add_executable(test_listener_accept_retry test_listener_accept_retry.cpp)
+    target_link_libraries(test_listener_accept_retry PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain)
+    target_include_directories(test_listener_accept_retry PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    # UBSan's vptr check opens a pipe on a type-cache miss, which aborts inside the exhausted table.
+    if(CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
+        target_compile_options(test_listener_accept_retry PRIVATE -fno-sanitize=vptr)
+    endif()
+    catch_discover_tests(test_listener_accept_retry TEST_PREFIX "integration.")
     endif()
 
     # The macOS send-to-closed-peer proof: a real plexus asio TCP-loopback and AF_UNIX stream

@@ -52,6 +52,7 @@ public:
             : m_io(io)
             , m_retiring()
             , m_acceptor(io)
+            , m_backoff(io)
             , m_cfg(cfg)
             , m_mode(mode)
             , m_peer_policy(&policy)
@@ -99,11 +100,11 @@ public:
             return detail::report(*this, ec);
         {
             [[maybe_unused]] plexus::detail::scoped_bind_umask umask_guard; // inert on Windows (AF_UNIX carries no mode bits)
-            m_acceptor.bind(ep, ec); // NO reuse_address for AF_UNIX
+            m_acceptor.bind(ep, ec);                                        // NO reuse_address for AF_UNIX
         }
         if(ec)
-            return detail::abort_start(*this, ec); // close the opened acceptor
-        m_bound_path = path;                       // bind created the inode — own it so any later failure unlinks it
+            return detail::abort_start(*this, ec);               // close the opened acceptor
+        m_bound_path = path;                                     // bind created the inode — own it so any later failure unlinks it
         if(!plexus::detail::apply_socket_mode(path, m_mode, ec)) // 0700 default, or a widened knob
             return detail::abort_start(*this, ec);
         m_acceptor.listen(::asio::socket_base::max_listen_connections, ec);
@@ -116,6 +117,7 @@ public:
     void stop()
     {
         m_running = false;
+        m_backoff.cancel();
         std::error_code ec;
         (void)m_acceptor.cancel(ec);
         (void)m_acceptor.close(ec);
@@ -137,10 +139,13 @@ private:
     friend void detail::adopt_peer(L &, ::asio::local::stream_protocol::socket);
     template<typename L>
     friend void detail::do_accept(L &);
+    template<typename L>
+    friend void detail::rearm_accept(L &);
 
     ::asio::io_context &m_io;
     io::detail::retiring_table<unix_channel> m_retiring;
     ::asio::local::stream_protocol::acceptor m_acceptor;
+    detail::accept_backoff m_backoff;
     stream::stream_inbound_config m_cfg;
     plexus::detail::socket_mode m_mode;
     const io::security::peer_cred_policy *m_peer_policy; // borrowed; never owned

@@ -4,6 +4,7 @@
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/tls_credential.h"
 
+#include "plexus/asio/detail/accept_retry.h"
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_endpoint_parse.h"
 
@@ -44,6 +45,7 @@ public:
                  io::egress_capacity egress = io::egress_capacity::bounded_default(), plexus::asio::stream_socket_options socket_options = {})
             : m_io(io)
             , m_acceptor(io)
+            , m_backoff(io)
             , m_cred(cred)
             , m_cfg(cfg)
             , m_no_delay(no_delay)
@@ -90,6 +92,7 @@ public:
     void stop()
     {
         m_running = false;
+        m_backoff.cancel();
         std::error_code ec;
         (void)m_acceptor.cancel(ec);
         (void)m_acceptor.close(ec);
@@ -104,19 +107,16 @@ public:
     }
 
 private:
-    // The closure captures the listener, which its owner stops and drains before destroying, so a success queued before
-    // stop() finds it alive and stopped and drops the socket.
+    // The closure and an accept backoff wait capture the listener, which its owner stops and drains before destroying, so
+    // a success or an expiry queued before stop() finds it alive and stopped and drops the socket or the retry.
     void do_accept()
     {
         m_acceptor.async_accept(
                 [this](std::error_code ec, ::asio::ip::tcp::socket peer)
                 {
                     if(ec)
-                    {
-                        if(ec != ::asio::error::operation_aborted)
-                            report(ec);
-                        return;
-                    }
+                        return plexus::asio::detail::handle_accept_error(m_backoff, ec, m_running, [this](const std::error_code &e) { report(e); }, [this] { rearm(); });
+                    m_backoff.reset();
                     if(!m_running)
                         return;
                     if(m_no_delay)
@@ -153,6 +153,12 @@ private:
         m_accepting.fail_accepted(raw);
     }
 
+    void rearm()
+    {
+        if(m_running)
+            do_accept();
+    }
+
     void report(const std::error_code &ec)
     {
         if(m_on_error_cb)
@@ -161,6 +167,7 @@ private:
 
     ::asio::io_context &m_io;
     ::asio::ip::tcp::acceptor m_acceptor;
+    plexus::asio::detail::accept_backoff m_backoff;
     const tls_credential &m_cred;
     stream::stream_inbound_config m_cfg;
     bool m_no_delay;

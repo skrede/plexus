@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_UNIX_ACCEPT_H
 
 #include "plexus/asio/unix_channel.h"
+#include "plexus/asio/detail/accept_retry.h"
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/security/peer_cred_policy.h"
@@ -70,8 +71,18 @@ void adopt_peer(L &l, ::asio::local::stream_protocol::socket peer)
     l.m_retiring.deliver_or_retire(l.m_on_accepted_cb, std::make_unique<unix_channel>(l.m_io, std::move(peer), l.m_cfg, l.m_congestion, l.m_egress_capacity, l.m_socket_options));
 }
 
-// The closure captures the listener, which its owner stops and drains before destroying, so a success queued before
-// stop() finds it alive and stopped and drops the socket.
+template<typename L>
+void do_accept(L &l);
+
+template<typename L>
+void rearm_accept(L &l)
+{
+    if(l.m_running)
+        do_accept(l);
+}
+
+// The closure and an accept backoff wait capture the listener, which its owner stops and drains before destroying, so a
+// success or an expiry queued before stop() finds it alive and stopped and drops the socket or the retry.
 template<typename L>
 void do_accept(L &l)
 {
@@ -79,11 +90,8 @@ void do_accept(L &l)
             [&l](std::error_code ec, ::asio::local::stream_protocol::socket peer)
             {
                 if(ec)
-                {
-                    if(ec != ::asio::error::operation_aborted)
-                        report(l, ec);
-                    return;
-                }
+                    return handle_accept_error(l.m_backoff, ec, l.m_running, [&l](const std::error_code &e) { report(l, e); }, [&l] { rearm_accept(l); });
+                l.m_backoff.reset();
                 if(!l.m_running)
                     return;
                 adopt_peer(l, std::move(peer));
