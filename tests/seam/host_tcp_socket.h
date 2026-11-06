@@ -35,12 +35,18 @@ public:
     host_tcp_socket()
             : m_fd(-1)
             , m_closed(false)
+            , m_stall(nullptr)
+            , m_fault(nullptr)
+            , m_close_witness(nullptr)
     {
     }
 
     explicit host_tcp_socket(int fd)
             : m_fd(fd)
             , m_closed(false)
+            , m_stall(nullptr)
+            , m_fault(nullptr)
+            , m_close_witness(nullptr)
     {
         suppress_sigpipe(m_fd);
         set_blocking(false);
@@ -168,9 +174,9 @@ private:
 
     int m_fd;
     bool m_closed;
-    const bool *m_stall{nullptr};
-    const bool *m_fault{nullptr};
-    std::atomic<std::thread::id> *m_close_witness{nullptr};
+    const bool *m_stall;
+    const bool *m_fault;
+    std::atomic<std::thread::id> *m_close_witness;
 };
 
 }
