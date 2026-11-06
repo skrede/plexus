@@ -75,9 +75,15 @@ public:
 
     void drain(deliver_fn &deliver)
     {
-        if(!m_subscriber)
-            return;
-        for(;;)
+        drain(deliver, [] { return true; });
+    }
+
+    // Takes while wanted() holds and the subscriber is engaged, so a holder that lets go of its messages from inside
+    // deliver receives nothing more from this drain.
+    template<typename Wanted>
+    void drain(deliver_fn &deliver, Wanted wanted)
+    {
+        while(m_subscriber && wanted())
         {
             taken_message msg;
             if(m_subscriber->take(msg) != loan_status::ok)

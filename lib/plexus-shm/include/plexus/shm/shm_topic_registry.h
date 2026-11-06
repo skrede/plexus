@@ -107,7 +107,7 @@ public:
 
     void set_consumer_sink(const std::string &fqn, ring_direction direction, const node_id &publisher, deliver_fn sink)
     {
-        detail::topic_set_sink(m_entries, key{fqn, direction, publisher}, std::move(sink));
+        detail::topic_set_sink(*this, key{fqn, direction, publisher}, std::move(sink));
     }
 
     // Called on the receive companion's teardown BEFORE its ring release (disarm-before-destroy).
@@ -180,6 +180,10 @@ private:
                                                                  std::uint32_t);
     template<typename R, typename E>
     friend ::plexus::shm::acquire_failure detail::topic_bind(R &, E &, ::plexus::shm::ring_role, ::plexus::shm::acquire_result);
+    template<typename R, typename E, typename D>
+    friend void detail::topic_drain(R &, E &, D);
+    template<typename R>
+    friend void detail::topic_set_sink(R &, const detail::shm_topic_key &, typename R::deliver_fn);
 };
 
 }

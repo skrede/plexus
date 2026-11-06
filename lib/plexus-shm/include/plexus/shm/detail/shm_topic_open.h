@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_TOPIC_OPEN_H
 
 #include "plexus/shm/detail/shm_topic_join.h"
+#include "plexus/shm/detail/shm_topic_drain.h"
 #include "plexus/shm/detail/shm_topic_entry.h"
 #include "plexus/shm/detail/shm_ring_adoption.h"
 #include "plexus/shm/detail/shm_ring_lifetime.h"
@@ -62,11 +63,11 @@ void topic_report(Report &report, io::fallback_reason reason)
 
 // A waiter lost after arming is reported once to the registry, then to every holder watching the entry; a notifier
 // that moves to a lesser wake reports each move while it keeps serving the waiter.
-template<typename Entry, typename Report>
-shm::arm_status topic_arm(Entry &e, std::uint32_t slot, Report &report)
+template<typename Registry, typename Entry, typename Report>
+shm::arm_status topic_arm(Registry &r, Entry &e, std::uint32_t slot, Report &report)
 {
     using notifier_type = typename Entry::notifier_type;
-    auto drain          = [&e, &report] { ring_lifetime::drain(e, report); };
+    auto drain          = [&r, &e, &report] { topic_drain(r, e, [&e, &report] { ring_lifetime::drain(e, report); }); };
     auto lost           = [loss = e.loss, &report](shm::arm_status status)
     {
         topic_report(report, io::fallback_reason::waiter_lost);
@@ -152,12 +153,12 @@ shm::acquire_failure topic_claim_cursor(Entry &e, bool held)
 
 // A subscriber the ring refused a cursor would never receive, so the engagement fails rather than attach it; the caller
 // undoes a failed engagement.
-template<typename Entry, typename Report>
-shm::acquire_failure topic_engage_consumer(Entry &e, Report &report, bool held)
+template<typename Registry, typename Entry, typename Report>
+shm::acquire_failure topic_engage_consumer(Registry &r, Entry &e, Report &report, bool held)
 {
     if(const shm::acquire_failure claimed = topic_claim_cursor(e, held); claimed.bound != shm::acquire_bound::none)
         return claimed;
-    if(const shm::arm_status armed = topic_arm(e, *e.channel->waiter_slot(), report); armed != shm::arm_status::armed)
+    if(const shm::arm_status armed = topic_arm(r, e, *e.channel->waiter_slot(), report); armed != shm::arm_status::armed)
         return shm::acquire_failure{shm::acquire_bound::notifier, 0, 0, shm::region_status::ok, armed};
     return shm::acquire_failure{};
 }
@@ -174,7 +175,7 @@ shm::acquire_failure topic_bind(Registry &r, Entry &e, shm::ring_role role, shm:
     e.hold(role);
     if(role == shm::ring_role::producer)
         return shm::acquire_failure{};
-    return topic_engage_consumer(e, r.m_fallback_cb, role == shm::ring_role::consumer);
+    return topic_engage_consumer(r, e, r.m_fallback_cb, role == shm::ring_role::consumer);
 }
 
 }

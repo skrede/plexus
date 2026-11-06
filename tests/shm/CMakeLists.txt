@@ -996,6 +996,23 @@ if(LIBURING_FOUND)
 
     catch_discover_tests(test_shm_switch_marker TEST_PREFIX "shm.")
 
+    # A subscriber that drops itself inside its own lane callback.
+    add_executable(test_shm_drain_reentry test_shm_drain_reentry.cpp)
+
+    target_include_directories(test_shm_drain_reentry PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
+
+    target_link_libraries(test_shm_drain_reentry PRIVATE
+        plexus::plexus
+        plexus::core
+        plexus::wire
+        plexus::asio
+        plexus::asio::shm
+        plexus::native
+        Catch2::Catch2WithMain)
+
+    catch_discover_tests(test_shm_drain_reentry TEST_PREFIX "shm.")
+
     # A reader engaged on a publisher's reliable ring beside a newcomer whose wire is backed up, and its control. The
     # cases time a loaded producer and reader, so they run alone.
     add_executable(test_shm_switch_hold test_shm_switch_hold.cpp)

@@ -53,8 +53,8 @@ struct ring_lifetime
         e.creator = false;
     }
 
-    // A ring its creator retired under this reader is lost to it, reported once like a lost waiter. The report may release
-    // the entry, so nothing touches it afterwards.
+    // A ring its creator retired under this reader is lost to it, reported once like a lost waiter. A release the report
+    // triggers is settled once the caller's drain returns.
     template<typename Entry, typename Report>
     static void drain(Entry &e, Report &report)
     {

@@ -20,6 +20,7 @@
 #include <string>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <optional>
 #include <functional>
 #include <unordered_map>
@@ -76,6 +77,9 @@ struct shm_topic_entry
             , producers(0)
             , consumers(0)
             , creator(false)
+            , release_pending(false)
+            , drain_depth(0)
+            , sink_generation(0)
             , sink()
             , loss(std::make_shared<waiter_loss>())
     {
@@ -93,6 +97,10 @@ struct shm_topic_entry
     std::uint32_t consumers;
     // This entry holds the ring's creator slot.
     bool creator;
+    // A role was released while the entry drained; the outermost drain settles the entry once it returns.
+    bool release_pending;
+    std::uint32_t drain_depth;
+    std::uint32_t sink_generation;
     // Unset, the consumer is held: a wake takes nothing until a sink is installed.
     deliver_fn sink;
     std::shared_ptr<waiter_loss> loss;
@@ -143,12 +151,23 @@ struct shm_topic_entry
             control.release_slot(cursor_slot(*cursor));
     }
 
-    // The ONE place the cursor is taken, so the armed wake and the attach-time catch-up
-    // share it without racing a second drainer.
+    bool reading() const noexcept
+    {
+        return channel && channel->waiter_slot();
+    }
+
+    // The ONE place the cursor is taken, so the armed wake and the attach-time catch-up share it without racing a second
+    // drainer. The running sink is held off the entry, so a sink installed or cleared from inside it destroys nothing that
+    // executes and ends this drain.
     void deliver_pending()
     {
-        if(channel && sink)
-            channel->drain(sink);
+        if(!channel || !sink)
+            return;
+        const std::uint32_t generation = sink_generation;
+        deliver_fn running             = std::exchange(sink, nullptr);
+        channel->drain(running, [this, generation] { return sink_generation == generation; });
+        if(sink_generation == generation)
+            sink = std::move(running);
     }
 };
 
