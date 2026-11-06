@@ -6,8 +6,9 @@
 // across recv turns and a peer close surfaced as on_error. The pool is fixed: no per-recv allocation
 // (the asan tree is the witness).
 
-#include "host_tcp_socket.h" // MUST precede the freertos headers: declares the host POSIX stream_socket
-#include "host_loopback_pair.h"
+#include "lwip_rx_rig.h"
+
+#include "support/retire_drain.h"
 
 #include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/lwip_rx_task.h"
@@ -140,23 +141,16 @@ TEST_CASE("lwip rx task surfaces a peer close as on_error, never on_protocol_clo
 
 TEST_CASE("lwip rx trampoline self-deletes on channel close instead of returning off the task", "[seam]")
 {
-    auto pair = plexus::test::make_loopback_pair();
-    REQUIRE(pair.has_value());
+    plexus::test::rx_rig rig;
+    REQUIRE(rig.spawn() == pdTRUE);
 
-    plexus::freertos::freertos_executor ex;
-    host_tcp_socket sender = std::move(pair->dialed);
-    auto receiver          = make_channel(std::move(pair->accepted), ex);
-
-    // The spawn path heap-allocates the ctx and hands ownership to the task; the trampoline frees it.
-    auto *ctx = new plexus::freertos::detail::lwip_rx_ctx<host_tcp_socket>{receiver, ex};
-
-    sender.close(); // an orderly peer FIN mid-stream
-    plexus::test::poll_until([&] { plexus::freertos::detail::lwip_rx_step(*ctx); }, [&] { return !(!receiver.closed()); });
-    REQUIRE(receiver.closed()); // the close surfaced, so the trampoline's first step exits the loop
-
+    rig.sender.close();
     const int before = plexus::freertos::detail::host_vtask_delete_calls;
-    plexus::freertos::detail::lwip_rx_trampoline<host_tcp_socket>(ctx);       // must not fall off the end
-    REQUIRE(plexus::freertos::detail::host_vtask_delete_calls == before + 1); // self-deleted, did not return
-    REQUIRE(plexus::freertos::detail::host_vtask_delete_last == nullptr);     // vTaskDelete(nullptr): itself
-    // the trampoline freed ctx on exit; the asan tree is the no-leak witness
+    plexus::test::run_spawned_task();
+    REQUIRE(plexus::freertos::detail::host_vtask_delete_calls == before + 1);
+    REQUIRE(plexus::freertos::detail::host_vtask_delete_last == nullptr);
+
+    const auto outcome = plexus::testing::retire_and_drain(rig.channel, [&rig] { rig.ex.drain(); });
+    CHECK(outcome.erased == 1);
+    CHECK(outcome.empty);
 }

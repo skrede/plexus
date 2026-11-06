@@ -36,7 +36,7 @@ template<plexus::stream::stream_socket S>
 class lwip_channel
 {
 public:
-    using rx_type                           = detail::lwip_rx_lifecycle<lwip_channel, lwip_channel_limits::rx_slots, lwip_channel_limits::read_buffer_bytes>;
+    using rx_type                           = detail::lwip_rx_lifecycle<lwip_channel, S, lwip_channel_limits::rx_slots, lwip_channel_limits::read_buffer_bytes>;
     using rx_slot                           = typename rx_type::slot_type;
     static constexpr std::size_t k_rx_slots = rx_type::k_slots;
 
@@ -50,7 +50,7 @@ public:
             , m_inbound(ex, plexus::stream::with_message_limits({}, max_message, reassembly_budget))
             , m_egress(
                       m_socket, m_on_error, [this](plexus::io::io_error e) { fail(e); }, egress_cap, congestion)
-            , m_rx(*this)
+            , m_rx(*this, m_socket, m_close, ex)
     {
         wire_inbound();
     }
@@ -72,12 +72,14 @@ public:
             return;
         m_inbound.shutdown();
         m_egress.close();
-        m_socket.close();
+        if(m_rx.live())
+            m_rx.request_exit();
+        else
+            m_socket.close();
         m_close.shut_down();
         m_on_data           = nullptr;
         m_on_error          = nullptr;
         m_on_protocol_close = nullptr;
-        // The notification does not wait for RX slots the receive task acquired: a feed it posted may still be queued.
         m_close.notify();
     }
     plexus::io::endpoint remote_endpoint() const
@@ -86,7 +88,7 @@ public:
     }
     bool closed() const noexcept
     {
-        return m_socket.closed();
+        return m_close.closed();
     }
 
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)

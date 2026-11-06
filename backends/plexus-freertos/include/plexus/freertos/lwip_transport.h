@@ -4,7 +4,6 @@
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/lwip_rx_task.h"
-#include "plexus/freertos/run_task.h"
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/detail/lwip_dialer.h"
 #include "plexus/freertos/detail/null_acceptor.h"
@@ -60,12 +59,10 @@ public:
     lwip_transport(const lwip_transport &)            = delete;
     lwip_transport &operator=(const lwip_transport &) = delete;
 
-    // Opt into the P2 receive policy: a dedicated RX task blocking-recvs into the channel's pooled
-    // slots and posts the feed to the executor task, delivering on_data POSTED. Unset, the transport
-    // stays on P1 — poll() drives a non-blocking recv with synchronous delivery, no RX task spawned.
-    void use_rx_task(task_options topts)
+    // The task receives while the executor sends on the same socket, which needs lwIP's LWIP_NETCONN_FULLDUPLEX (ESP-IDF enables it).
+    void use_rx_task(rx_task_options opts)
     {
-        m_rx_task = topts;
+        m_rx_task = opts;
     }
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> cb)
@@ -100,8 +97,6 @@ public:
         m_dialer.dial(ep,
                       [this, &ep](Socket socket)
                       {
-                          if(m_rx_task)
-                              socket.set_blocking(true);
                           if(m_on_dialed_cb)
                               m_on_dialed_cb(adopt(std::move(socket), ep), ep);
                       });
@@ -142,8 +137,6 @@ private:
             return;
         if(m_views.full() || !m_on_accepted_cb)
             return;
-        if(m_rx_task)
-            socket->set_blocking(true);
         m_on_accepted_cb(adopt(std::move(*socket), plexus::io::endpoint{"tcp", {}}));
     }
 
@@ -152,6 +145,11 @@ private:
     // because on_closed belongs to the owner, which retires the channel through it.
     std::unique_ptr<channel_type> adopt(Socket socket, const plexus::io::endpoint &ep)
     {
+        if(m_rx_task)
+        {
+            socket.set_blocking(true);
+            socket.set_receive_timeout(m_rx_task->recv_timeout);
+        }
         auto ch            = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
         channel_type *view = ch.get();
         m_views.add(view);
@@ -165,7 +163,7 @@ private:
     Acceptor m_acceptor;
     detail::lwip_channel_views<channel_type, MaxClients> m_views;
     detail::lwip_dialer<Socket> m_dialer;
-    std::optional<task_options> m_rx_task;
+    std::optional<rx_task_options> m_rx_task;
     bool m_listening;
     std::size_t m_read_buffer;
     std::size_t m_max_message;

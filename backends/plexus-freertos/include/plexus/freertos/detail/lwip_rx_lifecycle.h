@@ -1,16 +1,19 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_DETAIL_LWIP_RX_LIFECYCLE_H
 #define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_LWIP_RX_LIFECYCLE_H
 
+#include "plexus/freertos/posted_work.h"
 #include "plexus/freertos/freertos_executor.h"
 
+#include "plexus/freertos/detail/close_state.h"
 #include "plexus/freertos/detail/lwip_rx_slot_pool.h"
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
+#include <atomic>
 #include <cstddef>
 
 namespace plexus::freertos::detail {
 
-template<typename Owner, std::size_t Slots, std::size_t Capacity>
+template<typename Owner, typename Socket, std::size_t Slots, std::size_t Capacity>
 class lwip_rx_lifecycle
 {
 public:
@@ -21,8 +24,12 @@ public:
     static constexpr std::size_t k_slots = Slots;
     static_assert(k_slots <= freertos_executor::k_queue_depth, "the RX pool must not outsize the executor queue depth");
 
-    explicit lwip_rx_lifecycle(Owner &owner)
-            : m_pool(owner)
+    lwip_rx_lifecycle(Owner &owner, Socket &socket, close_state &close, freertos_executor &ex)
+            : m_socket(socket)
+            , m_close(close)
+            , m_ex(ex)
+            , m_exit(false)
+            , m_pool(owner)
     {
     }
 
@@ -39,13 +46,62 @@ public:
         m_pool.release(slot);
     }
 
+    void started() noexcept
+    {
+        m_close.hold();
+    }
+
+    void start_failed()
+    {
+        m_close.release();
+    }
+
+    bool live() const noexcept
+    {
+        return m_close.held();
+    }
+
+    void request_exit() noexcept
+    {
+        m_exit.store(true, std::memory_order_release);
+    }
+
+    bool exit_requested() const noexcept
+    {
+        return m_exit.load(std::memory_order_acquire);
+    }
+
+    // The socket is closed by the task while it is live, or by the executor once the task has posted exited; after that
+    // post is accepted the task touches nothing the channel owns, since the exited handler may lead to its destruction.
+    void close_and_post_exited() noexcept
+    {
+        m_socket.close();
+        freertos_executor &ex = m_ex;
+        const posted_work exited{&invoke_exited, this};
+        while(!ex.post_from_task(exited, portMAX_DELAY))
+        {
+        }
+    }
+
     static void invoke_feed(void *ctx) noexcept
     {
         auto &slot = *static_cast<slot_type *>(ctx);
         slot.owner->feed_from_slot(slot);
     }
 
+    static void invoke_exited(void *ctx) noexcept
+    {
+        auto &self = *static_cast<lwip_rx_lifecycle *>(ctx);
+        if(!self.m_socket.closed())
+            self.m_socket.close();
+        self.m_close.release();
+    }
+
 private:
+    Socket &m_socket;
+    close_state &m_close;
+    freertos_executor &m_ex;
+    std::atomic<bool> m_exit;
     lwip_rx_slot_pool<Owner, Slots, Capacity> m_pool;
 };
 

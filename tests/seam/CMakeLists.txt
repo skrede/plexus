@@ -99,7 +99,7 @@ catch_discover_tests(test_lwip_channel_seam TEST_PREFIX "seam.")
 # on_error. The current source dir is on the include path so the host socket header resolves.
 # Registered under the same `seam.` prefix.
 add_executable(test_lwip_rx_task_seam test_lwip_rx_task_seam.cpp)
-target_include_directories(test_lwip_rx_task_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(test_lwip_rx_task_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_link_libraries(test_lwip_rx_task_seam PRIVATE
     plexus::core
     plexus::wire
@@ -117,6 +117,15 @@ target_link_libraries(test_lwip_rx_task_backpressure PRIVATE
     plexus::freertos
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_rx_task_backpressure TEST_PREFIX "seam.")
+
+add_executable(test_lwip_rx_task_lifecycle test_lwip_rx_task_lifecycle.cpp)
+target_include_directories(test_lwip_rx_task_lifecycle PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_lwip_rx_task_lifecycle PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_rx_task_lifecycle TEST_PREFIX "seam.")
 
 # Host-side test of the constrained-target lwIP listen/accept transport: fires
 # static_assert(transport_backend<lwip_transport<host_tcp_socket, host_tcp_listener>>) at compile

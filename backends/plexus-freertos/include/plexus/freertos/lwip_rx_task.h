@@ -6,32 +6,48 @@
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
+#include <chrono>
+#include <cstdint>
 #include <utility>
 
 namespace plexus::freertos {
 
+// The receive timeout bounds every blocking receive and slot wait of the task, so a task asked to exit sees the request
+// within one timeout. The conversion from task_options keeps the timeout's default for callers that name only the task.
+struct rx_task_options
+{
+    rx_task_options(task_options task, std::chrono::milliseconds recv_timeout = std::chrono::milliseconds{100})
+            : task(task)
+            , recv_timeout(recv_timeout)
+    {
+    }
+
+    task_options task;
+    std::chrono::milliseconds recv_timeout;
+};
+
 namespace detail {
 
-// The spawned RX task owns this context for the channel's lifetime (the loop runs until the channel
-// closes), so the borrowed channel and executor it points at must outlive it — the caller's
-// contract, mirroring run_task_ctx. The RX task's sole verbs are recv + post_from_task; it touches
-// no engine state, so the engine stays single-threaded on the executor task.
+// The spawned RX task owns this context until it exits on the channel's exit request, so the borrowed channel and
+// executor it points at must outlive the task. The RX task's verbs are recv, post_from_task and, on exit, the socket's
+// close; it touches no engine state, so the engine stays single-threaded on the executor task.
 template<plexus::stream::stream_socket S>
 struct lwip_rx_ctx
 {
     lwip_channel<S> &channel;
     freertos_executor &executor;
+    TickType_t wait;
 };
 
 // portMAX_DELAY waits indefinitely only with INCLUDE_vTaskSuspend; where it can elapse the post is
-// retried while the channel is open, and once the channel has closed the slot goes back to the pool.
+// retried until the task is asked to exit, and then the slot goes back to the pool.
 template<plexus::stream::stream_socket S>
 void post_feed(lwip_rx_ctx<S> &ctx, typename lwip_channel<S>::rx_slot &slot)
 {
     const posted_work feed{&lwip_channel<S>::rx_type::invoke_feed, &slot};
     while(!ctx.executor.post_from_task(feed, portMAX_DELAY))
     {
-        if(ctx.channel.closed())
+        if(ctx.channel.rx().exit_requested())
         {
             ctx.channel.rx().release(slot);
             return;
@@ -39,23 +55,25 @@ void post_feed(lwip_rx_ctx<S> &ctx, typename lwip_channel<S>::rx_slot &slot)
     }
 }
 
-// Acquire a free pool slot (parking until one frees), recv into it, and post the feed across to the
-// executor task, parking on a full queue until the executor drains room: on a stream the TCP window
-// closes while the task waits, so no byte is lost. A recv of 0 with the socket still open is
-// EWOULDBLOCK on a non-blocking host build (the on-target socket is blocking, so the task parks in
-// recv) and releases the slot. Returns false once the channel has closed so the loop exits and the
-// engine re-dials on its own reconnect timer (the RX task never re-dials).
+// One turn: on an exit request close the socket, post exited and return false; otherwise acquire a slot, recv into it
+// and post the feed, parking on a full queue until the executor drains room, so on a stream the TCP window closes while
+// the task waits and no byte is lost. A recv of 0 (the receive timeout, or EWOULDBLOCK) releases the slot.
 template<plexus::stream::stream_socket S>
 bool lwip_rx_step(lwip_rx_ctx<S> &ctx)
 {
-    auto *slot = ctx.channel.rx().acquire(portMAX_DELAY);
+    if(ctx.channel.rx().exit_requested())
+    {
+        ctx.channel.rx().close_and_post_exited();
+        return false;
+    }
+    auto *slot = ctx.channel.rx().acquire(ctx.wait);
     if(!slot)
         return true;
     if(ctx.channel.recv_into_slot(*slot) > 0)
         post_feed(ctx, *slot);
     else
         ctx.channel.rx().release(*slot);
-    return !ctx.channel.closed();
+    return true;
 }
 
 template<plexus::stream::stream_socket S>
@@ -65,22 +83,27 @@ void lwip_rx_trampoline(void *arg)
     while(lwip_rx_step(*ctx))
     {
     }
-    // The loop exits when the channel closes; FreeRTOS aborts a task that returns, so free the owned
-    // context and delete the task rather than falling off the end (the engine re-dials on its own timer).
+    // FreeRTOS aborts a task that returns, so the task frees its context and deletes itself once it has posted exited.
     delete ctx;
     vTaskDelete(nullptr);
 }
 
 }
 
-// Spawn the dedicated transport RX task for one channel with an EXPLICIT stack (no default): a
-// blocking recv into a pooled slot + a zero-alloc post per turn. The borrowed channel and executor
-// must outlive the task (run-never-returns); the heap-allocated context is owned by the spawned task.
+// The task is marked live before it is created, so a close that races its first turn already asks it to exit; the
+// heap-allocated context is owned by the spawned task, and freed here only when the task could not be created.
 template<plexus::stream::stream_socket S>
-BaseType_t spawn_lwip_rx_task(lwip_channel<S> &channel, freertos_executor &ex, task_options topts)
+BaseType_t spawn_lwip_rx_task(lwip_channel<S> &channel, freertos_executor &ex, rx_task_options opts)
 {
-    auto *ctx = new detail::lwip_rx_ctx<S>{channel, ex};
-    return xTaskCreate(&detail::lwip_rx_trampoline<S>, "plexus-rx", topts.stack, ctx, topts.priority, nullptr);
+    auto *ctx = new detail::lwip_rx_ctx<S>{channel, ex, pdMS_TO_TICKS(static_cast<std::uint32_t>(opts.recv_timeout.count()))};
+    channel.rx().started();
+    const BaseType_t created = xTaskCreate(&detail::lwip_rx_trampoline<S>, "plexus-rx", opts.task.stack, ctx, opts.task.priority, nullptr);
+    if(created != pdTRUE)
+    {
+        delete ctx;
+        channel.rx().start_failed();
+    }
+    return created;
 }
 
 }

@@ -19,6 +19,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <memory>
 #include <vector>
@@ -75,6 +76,10 @@ public:
     {
         m_inner.set_blocking(blocking);
     }
+    void set_receive_timeout(std::chrono::milliseconds timeout)
+    {
+        m_inner.set_receive_timeout(timeout);
+    }
 
 private:
     host_tcp_socket m_inner;
@@ -85,7 +90,7 @@ private:
 // the stall flag keeps any egress resident, so the backlog connection needs no drain.
 struct open_listener
 {
-    int         fd;
+    int fd;
     std::string address;
 };
 
@@ -113,7 +118,8 @@ using lim            = plexus::freertos::lwip_channel_limits;
 
 std::vector<std::byte> on_wire(std::span<const std::byte> payload)
 {
-    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
+    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                      payload);
 }
 
 std::vector<std::byte> filler(std::size_t n)

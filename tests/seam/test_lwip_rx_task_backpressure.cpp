@@ -2,15 +2,11 @@
 // thread its own task handle and parks a waiting queue send on a condition variable, so these cases show the wait and
 // its release across threads; they do not show FreeRTOS task scheduling.
 
-#include "host_tcp_socket.h" // MUST precede the freertos headers: declares the host POSIX stream_socket
-#include "host_loopback_pair.h"
+#include "lwip_rx_rig.h"
 
 #include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/freertos_executor.h"
-
-#include "plexus/wire/frame.h"
-#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -23,7 +19,9 @@
 #include <utility>
 #include <optional>
 
+using plexus::test::on_wire;
 using plexus::test::host_tcp_socket;
+using plexus::test::acquirable_slots;
 using plexus::freertos::freertos_executor;
 using lwip_channel = plexus::freertos::lwip_channel<host_tcp_socket>;
 
@@ -34,26 +32,16 @@ void count_up(void *ctx) noexcept
     ++*static_cast<std::uint32_t *>(ctx);
 }
 
-std::vector<std::byte> on_wire(std::span<const std::byte> payload)
-{
-    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
-                                      payload);
-}
-
 host_tcp_socket blocking(host_tcp_socket socket)
 {
     socket.set_blocking(true);
     return socket;
 }
 
-std::size_t acquirable_slots(lwip_channel &channel)
+void fill_queue(freertos_executor &ex, std::uint32_t &filled)
 {
-    std::vector<lwip_channel::rx_slot *> taken;
-    while(auto *slot = channel.rx().acquire(0))
-        taken.push_back(slot);
-    for(auto *slot : taken)
-        channel.rx().release(*slot);
-    return taken.size();
+    for(std::uint32_t i = 0; i < freertos_executor::k_queue_depth; ++i)
+        REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&count_up, &filled}, 0));
 }
 
 bool rx_task_parked()
@@ -71,10 +59,9 @@ struct full_queue_rig
             , pair(plexus::test::make_loopback_pair())
             , sender(std::move(pair.value().dialed))
             , receiver(blocking(std::move(pair.value().accepted)), ex, plexus::io::endpoint{"tcp", "127.0.0.1:0"})
-            , ctx{receiver, ex}
+            , ctx{receiver, ex, 0}
     {
-        for(std::uint32_t i = 0; i < freertos_executor::k_queue_depth; ++i)
-            REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&count_up, &filled}, 0));
+        fill_queue(ex, filled);
     }
 
     std::uint32_t filled;
@@ -112,28 +99,34 @@ TEST_CASE("lwip rx task waits for queue room and delivers the feed once the exec
     CHECK(acquirable_slots(rig.receiver) == lwip_channel::k_rx_slots);
 }
 
-TEST_CASE("a closed channel releases an RX task waiting for queue room", "[seam]")
+TEST_CASE("lwip rx task: closing a channel releases a receive task waiting for queue room", "[seam][lwip_rx_task]")
 {
-    full_queue_rig rig;
+    plexus::test::rx_rig rig;
+    std::uint32_t filled    = 0;
     std::int32_t deliveries = 0;
-    rig.receiver.on_data([&deliveries](std::span<const std::byte>) { ++deliveries; });
+    std::int32_t closed     = 0;
+    fill_queue(rig.ex, filled);
+    rig.channel->on_data([&deliveries](std::span<const std::byte>) { ++deliveries; });
+    rig.channel->on_closed([&closed] { ++closed; });
+    REQUIRE(rig.spawn() == pdTRUE);
     rig.sender.send(on_wire(k_payload));
 
     std::atomic<bool> done{false};
-    bool open = true;
-    std::thread rx(
-            [&]
+    std::thread task(
+            [&done]
             {
-                open = plexus::freertos::detail::lwip_rx_step(rig.ctx);
+                plexus::test::run_spawned_task();
                 done = true;
             });
+    const std::thread::id task_id = task.get_id();
     CHECK(rx_task_parked());
-    rig.receiver.close();
-    plexus::test::poll_until([&] { rig.ex.pump(); }, [&] { return done.load(); });
-    rx.join();
+    rig.channel->close();
+    plexus::test::poll_until([&rig] { rig.ex.pump(); }, [&done] { return done.load(); });
+    task.join();
     rig.ex.drain();
 
-    CHECK_FALSE(open);
     CHECK(deliveries == 0);
-    CHECK(acquirable_slots(rig.receiver) == lwip_channel::k_rx_slots);
+    CHECK(closed == 1);
+    CHECK(acquirable_slots(*rig.channel) == lwip_channel::k_rx_slots);
+    CHECK(rig.closer.load() == task_id);
 }

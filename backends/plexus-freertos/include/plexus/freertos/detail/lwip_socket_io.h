@@ -17,13 +17,14 @@
 
     #include <span>
     #include <cerrno>
+    #include <chrono>
     #include <cstddef>
     #include <system_error>
 
 namespace plexus::freertos::detail {
 
-// The on-target connected TCP socket. Non-blocking throughout so the channel's poll() drains
-// recv() inside the cooperative loop and send() never parks it.
+// The on-target connected TCP socket. Non-blocking by default, so the channel's poll() drains recv() inside the
+// cooperative loop; the receive-task policy makes it blocking, so recv() parks for the receive timeout. send() never parks.
 class lwip_socket
 {
 public:
@@ -32,6 +33,7 @@ public:
     lwip_socket()
             : m_fd(-1)
             , m_closed(false)
+            , m_blocking(false)
     {
     }
 
@@ -40,6 +42,7 @@ public:
     explicit lwip_socket(int fd)
             : m_fd(fd)
             , m_closed(false)
+            , m_blocking(false)
     {
         set_nonblocking();
     }
@@ -55,6 +58,7 @@ public:
     lwip_socket(lwip_socket &&other) noexcept
             : m_fd(other.m_fd)
             , m_closed(other.m_closed)
+            , m_blocking(other.m_blocking)
     {
         other.m_fd     = -1;
         other.m_closed = true;
@@ -67,6 +71,7 @@ public:
             close();
             m_fd           = other.m_fd;
             m_closed       = other.m_closed;
+            m_blocking     = other.m_blocking;
             other.m_fd     = -1;
             other.m_closed = true;
         }
@@ -90,7 +95,7 @@ public:
 
     std::size_t recv(std::span<std::byte> buf)
     {
-        const int n = lwip_recv(m_fd, buf.data(), buf.size(), MSG_DONTWAIT);
+        const int n = lwip_recv(m_fd, buf.data(), buf.size(), m_blocking ? 0 : MSG_DONTWAIT);
         if(n == 0) // an orderly peer FIN is a hard drop
             m_closed = true;
         return classify_io(n);
@@ -114,6 +119,12 @@ public:
     void set_blocking(bool blocking)
     {
         set_fd_blocking(m_fd, blocking);
+        m_blocking = blocking;
+    }
+
+    void set_receive_timeout(std::chrono::milliseconds timeout)
+    {
+        apply_receive_timeout(m_fd, timeout);
     }
 
 private:
@@ -154,6 +165,7 @@ private:
 
     int m_fd;
     bool m_closed;
+    bool m_blocking;
 };
 
 }

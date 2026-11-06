@@ -5,6 +5,7 @@
 
     #include "lwip/sockets.h"
 
+    #include <chrono>
     #include <string>
     #include <cstdint>
     #include <charconv>
@@ -35,6 +36,17 @@ inline void set_fd_blocking(int fd, bool blocking)
 {
     const int flags = lwip_fcntl(fd, F_GETFL, 0);
     lwip_fcntl(fd, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+}
+
+// ESP-IDF's lwIP builds with LWIP_SO_RCVTIMEO and the standard timeval option value.
+inline void apply_receive_timeout(int fd, std::chrono::milliseconds timeout)
+{
+    const auto secs = std::chrono::duration_cast<std::chrono::seconds>(timeout);
+    const auto usec = std::chrono::duration_cast<std::chrono::microseconds>(timeout - secs);
+    timeval tv{};
+    tv.tv_sec  = static_cast<decltype(tv.tv_sec)>(secs.count());
+    tv.tv_usec = static_cast<decltype(tv.tv_usec)>(usec.count());
+    lwip_setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 }
 
 }
