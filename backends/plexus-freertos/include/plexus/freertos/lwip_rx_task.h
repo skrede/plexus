@@ -19,7 +19,7 @@ namespace detail {
 template<plexus::stream::stream_socket S>
 struct lwip_rx_ctx
 {
-    lwip_channel<S>   &channel;
+    lwip_channel<S> &channel;
     freertos_executor &executor;
 };
 
@@ -28,12 +28,12 @@ struct lwip_rx_ctx
 template<plexus::stream::stream_socket S>
 void post_feed(lwip_rx_ctx<S> &ctx, typename lwip_channel<S>::rx_slot &slot)
 {
-    const posted_work feed{&lwip_channel<S>::invoke_feed, &slot};
+    const posted_work feed{&lwip_channel<S>::rx_type::invoke_feed, &slot};
     while(!ctx.executor.post_from_task(feed, portMAX_DELAY))
     {
         if(ctx.channel.closed())
         {
-            ctx.channel.release_rx_slot(slot);
+            ctx.channel.rx().release(slot);
             return;
         }
     }
@@ -48,13 +48,13 @@ void post_feed(lwip_rx_ctx<S> &ctx, typename lwip_channel<S>::rx_slot &slot)
 template<plexus::stream::stream_socket S>
 bool lwip_rx_step(lwip_rx_ctx<S> &ctx)
 {
-    auto *slot = ctx.channel.acquire_rx_slot(portMAX_DELAY);
+    auto *slot = ctx.channel.rx().acquire(portMAX_DELAY);
     if(!slot)
         return true;
     if(ctx.channel.recv_into_slot(*slot) > 0)
         post_feed(ctx, *slot);
     else
-        ctx.channel.release_rx_slot(*slot);
+        ctx.channel.rx().release(*slot);
     return !ctx.channel.closed();
 }
 

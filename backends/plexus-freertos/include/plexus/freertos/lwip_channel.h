@@ -6,7 +6,7 @@
 #include "plexus/freertos/lwip_channel_limits.h"
 
 #include "plexus/freertos/detail/close_state.h"
-#include "plexus/freertos/detail/lwip_rx_slot_pool.h"
+#include "plexus/freertos/detail/lwip_rx_lifecycle.h"
 #include "plexus/freertos/detail/null_stream_socket.h"
 #include "plexus/freertos/detail/lwip_channel_egress.h"
 #include "plexus/freertos/detail/lwip_channel_inbound.h"
@@ -36,11 +36,9 @@ template<plexus::stream::stream_socket S>
 class lwip_channel
 {
 public:
-    // The RX hand-off pool holds k_rx_slots buffers and must stay within the executor queue depth, so
-    // it never holds more in-flight slots than the queue can carry a post for.
-    static constexpr std::size_t k_rx_slots = lwip_channel_limits::rx_slots;
-    static_assert(k_rx_slots <= freertos_executor::k_queue_depth, "the RX pool must not outsize the executor queue depth");
-    using rx_slot = detail::rx_slot<lwip_channel, lwip_channel_limits::read_buffer_bytes>;
+    using rx_type                           = detail::lwip_rx_lifecycle<lwip_channel, lwip_channel_limits::rx_slots, lwip_channel_limits::read_buffer_bytes>;
+    using rx_slot                           = typename rx_type::slot_type;
+    static constexpr std::size_t k_rx_slots = rx_type::k_slots;
 
     lwip_channel(S socket, freertos_executor &ex, plexus::io::endpoint remote, std::size_t read_buffer = lwip_channel_limits::read_buffer_bytes,
                  std::size_t max_message = lwip_channel_limits::max_message_bytes, std::size_t reassembly_budget = lwip_channel_limits::reassembly_bytes,
@@ -50,19 +48,16 @@ public:
             , m_remote(std::move(remote))
             , m_read_buffer(read_buffer)
             , m_inbound(ex, plexus::stream::with_message_limits({}, max_message, reassembly_budget))
-            , m_egress(m_socket, m_on_error, [this](plexus::io::io_error e) { fail(e); }, egress_cap, congestion)
-            , m_rx_pool(*this)
+            , m_egress(
+                      m_socket, m_on_error, [this](plexus::io::io_error e) { fail(e); }, egress_cap, congestion)
+            , m_rx(*this)
     {
         wire_inbound();
     }
 
-    rx_slot *acquire_rx_slot(TickType_t wait) noexcept
+    rx_type &rx() noexcept
     {
-        return m_rx_pool.acquire(wait);
-    }
-    void release_rx_slot(rx_slot &slot) noexcept
-    {
-        m_rx_pool.release(slot);
+        return m_rx;
     }
 
     void send(std::span<const std::byte> framed)
@@ -145,13 +140,7 @@ public:
     {
         if(!m_close.closed())
             m_inbound.feed(std::span<const std::byte>{slot.buffer.data(), slot.len});
-        release_rx_slot(slot);
-    }
-
-    static void invoke_feed(void *ctx) noexcept
-    {
-        auto &slot = *static_cast<rx_slot *>(ctx);
-        slot.owner->feed_from_slot(slot);
+        m_rx.release(slot);
     }
 
 private:
@@ -181,16 +170,16 @@ private:
 
     // m_on_error precedes m_egress: the egress borrows it by reference (block backpressure surfaces
     // through it), so it must be constructed first.
-    detail::on_data_cb                                                 m_on_data;
-    detail::close_state                                                m_close;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>     m_on_error;
-    detail::on_protocol_close_cb                                       m_on_protocol_close;
-    S                                                                   m_socket;
-    plexus::io::endpoint                                                m_remote;
-    std::vector<std::byte>                                              m_read_buffer;
+    detail::on_data_cb m_on_data;
+    detail::close_state m_close;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+    detail::on_protocol_close_cb m_on_protocol_close;
+    S m_socket;
+    plexus::io::endpoint m_remote;
+    std::vector<std::byte> m_read_buffer;
     plexus::stream::stream_inbound<freertos_timer, freertos_executor &> m_inbound;
-    detail::lwip_channel_egress<S>                                      m_egress;
-    detail::lwip_rx_slot_pool<lwip_channel, k_rx_slots, lwip_channel_limits::read_buffer_bytes> m_rx_pool;
+    detail::lwip_channel_egress<S> m_egress;
+    rx_type m_rx;
 };
 
 static_assert(plexus::io::byte_channel<lwip_channel<detail::null_stream_socket>>, "lwip_channel must satisfy byte_channel — check the seven verbs");

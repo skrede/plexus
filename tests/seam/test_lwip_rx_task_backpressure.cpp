@@ -49,10 +49,10 @@ host_tcp_socket blocking(host_tcp_socket socket)
 std::size_t acquirable_slots(lwip_channel &channel)
 {
     std::vector<lwip_channel::rx_slot *> taken;
-    while(auto *slot = channel.acquire_rx_slot(0))
+    while(auto *slot = channel.rx().acquire(0))
         taken.push_back(slot);
     for(auto *slot : taken)
-        channel.release_rx_slot(*slot);
+        channel.rx().release(*slot);
     return taken.size();
 }
 

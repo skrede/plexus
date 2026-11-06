@@ -56,14 +56,14 @@ struct lwip_pair
 
 bool rx_turn(lwip_channel &channel, freertos_executor &ex)
 {
-    auto *slot = channel.acquire_rx_slot(0);
+    auto *slot = channel.rx().acquire(0);
     if(!slot)
         return false;
     const std::size_t n = channel.recv_into_slot(*slot);
     if(n > 0)
-        REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::invoke_feed, slot}, 0));
+        REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::rx_type::invoke_feed, slot}, 0));
     else
-        channel.release_rx_slot(*slot);
+        channel.rx().release(*slot);
     return n > 0;
 }
 

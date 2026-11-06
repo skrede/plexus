@@ -29,7 +29,8 @@ namespace {
 
 std::vector<std::byte> on_wire(std::span<const std::byte> payload)
 {
-    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
+    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                      payload);
 }
 
 std::vector<std::byte> bytes_of(std::initializer_list<int> vs)
@@ -50,14 +51,14 @@ lwip_channel make_channel(host_tcp_socket socket, plexus::freertos::freertos_exe
 // never fills here, so the post takes a zero wait and must be taken.
 bool rx_turn(lwip_channel &channel, plexus::freertos::freertos_executor &ex)
 {
-    auto *slot = channel.acquire_rx_slot(0);
+    auto *slot = channel.rx().acquire(0);
     if(!slot)
         return false;
     const std::size_t n = channel.recv_into_slot(*slot);
     if(n > 0)
-        REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::invoke_feed, slot}, 0));
+        REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::rx_type::invoke_feed, slot}, 0));
     else
-        channel.release_rx_slot(*slot);
+        channel.rx().release(*slot);
     return n > 0;
 }
 
@@ -154,8 +155,8 @@ TEST_CASE("lwip rx trampoline self-deletes on channel close instead of returning
     REQUIRE(receiver.closed()); // the close surfaced, so the trampoline's first step exits the loop
 
     const int before = plexus::freertos::detail::host_vtask_delete_calls;
-    plexus::freertos::detail::lwip_rx_trampoline<host_tcp_socket>(ctx);        // must not fall off the end
-    REQUIRE(plexus::freertos::detail::host_vtask_delete_calls == before + 1);  // self-deleted, did not return
-    REQUIRE(plexus::freertos::detail::host_vtask_delete_last == nullptr);      // vTaskDelete(nullptr): itself
+    plexus::freertos::detail::lwip_rx_trampoline<host_tcp_socket>(ctx);       // must not fall off the end
+    REQUIRE(plexus::freertos::detail::host_vtask_delete_calls == before + 1); // self-deleted, did not return
+    REQUIRE(plexus::freertos::detail::host_vtask_delete_last == nullptr);     // vTaskDelete(nullptr): itself
     // the trampoline freed ctx on exit; the asan tree is the no-leak witness
 }
