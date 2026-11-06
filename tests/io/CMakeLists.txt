@@ -15,6 +15,7 @@ endif()
 set(PLEXUS_IO_TESTS
     test_mtu_budget
     test_udp_backpressure_queue
+    test_seq_ring
     test_handshake_gate
     test_assembly_pattern
     test_cert_facts
@@ -122,8 +123,9 @@ target_link_libraries(test_mtu_budget PRIVATE plexus::wire plexus::datagram)
 
 # The datagram-family building-block units link the header-only plexus::datagram
 # family that homes their types (send_queue, the udp backpressure queue, the
-# assembly pattern, the reassembler flat-map bound) — still sans-IO.
+# sequence ring, the assembly pattern, the reassembler flat-map bound) — still sans-IO.
 target_link_libraries(test_udp_backpressure_queue PRIVATE plexus::datagram)
+target_link_libraries(test_seq_ring PRIVATE plexus::datagram)
 target_link_libraries(test_assembly_pattern PRIVATE plexus::datagram)
 target_link_libraries(test_send_queue PRIVATE plexus::datagram)
 

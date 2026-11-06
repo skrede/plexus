@@ -5,6 +5,7 @@
 
 #include "plexus/io/detail/pending_ops.h"
 
+#include "plexus/datagram/detail/seq_ring.h"
 #include "plexus/datagram/detail/udp_rto_estimator.h"
 #include "plexus/datagram/detail/udp_reorder_buffer.h"
 
@@ -60,11 +61,9 @@ public:
     explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {}, std::uint16_t initial_seq = 0)
             : m_executor(executor)
             , m_cfg(cfg)
-            , m_window(cfg.window == 0 ? std::size_t{512} : std::min(cfg.window, std::size_t{32768}))
-            , m_slots(m_window)
-            , m_recv(m_window, initial_seq)
+            , m_slots(cfg.window == 0 ? std::size_t{512} : std::min(cfg.window, std::size_t{32768}), initial_seq)
+            , m_recv(m_slots.window(), initial_seq)
             , m_next(initial_seq)
-            , m_base(initial_seq)
             , m_rto(cfg.initial_rto, cfg.min_rto, cfg.max_rto)
             , m_pending()
     {
@@ -108,15 +107,15 @@ public:
 
     bool window_has_room() const noexcept
     {
-        return in_flight() < m_window;
+        return in_flight() < m_slots.window();
     }
 
     submit_result submit(std::span<const std::byte> payload, bool fragmented = false)
     {
-        if(in_flight() >= m_window)
+        if(in_flight() >= m_slots.window())
             return submit_result::window_full;
         const std::uint16_t seq = m_next++;
-        auto &slot              = m_slots[seq % m_window];
+        auto &slot              = m_slots.at(seq);
         slot.bytes.assign(payload.begin(), payload.end());
         slot.outstanding   = true;
         slot.retransmitted = false;
@@ -161,7 +160,7 @@ public:
 
     std::size_t in_flight() const noexcept
     {
-        return static_cast<std::uint16_t>(m_next - m_base);
+        return static_cast<std::uint16_t>(m_next - m_slots.base());
     }
     ms rto() const noexcept
     {
@@ -188,7 +187,7 @@ private:
 
     void arm(std::uint16_t seq)
     {
-        auto &s = m_slots[seq % m_window];
+        auto &s = m_slots.at(seq);
         s.timer->expires_after(m_rto.backed_off(s.retransmits)); // Karn backoff per retransmit
         m_pending.begin();
         s.timer->async_wait(
@@ -203,9 +202,9 @@ private:
 
     void on_rto(std::uint16_t seq)
     {
-        auto &s = m_slots[seq % m_window];
-        if(!s.outstanding)
+        if(!m_slots.holds(seq) || !m_slots.at(seq).outstanding)
             return; // already acked between fire and dispatch
+        auto &s = m_slots.at(seq);
         if(s.retransmits >= m_cfg.max_retransmit)
             return exhausted();
         ++s.retransmits;
@@ -216,30 +215,29 @@ private:
 
     void slide_to(std::uint16_t new_base)
     {
-        const std::uint16_t before = m_base;
+        const std::uint16_t before = m_slots.base();
         // Never slide the base past next-to-send: an ack ahead of the highest-sent seq would
         // otherwise underflow in_flight() and wedge the window at window_full.
-        while(static_cast<std::uint16_t>(new_base - m_base) != 0 && static_cast<std::uint16_t>(new_base - m_base) < udp_reorder_buffer::half_space && m_base != m_next)
+        for(auto ahead = static_cast<std::uint16_t>(new_base - before); ahead != 0 && ahead < udp_reorder_buffer::half_space && m_slots.base() != m_next; --ahead)
         {
-            free_segment(m_base, /*sample_rtt=*/true);
-            ++m_base;
+            free_segment(m_slots.base(), /*sample_rtt=*/true);
+            m_slots.advance();
         }
-        if(m_base != before && m_on_window_advance)
+        if(m_slots.base() != before && m_on_window_advance)
             m_on_window_advance();
     }
 
     // A selectively-acked hole above the base: cancel its retransmit; the gap below it keeps the base.
     void ack_hole(std::uint16_t seq)
     {
-        const auto rel = static_cast<std::uint16_t>(seq - m_base);
-        if(rel >= udp_reorder_buffer::half_space || rel >= m_window)
+        if(!m_slots.holds(seq))
             return; // below base (already freed) or out of window
         free_segment(seq, /*sample_rtt=*/true);
     }
 
     void free_segment(std::uint16_t seq, bool sample_rtt)
     {
-        auto &s = m_slots[seq % m_window];
+        auto &s = m_slots.at(seq);
         if(!s.outstanding)
             return;
         s.timer->cancel();
@@ -273,11 +271,9 @@ private:
 
     Executor m_executor;
     udp_arq_config m_cfg;
-    std::size_t m_window;
-    std::vector<slot> m_slots;
+    seq_ring<slot> m_slots;
     udp_reorder_buffer m_recv;
     std::uint16_t m_next{0};
-    std::uint16_t m_base{0};
     udp_rto_estimator m_rto;
     plexus::io::detail::pending_ops m_pending;
     bool m_dead{false};

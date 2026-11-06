@@ -143,6 +143,22 @@ TEST_CASE("udp reorder: in-order delivery survives the uint16 65535 -> 0 wrap", 
     REQUIRE(r.released_seq == std::vector<std::uint16_t>{65534, 65535, 0, 1, 2, 3});
 }
 
+TEST_CASE("udp reorder: a non-power-of-two window survives the sequence wrap", "[udp][reorder]")
+{
+    recorder r{/*window=*/5, /*initial_seq=*/65534};
+
+    REQUIRE(r.buf.feed(1, false, bytes_of("d")) == reorder::outcome::buffered);
+    REQUIRE(r.buf.feed(0, false, bytes_of("c")) == reorder::outcome::buffered);
+    REQUIRE(r.buf.feed(2, false, bytes_of("e")) == reorder::outcome::buffered);
+    REQUIRE(r.buf.feed(65535, false, bytes_of("b")) == reorder::outcome::buffered);
+    REQUIRE(r.released_seq.empty());
+    REQUIRE(r.buf.feed(65534, false, bytes_of("a")) == reorder::outcome::delivered);
+
+    REQUIRE(r.released_seq == std::vector<std::uint16_t>{65534, 65535, 0, 1, 2});
+    REQUIRE(r.released_payload == std::vector<std::string>{"a", "b", "c", "d", "e"});
+    REQUIRE(r.buf.feed(65535, false, bytes_of("b")) == reorder::outcome::duplicate);
+}
+
 TEST_CASE("udp reorder: the per-segment fragmented bit rides the slot through a HOL hold", "[udp][reorder]")
 {
     recorder r;
