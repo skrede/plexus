@@ -79,12 +79,8 @@ std::vector<std::byte> capture_source_identity_frame(std::string_view fqn, std::
 
 std::vector<std::byte> make_rpc_request_frame(std::string_view fqn, std::string_view param)
 {
-    wire::bidirectional_header hdr{.source         = wire::endpoint_source_type::caller,
-                                   .sequence       = 1,
-                                   .topic_hash     = wire::fqn_topic_hash(fqn),
-                                   .type_hash_1    = 0,
-                                   .type_hash_2    = 0,
-                                   .correlation_id = 7};
+    wire::bidirectional_header hdr{
+            .source = wire::endpoint_source_type::caller, .sequence = 1, .topic_hash = wire::fqn_topic_hash(fqn), .type_hash_1 = 0, .type_hash_2 = 0, .correlation_id = 7};
     const auto rpc_body = wire::encode_rpc_request(hdr, as_bytes(std::string{param}));
     wire::frame_header fhdr{.type = wire::msg_type::rpc_request, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = rpc_body.size()};
     return wire::encode_frame(fhdr, rpc_body);
@@ -96,7 +92,7 @@ std::vector<std::byte> forwarded_frame_of(const node_id &origin, std::uint16_t s
 {
     wire::forwarded_frame ff;
     ff.origin      = origin;
-    ff.destination = id_of(0x01); // the receiving node
+    ff.destination = make_cfg(0x01).self_id; // the receiving node
     ff.hop         = 1;
     ff.seq         = seq;
     ff.flags       = wire::k_forwarded_relay_consent_flag;
@@ -122,11 +118,12 @@ TEST_CASE("forwarded_dedup_delivery: a double-injected forwarded frame delivers 
 
     std::size_t deliveries = 0;
     std::optional<plexus::io::message_info> last;
-    link.responder->on_message_with_info([&](std::string_view, std::span<const std::byte>, const plexus::io::message_info &info)
-                                         {
-                                             ++deliveries;
-                                             last = info;
-                                         });
+    link.responder->on_message_with_info(
+            [&](std::string_view, std::span<const std::byte>, const plexus::io::message_info &info)
+            {
+                ++deliveries;
+                last = info;
+            });
 
     const node_id origin = id_of(0xB0);
     const auto inner     = capture_source_identity_frame("relayed.topic", "relayed-body");

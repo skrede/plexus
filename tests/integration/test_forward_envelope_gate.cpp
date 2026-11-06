@@ -86,7 +86,7 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
           "narrow serial session complete; a fitting frame on the same leg transits",
           "[integration][forward][envelope][serial]")
 {
-    constexpr int k_runs        = 3; // a serial round-trip claim is never made from a single run
+    constexpr int k_runs            = 3; // a serial round-trip claim is never made from a single run
     constexpr std::size_t k_ceiling = 4096;
 
     for(int run = 0; run < k_runs; ++run)
@@ -136,11 +136,12 @@ TEST_CASE("envelope gate: an oversized forwarded frame drops-with-count at the s
         const bool attached = relay_messages.attach_for_fanout(serial_msg_fwd::peer{relay.msg_peer().channel, "narrow"}, "gated");
         plexus::testing::pump_until(io, [&] { return true; }, k_pump_bound);
         REQUIRE(attached);
+        REQUIRE(peer_messages.attach(peer.msg_peer(), "gated"));
 
         pio::forward_options opts;
         opts.splice_slot_bytes = 16u * 1024; // room for the oversized envelope in a pool slot
         fwd_splice sp{pio::make_forward_ctx(opts)};
-        const auto hash = wire::fqn_topic_hash("gated");
+        const auto hash   = wire::fqn_topic_hash("gated");
         const auto origin = id_of(0xB0);
 
         // An OVERSIZED forwarded frame toward the narrow leg: gated at the splice, never sent.
@@ -220,7 +221,12 @@ TEST_CASE("envelope gate: a multi-fragment UDP message reassembles on the wide i
                 [&](std::unique_ptr<pasio::udp_channel> ch)
                 {
                     relay_in_ch = std::move(ch);
-                    relay_in_ch->on_data([&](std::span<const std::byte> whole) { if(relay_out_ch) relay_out_ch->send(whole); });
+                    relay_in_ch->on_data(
+                            [&](std::span<const std::byte> whole)
+                            {
+                                if(relay_out_ch)
+                                    relay_out_ch->send(whole);
+                            });
                 });
         relay_in.listen({"udp", "127.0.0.1:0"});
         plexus::testing::pump_until(io, [&] { return relay_in.port() != 0; }, k_udp_pump_bound);

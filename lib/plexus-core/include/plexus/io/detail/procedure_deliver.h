@@ -46,15 +46,15 @@ inline bool drop_orphan_response(log::logger &logger)
     return true;
 }
 
-template<typename Forwarder, typename Peer>
-bool deliver_response(Forwarder &f, const Peer &p, std::span<const std::byte> inner, const std::string *key_override)
+template<typename Forwarder, typename Table>
+bool deliver_response(Forwarder &f, Table &table, const std::string &node_name, std::span<const std::byte> inner)
 {
     auto decoded = wire::decode_rpc_response(inner);
     if(!decoded)
         return false;
 
-    auto peer_it = f.m_outstanding.find(key_override ? *key_override : p.node_name);
-    if(peer_it == f.m_outstanding.end())
+    auto peer_it = table.find(node_name);
+    if(peer_it == table.end())
         return drop_orphan_response(f.m_logger);
 
     auto entry_it = peer_it->second.find(decoded->header.correlation_id);

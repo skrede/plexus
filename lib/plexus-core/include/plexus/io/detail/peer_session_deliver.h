@@ -45,13 +45,17 @@ Result deliver_to_sink(Session &s, const wire::frame_header &hdr, Deliver &&deli
     return deliver(message_info{}, [](std::string_view, std::span<const std::byte>, const message_info &) {});
 }
 
-// Every path must honor has_source_identity to land the data span correctly, and attributes the passed source (never a
-// node_id read from the frame body).
+// Relayed data is gated on what this node demanded from the relay session (no demand is ever held against an origin
+// reached only through a relay) and attributes the passed source, never a node_id read from the frame body.
 template<typename Session>
 bool deliver_data_with_source(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner, const node_id &source)
 {
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
-    return deliver_to_sink<bool>(s, hdr, [&](const message_info &info, auto &&sink) { return s.m_messages.deliver(s.m_msg_peer, inner, info, source, has_source_identity, sink); });
+    const deliver_outcome outcome  = deliver_to_sink<deliver_outcome>(s, hdr, [&](const message_info &info, auto &&sink)
+                                                                      { return s.m_messages.deliver_demanded(s.m_msg_peer, inner, info, source, has_source_identity, sink); });
+    if(outcome.verdict == deliver_verdict::unsolicited)
+        detail::note_unsolicited(s, outcome.topic_hash);
+    return outcome.verdict != deliver_verdict::undecodable;
 }
 
 // The plain unidirectional path: pins the source to m_ctx.peer_id — the anti-spoofing invariant. An

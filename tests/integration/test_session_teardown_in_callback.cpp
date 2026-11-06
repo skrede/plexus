@@ -111,6 +111,8 @@ TEST_CASE("session teardown: a message callback that tears the session down stop
 TEST_CASE("session teardown: a message callback that tears the session down stops the forwarded re-fan", "[integration][session_teardown]")
 {
     teardown_acceptor f;
+    REQUIRE(f.messages.attach(f.subject->msg_peer(), k_topic));
+    f.settle();
     f.messages.on_forward_refan([&f](auto &&...) { ++f.refans; });
     f.tear_down_on_message();
 

@@ -1,15 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_FORWARD_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_FORWARD_H
 
-#include "plexus/io/node_name.h"
-
+#include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/forward_gate.h"
 #include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_deliver.h"
 
 #include "plexus/node_id.h"
-
-#include <string>
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/data_frame.h"
@@ -43,22 +40,39 @@ void refan_if_pubsub(Session &s, const wire::forwarded_frame &ff, const wire::fr
     s.m_messages.refan_forwarded(uni->header.topic_hash, ff.origin, ff.hop, std::span<const std::byte>{ff.inner}, &s.m_channel, owner);
 }
 
+inline bool rpc_addressed_elsewhere(const wire::forwarded_frame &ff, const wire::frame_header &hdr, const node_id &self)
+{
+    const bool rpc = hdr.type == wire::msg_type::rpc_request || hdr.type == wire::msg_type::rpc_response;
+    return rpc && ff.destination != node_id{} && ff.destination != self;
+}
+
+// Only a node with the engine's forward-rpc hook can re-resolve the frame onward; anywhere else it is unroutable.
+template<typename Messages>
+bool forward_rpc_onward(Messages &messages, const wire::forwarded_frame &ff)
+{
+    if(!messages.forward_rpc_installed())
+        return false;
+    messages.forward_rpc(ff.origin, ff.destination, ff.hop, std::span<const std::byte>{ff.inner});
+    return true;
+}
+
 // Dispatch an admitted forwarded frame's header-on inner frame by its own type. A request/response
 // addressed ELSEWHERE (destination set and not self) re-resolves onward by its destination identity
-// through route_select at this hop — the relay holds no correlation, so nothing is delivered locally.
-// A frame addressed HERE (destination self or unset) delivers: a unidirectional lands with source =
-// the trailer origin (never the relay session pin); a request stages the requester origin as its
-// reply route; a response keys the pending table by the responder ORIGIN, not the arrival via, so a
-// reply that re-resolved through a different relay still matches. Exactly one call per admitted frame.
+// through route_select at this hop, or is dropped as unroutable on a node that cannot forward — it is
+// never served or completed locally. A frame addressed HERE (destination self or unset) delivers: a
+// unidirectional lands with source = the trailer origin (never the relay session pin) only where this
+// node demanded the topic from the relay session; a request stages the requester origin as its reply
+// route; a response completes only a forwarded call, keyed by the responder ORIGIN rather than the
+// arrival via, so a reply that re-resolved through a different relay still matches. Exactly one call per
+// admitted frame.
 template<typename Session>
-// NOLINTNEXTLINE(readability-function-size)
 bool dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff, const wire::frame_header &hdr)
 {
-    const auto body      = std::span<const std::byte>{ff.inner}.subspan(wire::header_size);
-    const bool elsewhere = ff.destination != node_id{} && ff.destination != s.m_fsm_cfg.self_id;
-    if(elsewhere && (hdr.type == wire::msg_type::rpc_request || hdr.type == wire::msg_type::rpc_response) && s.m_messages.forward_rpc_installed())
+    const auto body = std::span<const std::byte>{ff.inner}.subspan(wire::header_size);
+    if(rpc_addressed_elsewhere(ff, hdr, s.m_fsm_cfg.self_id))
     {
-        s.m_messages.forward_rpc(ff.origin, ff.destination, ff.hop, std::span<const std::byte>{ff.inner});
+        if(!forward_rpc_onward(s.m_messages, ff))
+            report_drop(s, drop_cause::unroutable, 0);
         return true;
     }
     switch(hdr.type)
@@ -73,10 +87,7 @@ bool dispatch_forwarded_inner(Session &s, const wire::forwarded_frame &ff, const
         case wire::msg_type::rpc_request:
             return s.m_procedures.deliver_request(s.m_rpc_peer, body, s.m_session_id, &ff.origin);
         case wire::msg_type::rpc_response:
-            {
-                const std::string key = node_name_of(ff.origin);
-                return s.m_procedures.deliver_response(s.m_rpc_peer, body, &key);
-            }
+            return s.m_procedures.deliver_forwarded_response(ff.origin, body);
         default:
             return true;
     }

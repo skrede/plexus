@@ -42,12 +42,12 @@
 namespace plexus::io {
 
 // The req/res sibling of message_forwarder: a Policy-templated forwarder that correlates opaque-byte
-// requests to responses by a monotonic correlation_id, tracking pending calls in a bounded per-peer
-// outstanding-request table (an over-capacity call fails fast). An unmatched response is dropped as
-// an orphan. It arms a Policy timer per call (a forwarder default deadline, optionally overridden):
-// on expiry the entry fires rpc_status::timeout; a matched response or detach_all cancels it first.
-// It exposes deliver_request/deliver_response and owns no frame_header.type switch — the frame_router
-// owns the type switch and hands each the inner header-off payload.
+// requests to responses by a monotonic correlation_id, tracking pending calls in bounded per-peer
+// outstanding-request tables, direct and forwarded calls apart (an over-capacity call fails fast). An
+// unmatched response is dropped as an orphan. It arms a Policy timer per call (a forwarder default
+// deadline, optionally overridden): on expiry the entry fires rpc_status::timeout; a matched response or
+// detach_all cancels it first. It exposes deliver_request/deliver_response and owns no frame_header.type
+// switch — the frame_router owns the type switch and hands each the inner header-off payload.
 template<typename Policy>
     requires plexus::Policy<Policy>
 class procedure_forwarder
@@ -76,6 +76,7 @@ public:
             , m_next_correlation_id{1}
             , m_default_deadline(default_deadline)
             , m_ops()
+            , m_forwarded_outstanding()
     {
     }
 
@@ -130,22 +131,23 @@ public:
         detail::emit_rpc_call(*this, fqn, corr_id);
 
         auto [it, _] = per_peer.emplace(corr_id, pending_rpc{std::string{fqn}, std::move(on_response), std::make_unique<timer_type>(m_executor)});
-        detail::arm_deadline(*this, p.node_name, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
+        detail::arm_deadline(*this, m_outstanding, p.node_name, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
     }
 
     // The relayed sibling of call(): with no direct session to the responder, mint the correlation, build
     // a header-on rpc_request frame, and hand it to the engine's route-resolution seam (which wraps it in
     // a forwarded envelope addressed to the responder and sends it onto a route_select-chosen via-session).
     // The pending entry keys on the responder's IDENTITY, not the via, so a reply re-resolving back through
-    // a different relay still matches. An unroutable request still arms the deadline — the caller fails via
-    // rpc_status::timeout, never a manufactured route.
+    // a different relay still matches; the entry lives in the forwarded table, which no direct response
+    // reaches. An unroutable request still arms the deadline — the caller fails via rpc_status::timeout,
+    // never a manufactured route.
     void forward_call(const node_id &destination, std::string_view fqn, std::span<const std::byte> param, on_response_fn on_response,
                       std::optional<std::chrono::nanoseconds> deadline = std::nullopt)
     {
         if(m_ops.closing())
             return on_response(wire::rpc_status::canceled, {});
         const std::string key = node_name_of(destination);
-        auto &per_peer        = m_outstanding[key];
+        auto &per_peer        = m_forwarded_outstanding[key];
         if(per_peer.size() >= m_max_outstanding)
             return on_response(wire::rpc_status::error, {});
 
@@ -157,7 +159,7 @@ public:
         detail::emit_rpc_call(*this, fqn, corr_id);
 
         auto [it, _] = per_peer.emplace(corr_id, pending_rpc{std::string{fqn}, std::move(on_response), std::make_unique<timer_type>(m_executor)});
-        detail::arm_deadline(*this, key, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
+        detail::arm_deadline(*this, m_forwarded_outstanding, key, corr_id, *it->second.timer, deadline.value_or(m_default_deadline));
     }
 
     // Per-(peer, fqn) set gate: only the attach that inserts the pair emits a subscribe. A call() needs no prior attach.
@@ -195,27 +197,15 @@ public:
     }
 
     // The peer-death resolution path: cancel each entry's timer (so a torn-down entry fires no late
-    // timeout), fire every pending callback with peer_disconnected, and drop the peer's entries.
+    // timeout), fire every pending callback with peer_disconnected, and drop the peer's entries. Both of
+    // the peer's tables are taken out before any callback fires.
     void detach_all(const peer &p)
     {
         m_endpoint.remove_peer(p);
-
-        auto peer_it = m_outstanding.find(p.node_name);
-        if(peer_it == m_outstanding.end())
-            return;
-
-        // Move the peer's pending table out and drop the map entry BEFORE firing any callback: an
-        // on_response may re-issue a call that inserts into m_outstanding — rehashing the outer map
-        // (invalidating peer_it) or mutating this peer's inner map under the iterator. Firing from the
-        // detached copy leaves no live iterator into a container the callback can reach, mirroring
-        // deliver_response / fire_timeout.
-        auto detached = std::move(peer_it->second);
-        m_outstanding.erase(peer_it);
-        for(auto &[corr_id, pending] : detached)
-        {
-            pending.timer->cancel();
-            pending.on_response(wire::rpc_status::peer_disconnected, {});
-        }
+        auto direct    = detail::take_peer_calls(m_outstanding, p.node_name);
+        auto forwarded = detail::take_peer_calls(m_forwarded_outstanding, p.node_name);
+        detail::fail_calls(direct, wire::rpc_status::peer_disconnected);
+        detail::fail_calls(forwarded, wire::rpc_status::peer_disconnected);
     }
 
     // Resolve a local provider by topic_hash and dispatch to it over the opaque param bytes. An
@@ -228,12 +218,15 @@ public:
 
     // Find the pending entry for this peer by correlation_id, move it out + erase it, and fire its
     // callback. A non-matching corr_id is dropped as an orphan and fires no callback.
-    // key_override addresses the pending table by an identity other than the arrival session's peer: a
-    // forwarded reply arrives over whatever relay re-resolution chose, so it keys on the responder ORIGIN
-    // (carried by the forwarded envelope) rather than the via, matching forward_call's origin-keyed entry.
-    bool deliver_response(const peer &p, std::span<const std::byte> inner, const std::string *key_override = nullptr)
+    bool deliver_response(const peer &p, std::span<const std::byte> inner)
     {
-        return detail::deliver_response(*this, p, inner, key_override);
+        return detail::deliver_response(*this, m_outstanding, p.node_name, inner);
+    }
+
+    // Keyed by the responder origin the envelope carries, not the arrival via, matching forward_call's entry.
+    bool deliver_forwarded_response(const node_id &origin, std::span<const std::byte> inner)
+    {
+        return detail::deliver_response(*this, m_forwarded_outstanding, node_name_of(origin), inner);
     }
 
     // Every pending call completes once with canceled, and so does every later call; pending() settles once the canceled
@@ -252,10 +245,7 @@ public:
     // this stays zero on the relay reply path — the stateless-reply invariant, observable in a test.
     std::size_t outstanding() const noexcept
     {
-        std::size_t n = 0;
-        for(const auto &[name, per_peer] : m_outstanding)
-            n += per_peer.size();
-        return n;
+        return detail::count_calls(m_outstanding) + detail::count_calls(m_forwarded_outstanding);
     }
 
 private:
@@ -293,6 +283,7 @@ private:
     std::unordered_map<std::string, handler_fn> m_providers;
     std::unordered_map<std::uint64_t, std::string> m_hash_to_fqn;
     std::unordered_map<std::string, std::unordered_map<std::uint64_t, pending_rpc>> m_outstanding;
+    std::unordered_map<std::string, std::unordered_map<std::uint64_t, pending_rpc>> m_forwarded_outstanding;
     plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> m_on_rpc_call;
     plexus::detail::move_only_function<void(std::string_view, const rpc_view &)> m_on_rpc_serve;
     plexus::detail::move_only_function<void(std::string_view, const rpc_reply_view &)> m_on_rpc_reply;
@@ -310,13 +301,11 @@ private:
     template<typename F, typename C>
     friend void detail::send_subscribe(F &, C &, std::string_view, std::uint64_t);
     template<typename F>
-    friend void detail::fire_timeout(F &, const std::string &, std::uint64_t);
-    template<typename F>
     friend void detail::close_forwarder(F &);
     template<typename F, typename P>
     friend bool detail::deliver_request(F &, const P &, std::span<const std::byte>, std::uint64_t, const node_id *);
-    template<typename F, typename P>
-    friend bool detail::deliver_response(F &, const P &, std::span<const std::byte>, const std::string *);
+    template<typename F, typename T>
+    friend bool detail::deliver_response(F &, T &, const std::string &, std::span<const std::byte>);
 
     wire::bidirectional_header request_header(std::string_view fqn, std::uint64_t corr_id)
     {

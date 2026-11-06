@@ -2262,6 +2262,17 @@ target_include_directories(test_forward_reply_reresolve PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..)
 catch_discover_tests(test_forward_reply_reresolve TEST_PREFIX "integration.")
 
+# A forwarded envelope can neither complete a direct call nor be served or delivered where it was not addressed or demanded.
+add_executable(test_forwarded_rpc_tables test_forwarded_rpc_tables.cpp)
+target_link_libraries(test_forwarded_rpc_tables PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::inproc
+    Catch2::Catch2WithMain)
+target_include_directories(test_forwarded_rpc_tables PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+catch_discover_tests(test_forwarded_rpc_tables TEST_PREFIX "integration.")
+
 add_executable(test_forward_demand_propagation test_forward_demand_propagation.cpp)
 target_link_libraries(test_forward_demand_propagation PRIVATE
     plexus::core
