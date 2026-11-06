@@ -57,6 +57,16 @@ target_link_libraries(test_multicast_discovery_flood_cap PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_multicast_discovery_flood_cap TEST_PREFIX "discovery.")
 
+# The cap ages out silent sources on the awareness clock.
+add_executable(test_flood_cap_aging test_flood_cap_aging.cpp)
+target_link_libraries(test_flood_cap_aging PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::stream
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_flood_cap_aging TEST_PREFIX "discovery.")
+
 # The self-exclusion invariant, the self-echo health probe, and the default_discovery factory's
 # combined health surface + one-shot warning. The leaf cases run over the fake socket (a fake clock
 # drives the no-self-echo window); the factory cases drive the real asio socket, so this executable

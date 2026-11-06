@@ -16,7 +16,9 @@ namespace plexus::discovery::detail {
 // rate (per_source within a window), mirroring the data-plane demux precedent
 // (lib/plexus-datagram/.../inbound_demux.h): an already-admitted source is never refused by the
 // cap, so a flood of new sources cannot evict an established peer (evict_lru off, the default).
-// Templated on Clock so a virtual clock drives the rate window deterministically in tests.
+// A source silent for idle_expiry ages out lazily, only when a new source meets a full cap, so the
+// cap frees after churn with no timer. Templated on Clock so a virtual clock drives the rate window
+// and the expiry deterministically in tests.
 template<typename Clock = std::chrono::steady_clock>
 class discovery_flood_cap
 {
@@ -59,6 +61,11 @@ private:
         return m_options.max_peers != 0;
     }
 
+    bool full() const noexcept
+    {
+        return capped() && m_peers.size() >= m_options.max_peers;
+    }
+
     // An established source refreshes its window then passes the cap unconditionally.
     bool refresh(source_state &state, time_point now)
     {
@@ -70,7 +77,9 @@ private:
 
     bool admit_new(const std::string &source, time_point now)
     {
-        if(capped() && m_peers.size() >= m_options.max_peers)
+        if(full())
+            expire_idle(now);
+        if(full())
         {
             if(!m_options.evict_lru)
                 return false;
@@ -93,6 +102,13 @@ private:
             return false;
         ++state.window_count;
         return true;
+    }
+
+    void expire_idle(time_point now)
+    {
+        if(m_options.idle_expiry == std::chrono::milliseconds::zero())
+            return;
+        std::erase_if(m_peers, [&](const auto &entry) { return now - entry.second.last_seen >= m_options.idle_expiry; });
     }
 
     void evict_oldest()

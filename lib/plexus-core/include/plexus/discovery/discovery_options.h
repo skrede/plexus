@@ -3,6 +3,7 @@
 
 #include "plexus/discovery/universe.h"
 
+#include "plexus/io/known_peers.h"
 #include "plexus/io/network_interface.h"
 
 #include <chrono>
@@ -18,7 +19,8 @@ namespace plexus::discovery {
 // per_source_max/per_source_window bound one source's announce rate (4 per 1s tolerates the 1s
 // announce cadence plus a small burst). evict_lru off by default protects an established peer from
 // being evicted by a flood of new sources. Sentinels: max_peers == 0 is unlimited, per_source_max
-// == 0 disables the rate limit; both zero disables admission gating entirely.
+// == 0 disables the rate limit; both zero disables admission gating entirely; an idle_expiry of zero
+// never ages a source out.
 struct flood_cap_options
 {
     flood_cap_options()
@@ -26,6 +28,7 @@ struct flood_cap_options
             , max_peers(256)
             , per_source_max(4)
             , evict_lru(false)
+            , idle_expiry(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(io::default_discovery_ttl_ns)))
     {
     }
 
@@ -33,6 +36,7 @@ struct flood_cap_options
     std::size_t max_peers;
     std::size_t per_source_max;
     bool evict_lru;
+    std::chrono::milliseconds idle_expiry;
 };
 
 // The multicast discovery group/port/ttl and re-announce cadence. The group is held as a string so
