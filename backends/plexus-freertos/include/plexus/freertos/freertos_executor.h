@@ -7,6 +7,7 @@
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/fail_closed.h"
 #include "plexus/detail/driver_record.h"
 
 #include <deque>
@@ -40,6 +41,7 @@ public:
 
     freertos_executor()
             : m_queue(xQueueCreate(k_queue_depth, sizeof(posted_work)))
+            , m_live_tasks(0)
             , m_timers()
             , m_ingress()
             , m_driver()
@@ -52,9 +54,13 @@ public:
     freertos_executor(freertos_executor &&)                 = delete;
     freertos_executor &operator=(freertos_executor &&)      = delete;
 
-    ~freertos_executor()
+    // The queue is freed before the check, so the failing path leaks nothing under exceptions; without them it aborts.
+    ~freertos_executor() noexcept(false)
     {
+        const std::uint32_t live = m_live_tasks;
         vQueueDelete(m_queue);
+        if(live != 0)
+            plexus::detail::fail_closed("freertos_executor: destroyed while a task it counts can still post to it");
     }
 
     void post(plexus::detail::move_only_function<void()> fn)
@@ -82,6 +88,16 @@ public:
     std::uint32_t ingress_dropped() const noexcept
     {
         return m_ingress.dropped();
+    }
+
+    void note_task_started() noexcept
+    {
+        ++m_live_tasks;
+    }
+
+    void note_task_exited() noexcept
+    {
+        --m_live_tasks;
     }
 
     bool running_in_this_thread() noexcept
@@ -160,6 +176,7 @@ public:
 
 private:
     QueueHandle_t m_queue;
+    std::uint32_t m_live_tasks;
     std::vector<freertos_timer *> m_timers;
     detail::freertos_ingress<k_queue_depth> m_ingress;
     plexus::detail::driver_record<TaskHandle_t> m_driver;

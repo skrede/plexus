@@ -62,13 +62,13 @@ public:
 
     host_tcp_socket(host_tcp_socket &&other) noexcept
             : m_fd(other.m_fd)
-            , m_closed(other.m_closed)
+            , m_closed(other.m_closed.load())
             , m_stall(other.m_stall)
             , m_fault(other.m_fault)
             , m_close_witness(other.m_close_witness)
     {
-        other.m_fd     = -1;
-        other.m_closed = true;
+        other.m_fd = -1;
+        other.m_closed.store(true);
     }
 
     host_tcp_socket &operator=(host_tcp_socket &&other) noexcept
@@ -76,13 +76,13 @@ public:
         if(this != &other)
         {
             close();
-            m_fd            = other.m_fd;
-            m_closed        = other.m_closed;
+            m_fd = other.m_fd;
+            m_closed.store(other.m_closed.load());
             m_stall         = other.m_stall;
             m_fault         = other.m_fault;
             m_close_witness = other.m_close_witness;
             other.m_fd      = -1;
-            other.m_closed  = true;
+            other.m_closed.store(true);
         }
         return *this;
     }
@@ -96,7 +96,7 @@ public:
         if(connect_ipv4(m_fd, ep.address) < 0)
             return std::make_error_code(std::errc::connection_refused);
         set_blocking(false);
-        m_closed = false;
+        m_closed.store(false);
         return {};
     }
 
@@ -104,7 +104,7 @@ public:
     {
         if(m_fault && *m_fault) // a test-forced HARD send drop: classify_io's ECONNRESET/EPIPE branch
         {
-            m_closed = true;
+            m_closed.store(true);
             return 0;
         }
         if(m_stall && *m_stall) // a test-forced SOFT stall: the socket folded EWOULDBLOCK/ERR_MEM to 0
@@ -134,21 +134,21 @@ public:
     {
         const auto n = ::recv(m_fd, buf.data(), buf.size(), 0);
         if(n == 0)
-            m_closed = true;
+            m_closed.store(true);
         return classify_io(static_cast<int>(n));
     }
 
     bool closed() const
     {
-        return m_closed;
+        return m_closed.load();
     }
 
     void close()
     {
         if(m_fd >= 0)
             close_fd(m_fd, m_close_witness);
-        m_fd     = -1;
-        m_closed = true;
+        m_fd = -1;
+        m_closed.store(true);
     }
 
     // The P2 RX-task receive policy parks in a blocking recv; P1 stays non-blocking for its drain.
@@ -168,12 +168,12 @@ private:
         if(n > 0)
             return static_cast<std::size_t>(n);
         if(n < 0 && !soft_errno(errno) && hard_errno(errno))
-            m_closed = true;
+            m_closed.store(true);
         return 0;
     }
 
     int m_fd;
-    bool m_closed;
+    std::atomic<bool> m_closed;
     const bool *m_stall;
     const bool *m_fault;
     std::atomic<std::thread::id> *m_close_witness;

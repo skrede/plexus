@@ -16,6 +16,7 @@
     #include "lwip/netdb.h"
 
     #include <span>
+    #include <atomic>
     #include <cerrno>
     #include <chrono>
     #include <cstddef>
@@ -57,11 +58,11 @@ public:
 
     lwip_socket(lwip_socket &&other) noexcept
             : m_fd(other.m_fd)
-            , m_closed(other.m_closed)
+            , m_closed(other.m_closed.load())
             , m_blocking(other.m_blocking)
     {
-        other.m_fd     = -1;
-        other.m_closed = true;
+        other.m_fd = -1;
+        other.m_closed.store(true);
     }
 
     lwip_socket &operator=(lwip_socket &&other) noexcept
@@ -69,11 +70,11 @@ public:
         if(this != &other)
         {
             close();
-            m_fd           = other.m_fd;
-            m_closed       = other.m_closed;
-            m_blocking     = other.m_blocking;
-            other.m_fd     = -1;
-            other.m_closed = true;
+            m_fd = other.m_fd;
+            m_closed.store(other.m_closed.load());
+            m_blocking = other.m_blocking;
+            other.m_fd = -1;
+            other.m_closed.store(true);
         }
         return *this;
     }
@@ -83,7 +84,7 @@ public:
         const auto parsed = parse_host_port(ep.address);
         if(std::error_code ec = open_and_dial(parsed); ec)
             return ec;
-        m_closed = false;
+        m_closed.store(false);
         return {};
     }
 
@@ -97,21 +98,21 @@ public:
     {
         const int n = lwip_recv(m_fd, buf.data(), buf.size(), m_blocking ? 0 : MSG_DONTWAIT);
         if(n == 0) // an orderly peer FIN is a hard drop
-            m_closed = true;
+            m_closed.store(true);
         return classify_io(n);
     }
 
     bool closed() const
     {
-        return m_closed;
+        return m_closed.load();
     }
 
     void close()
     {
         if(m_fd >= 0)
             lwip_close(m_fd);
-        m_fd     = -1;
-        m_closed = true;
+        m_fd = -1;
+        m_closed.store(true);
     }
 
     // The RX-task receive policy parks in a blocking recv instead of spinning a non-blocking poll;
@@ -159,12 +160,12 @@ private:
             return static_cast<std::size_t>(n);
         const bool soft = errno == EWOULDBLOCK || errno == EAGAIN || errno == ENOMEM;
         if(n < 0 && !soft && (errno == ECONNRESET || errno == EPIPE))
-            m_closed = true;
+            m_closed.store(true);
         return 0;
     }
 
     int m_fd;
-    bool m_closed;
+    std::atomic<bool> m_closed;
     bool m_blocking;
 };
 

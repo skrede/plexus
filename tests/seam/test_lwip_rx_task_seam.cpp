@@ -1,6 +1,6 @@
 // Host-side test of the constrained-target lwIP P2 RX-task receive policy: off-target the spawned RX
 // task does not run (the host xTaskCreate is a no-op stub), so this models the RX task's cross-context
-// edge by driving the channel's acquire-slot -> recv_into_slot -> post_from_task step directly as the
+// edge by driving the channel's acquire-slot -> recv_into -> post_from_task step directly as the
 // "RX context", then ex.drain() as the executor task. It proves delivery is POSTED (on_data does NOT
 // fire until the executor drains — the key P2-vs-P1 distinction) and exactly once, with reassembly
 // across recv turns and a peer close surfaced as on_error. The pool is fixed: no per-recv allocation
@@ -55,7 +55,7 @@ bool rx_turn(lwip_channel &channel, plexus::freertos::freertos_executor &ex)
     auto *slot = channel.rx().acquire(0);
     if(!slot)
         return false;
-    const std::size_t n = channel.recv_into_slot(*slot);
+    const std::size_t n = channel.rx().recv_into(*slot);
     if(n > 0)
         REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::rx_type::invoke_feed, slot}, 0));
     else
@@ -119,24 +119,20 @@ TEST_CASE("lwip rx task reassembles a split frame into one posted delivery", "[s
 
 TEST_CASE("lwip rx task surfaces a peer close as on_error, never on_protocol_close", "[seam]")
 {
-    auto pair = plexus::test::make_loopback_pair();
-    REQUIRE(pair.has_value());
-
-    plexus::freertos::freertos_executor ex;
-    host_tcp_socket sender = std::move(pair->dialed);
-    auto receiver          = make_channel(std::move(pair->accepted), ex);
-
+    plexus::test::rx_rig rig;
     int errors          = 0;
     bool protocol_close = false;
-    receiver.on_error([&](plexus::io::io_error) { ++errors; });
-    receiver.on_protocol_close([&](plexus::wire::close_cause) { protocol_close = true; });
+    rig.channel->on_error([&](plexus::io::io_error) { ++errors; });
+    rig.channel->on_protocol_close([&](plexus::wire::close_cause) { protocol_close = true; });
+    REQUIRE(rig.spawn() == pdTRUE);
 
-    sender.close(); // an orderly peer FIN mid-stream
+    rig.sender.close();
+    plexus::test::run_spawned_task();
+    REQUIRE(errors == 0);
+    rig.ex.drain();
 
-    plexus::test::poll_until([&] { rx_turn(receiver, ex); }, [&] { return !(errors == 0); });
-
-    REQUIRE(errors == 1);          // the hard-drop seam fired on the RX context
-    REQUIRE_FALSE(protocol_close); // DISTINCT from the framing-violation seam
+    REQUIRE(errors == 1);
+    REQUIRE_FALSE(protocol_close);
 }
 
 TEST_CASE("lwip rx trampoline self-deletes on channel close instead of returning off the task", "[seam]")

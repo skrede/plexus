@@ -57,23 +57,31 @@ void post_feed(lwip_rx_ctx<S> &ctx, typename lwip_channel<S>::rx_slot &slot)
 
 // One turn: on an exit request close the socket, post exited and return false; otherwise acquire a slot, recv into it
 // and post the feed, parking on a full queue until the executor drains room, so on a stream the TCP window closes while
-// the task waits and no byte is lost. A recv of 0 (the receive timeout, or EWOULDBLOCK) releases the slot.
+// the task waits and no byte is lost. A recv of 0 (the receive timeout, or EWOULDBLOCK) releases the slot; on a dropped
+// socket the task then posts drop observed and exited and returns false, so the executor fails the channel.
 template<plexus::stream::stream_socket S>
 bool lwip_rx_step(lwip_rx_ctx<S> &ctx)
 {
-    if(ctx.channel.rx().exit_requested())
+    auto &rx = ctx.channel.rx();
+    if(rx.exit_requested())
     {
-        ctx.channel.rx().close_and_post_exited();
+        rx.close_and_post_exited();
         return false;
     }
-    auto *slot = ctx.channel.rx().acquire(ctx.wait);
+    auto *slot = rx.acquire(ctx.wait);
     if(!slot)
         return true;
-    if(ctx.channel.recv_into_slot(*slot) > 0)
+    if(rx.recv_into(*slot) > 0)
+    {
         post_feed(ctx, *slot);
-    else
-        ctx.channel.rx().release(*slot);
-    return true;
+        return true;
+    }
+    rx.release(*slot);
+    if(!rx.socket_dropped())
+        return true;
+    rx.post_drop_observed();
+    rx.post_exited();
+    return false;
 }
 
 template<plexus::stream::stream_socket S>

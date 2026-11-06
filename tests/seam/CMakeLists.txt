@@ -93,7 +93,7 @@ target_link_libraries(test_lwip_channel_seam PRIVATE
 catch_discover_tests(test_lwip_channel_seam TEST_PREFIX "seam.")
 
 # Host-side test of the constrained-target lwIP P2 RX-task receive policy: drives the channel's
-# acquire-slot -> recv_into_slot -> post_from_task step inline as the RX context (the spawned task
+# acquire-slot -> recv_into -> post_from_task step inline as the RX context (the spawned task
 # is a no-op stub off-target), then ex.drain() as the executor, proving delivery is POSTED and
 # exactly-once with reassembly over a REAL localhost-TCP loopback pair, and a peer close surfaced as
 # on_error. The current source dir is on the include path so the host socket header resolves.
@@ -126,6 +126,15 @@ target_link_libraries(test_lwip_rx_task_lifecycle PRIVATE
     plexus::freertos
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_rx_task_lifecycle TEST_PREFIX "seam.")
+
+add_executable(test_lwip_rx_task_teardown test_lwip_rx_task_teardown.cpp)
+target_include_directories(test_lwip_rx_task_teardown PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_lwip_rx_task_teardown PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_rx_task_teardown TEST_PREFIX "seam.")
 
 # Host-side test of the constrained-target lwIP listen/accept transport: fires
 # static_assert(transport_backend<lwip_transport<host_tcp_socket, host_tcp_listener>>) at compile

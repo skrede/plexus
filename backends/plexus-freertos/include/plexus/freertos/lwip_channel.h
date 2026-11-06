@@ -127,14 +127,6 @@ public:
         return m_egress.dropped();
     }
 
-    // P2 RX-task side: one recv into the slot's pooled buffer (blocking on-target), recording the
-    // count WITHOUT feeding — the RX task owns the post, the channel owns framing + the slot lifecycle.
-    std::size_t recv_into_slot(rx_slot &slot) noexcept
-    {
-        slot.len = recv_step(slot.buffer);
-        return slot.len;
-    }
-
     // P2's posted-delivery contract: feed the pooled slot's bytes on the EXECUTOR task (so on_frame
     // -> deliver -> on_data fire POSTED, the cross-context pair to P1's synchronous divergence), then
     // release the slot back to the fixed pool. No per-recv heap — the bytes lived in pool storage.
@@ -145,8 +137,12 @@ public:
         m_rx.release(slot);
     }
 
+    void rx_drop_observed()
+    {
+        fail(plexus::io::io_error::connection_reset);
+    }
+
 private:
-    // The shared recv and hard-drop classification both receive paths run.
     template<typename Buffer>
     std::size_t recv_step(Buffer &buffer)
     {

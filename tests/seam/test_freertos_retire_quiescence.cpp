@@ -59,7 +59,7 @@ bool rx_turn(lwip_channel &channel, freertos_executor &ex)
     auto *slot = channel.rx().acquire(0);
     if(!slot)
         return false;
-    const std::size_t n = channel.recv_into_slot(*slot);
+    const std::size_t n = channel.rx().recv_into(*slot);
     if(n > 0)
         REQUIRE(ex.post_from_task(plexus::freertos::posted_work{&lwip_channel::rx_type::invoke_feed, slot}, 0));
     else
