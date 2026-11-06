@@ -288,9 +288,11 @@ private:
     template<typename Ch>
     friend void detail::deliver_reliable_inorder(Ch &, bool, std::span<const std::byte>);
     template<typename Ch>
+    friend bool detail::refuses_overflow(Ch &, std::size_t);
+    template<typename Ch>
     friend typename Ch::submit_result detail::on_window_full(Ch &, std::span<const std::byte>, bool);
     template<typename Ch>
-    friend typename Ch::submit_result detail::submit_reliable_fragment(Ch &, std::uint16_t, std::uint32_t, std::uint32_t, std::span<const std::byte>);
+    friend void detail::submit_reliable_fragment(Ch &, std::uint16_t, std::uint32_t, std::uint32_t, std::span<const std::byte>);
     template<typename Ch>
     friend typename Ch::submit_result detail::send_reliable_large(Ch &, std::span<const std::byte>);
     template<typename Ch>

@@ -94,6 +94,20 @@ constexpr std::size_t effective_fragment_budget(std::size_t transport_budget, bo
     return transport_budget - overhead;
 }
 
+// The count split emits for a payload of this size; an empty payload still takes one fragment.
+constexpr std::uint32_t fragment_count(std::size_t payload_size, std::size_t transport_budget, bool aead_decorated = false) noexcept
+{
+    const std::size_t budget = effective_fragment_budget(transport_budget, aead_decorated);
+    return static_cast<std::uint32_t>(payload_size == 0 ? 1u : (payload_size + budget - 1u) / budget);
+}
+
+// The slice bytes split emits from fragment `first` onward; zero once `first` reaches the count.
+constexpr std::size_t fragment_tail_size(std::size_t payload_size, std::size_t transport_budget, std::size_t first, bool aead_decorated = false) noexcept
+{
+    const std::size_t offset = first * effective_fragment_budget(transport_budget, aead_decorated);
+    return payload_size > offset ? payload_size - offset : 0u;
+}
+
 // The sink the splitter drives once per fragment, in ascending index order: the channel
 // encodes each (idx, cnt, slice) via wrap_udp_fragment_into into its OWN reused scratch
 // buffer. Fully-qualified move_only_function — io::detail shadows plexus::detail.
@@ -107,12 +121,11 @@ using fragment_sink = plexus::detail::move_only_function<void(std::uint32_t frag
 // emits exactly one (frag_cnt == 1). Returns the fragment count emitted.
 inline std::uint32_t split(std::span<const std::byte> payload, std::size_t transport_budget, std::uint16_t /*msg_id*/, fragment_sink &sink, bool aead_decorated = false)
 {
-    const std::size_t budget = effective_fragment_budget(transport_budget, aead_decorated);
-    const std::size_t total  = payload.size();
-    const std::size_t count  = total == 0 ? 1u : (total + budget - 1u) / budget;
-    const auto frag_cnt      = static_cast<std::uint32_t>(count);
+    const std::size_t budget     = effective_fragment_budget(transport_budget, aead_decorated);
+    const std::size_t total      = payload.size();
+    const std::uint32_t frag_cnt = fragment_count(total, transport_budget, aead_decorated);
 
-    for(std::size_t i = 0; i < count; ++i)
+    for(std::size_t i = 0; i < frag_cnt; ++i)
     {
         const std::size_t offset = i * budget;
         const std::size_t len    = std::min(budget, total - offset);

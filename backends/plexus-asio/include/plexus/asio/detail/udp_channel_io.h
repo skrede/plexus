@@ -95,37 +95,43 @@ void deliver_reliable_inorder(Ch &c, bool fragmented, std::span<const std::byte>
     c.m_reassembler->feed(h->msg_id, h->frag_idx, h->frag_cnt, h->payload);
 }
 
-// block enqueues into the bounded queue (the ack handler drains it), would_block at its cap;
-// drop_newest sheds at the publisher. Either way publish() stays non-blocking.
+// The one admission decision for frames past the ARQ window's free room: drop_newest sheds them at
+// the publisher, block parks them only when the bounded queue (drained by the next ack) holds every
+// byte. A refusal is signalled once and parks nothing; publish() stays non-blocking either way.
 template<typename Ch>
-typename Ch::submit_result on_window_full(Ch &c, std::span<const std::byte> payload, bool fragmented)
+bool refuses_overflow(Ch &c, std::size_t bytes)
 {
-    using sr = typename Ch::submit_result;
     if(c.m_congestion == io::congestion::drop_newest)
     {
         ++c.m_dropped;
         if(c.m_on_drop_cb)
             c.m_on_drop_cb(io::detail::drop_event{.cause = io::detail::drop_cause::arq_shed, .transport = io::locality::remote});
-        return sr::window_full;
+        return true;
     }
-    if(!c.m_backpressure.admit(payload, fragmented))
-    {
-        if(c.m_on_error_cb)
-            c.m_on_error_cb(io::io_error::would_block);
-        return sr::window_full;
-    }
-    return sr::admitted;
+    if(c.m_backpressure.admits_total(bytes))
+        return false;
+    if(c.m_on_error_cb)
+        c.m_on_error_cb(io::io_error::would_block);
+    return true;
 }
 
-// Encode one fragment as [msg_id:2][idx:4][cnt:4][slice] and submit it FRAGMENTED-flagged.
 template<typename Ch>
-typename Ch::submit_result submit_reliable_fragment(Ch &c, std::uint16_t msg_id, std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
+typename Ch::submit_result on_window_full(Ch &c, std::span<const std::byte> payload, bool fragmented)
+{
+    if(refuses_overflow(c, payload.size()))
+        return Ch::submit_result::window_full;
+    c.m_backpressure.admit(payload, fragmented);
+    return Ch::submit_result::admitted;
+}
+
+// Encode one fragment as [msg_id:2][idx:4][cnt:4][slice] and submit it FRAGMENTED-flagged, parking
+// it once the window is full: send_reliable_large has already admitted the whole set.
+template<typename Ch>
+void submit_reliable_fragment(Ch &c, std::uint16_t msg_id, std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
 {
     wire::encode_udp_fragment_payload_into(c.m_frag_scratch, msg_id, idx, cnt, slice);
-    const auto r = c.m_arq->submit(c.m_frag_scratch, /*fragmented=*/true);
-    if(r == Ch::submit_result::admitted)
-        return r;
-    return on_window_full(c, c.m_frag_scratch, /*fragmented=*/true);
+    if(c.m_arq->submit(c.m_frag_scratch, /*fragmented=*/true) != Ch::submit_result::admitted)
+        c.m_backpressure.admit(c.m_frag_scratch, /*fragmented=*/true);
 }
 
 // Defined below, but the lazy-init send path above its definition calls it; two-phase lookup needs
@@ -134,7 +140,8 @@ template<typename Ch>
 void ensure_arq(Ch &c);
 
 // Each fragment is a send_reliable segment above the ARQ (selectively retransmitted on loss); the
-// FRAGMENTED envelope bit routes the peer's in-order payload to the reassembler.
+// FRAGMENTED envelope bit routes the peer's in-order payload to the reassembler. The message is
+// admitted or refused whole before its first fragment is submitted, so the peer never waits on a hole.
 template<typename Ch>
 typename Ch::submit_result send_reliable_large(Ch &c, std::span<const std::byte> payload)
 {
@@ -144,12 +151,18 @@ typename Ch::submit_result send_reliable_large(Ch &c, std::span<const std::byte>
         return Ch::submit_result::window_full;
     }
     ensure_arq(c);
-    const std::uint16_t msg_id      = c.m_out_msg_id++;
-    typename Ch::submit_result last = Ch::submit_result::admitted;
-    io::fragment_sink sink          = [&c, msg_id, &last](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice)
-    { last = submit_reliable_fragment(c, msg_id, idx, cnt, slice); };
+    const std::uint32_t count = io::fragment_count(payload.size(), c.m_max_payload);
+    const std::size_t room    = c.m_arq->window_room();
+    if(count > room)
+    {
+        const std::size_t parked = io::fragment_tail_size(payload.size(), c.m_max_payload, room) + (count - room) * wire::udp_fragment_subheader;
+        if(refuses_overflow(c, parked))
+            return Ch::submit_result::window_full;
+    }
+    const std::uint16_t msg_id = c.m_out_msg_id++;
+    io::fragment_sink sink     = [&c, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice) { submit_reliable_fragment(c, msg_id, idx, cnt, slice); };
     io::split(payload, c.m_max_payload, msg_id, sink);
-    return last;
+    return Ch::submit_result::admitted;
 }
 
 template<typename Ch>

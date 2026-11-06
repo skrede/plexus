@@ -27,11 +27,19 @@ public:
     // caller surfaces the stall signal); the bytes are copied into an owned slot otherwise.
     bool admit(std::span<const std::byte> frame, bool fragmented)
     {
-        if(!admits(frame.size()))
+        if(!admits_total(frame.size()))
             return false;
         m_bytes += frame.size();
         m_queue.push_back(entry{{frame.begin(), frame.end()}, fragmented});
         return true;
+    }
+
+    // Compare-before-add: the bytes fit only when the cap is not already met AND they are within the
+    // remaining budget (cap - bytes, with bytes < cap by the first clause, cannot wrap). A batch of
+    // non-empty frames that fits as a total is admitted frame by frame without a refusal.
+    bool admits_total(std::size_t bytes) const noexcept
+    {
+        return m_bytes < m_byte_cap && bytes <= m_byte_cap - m_bytes;
     }
 
     bool empty() const noexcept
@@ -73,13 +81,6 @@ private:
         std::vector<std::byte> bytes;
         bool fragmented;
     };
-
-    // Compare-before-add: a frame fits only when the cap is not already met AND its size is within
-    // the remaining budget (cap - bytes, with bytes < cap by the first clause, cannot wrap).
-    bool admits(std::size_t size) const noexcept
-    {
-        return m_bytes < m_byte_cap && size <= m_byte_cap - m_bytes;
-    }
 
     std::size_t m_byte_cap;
     std::size_t m_bytes{0};

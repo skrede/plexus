@@ -162,6 +162,10 @@ public:
     {
         return static_cast<std::uint16_t>(m_next - m_slots.base());
     }
+    std::size_t window_room() const noexcept
+    {
+        return m_slots.window() - in_flight();
+    }
     ms rto() const noexcept
     {
         return m_rto.rto();

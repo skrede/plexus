@@ -114,6 +114,13 @@ target_link_libraries(test_udp_arq_window_wrap PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_udp_arq_window_wrap TEST_PREFIX "udp.")
 
+# A large reliable send is admitted whole or refused whole under either congestion mode.
+add_executable(test_udp_fragment_admission test_udp_fragment_admission.cpp)
+target_link_libraries(test_udp_fragment_admission PRIVATE
+    plexus::asio
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_udp_fragment_admission TEST_PREFIX "udp.")
+
 # The numeric sweep: an empirical substantiation of the RTO/window defaults over a
 # loss x window x RTO grid. Hidden behind the [.sweep] Catch2 tag so the default ctest
 # run skips it; `ctest -R udp.sweep` selects it.
