@@ -58,7 +58,7 @@ constexpr const char *k_host_endpoint = PLEXUS_HOST_ENDPOINT;
 constexpr const char *k_log_tag = "plexus-liveness";
 constexpr std::chrono::milliseconds k_publish_period{PLEXUS_PUBLISH_PERIOD_MS};
 constexpr std::size_t k_max_payload_bytes   = 256;
-constexpr std::uint32_t k_plexus_task_stack = 8192; // bytes (ESP-IDF xTaskCreate takes bytes)
+constexpr std::uint32_t k_plexus_task_stack = 16384; // bytes (ESP-IDF xTaskCreate takes bytes)
 constexpr UBaseType_t k_plexus_task_prio    = 5;
 constexpr std::uint32_t k_rx_task_stack     = 4096; // bytes; the RX task parks in a blocking recv
 
