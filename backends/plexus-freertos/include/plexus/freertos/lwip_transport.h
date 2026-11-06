@@ -30,9 +30,9 @@ namespace plexus::freertos {
 // when an Acceptor is named, listens — each accepted connection is minted into a channel delivered
 // through on_accepted. Construction defaults to lwip_channel's MCU knob-down limits.
 //
-// MaxClients is the COMPILE-TIME accept cap (default 1 — the typical MCU single-client role): poll()
-// is poll-all over a BOUNDED, no-heap set of non-owning channel views; a connection over the cap is
-// refused. For N=1 the view set collapses to the single-slot case the dial-only path compiles to.
+// MaxClients is the COMPILE-TIME channel cap dialed and accepted channels share (default 1 — the typical MCU
+// single-client role): poll() is poll-all over a BOUNDED, no-heap set of non-owning channel views; a connection over
+// the cap is refused. For N=1 the view set collapses to the single-slot case the dial-only path compiles to.
 // The Socket and Acceptor are the injection seams: lwip_socket/lwip_acceptor on hardware, the host's
 // POSIX socket/listener under test. The default null_acceptor never listens (dial-only).
 template<plexus::stream::stream_socket Socket, typename Acceptor = detail::null_acceptor<Socket>, std::size_t MaxClients = 1>
@@ -95,6 +95,8 @@ public:
     // and the P2 RX path are uniform across dial and accept.
     void dial(const plexus::io::endpoint &ep)
     {
+        if(m_views.full())
+            return report_dial_fail(ep, plexus::io::io_error::would_block);
         Socket socket;
         if(std::error_code ec = socket.connect(ep); ec)
             return report_dial_fail(ep, detail::map_error(ec));

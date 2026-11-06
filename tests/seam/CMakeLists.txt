@@ -134,6 +134,16 @@ target_link_libraries(test_lwip_accept_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_accept_seam TEST_PREFIX "seam.")
 
+# The lwIP transport refusing a dial while its bounded channel view set is full, over host loopback.
+add_executable(test_lwip_dial_capacity_seam test_lwip_dial_capacity_seam.cpp)
+target_include_directories(test_lwip_dial_capacity_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_dial_capacity_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_dial_capacity_seam TEST_PREFIX "seam.")
+
 # Host-side test of the constrained-target lwIP egress backpressure / error-class split: over a REAL
 # localhost-TCP loopback pair (a genuine POSIX stream_socket, no hardware and no mock) it proves a full
 # egress queue drives the congestion QoS (block backpressures via would_block, drop_newest sheds +
