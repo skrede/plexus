@@ -109,7 +109,6 @@ a flat 0-cognitive sequential body is the canonical case.
 
 | Function | File:line | Lines (ceiling 25) | Justification |
 | -------- | --------- | ------------------ | ------------- |
-| `unix_listener::start` | backends/plexus-asio/include/plexus/asio/unix_listener.h:83 | 31 | One bind sequence (parse, platform-guard, open/bind/listen, arm the accept loop) over the shared listener members; splitting scatters that single bind path. |
 | `attach_for_fanout` | lib/plexus-core/include/plexus/io/detail/forwarder_fanout.h:55 | 34 | One per-topic attach gate (hash, type-id equality, qos admit) reading the forwarder registry/endpoint/default through the forwarder reference; a relocation of the forwarder body, splitting scatters the gate. |
 | `classify` | lib/plexus-core/include/plexus/io/detail/peer_session_gate.h:25 | 30 | One exhaustive default-less switch giving every message type its establishment verdict, so a new type cannot compile until it is given one; a case-per-type form whose length is the enumeration, splitting it loses that guarantee. |
 | `install_routing_sinks` | lib/plexus-core/include/plexus/io/detail/routing_sink_install.h:107 | 82 | One flat sequential wiring of every node-shared sink (transport edges, forwarder drop/data/demand/companion, rpc, liveness/tick) over the shared engine members; a relocation of the ctor body, splitting the run into one-shot helpers scatters the wiring with no readability gain. |

@@ -1,7 +1,7 @@
 // The af_unix permissions model proof: the listener creates its socket file at the
 // configured mode (0700 owner-only by default, a widened mode honored when the knob asks
 // for it), a peer-credential policy admits or refuses an accepted local peer fail-closed,
-// and the unlink-before-bind TOCTOU window is closed (bind under a restrictive umask). The
+// and the bind-then-chmod window is closed (bind in a private directory, rename into place). The
 // legs here drive a real unix_listener over a per-test owner-only temp directory and stat
 // the on-disk socket inode, plus stand up a real client to exercise the accept-time
 // credential gate.
@@ -112,12 +112,12 @@ TEST_CASE("unix_permissions: a widened socket mode is honored", "[integration][u
     REQUIRE((mode_of(t.path) & 0777) == widened);
 }
 
-TEST_CASE("unix_permissions: the unlink-before-bind window is closed under a restrictive umask", "[integration][unix][permissions]")
+TEST_CASE("unix_permissions: a permissive process umask never widens the socket mode", "[integration][unix][permissions]")
 {
     // Even under a permissive process umask (which would otherwise let bind create a
-    // world-accessible socket inode before the chmod), the listener binds under a
-    // restrictive umask so the inode is never momentarily world-accessible: the final
-    // 0700 mode holds and no broader bits ever appear.
+    // world-accessible socket inode before the chmod), the listener binds inside a
+    // private 0700 directory and renames the socket into place only after its mode is
+    // applied: the final 0700 mode holds and no broader bits ever appear.
     temp_dir t;
     const ::mode_t prev = ::umask(0); // maximally permissive: bind would create 0777 if unguarded
     ::asio::io_context io;

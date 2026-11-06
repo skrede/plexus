@@ -4,6 +4,7 @@
 #include "plexus/asio/unix_channel.h"
 #include "plexus/asio/detail/unix_accept.h"
 #include "plexus/asio/detail/asio_error_map.h"
+#include "plexus/asio/detail/unix_private_bind.h"
 #include "plexus/asio/detail/asio_unix_endpoint_parse.h"
 
 #include "plexus/stream/stream_inbound.h"
@@ -29,13 +30,13 @@
 
 namespace plexus::asio {
 
-// AF_UNIX acceptor over ::asio::local::stream_protocol::acceptor. start(endpoint) unlinks a STALE
-// socket file left by a crashed prior run (so bind cannot wedge with EADDRINUSE), binds under a
-// restrictive umask so the inode is created owner-only with no post-bind chmod window, then chmods
-// to the configured mode and listens. stop() unlinks only a path THIS listener bound.
+// AF_UNIX acceptor over ::asio::local::stream_protocol::acceptor. start(endpoint) binds inside a private
+// 0700 directory beside the path, applies the configured mode there and renames the socket into place
+// (replacing a STALE socket file left by a crashed prior run), then listens. stop() unlinks only a path
+// THIS listener bound.
 //
 // SECURITY CONTRACT (caller-owned): the socket path MUST live in a directory the owner controls
-// (not a world-writable shared tmp), so the unlink-before-bind cannot be raced. The socket mode
+// (not a world-writable shared tmp), so the replacement of the path cannot be raced. The socket mode
 // (0700 default, a widened knob) is the access boundary; the injected peer_cred_policy is
 // defense-in-depth ABOVE the mode, judging {uid, gid, pid} at accept and refusing an unauthorized
 // local peer fail-closed.
@@ -79,7 +80,6 @@ public:
         stop();
     }
 
-    // NOLINTNEXTLINE(readability-function-size)
     void start(const io::endpoint &bind_ep)
     {
         std::error_code ec;
@@ -93,20 +93,12 @@ public:
             if(!m_peer_policy->accepts_without_credentials())
                 return detail::report(*this, std::make_error_code(std::errc::operation_not_supported));
         }
-        const auto &path = bind_ep.address;
-        plexus::detail::remove_socket_path(path); // clear a stale socket file before bind
         m_acceptor.open(ep.protocol(), ec);
         if(ec)
             return detail::report(*this, ec);
-        {
-            [[maybe_unused]] plexus::detail::scoped_bind_umask umask_guard; // inert on Windows (AF_UNIX carries no mode bits)
-            m_acceptor.bind(ep, ec);                                        // NO reuse_address for AF_UNIX
-        }
-        if(ec)
-            return detail::abort_start(*this, ec);               // close the opened acceptor
-        m_bound_path = path;                                     // bind created the inode — own it so any later failure unlinks it
-        if(!plexus::detail::apply_socket_mode(path, m_mode, ec)) // 0700 default, or a widened knob
+        if(!detail::bind_in_private_dir(m_acceptor, m_mode, bind_ep.address, ec))
             return detail::abort_start(*this, ec);
+        m_bound_path = bind_ep.address; // owned only once the socket is in place
         m_acceptor.listen(::asio::socket_base::max_listen_connections, ec);
         if(ec)
             return detail::abort_start(*this, ec);

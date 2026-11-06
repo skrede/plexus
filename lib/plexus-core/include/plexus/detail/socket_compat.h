@@ -34,29 +34,6 @@ inline constexpr socket_mode default_socket_mode = 0;
 
 #if !defined(_WIN32)
 
-// Bind under a restrictive umask so the socket inode is created with no group/other access from the
-// outset, closing the TOCTOU window between bind and the mode application; the prior mask restores
-// on scope exit.
-class scoped_bind_umask
-{
-public:
-    scoped_bind_umask()
-            : m_prev(::umask(0077))
-    {
-    }
-
-    scoped_bind_umask(const scoped_bind_umask &)            = delete;
-    scoped_bind_umask &operator=(const scoped_bind_umask &) = delete;
-
-    ~scoped_bind_umask()
-    {
-        (void)::umask(m_prev);
-    }
-
-private:
-    ::mode_t m_prev;
-};
-
 inline bool apply_socket_mode(const std::string &path, socket_mode mode, std::error_code &ec)
 {
     if(::chmod(path.c_str(), mode) != 0)
@@ -68,14 +45,6 @@ inline bool apply_socket_mode(const std::string &path, socket_mode mode, std::er
 }
 
 #else
-
-class scoped_bind_umask
-{
-public:
-    scoped_bind_umask()                                     = default;
-    scoped_bind_umask(const scoped_bind_umask &)            = delete;
-    scoped_bind_umask &operator=(const scoped_bind_umask &) = delete;
-};
 
 // Windows AF_UNIX carries no mode bits; the NTFS ACL governs access instead.
 inline bool apply_socket_mode(const std::string &, socket_mode, std::error_code &)

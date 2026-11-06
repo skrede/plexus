@@ -1608,6 +1608,16 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain)
     catch_discover_tests(test_unix_permissions TEST_PREFIX "integration.")
 
+    # Interposes umask (dlsym RTLD_NEXT) to prove the unix listener's bind never reads or writes it.
+    add_executable(test_unix_bind_umask test_unix_bind_umask.cpp)
+    target_link_libraries(test_unix_bind_umask PRIVATE
+        plexus::core
+        plexus::wire
+        plexus::asio
+        Catch2::Catch2WithMain
+        ${CMAKE_DL_LIBS})
+    catch_discover_tests(test_unix_bind_umask TEST_PREFIX "integration.")
+
     # The asio and unix listeners keep accepting after an EMFILE accept once descriptors free; the exhaustion lowers
     # RLIMIT_NOFILE, which is POSIX-only.
     add_executable(test_listener_accept_retry test_listener_accept_retry.cpp)
