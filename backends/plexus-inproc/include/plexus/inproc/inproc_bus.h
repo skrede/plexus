@@ -4,6 +4,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/inproc/detail/inproc_dispatch.h"
+#include "plexus/inproc/detail/inproc_listener_set.h"
 #include "plexus/detail/compat.h"
 
 #include <span>
@@ -30,12 +31,6 @@ template<typename Clock = std::chrono::steady_clock>
 class inproc_bus
 {
 public:
-    struct listener_entry
-    {
-        io::endpoint ep;
-        detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted_cb;
-    };
-
     inproc_bus() = default;
 
     inproc_bus(const inproc_bus &)            = delete;
@@ -66,22 +61,19 @@ public:
         std::erase_if(m_channels, [chan](const channel_entry &e) { return e.chan == chan; });
     }
 
-    void register_listener(const io::endpoint &ep, detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
+    std::uint64_t register_listener(const io::endpoint &ep, detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> on_accepted)
     {
-        m_listeners.push_back(listener_entry{ep, std::move(on_accepted)});
+        return m_listeners.add(ep, std::move(on_accepted));
     }
 
-    listener_entry *find_listener(const io::endpoint &ep) noexcept
+    typename detail::inproc_listener_set<Clock>::entry *find_listener(const io::endpoint &ep) noexcept
     {
-        for(auto &entry : m_listeners)
-            if(entry.ep == ep)
-                return &entry;
-        return nullptr;
+        return m_listeners.find(ep);
     }
 
-    void deregister_listener(const io::endpoint &ep) noexcept
+    void deregister_listener(std::uint64_t id) noexcept
     {
-        std::erase_if(m_listeners, [&ep](const listener_entry &e) { return e.ep == ep; });
+        m_listeners.remove(id);
     }
 
     void enqueue(std::uint64_t to_key, std::span<const std::byte> data, std::uint64_t from_key)
@@ -195,7 +187,7 @@ private:
     }
 
     std::vector<channel_entry> m_channels;
-    std::vector<listener_entry> m_listeners;
+    detail::inproc_listener_set<Clock> m_listeners;
     std::vector<queued_packet> m_ring;
     std::size_t m_head{0};
     std::size_t m_size{0};

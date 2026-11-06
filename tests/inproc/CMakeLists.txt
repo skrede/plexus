@@ -53,3 +53,11 @@ target_link_libraries(test_inproc_ingress PRIVATE
     plexus::discovery
     Catch2::Catch2WithMain)
 catch_discover_tests(test_inproc_ingress TEST_PREFIX "inproc.")
+
+# A transport's listen set: every endpoint it listens on is dialable and released at close, a taken endpoint is refused.
+add_executable(test_inproc_listen_set test_inproc_listen_set.cpp)
+target_link_libraries(test_inproc_listen_set PRIVATE
+    plexus::core
+    plexus::inproc
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_inproc_listen_set TEST_PREFIX "inproc.")

@@ -14,7 +14,9 @@
 
 #include <chrono>
 #include <memory>
+#include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 
 namespace plexus::inproc {
@@ -32,6 +34,7 @@ public:
             : m_exec(exec)
             , m_bus(bus)
             , m_retiring()
+            , m_listen_ids()
     {
     }
 
@@ -57,8 +60,10 @@ public:
 
     void listen(const io::endpoint &ep)
     {
-        m_listen_ep = ep;
-        m_bus.register_listener(ep, [this](std::unique_ptr<inproc_channel<Clock>> ch) { m_retiring.deliver_or_retire(m_on_accepted_cb, std::move(ch)); });
+        const std::uint64_t id = m_bus.register_listener(ep, [this](std::unique_ptr<inproc_channel<Clock>> ch) { m_retiring.deliver_or_retire(m_on_accepted_cb, std::move(ch)); });
+        if(id == 0)
+            return report_error(io::io_error::address_in_use);
+        m_listen_ids.push_back(id);
     }
 
     void dial(const io::endpoint &ep)
@@ -76,7 +81,9 @@ public:
 
     void close()
     {
-        m_bus.deregister_listener(m_listen_ep);
+        for(const std::uint64_t id : m_listen_ids)
+            m_bus.deregister_listener(id);
+        m_listen_ids.clear();
     }
 
     std::size_t retiring_size() const noexcept
@@ -91,10 +98,16 @@ private:
             m_on_dial_failed_cb(ep, e);
     }
 
+    void report_error(io::io_error e)
+    {
+        if(m_on_error_cb)
+            m_on_error_cb(e);
+    }
+
     inproc_executor<Clock> &m_exec;
     inproc_bus<Clock> &m_bus;
     io::detail::retiring_table<inproc_channel<Clock>> m_retiring;
-    io::endpoint m_listen_ep;
+    std::vector<std::uint64_t> m_listen_ids;
     detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> m_on_accepted_cb;
     detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>, const io::endpoint &)> m_on_dialed_cb;
     detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
