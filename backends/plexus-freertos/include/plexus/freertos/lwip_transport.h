@@ -6,6 +6,7 @@
 #include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/run_task.h"
 #include "plexus/freertos/freertos_executor.h"
+#include "plexus/freertos/detail/lwip_errors.h"
 #include "plexus/freertos/detail/null_acceptor.h"
 #include "plexus/freertos/detail/lwip_channel_views.h"
 
@@ -96,7 +97,7 @@ public:
     {
         Socket socket;
         if(std::error_code ec = socket.connect(ep); ec)
-            return report_dial_fail(ep, map_error(ec));
+            return report_dial_fail(ep, detail::map_error(ec));
         if(m_rx_task)
             socket.set_blocking(true);
         if(m_on_dialed_cb)
@@ -148,7 +149,7 @@ private:
     // because on_closed belongs to the owner, which retires the channel through it.
     std::unique_ptr<channel_type> adopt(Socket socket, const plexus::io::endpoint &ep)
     {
-        auto ch          = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
+        auto ch            = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
         channel_type *view = ch.get();
         m_views.add(view);
         ch->on_shutdown([this, view] { m_views.remove(view); });
@@ -157,42 +158,32 @@ private:
         return ch;
     }
 
-    static plexus::io::io_error map_error(std::error_code ec)
-    {
-        if(ec == std::errc::connection_refused)
-            return plexus::io::io_error::connection_refused;
-        if(ec == std::errc::timed_out)
-            return plexus::io::io_error::timed_out;
-        if(ec == std::errc::address_in_use)
-            return plexus::io::io_error::address_in_use;
-        return plexus::io::io_error::unknown;
-    }
-
     void report_dial_fail(const plexus::io::endpoint &ep, plexus::io::io_error e)
     {
         if(m_on_dial_failed_cb)
             m_on_dial_failed_cb(ep, e);
     }
 
-    freertos_executor                                     &m_executor;
-    Acceptor                                               m_acceptor;
-    detail::lwip_channel_views<channel_type, MaxClients>  m_views;
-    std::optional<task_options>                           m_rx_task;
-    bool                                                  m_listening;
-    std::size_t                                           m_read_buffer;
-    std::size_t                                           m_max_message;
-    std::size_t                                           m_reassembly_budget;
-    std::size_t                                           m_egress_cap;
-    plexus::io::congestion                                m_congestion;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)>                               m_on_accepted_cb;
+    freertos_executor &m_executor;
+    Acceptor m_acceptor;
+    detail::lwip_channel_views<channel_type, MaxClients> m_views;
+    std::optional<task_options> m_rx_task;
+    bool m_listening;
+    std::size_t m_read_buffer;
+    std::size_t m_max_message;
+    std::size_t m_reassembly_budget;
+    std::size_t m_egress_cap;
+    plexus::io::congestion m_congestion;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const plexus::io::endpoint &)> m_on_dialed_cb;
-    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)>          m_on_dial_failed_cb;
-    plexus::detail::move_only_function<void(plexus::io::io_error)>                                        m_on_error_cb;
+    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error_cb;
 };
 
 }
 
-static_assert(plexus::io::transport_backend<plexus::freertos::lwip_transport<plexus::freertos::detail::null_stream_socket>, plexus::freertos::lwip_policy<plexus::freertos::detail::null_stream_socket>>,
+static_assert(plexus::io::transport_backend<plexus::freertos::lwip_transport<plexus::freertos::detail::null_stream_socket>,
+                                            plexus::freertos::lwip_policy<plexus::freertos::detail::null_stream_socket>>,
               "lwip_transport must satisfy transport_backend — check the listen/dial/on_* surface");
 
 #endif
