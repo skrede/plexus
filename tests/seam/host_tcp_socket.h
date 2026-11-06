@@ -8,38 +8,22 @@
 // never shipped in lib (on-target the lwIP socket in detail/lwip_socket_io.h plays this role).
 #if !defined(ESP_PLATFORM)
 
+    #include "host_socket_ops.h"
     #include "host_tcp_socket_platform.h"
 
     #include "plexus/io/endpoint.h"
 
-    #include <fcntl.h>
-    #include <netinet/in.h>
     #include <sys/socket.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
 
     #include <span>
+    #include <atomic>
     #include <cerrno>
-    #include <string>
-    #include <utility>
+    #include <chrono>
+    #include <thread>
     #include <cstddef>
-    #include <cstdint>
-    #include <charconv>
-    #include <string_view>
     #include <system_error>
 
 namespace plexus::test {
-
-inline std::pair<std::string, std::uint16_t> split_host_port(std::string_view address)
-{
-    const auto colon = address.rfind(':');
-    if(colon == std::string_view::npos)
-        return {std::string{address}, 0};
-    std::uint16_t port = 0;
-    const auto tail    = address.substr(colon + 1);
-    std::from_chars(tail.data(), tail.data() + tail.size(), port);
-    return {std::string{address.substr(0, colon)}, port};
-}
 
 // A non-blocking connected TCP socket over loopback. A recv() of 0 with no transient errno means an
 // orderly peer FIN (a hard drop the channel turns into on_error); EWOULDBLOCK is "nothing yet".
@@ -75,6 +59,7 @@ public:
             , m_closed(other.m_closed)
             , m_stall(other.m_stall)
             , m_fault(other.m_fault)
+            , m_close_witness(other.m_close_witness)
     {
         other.m_fd     = -1;
         other.m_closed = true;
@@ -85,28 +70,24 @@ public:
         if(this != &other)
         {
             close();
-            m_fd       = other.m_fd;
-            m_closed   = other.m_closed;
-            m_stall    = other.m_stall;
-            m_fault    = other.m_fault;
-            other.m_fd     = -1;
-            other.m_closed = true;
+            m_fd            = other.m_fd;
+            m_closed        = other.m_closed;
+            m_stall         = other.m_stall;
+            m_fault         = other.m_fault;
+            m_close_witness = other.m_close_witness;
+            other.m_fd      = -1;
+            other.m_closed  = true;
         }
         return *this;
     }
 
     std::error_code connect(endpoint_type ep)
     {
-        const auto [host, port] = split_host_port(ep.address);
-        m_fd                    = ::socket(AF_INET, SOCK_STREAM, 0);
+        m_fd = ::socket(AF_INET, SOCK_STREAM, 0);
         if(m_fd < 0)
             return std::make_error_code(std::errc::too_many_files_open);
         suppress_sigpipe(m_fd);
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port   = htons(port);
-        ::inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
-        if(::connect(m_fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) < 0)
+        if(connect_ipv4(m_fd, ep.address) < 0)
             return std::make_error_code(std::errc::connection_refused);
         set_blocking(false);
         m_closed = false;
@@ -138,6 +119,10 @@ public:
     {
         m_fault = &fault;
     }
+    void use_close_witness(std::atomic<std::thread::id> &witness)
+    {
+        m_close_witness = &witness;
+    }
 
     std::size_t recv(std::span<std::byte> buf)
     {
@@ -155,7 +140,7 @@ public:
     void close()
     {
         if(m_fd >= 0)
-            ::close(m_fd);
+            close_fd(m_fd, m_close_witness);
         m_fd     = -1;
         m_closed = true;
     }
@@ -163,27 +148,29 @@ public:
     // The P2 RX-task receive policy parks in a blocking recv; P1 stays non-blocking for its drain.
     void set_blocking(bool blocking)
     {
-        const int flags = ::fcntl(m_fd, F_GETFL, 0);
-        ::fcntl(m_fd, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+        set_fd_blocking(m_fd, blocking);
+    }
+
+    void set_receive_timeout(std::chrono::milliseconds timeout)
+    {
+        apply_receive_timeout(m_fd, timeout);
     }
 
 private:
-    // Mirror the on-target lwip_socket::classify_io split: SOFT (EWOULDBLOCK/EAGAIN/ENOMEM) folds to 0
-    // and re-arms; HARD (ECONNRESET/EPIPE) sets closed so the channel fires on_error.
     std::size_t classify_io(int n)
     {
         if(n > 0)
             return static_cast<std::size_t>(n);
-        const bool soft = errno == EWOULDBLOCK || errno == EAGAIN || errno == ENOMEM;
-        if(n < 0 && !soft && (errno == ECONNRESET || errno == EPIPE))
+        if(n < 0 && !soft_errno(errno) && hard_errno(errno))
             m_closed = true;
         return 0;
     }
 
-    int         m_fd;
-    bool        m_closed;
+    int m_fd;
+    bool m_closed;
     const bool *m_stall{nullptr};
     const bool *m_fault{nullptr};
+    std::atomic<std::thread::id> *m_close_witness{nullptr};
 };
 
 }

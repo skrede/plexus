@@ -6,7 +6,7 @@
 #include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/run_task.h"
 #include "plexus/freertos/freertos_executor.h"
-#include "plexus/freertos/detail/lwip_errors.h"
+#include "plexus/freertos/detail/lwip_dialer.h"
 #include "plexus/freertos/detail/null_acceptor.h"
 #include "plexus/freertos/detail/lwip_channel_views.h"
 
@@ -21,7 +21,6 @@
 #include <cstddef>
 #include <utility>
 #include <optional>
-#include <system_error>
 
 namespace plexus::freertos {
 
@@ -47,6 +46,7 @@ public:
             : m_executor(ex)
             , m_acceptor()
             , m_views()
+            , m_dialer()
             , m_rx_task(std::nullopt)
             , m_listening(false)
             , m_read_buffer(read_buffer)
@@ -78,7 +78,7 @@ public:
     }
     void on_dial_failed(plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> cb)
     {
-        m_on_dial_failed_cb = std::move(cb);
+        m_dialer.on_failed(std::move(cb));
     }
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
@@ -96,14 +96,15 @@ public:
     void dial(const plexus::io::endpoint &ep)
     {
         if(m_views.full())
-            return report_dial_fail(ep, plexus::io::io_error::would_block);
-        Socket socket;
-        if(std::error_code ec = socket.connect(ep); ec)
-            return report_dial_fail(ep, detail::map_error(ec));
-        if(m_rx_task)
-            socket.set_blocking(true);
-        if(m_on_dialed_cb)
-            m_on_dialed_cb(adopt(std::move(socket), ep), ep);
+            return m_dialer.report(ep, plexus::io::io_error::would_block);
+        m_dialer.dial(ep,
+                      [this, &ep](Socket socket)
+                      {
+                          if(m_rx_task)
+                              socket.set_blocking(true);
+                          if(m_on_dialed_cb)
+                              m_on_dialed_cb(adopt(std::move(socket), ep), ep);
+                      });
     }
 
     // The cooperative RX step the super-loop drives: drain the acceptor, then poll-all the live
@@ -160,15 +161,10 @@ private:
         return ch;
     }
 
-    void report_dial_fail(const plexus::io::endpoint &ep, plexus::io::io_error e)
-    {
-        if(m_on_dial_failed_cb)
-            m_on_dial_failed_cb(ep, e);
-    }
-
     freertos_executor &m_executor;
     Acceptor m_acceptor;
     detail::lwip_channel_views<channel_type, MaxClients> m_views;
+    detail::lwip_dialer<Socket> m_dialer;
     std::optional<task_options> m_rx_task;
     bool m_listening;
     std::size_t m_read_buffer;
@@ -178,7 +174,6 @@ private:
     plexus::io::congestion m_congestion;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const plexus::io::endpoint &)> m_on_dialed_cb;
-    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed_cb;
     plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error_cb;
 };
 

@@ -8,6 +8,8 @@
 
 #if defined(ESP_PLATFORM)
 
+    #include "plexus/freertos/detail/lwip_socket_ops.h"
+
     #include "plexus/io/endpoint.h"
 
     #include "lwip/sockets.h"
@@ -15,32 +17,10 @@
 
     #include <span>
     #include <cerrno>
-    #include <string>
     #include <cstddef>
-    #include <charconv>
-    #include <string_view>
     #include <system_error>
 
 namespace plexus::freertos::detail {
-
-struct host_port
-{
-    std::string host;
-    std::uint16_t port;
-};
-
-// Split a "host:port" address (the io::endpoint::address form) into its two parts; an absent
-// or unparsable port yields port 0, which connect() then rejects.
-inline host_port parse_host_port(std::string_view address)
-{
-    const auto colon = address.rfind(':');
-    if(colon == std::string_view::npos)
-        return {std::string{address}, 0};
-    std::uint16_t port = 0;
-    const auto tail = address.substr(colon + 1);
-    std::from_chars(tail.data(), tail.data() + tail.size(), port);
-    return {std::string{address.substr(0, colon)}, port};
-}
 
 // The on-target connected TCP socket. Non-blocking throughout so the channel's poll() drains
 // recv() inside the cooperative loop and send() never parks it.
@@ -133,8 +113,7 @@ public:
     // toggling the socket blocking is the P2 opt-in (P1 stays non-blocking for its cooperative drain).
     void set_blocking(bool blocking)
     {
-        const int flags = lwip_fcntl(m_fd, F_GETFL, 0);
-        lwip_fcntl(m_fd, F_SETFL, blocking ? (flags & ~O_NONBLOCK) : (flags | O_NONBLOCK));
+        set_fd_blocking(m_fd, blocking);
     }
 
 private:
@@ -156,8 +135,7 @@ private:
 
     void set_nonblocking()
     {
-        const int flags = lwip_fcntl(m_fd, F_GETFL, 0);
-        lwip_fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
+        set_fd_blocking(m_fd, false);
     }
 
     // A negative return splits into two classes kept textually distinct. SOFT/transient
@@ -174,7 +152,7 @@ private:
         return 0;
     }
 
-    int  m_fd;
+    int m_fd;
     bool m_closed;
 };
 
