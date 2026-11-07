@@ -4,12 +4,15 @@
 #if !defined(ESP_PLATFORM)
 
     #include <fcntl.h>
+    #include <unistd.h>
+
+    #include <arpa/inet.h>
+
     #include <netinet/in.h>
+
     #include <sys/time.h>
     #include <sys/select.h>
     #include <sys/socket.h>
-    #include <arpa/inet.h>
-    #include <unistd.h>
 
     #include <atomic>
     #include <cerrno>

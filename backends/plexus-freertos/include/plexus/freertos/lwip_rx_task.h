@@ -7,13 +7,14 @@
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
 #include <chrono>
+#include <memory>
 #include <cstdint>
-#include <utility>
 
 namespace plexus::freertos {
 
-// The receive timeout bounds every blocking receive and slot wait of the task, so a task asked to exit sees the request
-// within one timeout. The conversion from task_options keeps the timeout's default for callers that name only the task.
+// The receive timeout bounds each blocking receive and each slot wait of the task. The two stack, so a task asked to exit
+// sees the request within two receive timeouts while the executor keeps pumping. The conversion from task_options keeps
+// the timeout's default for callers that name only the task.
 struct rx_task_options
 {
     rx_task_options(task_options task, std::chrono::milliseconds recv_timeout = std::chrono::milliseconds{100})
@@ -55,10 +56,8 @@ void post_feed(lwip_rx_ctx<S> &ctx, typename lwip_channel<S>::rx_slot &slot)
     }
 }
 
-// One turn: on an exit request close the socket, post exited and return false; otherwise acquire a slot, recv into it
-// and post the feed, parking on a full queue until the executor drains room, so on a stream the TCP window closes while
-// the task waits and no byte is lost. A recv of 0 (the receive timeout, or EWOULDBLOCK) releases the slot; on a dropped
-// socket the task then posts drop observed and exited and returns false, so the executor fails the channel.
+// A full executor queue parks the feed post, so on a stream the TCP window closes while the task waits and no byte is
+// lost.
 template<plexus::stream::stream_socket S>
 bool lwip_rx_step(lwip_rx_ctx<S> &ctx)
 {
@@ -87,28 +86,31 @@ bool lwip_rx_step(lwip_rx_ctx<S> &ctx)
 template<plexus::stream::stream_socket S>
 void lwip_rx_trampoline(void *arg)
 {
-    auto *ctx = static_cast<lwip_rx_ctx<S> *>(arg);
-    while(lwip_rx_step(*ctx))
+    // The spawned task owns its context. FreeRTOS aborts a task that returns, so the task deletes itself, and the
+    // owner's scope closes first because vTaskDelete(nullptr) does not return on target.
     {
+        const std::unique_ptr<lwip_rx_ctx<S>> ctx{static_cast<lwip_rx_ctx<S> *>(arg)};
+        while(lwip_rx_step(*ctx))
+        {
+        }
     }
-    // FreeRTOS aborts a task that returns, so the task frees its context and deletes itself once it has posted exited.
-    delete ctx;
     vTaskDelete(nullptr);
 }
 
 }
 
-// The task is marked live before it is created, so a close that races its first turn already asks it to exit; the
-// heap-allocated context is owned by the spawned task, and freed here only when the task could not be created.
+// The task is marked live before it is created, so a close that races its first turn already asks it to exit. The
+// context passes to the spawned task, and comes back to this owner only when the task could not be created.
 template<plexus::stream::stream_socket S>
 BaseType_t spawn_lwip_rx_task(lwip_channel<S> &channel, freertos_executor &ex, rx_task_options opts)
 {
-    auto *ctx = new detail::lwip_rx_ctx<S>{channel, ex, pdMS_TO_TICKS(static_cast<std::uint32_t>(opts.recv_timeout.count()))};
+    auto ctx = std::make_unique<detail::lwip_rx_ctx<S>>(channel, ex, pdMS_TO_TICKS(static_cast<std::uint32_t>(opts.recv_timeout.count())));
     channel.rx().started();
-    const BaseType_t created = xTaskCreate(&detail::lwip_rx_trampoline<S>, "plexus-rx", opts.task.stack, ctx, opts.task.priority, nullptr);
+    auto *const arg          = ctx.release();
+    const BaseType_t created = xTaskCreate(&detail::lwip_rx_trampoline<S>, "plexus-rx", opts.task.stack, arg, opts.task.priority, nullptr);
     if(created != pdTRUE)
     {
-        delete ctx;
+        ctx.reset(arg);
         channel.rx().start_failed();
     }
     return created;

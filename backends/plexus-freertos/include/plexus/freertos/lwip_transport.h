@@ -23,16 +23,10 @@
 
 namespace plexus::freertos {
 
-// The constrained-target TCP transport: a node dials a peer (the transport connects a stream_socket
-// and hands back ONE lwip_channel through on_dialed carrying the endpoint correlation key) AND,
-// when an Acceptor is named, listens — each accepted connection is minted into a channel delivered
-// through on_accepted. Construction defaults to lwip_channel's MCU knob-down limits.
-//
-// MaxClients is the COMPILE-TIME channel cap dialed and accepted channels share (default 1 — the typical MCU
-// single-client role): poll() is poll-all over a BOUNDED, no-heap set of non-owning channel views; a connection over
-// the cap is refused. For N=1 the view set collapses to the single-slot case the dial-only path compiles to.
-// The Socket and Acceptor are the injection seams: lwip_socket/lwip_acceptor on hardware, the host's
-// POSIX socket/listener under test. The default null_acceptor never listens (dial-only).
+// MaxClients is the compile-time channel cap dialed and accepted channels share (default 1, the typical MCU client):
+// poll() is poll-all over a bounded, no-heap set of non-owning channel views, and a connection over the cap is refused.
+// The Socket and Acceptor are the injection seams: lwip_socket/lwip_acceptor on hardware, the host's POSIX
+// socket/listener under test. The default null_acceptor never listens.
 template<plexus::stream::stream_socket Socket, typename Acceptor = detail::null_acceptor<Socket>, std::size_t MaxClients = 1>
 class lwip_transport
 {
@@ -94,8 +88,8 @@ public:
         m_dialer.dial(ep);
     }
 
-    // The super-loop's step: drain the acceptor, complete parked dials, then poll-all the live views (P1 only; P2
-    // receives on the RX task). The views are non-owning and cleared on close, so poll-all never touches a dangling one.
+    // The views are non-owning and cleared on close, so poll-all never touches a dangling one. Under the receive-task
+    // policy the task, not poll, receives.
     void poll()
     {
         if(m_listening)

@@ -1,12 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_DETAIL_LWIP_RX_LIFECYCLE_H
 #define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_LWIP_RX_LIFECYCLE_H
 
-#include "plexus/freertos/posted_work.h"
-#include "plexus/freertos/freertos_executor.h"
-
 #include "plexus/freertos/detail/close_state.h"
 #include "plexus/freertos/detail/lwip_rx_slot_pool.h"
 #include "plexus/freertos/detail/freertos_host_shim.h"
+
+#include "plexus/freertos/posted_work.h"
+#include "plexus/freertos/freertos_executor.h"
 
 #include <atomic>
 #include <cstddef>
@@ -19,8 +19,9 @@ class lwip_rx_lifecycle
 public:
     using slot_type = rx_slot<Owner, Capacity>;
 
-    // The RX hand-off pool holds k_slots buffers and must stay within the executor queue depth, so
-    // it never holds more in-flight slots than the queue can carry a post for.
+    // The RX hand-off pool holds k_slots buffers within the executor queue depth, so one channel never holds more
+    // in-flight slots than the queue can carry a post for. The bound holds per channel only: the receive tasks of every
+    // channel and post_from_thread share the executor's one queue.
     static constexpr std::size_t k_slots = Slots;
     static_assert(k_slots <= freertos_executor::k_queue_depth, "the RX pool must not outsize the executor queue depth");
 
