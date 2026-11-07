@@ -19,6 +19,7 @@
 #include <system_error>
 
 using plexus::test::g_dial_script;
+using plexus::test::scripted_acceptor;
 using plexus::test::scripted_dial_socket;
 
 template<std::size_t MaxClients>
@@ -30,12 +31,14 @@ namespace {
 struct dial_record
 {
     std::vector<std::unique_ptr<dial_channel>> dialed;
+    std::vector<std::unique_ptr<dial_channel>> accepted;
     std::vector<std::pair<plexus::io::endpoint, plexus::io::io_error>> failed;
 };
 
-template<std::size_t MaxClients>
-void record(dial_transport<MaxClients> &transport, dial_record &out)
+template<typename Transport>
+void record(Transport &transport, dial_record &out)
 {
+    transport.on_accepted([&out](std::unique_ptr<dial_channel> ch) { out.accepted.push_back(std::move(ch)); });
     transport.on_dialed([&out](std::unique_ptr<dial_channel> ch, const plexus::io::endpoint &) { out.dialed.push_back(std::move(ch)); });
     transport.on_dial_failed([&out](const plexus::io::endpoint &ep, plexus::io::io_error e) { out.failed.emplace_back(ep, e); });
 }
@@ -132,7 +135,7 @@ TEST_CASE("lwip dial: closing the transport aborts a pending dial off the close 
     CHECK(out.dialed.empty());
 }
 
-TEST_CASE("lwip dial: a dial that completes while the view set is full fails and closes its socket", "[seam][lwip_dial]")
+TEST_CASE("lwip dial: a dial while the view set is full is refused off the dial call and opens no socket", "[seam][lwip_dial]")
 {
     g_dial_script         = plexus::test::dial_script{};
     g_dial_script.outcome = std::error_code{};
@@ -148,8 +151,33 @@ TEST_CASE("lwip dial: a dial that completes while the view set is full fails and
     REQUIRE(out.dialed.size() == 1);
 
     transport.dial(k_second);
+    REQUIRE(out.failed.empty());
+    ex.drain();
+    REQUIRE(out.failed.size() == 1);
+    CHECK(out.failed[0].first == k_second);
+    CHECK(out.failed[0].second == plexus::io::io_error::would_block);
+    CHECK(out.dialed.size() == 1);
+    CHECK(g_dial_script.connects == 1);
+    CHECK(g_dial_script.closes == 0);
+}
+
+TEST_CASE("lwip dial: a dial that completes while the view set is full fails and closes its socket", "[seam][lwip_dial]")
+{
+    g_dial_script         = plexus::test::dial_script{};
+    g_dial_script.outcome = std::error_code{};
+    plexus::freertos::freertos_executor ex;
+    plexus::freertos::lwip_transport<scripted_dial_socket, scripted_acceptor, 2> transport{ex};
+    dial_record out;
+    record(transport, out);
+    transport.listen(plexus::io::endpoint{"tcp", "10.0.0.9:7000"});
+
+    transport.dial(k_first);
+    REQUIRE(out.dialed.empty());
+    transport.dial(k_second);
+    g_dial_script.accept_ready = true;
     transport.poll();
     ex.drain();
+    REQUIRE(out.dialed.size() == 1);
     REQUIRE(out.failed.size() == 1);
     CHECK(out.failed[0].first == k_second);
     CHECK(out.failed[0].second == plexus::io::io_error::would_block);

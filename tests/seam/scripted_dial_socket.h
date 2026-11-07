@@ -17,6 +17,8 @@ struct dial_script
 {
     std::optional<std::error_code> outcome = std::nullopt;
     std::error_code start                  = {};
+    bool accept_ready                      = false;
+    std::uint32_t connects                 = 0;
     std::uint32_t closes                   = 0;
     std::uint32_t probes                   = 0;
 };
@@ -30,7 +32,12 @@ public:
     using endpoint_type = plexus::io::endpoint;
 
     scripted_dial_socket()
-            : m_open(false)
+            : scripted_dial_socket(false)
+    {
+    }
+
+    explicit scripted_dial_socket(bool open)
+            : m_open(open)
     {
     }
 
@@ -59,6 +66,7 @@ public:
 
     std::error_code connect(endpoint_type)
     {
+        ++g_dial_script.connects;
         m_open = !g_dial_script.start;
         return g_dial_script.start;
     }
@@ -101,6 +109,27 @@ public:
 
 private:
     bool m_open;
+};
+
+// The transport default-constructs its acceptor as well, so whether a connection waits lives in the global script.
+class scripted_acceptor
+{
+public:
+    std::error_code bind_and_listen(plexus::io::endpoint)
+    {
+        return {};
+    }
+
+    std::optional<scripted_dial_socket> accept_one()
+    {
+        if(!std::exchange(g_dial_script.accept_ready, false))
+            return std::nullopt;
+        return scripted_dial_socket{true};
+    }
+
+    void close()
+    {
+    }
 };
 
 }

@@ -23,7 +23,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <optional>
 
 using plexus::test::host_tcp_socket;
 using plexus::test::host_tcp_listener;
@@ -98,10 +97,7 @@ TEST_CASE("lwip_transport refuses a dial while its view set is full and reports 
     REQUIRE(out.failed.size() == 1);
     REQUIRE(out.failed[0].first == target.local_endpoint());
     REQUIRE(out.failed[0].second == plexus::io::io_error::would_block);
-    std::optional<host_tcp_socket> peer;
-    REQUIRE(plexus::test::poll_until([&] { peer = target.accept_one(); }, [&peer] { return peer.has_value(); }));
-    std::byte scratch[1];
-    REQUIRE(plexus::test::poll_until([&] { peer->recv(scratch); }, [&peer] { return peer->closed(); }));
+    REQUIRE_FALSE(target.accept_one().has_value());
 
     std::vector<std::byte> received;
     accepted->on_data([&received](std::span<const std::byte> frame) { received.assign(frame.begin(), frame.end()); });

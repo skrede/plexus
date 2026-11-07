@@ -88,9 +88,12 @@ public:
         m_dialer.set_timeout(timeout);
     }
 
-    // The dial completes from poll(), or fails there with timed_out once its dial timeout elapses.
+    // A dial while the view set is full is refused off the call without opening a socket. Otherwise the dial completes
+    // from poll(), or fails there with timed_out once its dial timeout elapses.
     void dial(const plexus::io::endpoint &ep)
     {
+        if(m_views.full())
+            return m_dialer.refuse(ep, plexus::io::io_error::would_block);
         m_dialer.dial(ep);
     }
 
@@ -133,7 +136,8 @@ private:
         m_on_accepted_cb(adopt(std::move(*socket), plexus::io::endpoint{"tcp", {}}));
     }
 
-    // A dialed channel past a full view set would never be polled, so the dial fails and its socket closes.
+    // The set can still fill while a connect is pending (an accept can fill it). A dialed channel past a full set
+    // would never be polled, so the dial fails and its socket closes.
     void deliver_dialed(Socket socket, const plexus::io::endpoint &ep)
     {
         if(m_views.full())
