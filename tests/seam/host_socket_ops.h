@@ -45,7 +45,11 @@ inline int connect_ipv4(int fd, std::string_view address)
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(port);
-    ::inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+    if(::inet_pton(AF_INET, host.c_str(), &addr.sin_addr) != 1)
+    {
+        errno = EINVAL;
+        return -1;
+    }
     return ::connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
 }
 

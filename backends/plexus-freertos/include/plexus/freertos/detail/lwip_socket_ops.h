@@ -35,12 +35,13 @@ inline host_port parse_host_port(std::string_view address)
     return {std::string{address.substr(0, colon)}, port};
 }
 
-inline sockaddr_in ipv4_address(const host_port &parsed)
+inline std::optional<sockaddr_in> ipv4_address(const host_port &parsed)
 {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port   = lwip_htons(parsed.port);
-    inet_pton(AF_INET, parsed.host.c_str(), &addr.sin_addr);
+    if(inet_pton(AF_INET, parsed.host.c_str(), &addr.sin_addr) != 1)
+        return std::nullopt;
     return addr;
 }
 

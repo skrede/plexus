@@ -16,6 +16,7 @@
 
 #include "plexus/detail/compat.h"
 
+#include <chrono>
 #include <memory>
 #include <cstddef>
 #include <utility>
@@ -81,8 +82,13 @@ public:
         m_listening = !m_acceptor.bind_and_listen(ep);
     }
 
-    // The dial completes from poll(); a connect to a host that never answers stays pending until lwIP's SYN
-    // retransmission limit aborts it.
+    // Applies to later dials; zero leaves a dial to lwIP's SYN retransmission limit.
+    void set_dial_timeout(std::chrono::nanoseconds timeout) noexcept
+    {
+        m_dialer.set_timeout(timeout);
+    }
+
+    // The dial completes from poll(), or fails there with timed_out once its dial timeout elapses.
     void dial(const plexus::io::endpoint &ep)
     {
         m_dialer.dial(ep);

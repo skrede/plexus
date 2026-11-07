@@ -145,6 +145,18 @@ target_link_libraries(test_lwip_dial_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_dial_seam TEST_PREFIX "seam.")
 
+# The node's dial timeout reaches the lwIP dialer through the same probe the node runs, so the deadline cases link the API layer.
+add_executable(test_lwip_dial_deadline_seam test_lwip_dial_deadline_seam.cpp)
+target_include_directories(test_lwip_dial_deadline_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_lwip_dial_deadline_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    plexus::plexus
+    plexus::discovery
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_dial_deadline_seam TEST_PREFIX "seam.")
+
 # Host-side test of the constrained-target lwIP listen/accept transport: fires
 # static_assert(transport_backend<lwip_transport<host_tcp_socket, host_tcp_listener>>) at compile
 # time, then over a REAL localhost-TCP loopback (a genuine POSIX listener test-side, no hardware and

@@ -87,12 +87,14 @@ public:
 
     std::error_code connect(endpoint_type ep)
     {
+        const std::optional<sockaddr_in> addr = ipv4_address(parse_host_port(ep.address));
+        if(!addr)
+            return std::make_error_code(std::errc::invalid_argument);
         m_fd = ::lwip_socket(AF_INET, SOCK_STREAM, 0); // the BSD opener; the class name shadows it unqualified here
         if(m_fd < 0)
             return std::make_error_code(std::errc::too_many_files_open);
         set_nonblocking();
-        const sockaddr_in addr = ipv4_address(parse_host_port(ep.address));
-        if(lwip_connect(m_fd, reinterpret_cast<const sockaddr *>(&addr), sizeof(addr)) < 0 && errno != EINPROGRESS)
+        if(lwip_connect(m_fd, reinterpret_cast<const sockaddr *>(&*addr), sizeof(*addr)) < 0 && errno != EINPROGRESS)
             return std::error_code{errno, std::generic_category()};
         m_closed.store(false);
         return {};

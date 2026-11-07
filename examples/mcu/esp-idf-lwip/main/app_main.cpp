@@ -40,7 +40,7 @@ namespace {
     #define PLEXUS_PUBLISH_PERIOD_MS 1000
 #endif
 
-// A dial to a dead endpoint stays pending through lwIP's SYN retries, so it needs a client slot beside the host dial's.
+// A dial to a dead endpoint holds a pending slot until its dial timeout, so it needs one beside the host dial's.
 #ifdef PLEXUS_DEAD_ENDPOINT
 constexpr std::size_t k_max_clients = 2;
 #else
