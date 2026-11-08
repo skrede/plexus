@@ -10,8 +10,8 @@
 // port. The accept deadline is generous because the device must associate + lease before it dials.
 //
 // PLEXUS_HOST_HOLD=<s> re-arms the deadline to that many seconds after the first message, and
-// PLEXUS_HOST_DROP_AFTER=<n> exits after n messages, dropping the session. With neither set the run ends at the
-// first message.
+// PLEXUS_HOST_DROP_AFTER=<n> exits after n messages, dropping the session; such a run passes only once n messages
+// arrived, so a deadline that fires first fails it. With neither set the run ends, and passes, at the first message.
 
 #include "plexus/node.h"
 #include "plexus/subscriber.h"
@@ -89,6 +89,41 @@ void stop_after(::asio::steady_timer &deadline, ::asio::io_context &io, std::chr
         });
 }
 
+struct message_tally
+{
+    ::asio::io_context &io;
+    std::uint32_t count{0};
+    ::asio::steady_timer &deadline;
+    std::optional<std::uint8_t> last{};
+    std::optional<std::uint32_t> hold{};
+    std::optional<std::uint32_t> drop_after{};
+
+    void on_message(std::span<const std::byte> bytes)
+    {
+        if(!bytes.empty())
+            last = static_cast<std::uint8_t>(bytes[0]);
+        ++count;
+        if(drop_after.has_value() && count >= *drop_after)
+            io.stop();
+        else if(hold.has_value() && count == 1)
+            stop_after(deadline, io, std::chrono::seconds{*hold});
+        else if(!hold.has_value() && !drop_after.has_value())
+            io.stop();
+    }
+};
+
+int report(const message_tally &tally)
+{
+    const std::uint32_t needed = tally.drop_after.value_or(1);
+    if(tally.last.has_value() && tally.count >= needed)
+    {
+        std::cout << "GATE_PASS value=" << static_cast<std::uint32_t>(*tally.last) << " count=" << tally.count << '\n';
+        return 0;
+    }
+    std::cout << "GATE_FAIL count=" << tally.count << " needed=" << needed << '\n';
+    return 1;
+}
+
 }
 
 int main(int argc, char **argv)
@@ -105,36 +140,14 @@ int main(int argc, char **argv)
 
     plexus::node<pasio::asio_policy, pasio::asio_transport> node{io, disc, "lwip-gate-host", transport, opts};
 
-    const std::optional<std::uint32_t> hold       = env_count("PLEXUS_HOST_HOLD");
-    const std::optional<std::uint32_t> drop_after = env_count("PLEXUS_HOST_DROP_AFTER");
     ::asio::steady_timer deadline{io};
-
-    std::optional<std::uint8_t> last;
-    std::uint32_t count = 0;
-    plexus::subscriber<> telemetry{node, k_topic,
-                                   [&](std::span<const std::byte> bytes, const plexus::io::message_info &)
-                                   {
-                                       if(!bytes.empty())
-                                           last = static_cast<std::uint8_t>(bytes[0]);
-                                       ++count;
-                                       if(drop_after.has_value() && count >= *drop_after)
-                                           io.stop();
-                                       else if(hold.has_value() && count == 1)
-                                           stop_after(deadline, io, std::chrono::seconds{*hold});
-                                       else if(!hold.has_value() && !drop_after.has_value())
-                                           io.stop();
-                                   }};
+    message_tally tally{.io = io, .deadline = deadline, .hold = env_count("PLEXUS_HOST_HOLD"), .drop_after = env_count("PLEXUS_HOST_DROP_AFTER")};
+    plexus::subscriber<> telemetry{node, k_topic, [&tally](std::span<const std::byte> bytes, const plexus::io::message_info &)
+                                   { tally.on_message(bytes); }};
 
     node.listen({"tcp", listen_address(argc, argv)});
     stop_after(deadline, io, k_timeout);
 
     io.run();
-
-    if(last.has_value())
-    {
-        std::cout << "GATE_PASS value=" << static_cast<std::uint32_t>(*last) << " count=" << count << '\n';
-        return 0;
-    }
-    std::cout << "GATE_FAIL no message within " << k_timeout.count() << "s\n";
-    return 1;
+    return report(tally);
 }

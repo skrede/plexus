@@ -22,11 +22,14 @@
 #
 # Environment:
 #   IDF_PROJECT      the ESP-IDF project to build and flash (default examples/mcu/esp-idf-lwip)
-#   BUILD_DIR        its build directory (default ${IDF_PROJECT}/build_esp32)
+#   BUILD_DIR        its build directory (default ${IDF_PROJECT}/build_esp32); it holds a stamp of the
+#                    IDF_DEFINES and SDKCONFIG_FILE it was built with, and a run whose knobs differ from the
+#                    stamp removes BUILD_DIR/CMakeCache.txt first, so a define left out is really left out
 #   SDKCONFIG_FILE   when set, build with this sdkconfig and IDF_TARGET=esp32 instead of running
 #                    set-target, which would regenerate the project's sdkconfig
 #   IDF_DEFINES      extra -D words passed to the build and to flash, e.g.
-#                    "-DPLEXUS_HOST_ENDPOINT=192.168.1.10:7447 -DPLEXUS_PUBLISH_PERIOD_MS=10"
+#                    "-DPLEXUS_HOST_ENDPOINT=192.168.1.10:7447 -DPLEXUS_PUBLISH_PERIOD_MS=10"; they are printed
+#                    before the cross-build and written to LOG_DIR/run_<n>_defines.log before each flash
 #   CAPTURE_SECONDS  the device serial capture window per run (default 75)
 #   CYCLES           host instances run one after another within a run, each must pass; the device
 #                    redials after each one exits (default 1)
@@ -55,6 +58,8 @@ LOG_DIR="${LOG_DIR:-${REPO_ROOT}/build/examples/mcu/lwip_gate_logs}"
 HOST_GATE="${REPO_ROOT}/build/examples/mcu/lwip_gate_host"
 CREDENTIALS="${IDF_PROJECT}/main/wifi_credentials.h"
 CREDENTIALS_TEMPLATE="${IDF_PROJECT}/main/wifi_credentials.h.example"
+KNOB_STAMP="${BUILD_DIR}/plexus_gate_knobs.txt"
+KNOBS="IDF_DEFINES=${IDF_DEFINES:-} SDKCONFIG_FILE=${SDKCONFIG_FILE}"
 
 read -r -a EXTRA_DEFINES <<< "${IDF_DEFINES:-}"
 IDF_ARGS=(-C "${IDF_PROJECT}" -B "${BUILD_DIR}")
@@ -118,6 +123,14 @@ stop_capture() {   # $1=capture pid
 # The on-target compile: set the target once (unless an sdkconfig is supplied), then build. A
 # non-zero exit fails the gate before a single flash.
 echo "=== cross-building ${IDF_PROJECT} for esp32 ==="
+echo "effective defines: ${IDF_DEFINES:-<none>}"
+# A -D cache entry outlives the run that set it, so a changed knob set starts from a fresh CMake cache.
+if [[ -f "${BUILD_DIR}/CMakeCache.txt" && "$(cat "${KNOB_STAMP}" 2>/dev/null)" != "${KNOBS}" ]]; then
+    echo "the build knobs differ from the last build's; removing ${BUILD_DIR}/CMakeCache.txt"
+    rm -f "${BUILD_DIR}/CMakeCache.txt"
+fi
+mkdir -p "${BUILD_DIR}"
+printf '%s\n' "${KNOBS}" > "${KNOB_STAMP}"
 if [[ -z "${SDKCONFIG_FILE}" ]]; then
     idf.py "${IDF_ARGS[@]}" set-target esp32
 fi
@@ -132,6 +145,7 @@ for ((run = 1; run <= RUNS; ++run)); do
     # launch — so starting it here still wins the race, AND the gate's receive deadline covers only
     # the device's boot+join+dial, not the ~20s flash.
     echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="
+    printf 'IDF_DEFINES=%s\nSDKCONFIG_FILE=%s\n' "${IDF_DEFINES:-}" "${SDKCONFIG_FILE}" >"${LOG_DIR}/run_${run}_defines.log"
     idf.py "${IDF_ARGS[@]}" -p "${PORT}" flash >"${LOG_DIR}/run_${run}_flash.log" 2>&1
 
     devlog="${LOG_DIR}/run_${run}_device.log"

@@ -60,7 +60,7 @@ constexpr std::chrono::milliseconds k_publish_period{PLEXUS_PUBLISH_PERIOD_MS};
 constexpr std::size_t k_max_payload_bytes   = 256;
 constexpr std::uint32_t k_plexus_task_stack = 16384; // bytes (ESP-IDF xTaskCreate takes bytes)
 constexpr UBaseType_t k_plexus_task_prio    = 5;
-constexpr std::uint32_t k_rx_task_stack     = 4096; // bytes; the RX task parks in a blocking recv
+constexpr std::uint32_t k_rx_task_stack     = 4096; // bytes
 
 // A monotonic counter byte stands in for a real sensor reading — a deterministic payload for the
 // multi-run host gate, no GPIO needed.
@@ -111,34 +111,21 @@ struct liveness_loop
     }
 };
 
-void plexus_task(void *)
+plexus::node_options telemetry_node_options()
 {
     using namespace std::chrono_literals;
-
-    if(!example::eth_connect())
-        return;
-
-    plexus::freertos::freertos_executor ex;
-    lwip_transport transport{ex};
-    plexus::discovery::static_discovery disc{{}};
 
     plexus::node_options opts;
     opts.name              = "esp32-eth-telemetry";
     opts.max_message_bytes = k_max_payload_bytes;
     opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0xE74C0DE;
+    return opts;
+}
 
-#ifdef PLEXUS_RX_TASK
-    transport.use_rx_task(plexus::freertos::task_options{k_rx_task_stack});
-#endif
-
-    auto node = std::make_unique<plexus::node<lwip_policy, lwip_transport>>(ex, disc, "esp32-eth-telemetry", transport, opts);
-    node->dial({"tcp", k_host_endpoint});
-#ifdef PLEXUS_DEAD_ENDPOINT
-    node->dial({"tcp", PLEXUS_DEAD_ENDPOINT});
-#endif
-
-    plexus::publisher<void> telemetry{*node, "telemetry"};
+void publish_until_stopped(plexus::freertos::freertos_executor &ex, lwip_transport &transport, plexus::node<lwip_policy, lwip_transport> &node)
+{
+    plexus::publisher<void> telemetry{node, "telemetry"};
 
     telemetry_source source;
     plexus::freertos::freertos_timer timer(ex);
@@ -150,6 +137,29 @@ void plexus_task(void *)
     liveness.arm();
 
     plexus::freertos::run(ex, transport);
+}
+
+void plexus_task(void *)
+{
+    if(!example::eth_connect())
+        return;
+
+    plexus::freertos::freertos_executor ex;
+    lwip_transport transport{ex};
+    plexus::discovery::static_discovery disc{{}};
+    const plexus::node_options opts = telemetry_node_options();
+
+#ifdef PLEXUS_RX_TASK
+    transport.use_rx_task(plexus::freertos::task_options{k_rx_task_stack});
+#endif
+
+    auto node = std::make_unique<plexus::node<lwip_policy, lwip_transport>>(ex, disc, "esp32-eth-telemetry", transport, opts);
+    node->dial({"tcp", k_host_endpoint});
+#ifdef PLEXUS_DEAD_ENDPOINT
+    node->dial({"tcp", PLEXUS_DEAD_ENDPOINT});
+#endif
+
+    publish_until_stopped(ex, transport, *node);
 }
 
 }

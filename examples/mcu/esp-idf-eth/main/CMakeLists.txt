@@ -11,7 +11,8 @@ target_include_directories(${COMPONENT_LIB} PRIVATE
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -std=gnu++20 -fno-exceptions -fno-rtti)
 
-# The gate script sets these per run; an unset variable keeps the firmware's built-in default.
+# The gate script sets these per run and resets the CMake cache when its knobs change, so an unset variable
+# keeps the firmware's built-in default.
 if(DEFINED PLEXUS_HOST_ENDPOINT)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE PLEXUS_HOST_ENDPOINT="${PLEXUS_HOST_ENDPOINT}")
 endif()

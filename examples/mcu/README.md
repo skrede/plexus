@@ -158,6 +158,50 @@ host received a real message over TCP. It requires at least three reproducible p
 fails the whole gate. The on-hardware run needs the operator-supplied credentials above; it cannot
 run without them.
 
+### Gate knobs
+
+Firmware defines, passed as `-D` words through `IDF_DEFINES` (for example
+`IDF_DEFINES="-DPLEXUS_HOST_ENDPOINT=192.168.1.10:7447 -DPLEXUS_PUBLISH_PERIOD_MS=10"`). Leaving one out
+builds the firmware's built-in default:
+
+| Define | Default | Effect |
+|--------|---------|--------|
+| `PLEXUS_HOST_ENDPOINT` | `192.168.1.69:7447` | the host endpoint the firmware dials |
+| `PLEXUS_DEAD_ENDPOINT` | unset (no second dial) | also dials this endpoint, which should not answer; the firmware then holds two client slots, and the dead dial fails at the node's dial timeout (5 s by default) while the host link and the 1 Hz `tick` log keep running |
+| `PLEXUS_PUBLISH_PERIOD_MS` | `1000` | the telemetry publish period in milliseconds |
+| `PLEXUS_RX_TASK` | off | Ethernet firmware only: receive on a dedicated receive task instead of the executor's poll (the Wi-Fi firmware always uses the receive task) |
+
+`run_lwip_gate.sh` reads these variables:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `IDF_PROJECT` | `examples/mcu/esp-idf-lwip` | the ESP-IDF project to build and flash |
+| `BUILD_DIR` | `${IDF_PROJECT}/build_esp32` | its build directory |
+| `SDKCONFIG_FILE` | unset | build with this sdkconfig and `IDF_TARGET=esp32` instead of running `set-target`, which would regenerate the project's sdkconfig |
+| `IDF_DEFINES` | empty | the firmware defines above, passed to the build and to flash |
+| `CAPTURE_SECONDS` | `75` | the device serial capture window per run |
+| `CYCLES` | `1` | host instances run one after another within a run; each must pass, and the device redials after each exits |
+| `LOG_DIR` | `build/examples/mcu/lwip_gate_logs` | where the per-run logs go |
+
+CMake keeps a `-D` value in the build directory's cache after the run that passed it, so a later run that
+leaves the define out would still build it. The script therefore records `IDF_DEFINES` and `SDKCONFIG_FILE`
+in a stamp file in `BUILD_DIR` and removes `BUILD_DIR/CMakeCache.txt` whenever they differ from the last
+run's: every run builds exactly the defines it was given. It prints the effective defines before the
+cross-build and writes them to `run_<n>_defines.log` in `LOG_DIR` before each flash.
+
+The script passes `PLEXUS_HOST_HOLD` and `PLEXUS_HOST_DROP_AFTER` through to every host instance:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `PLEXUS_HOST_PORT` | `7447` | the listen port when none is given on the command line (the script always passes `HOST_PORT`) |
+| `PLEXUS_HOST_HOLD` | unset | end the instance this many seconds after the first message, keeping the session until then |
+| `PLEXUS_HOST_DROP_AFTER` | unset | exit after this many messages, dropping the session so the device redials |
+
+A host instance waits up to 60 s for its first message. With neither `PLEXUS_HOST_HOLD` nor
+`PLEXUS_HOST_DROP_AFTER` set it passes at the first message. With `PLEXUS_HOST_DROP_AFTER=n` it passes
+only once n messages have arrived; if the first-message deadline or the hold deadline fires first it prints
+`GATE_FAIL count=<received> needed=<n>` and fails the run. A pass prints `GATE_PASS value=<last byte> count=<received>`.
+
 # MCU bench — request/echo round trip over serial, lwIP-P1, and lwIP-P2
 
 [`esp-idf-lwip-bench/`](esp-idf-lwip-bench/) is the on-device bench firmware. It reuses the Wi-Fi
