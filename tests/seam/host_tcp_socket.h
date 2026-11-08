@@ -1,11 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_SOCKET_H
 #define HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_SOCKET_H
 
-// A GENUINE POSIX-TCP stream_socket the host-side seam tests connect over loopback — NOT a mock and NOT a
-// synthetic byte buffer. It exercises the channel's framing against real partial reads and real
-// EWOULDBLOCK on a non-blocking 127.0.0.1 socket, so the loopback round-trip proves the dial path,
-// the stream_inbound reassembly, and the P1 poll-drive end-to-end with no hardware. Test-local —
-// never shipped in lib (on-target the lwIP socket in detail/lwip_socket_io.h plays this role).
+// A real POSIX TCP socket over loopback for the host seams; on target lwip_socket in detail/lwip_socket_io.h plays this
+// role.
 #if !defined(ESP_PLATFORM)
 
     #include "host_socket_ops.h"
@@ -35,20 +32,18 @@ public:
 
     host_tcp_socket()
             : m_fd(-1)
+            , m_blocking(false)
+            , m_hooks()
             , m_closed(false)
-            , m_stall(nullptr)
-            , m_fault(nullptr)
-            , m_close_witness(nullptr)
             , m_connect_outcome(std::nullopt)
     {
     }
 
     explicit host_tcp_socket(int fd)
             : m_fd(fd)
+            , m_blocking(false)
+            , m_hooks()
             , m_closed(false)
-            , m_stall(nullptr)
-            , m_fault(nullptr)
-            , m_close_witness(nullptr)
             , m_connect_outcome(std::nullopt)
     {
         suppress_sigpipe(m_fd);
@@ -65,10 +60,9 @@ public:
 
     host_tcp_socket(host_tcp_socket &&other) noexcept
             : m_fd(other.m_fd)
+            , m_blocking(other.m_blocking)
+            , m_hooks(other.m_hooks)
             , m_closed(other.m_closed.load())
-            , m_stall(other.m_stall)
-            , m_fault(other.m_fault)
-            , m_close_witness(other.m_close_witness)
             , m_connect_outcome(other.m_connect_outcome)
     {
         other.m_fd = -1;
@@ -80,11 +74,10 @@ public:
         if(this != &other)
         {
             close();
-            m_fd = other.m_fd;
+            m_fd       = other.m_fd;
+            m_blocking = other.m_blocking;
+            m_hooks    = other.m_hooks;
             m_closed.store(other.m_closed.load());
-            m_stall           = other.m_stall;
-            m_fault           = other.m_fault;
-            m_close_witness   = other.m_close_witness;
             m_connect_outcome = other.m_connect_outcome;
             other.m_fd        = -1;
             other.m_closed.store(true);
@@ -114,14 +107,14 @@ public:
 
     std::size_t send(std::span<const std::byte> bytes)
     {
-        if(m_fault && *m_fault) // a test-forced HARD send drop: classify_io's ECONNRESET/EPIPE branch
+        if(m_hooks.fault && *m_hooks.fault)
         {
             m_closed.store(true);
             return 0;
         }
-        if(m_stall && *m_stall) // a test-forced SOFT stall: the socket folded EWOULDBLOCK/ERR_MEM to 0
+        if(m_hooks.stall && *m_hooks.stall)
             return 0;
-        const auto n = ::send(m_fd, bytes.data(), bytes.size(), nosignal_send_flag);
+        const auto n = ::send(m_fd, bytes.data(), bytes.size(), MSG_DONTWAIT | nosignal_send_flag);
         return classify_io(static_cast<int>(n));
     }
 
@@ -131,20 +124,20 @@ public:
     // guarantee these deterministically (a closed peer's RST is not reliably timely on the host).
     void use_stall_flag(const bool &stall)
     {
-        m_stall = &stall;
+        m_hooks.stall = &stall;
     }
     void use_fault_flag(const bool &fault)
     {
-        m_fault = &fault;
+        m_hooks.fault = &fault;
     }
     void use_close_witness(std::atomic<std::thread::id> &witness)
     {
-        m_close_witness = &witness;
+        m_hooks.close_witness = &witness;
     }
 
     std::size_t recv(std::span<std::byte> buf)
     {
-        const auto n = ::recv(m_fd, buf.data(), buf.size(), 0);
+        const auto n = ::recv(m_fd, buf.data(), buf.size(), m_blocking ? 0 : MSG_DONTWAIT);
         if(n == 0)
             m_closed.store(true);
         return classify_io(static_cast<int>(n));
@@ -158,7 +151,7 @@ public:
     void close()
     {
         if(m_fd >= 0)
-            close_fd(m_fd, m_close_witness);
+            close_fd(m_fd, m_hooks.close_witness);
         m_fd = -1;
         m_closed.store(true);
     }
@@ -166,6 +159,7 @@ public:
     // The P2 RX-task receive policy parks in a blocking recv; P1 stays non-blocking for its drain.
     void set_blocking(bool blocking)
     {
+        m_blocking = blocking;
         set_fd_blocking(m_fd, blocking);
     }
 
@@ -185,10 +179,9 @@ private:
     }
 
     int m_fd;
+    bool m_blocking;
+    host_socket_hooks m_hooks;
     std::atomic<bool> m_closed;
-    const bool *m_stall;
-    const bool *m_fault;
-    std::atomic<std::thread::id> *m_close_witness;
     std::optional<std::error_code> m_connect_outcome;
 };
 

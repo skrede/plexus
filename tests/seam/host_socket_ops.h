@@ -28,6 +28,14 @@
 
 namespace plexus::test {
 
+// The hooks are test-owned; the socket borrows them and they ride its moves into the channel.
+struct host_socket_hooks
+{
+    const bool *stall                           = nullptr;
+    const bool *fault                           = nullptr;
+    std::atomic<std::thread::id> *close_witness = nullptr;
+};
+
 inline std::pair<std::string, std::uint16_t> split_host_port(std::string_view address)
 {
     const auto colon = address.rfind(':');
