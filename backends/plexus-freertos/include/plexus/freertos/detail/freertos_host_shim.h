@@ -1,14 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_DETAIL_FREERTOS_HOST_SHIM_H
 #define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_FREERTOS_HOST_SHIM_H
 
-// The executor and timer call a handful of FreeRTOS primitives unqualified, the
-// way device code does. ESP_PLATFORM is defined by the ESP-IDF build, so on-target
-// this header is a thin pass-through to the real kernel, and the same source binds
-// to it. Off-target (the host suite) those headers cannot be included — they pull
-// in a per-arch port layer — so this provides host stand-ins for exactly the
-// primitives the substrate references, at global scope to match the real
-// declarations, and nothing more. The stand-ins are host-test scaffolding under
-// detail/, never shipped to the device.
+// On target (ESP_PLATFORM) this passes through to the real kernel. The host suite cannot include those headers, which
+// pull in a per-arch port layer, so it gets stand-ins for exactly the primitives the substrate calls, at global scope
+// like the real declarations. The stand-ins are host-test scaffolding, never shipped to the device.
 #if !defined(ESP_PLATFORM)
 
     #include <deque>
@@ -162,6 +157,7 @@ inline int host_vtask_delete_calls           = 0;
 inline TaskHandle_t host_vtask_delete_last   = nullptr;
 inline TaskFunction_t host_task_created_code = nullptr;
 inline void *host_task_created_arg           = nullptr;
+inline BaseType_t host_task_create_result    = pdTRUE;
 }
 
 inline void vTaskDelete(TaskHandle_t task) noexcept
@@ -170,9 +166,11 @@ inline void vTaskDelete(TaskHandle_t task) noexcept
     plexus::freertos::detail::host_vtask_delete_last = task;
 }
 
-// The host stand-in reports success without running the task.
+// The host stand-in records the task without running it, or reports the scripted failure and records nothing.
 inline BaseType_t xTaskCreate(TaskFunction_t code, const char * /*name*/, configSTACK_DEPTH_TYPE /*stack*/, void *params, UBaseType_t /*prio*/, TaskHandle_t * /*out*/)
 {
+    if(plexus::freertos::detail::host_task_create_result != pdTRUE)
+        return plexus::freertos::detail::host_task_create_result;
     plexus::freertos::detail::host_task_created_code = code;
     plexus::freertos::detail::host_task_created_arg  = params;
     return pdTRUE;

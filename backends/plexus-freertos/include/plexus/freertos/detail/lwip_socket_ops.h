@@ -73,14 +73,14 @@ inline void set_fd_blocking(int fd, bool blocking)
 }
 
 // ESP-IDF's lwIP builds with LWIP_SO_RCVTIMEO and the standard timeval option value.
-inline void apply_receive_timeout(int fd, std::chrono::milliseconds timeout)
+inline bool apply_receive_timeout(int fd, std::chrono::milliseconds timeout)
 {
     const auto secs = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     const auto usec = std::chrono::duration_cast<std::chrono::microseconds>(timeout - secs);
     timeval tv{};
     tv.tv_sec  = static_cast<decltype(tv.tv_sec)>(secs.count());
     tv.tv_usec = static_cast<decltype(tv.tv_usec)>(usec.count());
-    lwip_setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    return lwip_setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0;
 }
 
 }

@@ -94,14 +94,14 @@ inline void close_fd(int fd, std::atomic<std::thread::id> *witness)
     ::close(fd);
 }
 
-inline void apply_receive_timeout(int fd, std::chrono::milliseconds timeout)
+inline bool apply_receive_timeout(int fd, std::chrono::milliseconds timeout)
 {
     const auto secs = std::chrono::duration_cast<std::chrono::seconds>(timeout);
     const auto usec = std::chrono::duration_cast<std::chrono::microseconds>(timeout - secs);
     timeval tv{};
     tv.tv_sec  = static_cast<decltype(tv.tv_sec)>(secs.count());
     tv.tv_usec = static_cast<decltype(tv.tv_usec)>(usec.count());
-    ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    return ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0;
 }
 
 // Mirror the on-target lwip_socket::classify_io split: SOFT (EWOULDBLOCK/EAGAIN/ENOMEM) folds to 0

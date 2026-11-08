@@ -44,8 +44,9 @@ struct null_stream_socket
     void set_blocking(bool)
     {
     }
-    void set_receive_timeout(std::chrono::milliseconds)
+    bool set_receive_timeout(std::chrono::milliseconds)
     {
+        return true;
     }
 };
 

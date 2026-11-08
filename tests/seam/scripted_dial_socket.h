@@ -18,6 +18,7 @@ struct dial_script
     std::optional<std::error_code> outcome = std::nullopt;
     std::error_code start                  = {};
     bool accept_ready                      = false;
+    bool receive_timeout_accepted          = true;
     std::uint32_t connects                 = 0;
     std::uint32_t closes                   = 0;
     std::uint32_t probes                   = 0;
@@ -103,8 +104,9 @@ public:
     {
     }
 
-    void set_receive_timeout(std::chrono::milliseconds)
+    bool set_receive_timeout(std::chrono::milliseconds)
     {
+        return g_dial_script.receive_timeout_accepted;
     }
 
 private:

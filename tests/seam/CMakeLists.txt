@@ -136,6 +136,24 @@ target_link_libraries(test_lwip_rx_task_teardown PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_rx_task_teardown TEST_PREFIX "seam.")
 
+add_executable(test_lwip_rx_task_transport_seam test_lwip_rx_task_transport_seam.cpp)
+target_include_directories(test_lwip_rx_task_transport_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_lwip_rx_task_transport_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_rx_task_transport_seam TEST_PREFIX "seam.")
+
+add_executable(test_lwip_rx_task_adopt_seam test_lwip_rx_task_adopt_seam.cpp)
+target_include_directories(test_lwip_rx_task_adopt_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_lwip_rx_task_adopt_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_rx_task_adopt_seam TEST_PREFIX "seam.")
+
 add_executable(test_lwip_dial_seam test_lwip_dial_seam.cpp)
 target_include_directories(test_lwip_dial_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(test_lwip_dial_seam PRIVATE

@@ -6,6 +6,7 @@
 
 #include "host_tcp_socket.h" // MUST precede lwip_transport.h: declares the host POSIX stream_socket
 #include "host_loopback_pair.h"
+#include "stalling_host_socket.h"
 
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
@@ -30,65 +31,8 @@
 
 namespace {
 
-using plexus::test::host_tcp_socket;
-
-// A test-owned stall flag bound at socket construction. The transport's dial() default-constructs its
-// own socket internally, so the flag cannot be injected after the fact — binding it in the wrapper's
-// ctor lets the loopback egress be held resident deterministically (the peer's timing cannot).
-bool g_stall = false;
-
-// A stream_socket that arms the stall flag on construction and forwards the rest to a host POSIX
-// socket. The stall pointer rides host_tcp_socket's move, so it survives the transport's adopt().
-class stalling_host_socket
-{
-public:
-    using endpoint_type = plexus::io::endpoint;
-
-    stalling_host_socket()
-            : m_inner()
-    {
-        m_inner.use_stall_flag(g_stall);
-    }
-
-    stalling_host_socket(stalling_host_socket &&)            = default;
-    stalling_host_socket &operator=(stalling_host_socket &&) = default;
-
-    std::error_code connect(endpoint_type ep)
-    {
-        return m_inner.connect(std::move(ep));
-    }
-    std::optional<std::error_code> connect_outcome()
-    {
-        return m_inner.connect_outcome();
-    }
-    std::size_t send(std::span<const std::byte> bytes)
-    {
-        return m_inner.send(bytes);
-    }
-    std::size_t recv(std::span<std::byte> buf)
-    {
-        return m_inner.recv(buf);
-    }
-    bool closed() const
-    {
-        return m_inner.closed();
-    }
-    void close()
-    {
-        m_inner.close();
-    }
-    void set_blocking(bool blocking)
-    {
-        m_inner.set_blocking(blocking);
-    }
-    void set_receive_timeout(std::chrono::milliseconds timeout)
-    {
-        m_inner.set_receive_timeout(timeout);
-    }
-
-private:
-    host_tcp_socket m_inner;
-};
+using plexus::test::g_stall;
+using plexus::test::stalling_host_socket;
 
 // A transient listener that stays OPEN so the transport can dial into it (make_loopback_pair closes
 // its listener after one accept). The dialed connection completes on loopback without an accept, and

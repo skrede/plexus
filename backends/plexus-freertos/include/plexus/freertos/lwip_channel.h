@@ -29,9 +29,9 @@
 namespace plexus::freertos {
 
 // The constrained-target TCP byte_channel over a connected stream_socket, framed by the plain stream_inbound (TCP
-// provides integrity, so no CRC layer). P1 polls from the loop: a non-blocking recv() inside poll() on the executor
-// task delivers on_data synchronously. plexus::detail is spelled in full: an io detail namespace in scope here shadows
-// the bare detail:: lookup.
+// provides integrity, so no CRC layer). poll() on the executor always retries a stalled send and receives only when no
+// receive task serves the channel; its non-blocking recv() then delivers on_data synchronously. plexus::detail is
+// spelled in full: an io detail namespace in scope here shadows the bare detail:: lookup.
 template<plexus::stream::stream_socket S>
 class lwip_channel
 {
@@ -112,10 +112,12 @@ public:
         m_on_protocol_close = std::move(cb);
     }
 
-    // A hard connection drop fails the channel through on_error, a seam distinct from on_protocol_close.
+    // The send_queue never re-issues a stalled gather, so poll retries it. A hard drop fails the channel through on_error, not on_protocol_close.
     void poll()
     {
-        m_egress.poll_egress(); // retry a soft-stalled gather (the send_queue won't re-issue it itself)
+        m_egress.poll_egress();
+        if(m_rx.live())
+            return;
         const std::size_t n = recv_step(m_read_buffer);
         if(n > 0)
             m_inbound.feed(std::span<const std::byte>{m_read_buffer.data(), n});

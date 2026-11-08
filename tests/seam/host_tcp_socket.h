@@ -163,9 +163,9 @@ public:
         set_fd_blocking(m_fd, blocking);
     }
 
-    void set_receive_timeout(std::chrono::milliseconds timeout)
+    bool set_receive_timeout(std::chrono::milliseconds timeout)
     {
-        apply_receive_timeout(m_fd, timeout);
+        return apply_receive_timeout(m_fd, timeout);
     }
 
 private:

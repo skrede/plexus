@@ -54,7 +54,8 @@ public:
     lwip_transport(const lwip_transport &)            = delete;
     lwip_transport &operator=(const lwip_transport &) = delete;
 
-    // The task receives while the executor sends on the same socket, which needs lwIP's LWIP_NETCONN_FULLDUPLEX (ESP-IDF enables it).
+    // Applies to channels adopted after the call. The task receives while the executor sends on the same socket, which
+    // needs lwIP's LWIP_NETCONN_FULLDUPLEX (ESP-IDF enables it).
     void use_rx_task(rx_task_options opts)
     {
         m_rx_task = opts;
@@ -97,15 +98,14 @@ public:
         m_dialer.dial(ep);
     }
 
-    // The views are non-owning and cleared on close, so poll-all never touches a dangling one. Under the receive-task
-    // policy the task, not poll, receives.
+    // The views are non-owning and cleared on close, so poll-all never touches a dangling one. Every view is polled under
+    // both policies, and a channel its receive task serves only retries its stalled send there.
     void poll()
     {
         if(m_listening)
             accept_pending();
         m_dialer.complete_each([this](Socket socket, const plexus::io::endpoint &ep) { deliver_dialed(std::move(socket), ep); });
-        if(!m_rx_task)
-            m_views.poll_each([](channel_type &ch) { ch.poll(); });
+        m_views.poll_each([](channel_type &ch) { ch.poll(); });
     }
 
     // The shed total folded over the LIVE views only (a closed channel drops out of the set).
@@ -124,8 +124,8 @@ public:
     }
 
 private:
-    // Mint an accepted channel and hand ownership to the engine through on_accepted — refused (the
-    // socket dropped, the set never grows) when the cap is reached, the bound enforced by construction.
+    // Mint an accepted channel and hand ownership to the engine through on_accepted — refused (the socket dropped, the
+    // set never grows) when the cap is reached, the bound enforced by construction, or when adopt cannot set it up.
     void accept_pending()
     {
         std::optional<Socket> socket = m_acceptor.accept_one();
@@ -133,35 +133,42 @@ private:
             return;
         if(m_views.full() || !m_on_accepted_cb)
             return;
-        m_on_accepted_cb(adopt(std::move(*socket), plexus::io::endpoint{"tcp", {}}));
+        if(auto ch = adopt(std::move(*socket), plexus::io::endpoint{"tcp", {}}))
+            m_on_accepted_cb(std::move(ch));
     }
 
     // The set can still fill while a connect is pending (an accept can fill it). A dialed channel past a full set
-    // would never be polled, so the dial fails and its socket closes.
+    // would never be polled, so the dial fails and its socket closes, as it does when adopt cannot set the channel up.
     void deliver_dialed(Socket socket, const plexus::io::endpoint &ep)
     {
         if(m_views.full())
             return m_dialer.report(ep, plexus::io::io_error::would_block);
-        if(m_on_dialed_cb)
-            m_on_dialed_cb(adopt(std::move(socket), ep), ep);
+        if(!m_on_dialed_cb)
+            return;
+        auto ch = adopt(std::move(socket), ep);
+        if(!ch)
+            return m_dialer.report(ep, plexus::io::io_error::unknown);
+        m_on_dialed_cb(std::move(ch), ep);
     }
 
     // The view-invalidation hook is armed before the channel is handed out, so no window exists where the engine owns
     // the channel but its poll view is uninstrumented. It rides the channel's shutdown hook, synchronously at close,
-    // because on_closed belongs to the owner, which retires the channel through it.
+    // because on_closed belongs to the owner, which retires the channel through it. Under the receive-task policy a
+    // rejected receive timeout or a task that cannot be created yields no channel, and the socket closes.
     std::unique_ptr<channel_type> adopt(Socket socket, const plexus::io::endpoint &ep)
     {
         if(m_rx_task)
         {
             socket.set_blocking(true);
-            socket.set_receive_timeout(m_rx_task->recv_timeout);
+            if(!socket.set_receive_timeout(m_rx_task->recv_timeout))
+                return nullptr;
         }
-        auto ch            = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
+        auto ch = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
+        if(m_rx_task && spawn_lwip_rx_task(*ch, m_executor, *m_rx_task) != pdTRUE)
+            return nullptr;
         channel_type *view = ch.get();
         m_views.add(view);
         ch->on_shutdown([this, view] { m_views.remove(view); });
-        if(m_rx_task)
-            spawn_lwip_rx_task(*view, m_executor, *m_rx_task);
         return ch;
     }
 
