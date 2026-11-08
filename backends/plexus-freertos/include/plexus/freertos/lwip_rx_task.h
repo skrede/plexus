@@ -1,19 +1,40 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_LWIP_RX_TASK_H
 #define HPP_GUARD_PLEXUS_FREERTOS_LWIP_RX_TASK_H
 
-#include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/run_task.h"
+#include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/freertos_executor.h"
+
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
 #include "plexus/detail/fail_closed.h"
 
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <cstdint>
-#include <algorithm>
 
 namespace plexus::freertos {
+
+namespace detail {
+
+// ESP-IDF's lwIP port waits timeout / portTICK_PERIOD_MS ticks (components/lwip/port/freertos/sys_arch.c), so a timeout
+// under one tick never parks the task. At least one tick by pdMS_TO_TICKS is at least one by that division at every tick
+// rate up to 1000 Hz, and pdMS_TO_TICKS multiplies in TickType_t, hence the cap.
+inline TickType_t receive_timeout_ticks(std::chrono::milliseconds timeout)
+{
+    constexpr std::int64_t max_ms = std::numeric_limits<std::uint32_t>::max() / 1000;
+    if(timeout <= std::chrono::milliseconds::zero())
+        plexus::detail::fail_closed("rx_task_options: the receive timeout must be positive");
+    if(timeout.count() > max_ms)
+        plexus::detail::fail_closed("rx_task_options: the receive timeout exceeds the tick range");
+    const TickType_t ticks = pdMS_TO_TICKS(static_cast<std::uint32_t>(timeout.count()));
+    if(ticks == 0)
+        plexus::detail::fail_closed("rx_task_options: the receive timeout must be at least one tick");
+    return ticks;
+}
+
+}
 
 // The receive timeout bounds each blocking receive and each slot wait of the task. The two stack, so a task asked to exit
 // sees the request within two receive timeouts while the executor keeps pumping. The conversion from task_options keeps
@@ -24,8 +45,7 @@ struct rx_task_options
             : task(task)
             , recv_timeout(recv_timeout)
     {
-        if(recv_timeout <= std::chrono::milliseconds::zero())
-            plexus::detail::fail_closed("rx_task_options: the receive timeout must be positive");
+        detail::receive_timeout_ticks(recv_timeout);
     }
 
     task_options task;
@@ -109,8 +129,7 @@ void lwip_rx_trampoline(void *arg)
 template<plexus::stream::stream_socket S>
 BaseType_t spawn_lwip_rx_task(lwip_channel<S> &channel, freertos_executor &ex, rx_task_options opts)
 {
-    // A slot wait of 0 never parks, so a timeout under one tick would spin the task on an exhausted pool.
-    const TickType_t wait = std::max<TickType_t>(1, pdMS_TO_TICKS(static_cast<std::uint32_t>(opts.recv_timeout.count())));
+    const TickType_t wait = detail::receive_timeout_ticks(opts.recv_timeout);
     auto ctx              = std::make_unique<detail::lwip_rx_ctx<S>>(channel, ex, wait);
     channel.rx().started();
     auto *const arg          = ctx.release();

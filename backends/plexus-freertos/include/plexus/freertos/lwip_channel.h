@@ -125,7 +125,7 @@ public:
     void poll()
     {
         m_egress.poll_egress();
-        if(m_rx.live())
+        if(m_close.closed() || m_rx.live())
             return;
         const std::size_t n = recv_step(m_read_buffer);
         if(n > 0)

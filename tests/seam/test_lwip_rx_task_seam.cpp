@@ -14,6 +14,8 @@
 #include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/freertos_executor.h"
 
+#include "plexus/freertos/detail/freertos_host_shim.h"
+
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
 
@@ -21,8 +23,10 @@
 
 #include <span>
 #include <chrono>
+#include <limits>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 
 using plexus::test::host_tcp_socket;
@@ -158,4 +162,19 @@ TEST_CASE("lwip rx task: a receive timeout that is not positive fails closed", "
     const plexus::freertos::task_options task{4096};
     CHECK_THROWS_AS(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{0}), std::runtime_error);
     CHECK_THROWS_AS(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{-1}), std::runtime_error);
+}
+
+TEST_CASE("lwip rx task: a receive timeout past the 32-bit tick range fails closed and the largest in range is accepted", "[seam][lwip_rx_task]")
+{
+    const plexus::freertos::task_options task{4096};
+    constexpr std::int64_t max = std::numeric_limits<std::uint32_t>::max() / 1000;
+    CHECK_THROWS_AS(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{max + 1}), std::runtime_error);
+    CHECK_NOTHROW(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{max}));
+    CHECK_NOTHROW(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{1}));
+}
+
+TEST_CASE("lwip rx task: a receive timeout one millisecond under a tick fails closed and only a target build tells it from zero", "[seam][lwip_rx_task]")
+{
+    const plexus::freertos::task_options task{4096};
+    CHECK_THROWS_AS(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{portTICK_PERIOD_MS - 1}), std::runtime_error);
 }

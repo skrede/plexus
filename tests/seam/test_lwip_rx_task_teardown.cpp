@@ -14,6 +14,7 @@
 #include <thread>
 #include <cstdint>
 #include <utility>
+#include <stdexcept>
 
 using plexus::test::rx_rig;
 using plexus::test::rx_channel;
@@ -78,4 +79,20 @@ TEST_CASE("lwip rx task: a retired channel stays in its graveyard while its rece
 
     CHECK(held_after_drain);
     CHECK(graveyard.empty());
+}
+
+TEST_CASE("lwip rx task: a receive timeout set out of range after construction is refused at spawn before the task is created", "[seam][lwip_rx_task]")
+{
+    rx_rig rig;
+    plexus::freertos::rx_task_options opts{plexus::freertos::task_options{4096}};
+    opts.recv_timeout  = std::chrono::milliseconds{0};
+    BaseType_t created = pdFALSE;
+
+    CHECK_THROWS_AS(created = plexus::freertos::spawn_lwip_rx_task(*rig.channel, rig.ex, opts), std::runtime_error);
+    CHECK_FALSE(rig.channel->rx().live());
+
+    rig.channel->close();
+    if(created == pdTRUE)
+        plexus::test::run_spawned_task();
+    rig.ex.drain();
 }

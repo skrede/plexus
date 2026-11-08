@@ -41,6 +41,8 @@ struct host_socket_hooks
 // on a connection a loopback peer cannot be made to lose on demand.
 inline std::atomic<int> host_forced_errno{0};
 
+inline std::atomic<std::uint32_t> host_recv_calls{0};
+
 inline bool forced_failure()
 {
     const int forced = host_forced_errno.load();
@@ -56,6 +58,7 @@ inline ssize_t host_send(int fd, const void *data, std::size_t size, int flags)
 
 inline ssize_t host_recv(int fd, void *data, std::size_t size, int flags)
 {
+    ++host_recv_calls;
     return forced_failure() ? -1 : ::recv(fd, data, size, flags);
 }
 

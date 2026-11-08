@@ -23,6 +23,7 @@
 #include <span>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 
 using plexus::test::host_tcp_socket;
 using lwip_channel = plexus::freertos::lwip_channel<host_tcp_socket>;
@@ -162,4 +163,34 @@ TEST_CASE("lwip_channel surfaces a hard send drop as on_error, distinct from pro
     REQUIRE(errors == 1);          // the hard-drop seam fired on the send side
     REQUIRE_FALSE(protocol_close); // DISTINCT from the framing-violation seam
     REQUIRE(sender.closed());      // a hard drop closes the socket
+}
+
+TEST_CASE("lwip_channel ends a poll turn whose stalled-send retry hit a hard drop without receiving on the closed socket", "[seam]")
+{
+    auto pair = plexus::test::make_loopback_pair();
+    REQUIRE(pair.has_value());
+
+    bool stall = true;
+    bool fault = false;
+    pair->dialed.use_stall_flag(stall);
+    pair->dialed.use_fault_flag(fault);
+
+    plexus::freertos::freertos_executor ex;
+    auto sender = make_egress_channel(std::move(pair->dialed), ex, plexus::freertos::lwip_channel_limits::egress_cap_bytes, plexus::io::congestion::block);
+
+    int errors = 0;
+    sender.on_error([&](plexus::io::io_error) { ++errors; });
+
+    sender.send(on_wire(filler(32)));
+    sender.poll();
+    REQUIRE(errors == 0);
+
+    stall                      = false;
+    fault                      = true;
+    const std::uint32_t before = plexus::test::host_recv_calls.load();
+    sender.poll();
+
+    CHECK(errors == 1);
+    CHECK(sender.closed());
+    CHECK(plexus::test::host_recv_calls.load() == before);
 }
