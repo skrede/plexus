@@ -3,7 +3,6 @@
 
 #include "lwip_rx_rig.h"
 
-#include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/freertos_executor.h"
 
 #include "plexus/freertos/detail/lwip_errors.h"

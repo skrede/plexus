@@ -32,7 +32,13 @@ bool finishes(const std::atomic<bool> &done)
     return plexus::test::poll_until([] {}, [&done] { return done.load(); }, std::chrono::seconds{1});
 }
 
-std::int32_t idle_turns_until_close(rx_channel &channel, plexus::freertos::freertos_executor &ex)
+struct idle_outcome
+{
+    std::int32_t turns;
+    bool finished;
+};
+
+idle_outcome idle_turns_until_close(rx_channel &channel, plexus::freertos::freertos_executor &ex)
 {
     std::atomic<std::int32_t> turns{0};
     std::atomic<bool> done{false};
@@ -50,8 +56,7 @@ std::int32_t idle_turns_until_close(rx_channel &channel, plexus::freertos::freer
     task.join();
     ex.drain();
     plexus::test::release_spawned_ctx();
-    CHECK(finished);
-    return idle_turns;
+    return {idle_turns, finished};
 }
 
 void queue_one_feed(rx_rig &rig)
@@ -135,22 +140,7 @@ TEST_CASE("lwip rx task: an idle receive under the task policy parks for the rec
     rx_rig rig;
     REQUIRE(rig.spawn() == pdTRUE);
 
-    std::atomic<std::int32_t> turns{0};
-    std::atomic<bool> done{false};
-    std::thread task(
-            [&turns, &done]
-            {
-                while(plexus::freertos::detail::lwip_rx_step(plexus::test::spawned_ctx()))
-                    ++turns;
-                done = true;
-            });
-    std::this_thread::sleep_for(std::chrono::milliseconds{350});
-    const std::int32_t idle_turns = turns.load();
-    rig.channel->close();
-    const bool finished = finishes(done);
-    task.join();
-    rig.ex.drain();
-    plexus::test::release_spawned_ctx();
+    const auto [idle_turns, finished] = idle_turns_until_close(*rig.channel, rig.ex);
 
     CHECK(idle_turns >= 1);
     CHECK(idle_turns <= 5);
@@ -173,7 +163,8 @@ TEST_CASE("lwip rx task: an idle channel the transport adopted under the task po
     host_tcp_socket client;
     REQUIRE_FALSE(client.connect(address));
     REQUIRE(plexus::test::poll_until([&transport] { transport.poll(); }, [&accepted] { return accepted != nullptr; }));
-    const std::int32_t idle_turns = idle_turns_until_close(*accepted, ex);
+    const auto [idle_turns, finished] = idle_turns_until_close(*accepted, ex);
+    CHECK(finished);
 
     CHECK(idle_turns >= 1);
     CHECK(idle_turns <= 5);

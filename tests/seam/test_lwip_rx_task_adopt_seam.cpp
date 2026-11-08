@@ -2,8 +2,9 @@
 // closes whatever channel was handed out and runs any trampoline the host xTaskCreate recorded, so the executor is never
 // destroyed under a live task.
 
-#include "lwip_rx_rig.h"
+#include "host_tcp_socket.h"
 #include "host_tcp_listener.h"
+#include "host_loopback_pair.h"
 #include "scripted_dial_socket.h"
 
 #include "plexus/freertos/lwip_transport.h"
