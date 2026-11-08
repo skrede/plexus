@@ -154,6 +154,15 @@ target_link_libraries(test_lwip_rx_task_adopt_seam PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_lwip_rx_task_adopt_seam TEST_PREFIX "seam.")
 
+add_executable(test_lwip_drop_errno_seam test_lwip_drop_errno_seam.cpp)
+target_include_directories(test_lwip_drop_errno_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(test_lwip_drop_errno_seam PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos
+    Catch2::Catch2WithMain)
+catch_discover_tests(test_lwip_drop_errno_seam TEST_PREFIX "seam.")
+
 add_executable(test_lwip_dial_seam test_lwip_dial_seam.cpp)
 target_include_directories(test_lwip_dial_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(test_lwip_dial_seam PRIVATE
@@ -265,6 +274,8 @@ target_link_libraries(test_freertos_live_task_abort PRIVATE
     plexus::freertos)
 add_test(NAME seam.freertos_live_task_abort.executor COMMAND test_freertos_live_task_abort executor)
 set_tests_properties(seam.freertos_live_task_abort.executor PROPERTIES WILL_FAIL TRUE)
+add_test(NAME seam.freertos_live_task_abort.channel COMMAND test_freertos_live_task_abort channel)
+set_tests_properties(seam.freertos_live_task_abort.channel PROPERTIES WILL_FAIL TRUE)
 
 # The pooled cross-task ingress of the constrained-target executor on the host shim: work from
 # another thread runs at the next pump, a full slot pool (allocating nothing) or a full queue is a

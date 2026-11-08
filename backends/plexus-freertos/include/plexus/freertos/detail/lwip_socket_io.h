@@ -8,6 +8,7 @@
 
 #if defined(ESP_PLATFORM)
 
+    #include "plexus/freertos/detail/lwip_errors.h"
     #include "plexus/freertos/detail/lwip_socket_ops.h"
 
     #include "plexus/io/endpoint.h"
@@ -153,16 +154,14 @@ private:
         set_fd_blocking(m_fd, false);
     }
 
-    // A negative return splits into two classes kept textually distinct. SOFT/transient
-    // — EWOULDBLOCK/EAGAIN (send buffer full) or ENOMEM (lwIP ERR_MEM: a tcp_write/pbuf OOM) — is local
-    // congestion: report 0, the channel re-arms, it NEVER tears down. HARD — ECONNRESET/EPIPE — is a
-    // connection drop: set closed so the channel fires on_error and the engine re-dials.
+    // A negative return with a transient errno (a full buffer, lwIP's ERR_MEM, an interrupted call, the receive timeout)
+    // reports 0 and the channel re-arms; any other errno is a lost connection, so the socket closes, the channel fails
+    // and the engine re-dials.
     std::size_t classify_io(int n)
     {
         if(n > 0)
             return static_cast<std::size_t>(n);
-        const bool soft = errno == EWOULDBLOCK || errno == EAGAIN || errno == ENOMEM;
-        if(n < 0 && !soft && (errno == ECONNRESET || errno == EPIPE))
+        if(n < 0 && !transient_socket_errno(errno))
             m_closed.store(true);
         return 0;
     }

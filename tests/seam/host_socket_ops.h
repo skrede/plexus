@@ -19,6 +19,7 @@
     #include <chrono>
     #include <string>
     #include <thread>
+    #include <cstddef>
     #include <cstdint>
     #include <utility>
     #include <charconv>
@@ -35,6 +36,28 @@ struct host_socket_hooks
     const bool *fault                           = nullptr;
     std::atomic<std::thread::id> *close_witness = nullptr;
 };
+
+// While nonzero, every host socket send and receive fails with this errno, standing in for an error the stack reports
+// on a connection a loopback peer cannot be made to lose on demand.
+inline std::atomic<int> host_forced_errno{0};
+
+inline bool forced_failure()
+{
+    const int forced = host_forced_errno.load();
+    if(forced != 0)
+        errno = forced;
+    return forced != 0;
+}
+
+inline ssize_t host_send(int fd, const void *data, std::size_t size, int flags)
+{
+    return forced_failure() ? -1 : ::send(fd, data, size, flags);
+}
+
+inline ssize_t host_recv(int fd, void *data, std::size_t size, int flags)
+{
+    return forced_failure() ? -1 : ::recv(fd, data, size, flags);
+}
 
 inline std::pair<std::string, std::uint16_t> split_host_port(std::string_view address)
 {
@@ -102,18 +125,6 @@ inline bool apply_receive_timeout(int fd, std::chrono::milliseconds timeout)
     tv.tv_sec  = static_cast<decltype(tv.tv_sec)>(secs.count());
     tv.tv_usec = static_cast<decltype(tv.tv_usec)>(usec.count());
     return ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0;
-}
-
-// Mirror the on-target lwip_socket::classify_io split: SOFT (EWOULDBLOCK/EAGAIN/ENOMEM) folds to 0
-// and re-arms; HARD (ECONNRESET/EPIPE) sets closed so the channel fires on_error.
-inline bool soft_errno(int e)
-{
-    return e == EWOULDBLOCK || e == EAGAIN || e == ENOMEM;
-}
-
-inline bool hard_errno(int e)
-{
-    return e == ECONNRESET || e == EPIPE;
 }
 
 }

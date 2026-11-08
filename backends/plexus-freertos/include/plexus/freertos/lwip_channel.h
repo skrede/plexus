@@ -20,6 +20,7 @@
 #include "plexus/stream/stream_inbound.h"
 
 #include "plexus/detail/compat.h"
+#include "plexus/detail/fail_closed.h"
 
 #include <span>
 #include <vector>
@@ -53,6 +54,14 @@ public:
             , m_rx(*this, m_socket, m_close, ex)
     {
         wire_inbound();
+    }
+
+    // A live receive task borrows this channel, its socket and its slot pool, so destruction under one aborts. An owner
+    // pumps the executor until on_closed has run first: drain() can return while the task is still parked in a receive.
+    ~lwip_channel()
+    {
+        if(m_rx.live())
+            plexus::detail::on_fatal("lwip_channel: destroyed while its receive task is live");
     }
 
     rx_type &rx() noexcept

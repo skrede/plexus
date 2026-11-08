@@ -8,6 +8,7 @@
 #include "plexus/io/endpoint.h"
 
 #include <cstdio>
+#include <memory>
 #include <csignal>
 #include <cstdlib>
 #include <optional>
@@ -52,6 +53,17 @@ void destroy_executor_under_live_task()
     exit_without_abort("the executor was destroyed under a live task");
 }
 
+// The executor outlives the channel; _Exit ends the program before it is destroyed under the still-counted task.
+void destroy_channel_under_live_task()
+{
+    plexus::freertos::freertos_executor ex;
+    auto channel = std::make_unique<null_channel>(plexus::freertos::detail::null_stream_socket{}, ex, plexus::io::endpoint{"tcp", "127.0.0.1:0"});
+    if(plexus::freertos::spawn_lwip_rx_task(*channel, ex, plexus::freertos::task_options{4096}) != pdTRUE)
+        exit_without_abort("the receive task was not spawned");
+    channel.reset();
+    exit_without_abort("the channel was destroyed under a live receive task");
+}
+
 }
 
 // WILL_FAIL does not invert a signal, so the expected abort exits 1 and every other outcome exits 0. An expected abort
@@ -68,5 +80,7 @@ int main(int argc, char **argv)
     std::signal(SIGABRT, &exit_on_abort);
     if(argc > 1 && std::string_view{argv[1]} == "executor")
         destroy_executor_under_live_task();
+    if(argc > 1 && std::string_view{argv[1]} == "channel")
+        destroy_channel_under_live_task();
     return EXIT_SUCCESS;
 }

@@ -40,7 +40,8 @@ public:
     channel_graveyard(const channel_graveyard &)            = delete;
     channel_graveyard &operator=(const channel_graveyard &) = delete;
 
-    // An entry still held here at destruction is valid only once the executor has drained.
+    // Destroy the graveyard only once it is empty, every retired channel's on_closed having run; a channel whose close
+    // completes on another task can post its on_closed after drain() returns.
     ~channel_graveyard() = default;
 
     void retire(std::unique_ptr<Channel> channel, plexus::detail::move_only_function<void()> on_erased = {})

@@ -25,7 +25,7 @@ namespace plexus::freertos::detail {
 //     folded from EWOULDBLOCK/EAGAIN/ERR_MEM. This is LOCAL congestion: the congestion QoS absorbs
 //     it (block backpressures the producer with would_block; drop_newest sheds+counts). It NEVER
 //     fires the connection-drop on_error and NEVER tears the channel down.
-//   * HARD/connection — ECONNRESET/EPIPE, surfaced by the socket's closed predicate after the
+//   * HARD/connection — any errno the socket does not treat as transient, surfaced by its closed predicate after the
 //     gather. This fails the channel with connection_reset (on_error, then closed) so the engine re-dials.
 template<plexus::stream::stream_socket S>
 class lwip_channel_egress
@@ -125,15 +125,15 @@ private:
         m_pending = true;
     }
 
-    S          &m_socket;
-    error_cb   &m_on_error;
-    error_cb    m_fail_cb;
-    buffer_seq  m_views{};
-    completion  m_done{};
-    plexus::io::congestion             m_congestion;
-    std::size_t                        m_dropped{0};
-    std::size_t                        m_sent{0};
-    bool                               m_pending{false};
+    S &m_socket;
+    error_cb &m_on_error;
+    error_cb m_fail_cb;
+    buffer_seq m_views{};
+    completion m_done{};
+    plexus::io::congestion m_congestion;
+    std::size_t m_dropped{0};
+    std::size_t m_sent{0};
+    bool m_pending{false};
     plexus::stream::detail::send_queue m_send_queue;
 };
 

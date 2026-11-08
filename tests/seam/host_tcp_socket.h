@@ -8,6 +8,8 @@
     #include "host_socket_ops.h"
     #include "host_tcp_socket_platform.h"
 
+    #include "plexus/freertos/detail/lwip_errors.h"
+
     #include "plexus/io/endpoint.h"
 
     #include <sys/socket.h>
@@ -114,7 +116,7 @@ public:
         }
         if(m_hooks.stall && *m_hooks.stall)
             return 0;
-        const auto n = ::send(m_fd, bytes.data(), bytes.size(), MSG_DONTWAIT | nosignal_send_flag);
+        const auto n = host_send(m_fd, bytes.data(), bytes.size(), MSG_DONTWAIT | nosignal_send_flag);
         return classify_io(static_cast<int>(n));
     }
 
@@ -137,7 +139,7 @@ public:
 
     std::size_t recv(std::span<std::byte> buf)
     {
-        const auto n = ::recv(m_fd, buf.data(), buf.size(), m_blocking ? 0 : MSG_DONTWAIT);
+        const auto n = host_recv(m_fd, buf.data(), buf.size(), m_blocking ? 0 : MSG_DONTWAIT);
         if(n == 0)
             m_closed.store(true);
         return classify_io(static_cast<int>(n));
@@ -173,7 +175,7 @@ private:
     {
         if(n > 0)
             return static_cast<std::size_t>(n);
-        if(n < 0 && !soft_errno(errno) && hard_errno(errno))
+        if(n < 0 && !plexus::freertos::detail::transient_socket_errno(errno))
             m_closed.store(true);
         return 0;
     }

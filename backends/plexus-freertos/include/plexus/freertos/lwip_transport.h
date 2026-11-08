@@ -55,7 +55,8 @@ public:
     lwip_transport &operator=(const lwip_transport &) = delete;
 
     // Applies to channels adopted after the call. The task receives while the executor sends on the same socket, which
-    // needs lwIP's LWIP_NETCONN_FULLDUPLEX (ESP-IDF enables it).
+    // needs lwIP's LWIP_NETCONN_FULLDUPLEX (ESP-IDF enables it). A channel's close then completes when its task exits, so
+    // an owner pumps the executor until on_closed has run (for a node, the node's on_closed) before destroying it.
     void use_rx_task(rx_task_options opts)
     {
         m_rx_task = opts;

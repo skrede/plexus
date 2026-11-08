@@ -6,9 +6,12 @@
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
+#include "plexus/detail/fail_closed.h"
+
 #include <chrono>
 #include <memory>
 #include <cstdint>
+#include <algorithm>
 
 namespace plexus::freertos {
 
@@ -21,6 +24,8 @@ struct rx_task_options
             : task(task)
             , recv_timeout(recv_timeout)
     {
+        if(recv_timeout <= std::chrono::milliseconds::zero())
+            plexus::detail::fail_closed("rx_task_options: the receive timeout must be positive");
     }
 
     task_options task;
@@ -104,7 +109,9 @@ void lwip_rx_trampoline(void *arg)
 template<plexus::stream::stream_socket S>
 BaseType_t spawn_lwip_rx_task(lwip_channel<S> &channel, freertos_executor &ex, rx_task_options opts)
 {
-    auto ctx = std::make_unique<detail::lwip_rx_ctx<S>>(channel, ex, pdMS_TO_TICKS(static_cast<std::uint32_t>(opts.recv_timeout.count())));
+    // A slot wait of 0 never parks, so a timeout under one tick would spin the task on an exhausted pool.
+    const TickType_t wait = std::max<TickType_t>(1, pdMS_TO_TICKS(static_cast<std::uint32_t>(opts.recv_timeout.count())));
+    auto ctx              = std::make_unique<detail::lwip_rx_ctx<S>>(channel, ex, wait);
     channel.rx().started();
     auto *const arg          = ctx.release();
     const BaseType_t created = xTaskCreate(&detail::lwip_rx_trampoline<S>, "plexus-rx", opts.task.stack, arg, opts.task.priority, nullptr);

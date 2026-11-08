@@ -20,8 +20,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <vector>
 #include <cstddef>
+#include <stdexcept>
 
 using plexus::test::host_tcp_socket;
 using lwip_channel = plexus::freertos::lwip_channel<host_tcp_socket>;
@@ -149,4 +151,11 @@ TEST_CASE("lwip rx trampoline self-deletes on channel close instead of returning
     const auto outcome = plexus::testing::retire_and_drain(rig.channel, [&rig] { rig.ex.drain(); });
     CHECK(outcome.erased == 1);
     CHECK(outcome.empty);
+}
+
+TEST_CASE("lwip rx task: a receive timeout that is not positive fails closed", "[seam][lwip_rx_task]")
+{
+    const plexus::freertos::task_options task{4096};
+    CHECK_THROWS_AS(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{0}), std::runtime_error);
+    CHECK_THROWS_AS(plexus::freertos::rx_task_options(task, std::chrono::milliseconds{-1}), std::runtime_error);
 }

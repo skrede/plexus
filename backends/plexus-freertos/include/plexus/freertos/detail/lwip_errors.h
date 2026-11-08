@@ -3,9 +3,18 @@
 
 #include "plexus/io/io_error.h"
 
+#include <cerrno>
 #include <system_error>
 
 namespace plexus::freertos::detail {
+
+// lwIP reports a connection its retransmission or keepalive limit aborted as ECONNABORTED and then ENOTCONN, so any other
+// errno is a lost connection and the socket fails closed rather than wedging; lwIP's receive timeout arrives as
+// EWOULDBLOCK and stays transient.
+inline bool transient_socket_errno(int e) noexcept
+{
+    return e == EWOULDBLOCK || e == EAGAIN || e == ENOMEM || e == EINTR;
+}
 
 inline plexus::io::io_error map_error(std::error_code ec)
 {
