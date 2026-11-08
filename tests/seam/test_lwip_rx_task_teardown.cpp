@@ -11,11 +11,8 @@
 #include <chrono>
 #include <thread>
 #include <cstdint>
-#include <utility>
-#include <stdexcept>
 
 using plexus::test::rx_rig;
-using plexus::test::rx_channel;
 
 namespace {
 
@@ -61,19 +58,4 @@ TEST_CASE("lwip rx task: a peer close seen by the receive task fails the channel
     CHECK(closes == 1);
     CHECK(rig.channel->closed());
     CHECK(rig.closer.load() == std::this_thread::get_id());
-}
-
-TEST_CASE("lwip rx task: destroying an executor with a live receive task fails closed", "[seam][lwip_rx_task]")
-{
-    const auto leave_with_live_task = []
-    {
-        plexus::freertos::freertos_executor ex;
-        auto pair = plexus::test::make_loopback_pair();
-        REQUIRE(pair.has_value());
-        rx_channel channel(std::move(pair->accepted), ex, plexus::io::endpoint{"tcp", "127.0.0.1:0"});
-        REQUIRE(plexus::freertos::spawn_lwip_rx_task(channel, ex, plexus::freertos::task_options{4096}) == pdTRUE);
-    };
-
-    REQUIRE_THROWS_AS(leave_with_live_task(), std::runtime_error);
-    plexus::test::release_spawned_ctx();
 }

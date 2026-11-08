@@ -16,12 +16,13 @@
 
 namespace plexus::detail {
 
-[[noreturn]] inline void on_fatal(const char * /*what*/)
+[[noreturn]] inline void on_fatal(const char *what)
 {
+    std::fprintf(stderr, "plexus: %s\n", what);
     std::abort();
 }
 
-// Under exceptions, throws std::runtime_error; under PLEXUS_NO_EXCEPTIONS, aborts.
+// Under exceptions, throws std::runtime_error; under PLEXUS_NO_EXCEPTIONS, prints the reason and aborts.
 [[noreturn]] inline void fail_closed(const char *what)
 {
 #if defined(__cpp_exceptions) && !defined(PLEXUS_NO_EXCEPTIONS)

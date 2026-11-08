@@ -239,6 +239,15 @@ target_link_libraries(test_freertos_executor_post PRIVATE
     Catch2::Catch2WithMain)
 catch_discover_tests(test_freertos_executor_post TEST_PREFIX "seam.")
 
+# The program turns the expected abort into exit status 1, because WILL_FAIL does not invert a signal.
+add_executable(test_freertos_live_task_abort test_freertos_live_task_abort.cpp)
+target_link_libraries(test_freertos_live_task_abort PRIVATE
+    plexus::core
+    plexus::wire
+    plexus::freertos)
+add_test(NAME seam.freertos_live_task_abort.executor COMMAND test_freertos_live_task_abort executor)
+set_tests_properties(seam.freertos_live_task_abort.executor PROPERTIES WILL_FAIL TRUE)
+
 # The pooled cross-task ingress of the constrained-target executor on the host shim: work from
 # another thread runs at the next pump, a full slot pool (allocating nothing) or a full queue is a
 # counted drop, and the in-pump fact is per task. RUN_SERIAL keeps the alloc count clean.

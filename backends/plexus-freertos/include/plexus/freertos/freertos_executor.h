@@ -54,13 +54,12 @@ public:
     freertos_executor(freertos_executor &&)                 = delete;
     freertos_executor &operator=(freertos_executor &&)      = delete;
 
-    // The queue is freed before the check, so the failing path leaks nothing under exceptions; without them it aborts.
-    ~freertos_executor() noexcept(false)
+    // A task it still counts could post into the freed queue, so destruction under one aborts.
+    ~freertos_executor()
     {
-        const std::uint32_t live = m_live_tasks;
+        if(m_live_tasks != 0)
+            plexus::detail::on_fatal("freertos_executor: destroyed while a task it counts can still post to it");
         vQueueDelete(m_queue);
-        if(live != 0)
-            plexus::detail::fail_closed("freertos_executor: destroyed while a task it counts can still post to it");
     }
 
     void post(plexus::detail::move_only_function<void()> fn)
