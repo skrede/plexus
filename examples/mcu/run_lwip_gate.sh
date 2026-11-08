@@ -23,8 +23,9 @@
 # Environment:
 #   IDF_PROJECT      the ESP-IDF project to build and flash (default examples/mcu/esp-idf-lwip)
 #   BUILD_DIR        its build directory (default ${IDF_PROJECT}/build_esp32); it holds a stamp of the
-#                    IDF_DEFINES and SDKCONFIG_FILE it was built with, and a run whose knobs differ from the
-#                    stamp removes BUILD_DIR/CMakeCache.txt first, so a define left out is really left out
+#                    IDF_DEFINES and SDKCONFIG_FILE of its last successful build, and a run whose knobs differ
+#                    from the stamp empties it with idf.py fullclean first, so a define left out is really left
+#                    out; keep SDKCONFIG_FILE and LOG_DIR outside it
 #   SDKCONFIG_FILE   when set, build with this sdkconfig and IDF_TARGET=esp32 instead of running
 #                    set-target, which would regenerate the project's sdkconfig
 #   IDF_DEFINES      extra -D words passed to the build and to flash, e.g.
@@ -124,17 +125,18 @@ stop_capture() {   # $1=capture pid
 # non-zero exit fails the gate before a single flash.
 echo "=== cross-building ${IDF_PROJECT} for esp32 ==="
 echo "effective defines: ${IDF_DEFINES:-<none>}"
-# A -D cache entry outlives the run that set it, so a changed knob set starts from a fresh CMake cache.
+# A -D cache entry outlives the run that set it, so a changed knob set starts from a clean build directory.
+# The stamp is dropped before the build and written after it succeeds, so a failed build leaves none.
 if [[ -f "${BUILD_DIR}/CMakeCache.txt" && "$(cat "${KNOB_STAMP}" 2>/dev/null)" != "${KNOBS}" ]]; then
-    echo "the build knobs differ from the last build's; removing ${BUILD_DIR}/CMakeCache.txt"
-    rm -f "${BUILD_DIR}/CMakeCache.txt"
+    echo "the build knobs differ from the last build's; cleaning ${BUILD_DIR}"
+    idf.py "${IDF_ARGS[@]}" fullclean
 fi
-mkdir -p "${BUILD_DIR}"
-printf '%s\n' "${KNOBS}" > "${KNOB_STAMP}"
+rm -f "${KNOB_STAMP}"
 if [[ -z "${SDKCONFIG_FILE}" ]]; then
     idf.py "${IDF_ARGS[@]}" set-target esp32
 fi
 idf.py "${IDF_ARGS[@]}" build
+printf '%s\n' "${KNOBS}" > "${KNOB_STAMP}"
 
 mkdir -p "${LOG_DIR}"
 

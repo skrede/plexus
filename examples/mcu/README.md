@@ -184,10 +184,13 @@ builds the firmware's built-in default:
 | `LOG_DIR` | `build/examples/mcu/lwip_gate_logs` | where the per-run logs go |
 
 CMake keeps a `-D` value in the build directory's cache after the run that passed it, so a later run that
-leaves the define out would still build it. The script therefore records `IDF_DEFINES` and `SDKCONFIG_FILE`
-in a stamp file in `BUILD_DIR` and removes `BUILD_DIR/CMakeCache.txt` whenever they differ from the last
-run's: every run builds exactly the defines it was given. It prints the effective defines before the
-cross-build and writes them to `run_<n>_defines.log` in `LOG_DIR` before each flash.
+leaves the define out would still build it. The script therefore stamps `IDF_DEFINES` and `SDKCONFIG_FILE`
+into `BUILD_DIR` after each successful build. When a CMake cache exists and a later run's knobs differ from
+the stamp, or there is no stamp, the script empties `BUILD_DIR` with `idf.py fullclean` before building, so
+every run builds exactly the defines it was given. Without `SDKCONFIG_FILE`, `idf.py set-target` cleans the
+build directory on every run anyway. Because the clean empties `BUILD_DIR`, keep `SDKCONFIG_FILE` and
+`LOG_DIR` outside it. The script prints the effective defines before the cross-build and writes them to
+`run_<n>_defines.log` in `LOG_DIR` before each flash.
 
 The script passes `PLEXUS_HOST_HOLD` and `PLEXUS_HOST_DROP_AFTER` through to every host instance:
 
