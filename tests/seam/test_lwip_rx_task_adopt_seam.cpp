@@ -7,6 +7,7 @@
 #include "host_loopback_pair.h"
 #include "scripted_dial_socket.h"
 
+#include "plexus/freertos/lwip_rx_task.h"
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
 
@@ -18,10 +19,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
+#include <chrono>
 #include <memory>
 #include <vector>
 #include <cstddef>
 #include <utility>
+#include <stdexcept>
 #include <system_error>
 
 using plexus::test::g_dial_script;
@@ -72,11 +75,10 @@ struct dial_record
     std::vector<plexus::io::io_error> failed;
 };
 
-bool resolve_dial(dial_transport &transport, plexus::freertos::freertos_executor &ex, dial_record &out)
+bool await_dial(dial_transport &transport, plexus::freertos::freertos_executor &ex, dial_record &out)
 {
     transport.on_dialed([&out](std::unique_ptr<dial_channel> ch, const plexus::io::endpoint &) { out.dialed.push_back(std::move(ch)); });
     transport.on_dial_failed([&out](const plexus::io::endpoint &, plexus::io::io_error e) { out.failed.push_back(e); });
-    transport.use_rx_task(plexus::freertos::task_options{4096});
     transport.dial(k_peer);
     return plexus::test::poll_until(
             [&]
@@ -85,6 +87,12 @@ bool resolve_dial(dial_transport &transport, plexus::freertos::freertos_executor
                 ex.drain();
             },
             [&out] { return !out.dialed.empty() || !out.failed.empty(); });
+}
+
+bool resolve_dial(dial_transport &transport, plexus::freertos::freertos_executor &ex, dial_record &out)
+{
+    transport.use_rx_task(plexus::freertos::task_options{4096});
+    return await_dial(transport, ex, out);
 }
 
 void finish(std::vector<std::unique_ptr<dial_channel>> &dialed, plexus::freertos::freertos_executor &ex)
@@ -165,5 +173,24 @@ TEST_CASE("lwip rx task: a dial whose receive timeout the socket rejects fails w
     CHECK(out.failed == std::vector{plexus::io::io_error::unknown});
     CHECK(shim::host_task_created_arg == nullptr);
     CHECK(g_dial_script.closes == 1);
+    finish(out.dialed, ex);
+}
+
+TEST_CASE("lwip rx task: a receive timeout set out of range is refused by use_rx_task and a later dial still resolves", "[seam][lwip_rx_task]")
+{
+    const spawn_scope spawning{pdTRUE};
+    g_dial_script.outcome = std::error_code{};
+    plexus::freertos::freertos_executor ex;
+    dial_transport transport{ex};
+    dial_record out;
+    plexus::freertos::rx_task_options opts{plexus::freertos::task_options{4096}};
+    opts.recv_timeout = std::chrono::milliseconds{0};
+
+    CHECK_THROWS_AS(transport.use_rx_task(opts), std::runtime_error);
+    bool resolved = false;
+    CHECK_NOTHROW(resolved = await_dial(transport, ex, out));
+    CHECK(resolved);
+    CHECK(out.dialed.size() == 1);
+    CHECK(shim::host_task_created_arg == nullptr);
     finish(out.dialed, ex);
 }

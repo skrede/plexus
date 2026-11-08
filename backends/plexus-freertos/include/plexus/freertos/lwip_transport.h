@@ -60,6 +60,7 @@ public:
     // an owner pumps the executor until on_closed has run (for a node, the node's on_closed) before destroying it.
     void use_rx_task(rx_task_options opts)
     {
+        detail::receive_timeout_ticks(opts.recv_timeout);
         m_rx_task = opts;
     }
 
@@ -156,7 +157,7 @@ private:
     // The view-invalidation hook is armed before the channel is handed out, so no window exists where the engine owns
     // the channel but its poll view is uninstrumented. It rides the channel's shutdown hook, synchronously at close,
     // because on_closed belongs to the owner, which retires the channel through it. Under the receive-task policy a
-    // rejected receive timeout or a task that cannot be created yields no channel, and the socket closes.
+    // receive timeout the socket rejects or a task that cannot be created yields no channel, and the socket closes.
     std::unique_ptr<channel_type> adopt(Socket socket, const plexus::io::endpoint &ep)
     {
         if(m_rx_task)

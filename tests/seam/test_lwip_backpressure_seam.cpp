@@ -48,6 +48,12 @@ lwip_channel make_egress_channel(host_tcp_socket socket, plexus::freertos::freer
     return lwip_channel{std::move(socket), ex, plexus::io::endpoint{"tcp", "127.0.0.1:0"}, lim::read_buffer_bytes, lim::max_message_bytes, lim::reassembly_bytes, egress_cap, c};
 }
 
+lwip_channel make_faultable_sender(host_tcp_socket socket, plexus::freertos::freertos_executor &ex, const bool &stall, const bool &fault)
+{
+    socket.use_stall_flag(stall);
+    socket.use_fault_flag(fault);
+    return make_egress_channel(std::move(socket), ex, plexus::freertos::lwip_channel_limits::egress_cap_bytes, plexus::io::congestion::block);
+}
 }
 
 TEST_CASE("lwip_channel under block backpressures an over-cap send via would_block, never re-dials", "[seam]")
@@ -172,13 +178,9 @@ TEST_CASE("lwip_channel ends a poll turn whose stalled-send retry hit a hard dro
 
     bool stall = true;
     bool fault = false;
-    pair->dialed.use_stall_flag(stall);
-    pair->dialed.use_fault_flag(fault);
-
     plexus::freertos::freertos_executor ex;
-    auto sender = make_egress_channel(std::move(pair->dialed), ex, plexus::freertos::lwip_channel_limits::egress_cap_bytes, plexus::io::congestion::block);
-
-    int errors = 0;
+    auto sender         = make_faultable_sender(std::move(pair->dialed), ex, stall, fault);
+    std::int32_t errors = 0;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
 
     sender.send(on_wire(filler(32)));

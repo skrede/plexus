@@ -25,12 +25,12 @@ inline TickType_t receive_timeout_ticks(std::chrono::milliseconds timeout)
 {
     constexpr std::int64_t max_ms = std::numeric_limits<std::uint32_t>::max() / 1000;
     if(timeout <= std::chrono::milliseconds::zero())
-        plexus::detail::fail_closed("rx_task_options: the receive timeout must be positive");
+        plexus::detail::fail_closed("lwip_rx_task: the receive timeout must be positive");
     if(timeout.count() > max_ms)
-        plexus::detail::fail_closed("rx_task_options: the receive timeout exceeds the tick range");
+        plexus::detail::fail_closed("lwip_rx_task: the receive timeout exceeds the tick range");
     const TickType_t ticks = pdMS_TO_TICKS(static_cast<std::uint32_t>(timeout.count()));
     if(ticks == 0)
-        plexus::detail::fail_closed("rx_task_options: the receive timeout must be at least one tick");
+        plexus::detail::fail_closed("lwip_rx_task: the receive timeout must be at least one tick");
     return ticks;
 }
 

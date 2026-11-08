@@ -28,8 +28,8 @@ inline constexpr BaseType_t pdFALSE = 0;
 inline constexpr TickType_t portMAX_DELAY      = 0xFFFFFFFFu;
 inline constexpr TickType_t portTICK_PERIOD_MS = 1;
 
-// The host clock assumes a 1000 Hz tick so a millisecond maps to one tick — the
-// ESP-IDF default rate. The wrap-safe comparison at ~49.7 days is an on-bench
+// The host clock assumes a 1000 Hz tick so a millisecond maps to one tick (ESP-IDF
+// defaults to 100 Hz). The wrap-safe comparison at ~49.7 days is an on-bench
 // concern, not exercised by the host compile-proof.
 constexpr TickType_t pdMS_TO_TICKS(std::uint32_t ms) noexcept
 {
