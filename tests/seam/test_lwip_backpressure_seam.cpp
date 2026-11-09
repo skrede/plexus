@@ -1,22 +1,15 @@
-// Host-side test of the constrained-target lwIP egress backpressure / error-class split: over a REAL
-// localhost-TCP loopback pair (a genuine POSIX stream_socket, no hardware and no mock) it proves the
-// two failure classes stay DISTINCT. A full egress queue (cap exceeded) drives the congestion QoS —
-// block backpressures the producer (would_block), drop_newest sheds + counts — and NEVER fires
-// on_error / re-dials (the channel stays open). A transient short/zero send re-arms with the unsent
-// tail left queued (no success-of-zero-bytes), flushing once the stall clears. A hard ECONNRESET/EPIPE
-// fires on_error(connection_reset), DISTINCT from on_protocol_close. Additive to the host suite.
-
-#include "host_tcp_socket.h" // MUST precede lwip_channel.h: declares the host POSIX stream_socket
+// Must precede lwip_channel.h, which needs the host POSIX stream_socket it declares.
+#include "host_tcp_socket.h"
 #include "host_loopback_pair.h"
 
 #include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/freertos_executor.h"
 
-#include "plexus/io/congestion.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/congestion.h"
 
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -41,8 +34,6 @@ std::vector<std::byte> filler(std::size_t n)
     return std::vector<std::byte>(n, std::byte{0x5A});
 }
 
-// A channel with a chosen egress cap + congestion policy; the read/message/reassembly knobs keep the
-// channel defaults (this test exercises only the egress half).
 lwip_channel make_egress_channel(host_tcp_socket socket, plexus::freertos::freertos_executor &ex, std::size_t egress_cap, plexus::io::congestion c)
 {
     using lim = plexus::freertos::lwip_channel_limits;
@@ -63,21 +54,22 @@ TEST_CASE("lwip_channel under block backpressures an over-cap send via would_blo
     REQUIRE(pair.has_value());
 
     bool stall = true;
-    pair->dialed.use_stall_flag(stall); // keep the first frame resident so the second overflows the cap
+    // Keeps the first frame resident so the second overflows the cap.
+    pair->dialed.use_stall_flag(stall);
 
     plexus::freertos::freertos_executor ex;
     const auto frame = on_wire(filler(64));
     auto sender      = make_egress_channel(std::move(pair->dialed), ex, frame.size() + 8, plexus::io::congestion::block);
 
-    int errors = 0;
+    std::int32_t errors = 0;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
 
-    sender.send(frame); // admitted, stalls resident (the cap now near-full)
-    sender.send(frame); // would exceed the cap -> congestion=block -> would_block
+    sender.send(frame);
+    sender.send(frame);
 
-    REQUIRE(errors == 1);           // backpressure surfaced through on_error(would_block)
-    REQUIRE_FALSE(sender.closed()); // congestion never tears the channel down
-    REQUIRE(sender.dropped() == 0); // block does not shed
+    REQUIRE(errors == 1);
+    REQUIRE_FALSE(sender.closed());
+    REQUIRE(sender.dropped() == 0);
 }
 
 TEST_CASE("lwip_channel under drop_newest sheds + counts an over-cap send, never fires on_error", "[seam]")
@@ -92,15 +84,15 @@ TEST_CASE("lwip_channel under drop_newest sheds + counts an over-cap send, never
     const auto frame = on_wire(filler(64));
     auto sender      = make_egress_channel(std::move(pair->dialed), ex, frame.size() + 8, plexus::io::congestion::drop_newest);
 
-    int errors = 0;
+    std::int32_t errors = 0;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
 
-    sender.send(frame); // admitted, stalls resident
-    sender.send(frame); // over cap -> drop_newest -> shed + count
+    sender.send(frame);
+    sender.send(frame);
 
-    REQUIRE(sender.dropped() == 1); // the overrun frame was shed and counted
-    REQUIRE(errors == 0);           // drop_newest is silent, never on_error
-    REQUIRE_FALSE(sender.closed()); // the channel stays open
+    REQUIRE(sender.dropped() == 1);
+    REQUIRE(errors == 0);
+    REQUIRE_FALSE(sender.closed());
 }
 
 TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared, no zero-byte success", "[seam]")
@@ -115,10 +107,10 @@ TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared,
     auto sender   = make_egress_channel(std::move(pair->dialed), ex, plexus::freertos::lwip_channel_limits::egress_cap_bytes, plexus::io::congestion::block);
     auto receiver = lwip_channel{std::move(pair->accepted), ex, plexus::io::endpoint{"tcp", "127.0.0.1:0"}};
 
-    int errors = 0;
+    std::int32_t errors = 0;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
     std::vector<std::byte> received;
-    int deliveries = 0;
+    std::int32_t deliveries = 0;
     receiver.on_data(
             [&](std::span<const std::byte> f)
             {
@@ -127,18 +119,18 @@ TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared,
             });
 
     const auto payload = filler(32);
-    sender.send(on_wire(payload)); // stalled: the gather stays resident, nothing leaves the node
+    sender.send(on_wire(payload));
 
-    for(int turn = 0; turn < 50; ++turn)
+    for(std::int32_t turn = 0; turn < 50; ++turn)
     {
-        sender.poll(); // pumps the stalled egress — still stalled, must not pop or error
+        sender.poll();
         receiver.poll();
     }
-    REQUIRE(deliveries == 0); // a stalled send delivers nothing — no success-of-zero-bytes
-    REQUIRE(errors == 0);     // a soft stall is not an error
+    REQUIRE(deliveries == 0);
+    REQUIRE(errors == 0);
     REQUIRE_FALSE(sender.closed());
 
-    stall = false; // the socket can flush now
+    stall = false;
     plexus::test::poll_until(
             [&]
             {
@@ -147,7 +139,7 @@ TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared,
             },
             [&] { return !(deliveries == 0); });
 
-    REQUIRE(deliveries == 1); // the unsent tail flushed exactly once after the re-arm
+    REQUIRE(deliveries == 1);
     REQUIRE(received.size() == plexus::wire::header_size + payload.size());
 }
 
@@ -157,21 +149,22 @@ TEST_CASE("lwip_channel surfaces a hard send drop as on_error, distinct from pro
     REQUIRE(pair.has_value());
 
     bool fault = true;
-    pair->dialed.use_fault_flag(fault); // the next send draws the hard ECONNRESET/EPIPE class
+    // The next send fails with the hard ECONNRESET/EPIPE class.
+    pair->dialed.use_fault_flag(fault);
 
     plexus::freertos::freertos_executor ex;
     auto sender = make_egress_channel(std::move(pair->dialed), ex, plexus::freertos::lwip_channel_limits::egress_cap_bytes, plexus::io::congestion::block);
 
-    int errors          = 0;
+    std::int32_t errors = 0;
     bool protocol_close = false;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
     sender.on_protocol_close([&](plexus::wire::close_cause) { protocol_close = true; });
 
-    sender.send(on_wire(filler(64))); // a hard send failure must reach on_error, never congestion
+    sender.send(on_wire(filler(64)));
 
-    REQUIRE(errors == 1);          // the hard-drop seam fired on the send side
-    REQUIRE_FALSE(protocol_close); // DISTINCT from the framing-violation seam
-    REQUIRE(sender.closed());      // a hard drop closes the socket
+    REQUIRE(errors == 1);
+    REQUIRE_FALSE(protocol_close);
+    REQUIRE(sender.closed());
 }
 
 TEST_CASE("lwip_channel ends a poll turn whose stalled-send retry hit a hard drop without receiving on the closed socket", "[seam]")
