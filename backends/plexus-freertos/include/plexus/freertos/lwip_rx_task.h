@@ -38,7 +38,8 @@ inline TickType_t receive_timeout_ticks(std::chrono::milliseconds timeout)
 
 // The receive timeout bounds each blocking receive and each slot wait of the task. The two stack, so a task asked to exit
 // sees the request within two receive timeouts while the executor keeps pumping. The conversion from task_options keeps
-// the timeout's default for callers that name only the task.
+// the timeout's default for callers that name only the task. Below 10 Hz the default is under one tick and fails closed,
+// so such builds pass their own timeout.
 struct rx_task_options
 {
     rx_task_options(task_options task, std::chrono::milliseconds recv_timeout = std::chrono::milliseconds{100})
