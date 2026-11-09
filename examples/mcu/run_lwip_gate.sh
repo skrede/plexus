@@ -23,9 +23,11 @@
 # Environment:
 #   IDF_PROJECT      the ESP-IDF project to build and flash (default examples/mcu/esp-idf-lwip)
 #   BUILD_DIR        its build directory (default ${IDF_PROJECT}/build_esp32); it holds a stamp of the
-#                    IDF_DEFINES and SDKCONFIG_FILE of its last successful build, and a run whose knobs differ
-#                    from the stamp empties it with idf.py fullclean first, so a define left out is really left
-#                    out; keep SDKCONFIG_FILE and LOG_DIR outside it
+#                    IDF_PROJECT, IDF_DEFINES and SDKCONFIG_FILE of its last successful build, and a run whose
+#                    knobs differ from the stamp empties it with idf.py fullclean first, so a define left out is
+#                    really left out; the script refuses a BUILD_DIR that holds SDKCONFIG_FILE, LOG_DIR or the
+#                    host gate binary, one whose CMake cache belongs to another source tree, and, without
+#                    SDKCONFIG_FILE, one holding files but no CMake cache
 #   SDKCONFIG_FILE   when set, build with this sdkconfig and IDF_TARGET=esp32 instead of running
 #                    set-target, which would regenerate the project's sdkconfig
 #   IDF_DEFINES      extra -D words passed to the build and to flash, e.g.
@@ -50,7 +52,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-IDF_PROJECT="$(cd "${IDF_PROJECT:-${REPO_ROOT}/examples/mcu/esp-idf-lwip}" && pwd)"
+IDF_PROJECT="$(cd "${IDF_PROJECT:-${REPO_ROOT}/examples/mcu/esp-idf-lwip}" && pwd -P)"
 BUILD_DIR="${BUILD_DIR:-${IDF_PROJECT}/build_esp32}"
 SDKCONFIG_FILE="${SDKCONFIG_FILE:-}"
 CAPTURE_SECONDS="${CAPTURE_SECONDS:-75}"
@@ -60,7 +62,7 @@ HOST_GATE="${REPO_ROOT}/build/examples/mcu/lwip_gate_host"
 CREDENTIALS="${IDF_PROJECT}/main/wifi_credentials.h"
 CREDENTIALS_TEMPLATE="${IDF_PROJECT}/main/wifi_credentials.h.example"
 KNOB_STAMP="${BUILD_DIR}/plexus_gate_knobs.txt"
-KNOBS="IDF_DEFINES=${IDF_DEFINES:-} SDKCONFIG_FILE=${SDKCONFIG_FILE}"
+KNOBS="IDF_PROJECT=${IDF_PROJECT} IDF_DEFINES=${IDF_DEFINES:-} SDKCONFIG_FILE=${SDKCONFIG_FILE}"
 
 read -r -a EXTRA_DEFINES <<< "${IDF_DEFINES:-}"
 IDF_ARGS=(-C "${IDF_PROJECT}" -B "${BUILD_DIR}")
@@ -84,6 +86,20 @@ if [[ -f "${CREDENTIALS_TEMPLATE}" && ! -f "${CREDENTIALS}" ]]; then
     echo "Wi-Fi credentials not found at ${CREDENTIALS}"
     echo "create it from the template (it is gitignored and never committed):"
     echo "  cp ${CREDENTIALS_TEMPLATE} ${CREDENTIALS}   # then fill in SSID/password"
+    exit 1
+fi
+
+# idf.py fullclean empties BUILD_DIR and set-target runs it on every default-path run, so nothing the gate keeps may
+# live inside it and only a CMake build of IDF_PROJECT is cleaned; python3 resolves paths that do not exist yet.
+inside_build_dir() { python3 -c 'import os, sys; b, p = map(os.path.realpath, sys.argv[1:3]); sys.exit(os.path.commonpath([b, p]) != b)' "${BUILD_DIR}" "$1"; }
+for path in "${SDKCONFIG_FILE}" "${LOG_DIR}" "${HOST_GATE}"; do
+    if [[ -n "${path}" ]] && inside_build_dir "${path}"; then
+        echo "${path} lies inside BUILD_DIR=${BUILD_DIR}, which idf.py fullclean empties; move it outside"
+        exit 1
+    fi
+done
+if [[ -f "${BUILD_DIR}/CMakeCache.txt" ]] && ! grep -qxF "CMAKE_HOME_DIRECTORY:INTERNAL=${IDF_PROJECT}" "${BUILD_DIR}/CMakeCache.txt"; then
+    echo "BUILD_DIR=${BUILD_DIR} holds a CMake build of another source tree than ${IDF_PROJECT}; delete it or choose another BUILD_DIR"
     exit 1
 fi
 
@@ -128,11 +144,15 @@ echo "effective defines: ${IDF_DEFINES:-<none>}"
 # A -D cache entry outlives the run that set it, so a changed knob set starts from a clean build directory.
 # The stamp is dropped before the build and written after it succeeds, so a failed build leaves none.
 if [[ -f "${BUILD_DIR}/CMakeCache.txt" && "$(cat "${KNOB_STAMP}" 2>/dev/null)" != "${KNOBS}" ]]; then
-    echo "the build knobs differ from the last build's; cleaning ${BUILD_DIR}"
+    echo "the build knobs differ from, or were never stamped by, the last successful build; cleaning ${BUILD_DIR}"
     idf.py "${IDF_ARGS[@]}" fullclean
 fi
 rm -f "${KNOB_STAMP}"
 if [[ -z "${SDKCONFIG_FILE}" ]]; then
+    if [[ -d "${BUILD_DIR}" && ! -f "${BUILD_DIR}/CMakeCache.txt" && -n "$(ls -A "${BUILD_DIR}")" ]]; then
+        echo "BUILD_DIR=${BUILD_DIR} holds files but no CMake cache, which idf.py set-target refuses to clean; delete it and rerun"
+        exit 1
+    fi
     idf.py "${IDF_ARGS[@]}" set-target esp32
 fi
 idf.py "${IDF_ARGS[@]}" build
