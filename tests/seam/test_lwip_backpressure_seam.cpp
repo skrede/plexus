@@ -32,7 +32,8 @@ namespace {
 
 std::vector<std::byte> on_wire(std::span<const std::byte> payload)
 {
-    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, payload);
+    return plexus::wire::encode_frame(plexus::wire::frame_header{.type = plexus::wire::msg_type::unidirectional, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                      payload);
 }
 
 std::vector<std::byte> filler(std::size_t n)
@@ -65,8 +66,8 @@ TEST_CASE("lwip_channel under block backpressures an over-cap send via would_blo
     pair->dialed.use_stall_flag(stall); // keep the first frame resident so the second overflows the cap
 
     plexus::freertos::freertos_executor ex;
-    const auto frame  = on_wire(filler(64));
-    auto       sender = make_egress_channel(std::move(pair->dialed), ex, frame.size() + 8, plexus::io::congestion::block);
+    const auto frame = on_wire(filler(64));
+    auto sender      = make_egress_channel(std::move(pair->dialed), ex, frame.size() + 8, plexus::io::congestion::block);
 
     int errors = 0;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
@@ -74,9 +75,9 @@ TEST_CASE("lwip_channel under block backpressures an over-cap send via would_blo
     sender.send(frame); // admitted, stalls resident (the cap now near-full)
     sender.send(frame); // would exceed the cap -> congestion=block -> would_block
 
-    REQUIRE(errors == 1);            // backpressure surfaced through on_error(would_block)
-    REQUIRE_FALSE(sender.closed());  // congestion never tears the channel down
-    REQUIRE(sender.dropped() == 0);  // block does not shed
+    REQUIRE(errors == 1);           // backpressure surfaced through on_error(would_block)
+    REQUIRE_FALSE(sender.closed()); // congestion never tears the channel down
+    REQUIRE(sender.dropped() == 0); // block does not shed
 }
 
 TEST_CASE("lwip_channel under drop_newest sheds + counts an over-cap send, never fires on_error", "[seam]")
@@ -88,8 +89,8 @@ TEST_CASE("lwip_channel under drop_newest sheds + counts an over-cap send, never
     pair->dialed.use_stall_flag(stall);
 
     plexus::freertos::freertos_executor ex;
-    const auto frame  = on_wire(filler(64));
-    auto       sender = make_egress_channel(std::move(pair->dialed), ex, frame.size() + 8, plexus::io::congestion::drop_newest);
+    const auto frame = on_wire(filler(64));
+    auto sender      = make_egress_channel(std::move(pair->dialed), ex, frame.size() + 8, plexus::io::congestion::drop_newest);
 
     int errors = 0;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
@@ -97,9 +98,9 @@ TEST_CASE("lwip_channel under drop_newest sheds + counts an over-cap send, never
     sender.send(frame); // admitted, stalls resident
     sender.send(frame); // over cap -> drop_newest -> shed + count
 
-    REQUIRE(sender.dropped() == 1);  // the overrun frame was shed and counted
-    REQUIRE(errors == 0);            // drop_newest is silent, never on_error
-    REQUIRE_FALSE(sender.closed());  // the channel stays open
+    REQUIRE(sender.dropped() == 1); // the overrun frame was shed and counted
+    REQUIRE(errors == 0);           // drop_newest is silent, never on_error
+    REQUIRE_FALSE(sender.closed()); // the channel stays open
 }
 
 TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared, no zero-byte success", "[seam]")
@@ -117,19 +118,20 @@ TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared,
     int errors = 0;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
     std::vector<std::byte> received;
-    int                    deliveries = 0;
-    receiver.on_data([&](std::span<const std::byte> f)
-                     {
-                         received.assign(f.begin(), f.end());
-                         ++deliveries;
-                     });
+    int deliveries = 0;
+    receiver.on_data(
+            [&](std::span<const std::byte> f)
+            {
+                received.assign(f.begin(), f.end());
+                ++deliveries;
+            });
 
     const auto payload = filler(32);
     sender.send(on_wire(payload)); // stalled: the gather stays resident, nothing leaves the node
 
     for(int turn = 0; turn < 50; ++turn)
     {
-        sender.poll();   // pumps the stalled egress — still stalled, must not pop or error
+        sender.poll(); // pumps the stalled egress — still stalled, must not pop or error
         receiver.poll();
     }
     REQUIRE(deliveries == 0); // a stalled send delivers nothing — no success-of-zero-bytes
@@ -137,12 +139,13 @@ TEST_CASE("lwip_channel re-arms a transient short send and flushes once cleared,
     REQUIRE_FALSE(sender.closed());
 
     stall = false; // the socket can flush now
-    plexus::test::poll_until([&]
-                             {
-                                 sender.poll();
-                                 receiver.poll();
-                             },
-                             [&] { return !(deliveries == 0); });
+    plexus::test::poll_until(
+            [&]
+            {
+                sender.poll();
+                receiver.poll();
+            },
+            [&] { return !(deliveries == 0); });
 
     REQUIRE(deliveries == 1); // the unsent tail flushed exactly once after the re-arm
     REQUIRE(received.size() == plexus::wire::header_size + payload.size());
@@ -159,7 +162,7 @@ TEST_CASE("lwip_channel surfaces a hard send drop as on_error, distinct from pro
     plexus::freertos::freertos_executor ex;
     auto sender = make_egress_channel(std::move(pair->dialed), ex, plexus::freertos::lwip_channel_limits::egress_cap_bytes, plexus::io::congestion::block);
 
-    int  errors         = 0;
+    int errors          = 0;
     bool protocol_close = false;
     sender.on_error([&](plexus::io::io_error) { ++errors; });
     sender.on_protocol_close([&](plexus::wire::close_cause) { protocol_close = true; });
