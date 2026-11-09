@@ -177,7 +177,7 @@ builds the firmware's built-in default:
 |----------|---------|---------|
 | `IDF_PROJECT` | `examples/mcu/esp-idf-lwip` | the ESP-IDF project to build and flash |
 | `BUILD_DIR` | `${IDF_PROJECT}/build_esp32` | its build directory |
-| `SDKCONFIG_FILE` | unset | build with this sdkconfig and `IDF_TARGET=esp32` instead of running `set-target`, which would regenerate the project's sdkconfig |
+| `SDKCONFIG_FILE` | unset | build with this sdkconfig and `IDF_TARGET=esp32` instead of running `set-target`, which would regenerate the project's sdkconfig; a relative path is resolved against `IDF_PROJECT`, the way the ESP-IDF build resolves it |
 | `IDF_DEFINES` | empty | the firmware defines above, passed to the build and to flash |
 | `CAPTURE_SECONDS` | `75` | the device serial capture window per run |
 | `CYCLES` | `1` | host instances run one after another within a run; each must pass, and the device redials after each exits |
@@ -189,11 +189,12 @@ leaves the define out would still build it. The script therefore stamps
 cache exists and a later run's knobs differ from the stamp, or there is no stamp, the script empties `BUILD_DIR`
 with `idf.py fullclean` before building, so every run builds exactly the defines it was given. Without
 `SDKCONFIG_FILE`, `idf.py set-target` cleans the build directory on every run anyway. Because the clean empties
-`BUILD_DIR`, keep `SDKCONFIG_FILE` and `LOG_DIR` outside it: the script refuses to start when either, or the host
-gate binary, lies inside `BUILD_DIR`, and when `BUILD_DIR` holds a CMake cache of another source tree than
-`IDF_PROJECT`. Without `SDKCONFIG_FILE` it also refuses a `BUILD_DIR` that holds files but no CMake cache, which
-`idf.py set-target` will not clean, so delete such a directory by hand. The script prints the effective defines
-before the cross-build and writes them to `run_<n>_defines.log` in `LOG_DIR` before each flash.
+`BUILD_DIR`, keep `SDKCONFIG_FILE` and `LOG_DIR` outside it: the script refuses to start when either, or the host gate
+binary, lies inside `BUILD_DIR` or `python3` cannot tell whether it does, and when `BUILD_DIR` holds a CMake cache of
+another source tree than `IDF_PROJECT`. Without `SDKCONFIG_FILE` it also refuses a `BUILD_DIR` that holds files but no
+CMake cache, which `idf.py set-target` will not clean. A run whose CMake configure fails, on a `-D` value CMake
+rejects or a Kconfig error, leaves `BUILD_DIR` in that state, so delete it by hand before rerunning. The script prints
+the effective defines before the cross-build and writes them to `run_<n>_defines.log` in `LOG_DIR` before each flash.
 
 The script passes `PLEXUS_HOST_HOLD` and `PLEXUS_HOST_DROP_AFTER` through to every host instance:
 

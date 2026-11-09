@@ -29,7 +29,8 @@
 #                    host gate binary, one whose CMake cache belongs to another source tree, and, without
 #                    SDKCONFIG_FILE, one holding files but no CMake cache
 #   SDKCONFIG_FILE   when set, build with this sdkconfig and IDF_TARGET=esp32 instead of running
-#                    set-target, which would regenerate the project's sdkconfig
+#                    set-target, which would regenerate the project's sdkconfig; a relative path is
+#                    resolved against IDF_PROJECT, the way the ESP-IDF build resolves it
 #   IDF_DEFINES      extra -D words passed to the build and to flash, e.g.
 #                    "-DPLEXUS_HOST_ENDPOINT=192.168.1.10:7447 -DPLEXUS_PUBLISH_PERIOD_MS=10"; they are printed
 #                    before the cross-build and written to LOG_DIR/run_<n>_defines.log before each flash
@@ -55,6 +56,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 IDF_PROJECT="$(cd "${IDF_PROJECT:-${REPO_ROOT}/examples/mcu/esp-idf-lwip}" && pwd -P)"
 BUILD_DIR="${BUILD_DIR:-${IDF_PROJECT}/build_esp32}"
 SDKCONFIG_FILE="${SDKCONFIG_FILE:-}"
+if [[ -n "${SDKCONFIG_FILE}" && "${SDKCONFIG_FILE}" != /* ]]; then SDKCONFIG_FILE="${IDF_PROJECT}/${SDKCONFIG_FILE}"; fi
 CAPTURE_SECONDS="${CAPTURE_SECONDS:-75}"
 CYCLES="${CYCLES:-1}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/build/examples/mcu/lwip_gate_logs}"
@@ -90,13 +92,13 @@ if [[ -f "${CREDENTIALS_TEMPLATE}" && ! -f "${CREDENTIALS}" ]]; then
 fi
 
 # idf.py fullclean empties BUILD_DIR and set-target runs it on every default-path run, so nothing the gate keeps may
-# live inside it and only a CMake build of IDF_PROJECT is cleaned; python3 resolves paths that do not exist yet.
-inside_build_dir() { python3 -c 'import os, sys; b, p = map(os.path.realpath, sys.argv[1:3]); sys.exit(os.path.commonpath([b, p]) != b)' "${BUILD_DIR}" "$1"; }
-for path in "${SDKCONFIG_FILE}" "${LOG_DIR}" "${HOST_GATE}"; do
-    if [[ -n "${path}" ]] && inside_build_dir "${path}"; then
-        echo "${path} lies inside BUILD_DIR=${BUILD_DIR}, which idf.py fullclean empties; move it outside"
-        exit 1
-    fi
+# live inside it and only a CMake build of IDF_PROJECT is cleaned. python3 resolves paths that do not exist yet, and
+# it answers outside with 3 because a missing or failing interpreter exits 127 or 1.
+inside_build_dir() { python3 -c 'import os, sys; b, p = map(os.path.realpath, sys.argv[1:3]); sys.exit(0 if os.path.commonpath([b, p]) == b else 3)' "${BUILD_DIR}" "$1"; }
+for path in ${SDKCONFIG_FILE:+"${SDKCONFIG_FILE}"} "${LOG_DIR}" "${HOST_GATE}"; do
+    rc=0; inside_build_dir "${path}" || rc=$?
+    if [[ "${rc}" -eq 0 ]]; then echo "${path} lies inside BUILD_DIR=${BUILD_DIR}, which idf.py fullclean empties; choose a BUILD_DIR that does not contain it"; exit 1; fi
+    if [[ "${rc}" -ne 3 ]]; then echo "cannot tell whether ${path} lies inside BUILD_DIR=${BUILD_DIR}: python3 exited ${rc}"; exit 1; fi
 done
 if [[ -f "${BUILD_DIR}/CMakeCache.txt" ]] && ! grep -qxF "CMAKE_HOME_DIRECTORY:INTERNAL=${IDF_PROJECT}" "${BUILD_DIR}/CMakeCache.txt"; then
     echo "BUILD_DIR=${BUILD_DIR} holds a CMake build of another source tree than ${IDF_PROJECT}; delete it or choose another BUILD_DIR"
