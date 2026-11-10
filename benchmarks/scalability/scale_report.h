@@ -85,10 +85,24 @@ inline void print_footprint_table(std::ostream &out, const sweep_axes &axes, std
     print_table(out, axes, grid, [&out, field](const cell_result &c) { out << ' ' << c.feet.*field << " |"; });
 }
 
-inline void print_preamble(std::ostream &out, std::uint64_t messages_per_pair, std::uint64_t peak_rss_kib)
+inline void put_axis(std::ostream &out, std::span<const std::size_t> values)
+{
+    out << '{';
+    for(std::size_t i = 0; i < values.size(); ++i)
+        out << (i == 0 ? "" : ",") << values[i];
+    out << '}';
+}
+
+inline void print_preamble(std::ostream &out, const sweep_axes &axes, std::uint64_t peak_rss_kib)
 {
     out << "# plexus scalability first-cut (inproc, single process)\n\n";
-    out << "Axes: nodes {1,4,16,64}, topics {1,4,16,64}, payload {8,4096} B; " << messages_per_pair << " messages per (publisher, topic) pair.\n";
+    out << "Axes: nodes ";
+    put_axis(out, axes.nodes);
+    out << ", topics ";
+    put_axis(out, axes.topics);
+    out << ", payload ";
+    put_axis(out, axes.payloads);
+    out << " B; " << axes.messages_per_pair << " messages per (publisher, topic) pair.\n";
     out << "Latency is one-way (steady_clock stamp in payload) over the in-process bus, "
         << "single executor. Footprint is the whole-process VmRSS/fd/thread sampled after "
         << "the cell's steady loop.\n";
@@ -100,7 +114,7 @@ inline void print_preamble(std::ostream &out, std::uint64_t messages_per_pair, s
 
 inline void emit_report(std::ostream &out, const sweep_axes &axes, const sweep_results &results)
 {
-    print_preamble(out, axes.messages_per_pair, results.peak_rss_kib);
+    print_preamble(out, axes, results.peak_rss_kib);
     for(std::size_t pi = 0; pi < axes.payloads.size(); ++pi)
         print_matrix(out, axes, axes.payloads[pi], results.by_payload[pi]);
     const auto &heaviest = results.by_payload.back();
