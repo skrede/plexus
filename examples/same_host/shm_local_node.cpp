@@ -8,8 +8,9 @@
 // and MUST OUTLIVE every node it mints:
 //
 //   asio::io_context io;
-//   plexus::native::shm_region_broker broker;                        // owns the rings; outlives the
-//   set plexus::asio::transport_set<plexus::asio::shm::shm_member,
+//   // The broker owns the rings and outlives the set.
+//   plexus::native::shm_region_broker broker;
+//   plexus::asio::transport_set<plexus::asio::shm::shm_member,
 //                               plexus::asio::unix_transport,
 //                               plexus::asio::asio_transport> ts{io, broker};
 //   auto node = ts.make_node<plexus::asio::asio_policy>(disc, id, plexus::node_options{});
@@ -39,11 +40,8 @@
 // build with PLEXUS_ENABLE_CRYPTO_BACKEND=OFF — the difference from all_backends_mux_shm, which
 // carries the secure + datagram members.
 //
-// SCOPE: this example proves the composition COMPILES and a live shm-bearing node STANDS UP
-// (constructs + listens) to rc=0. The same-host SHM delivery data path (two processes
-// converging on a named ring and round-tripping a value byte-exact) is proven by the shm
-// test suite — see tests/shm/broker/test_shm_same_host_roundtrip.cpp and the live-mux xproc proofs
-// in tests/shm/same_host/test_shm_large_message.cpp / tests/shm/notifier/posix_test_shm_dual_delivery.cpp.
+// SCOPE: this example proves the composition compiles and that a live shm-bearing node constructs and listens, exiting
+// 0. It is not the delivery proof: a single node acquires no ring, so no value crosses shared memory here.
 
 #include "plexus/asio/shm/shm_member.h"
 #include "plexus/asio/transport_set.h"

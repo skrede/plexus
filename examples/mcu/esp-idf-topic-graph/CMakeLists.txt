@@ -1,6 +1,5 @@
-# Top-level ESP-IDF project for the topic-propagation example: a node over the real UART link that
-# produces a typed topic, consumes the host's, and enumerates what its peer declared. Cross-builds a
-# compile-and-link proof of the enumeration surface against real FreeRTOS for esp32 (xtensa):
+# The topic-propagation example: a node on the UART link that produces a typed topic, consumes the host's and
+# enumerates what its peer declared, cross-built against real FreeRTOS for esp32 (xtensa):
 #   . /opt/esp-idf/export.sh && idf.py set-target esp32 && idf.py build
 cmake_minimum_required(VERSION 3.16)
 

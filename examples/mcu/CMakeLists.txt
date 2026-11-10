@@ -1,18 +1,11 @@
-# The host half of the on-device serial example: it reuses the asio serial transport on the
-# real /dev/ttyUSB0 link, so it is guarded on asio alone (static discovery, no mDNS). It is a
-# board-gated runnable the gate driver flashes + drives — deliberately NOT a registered ctest.
-#
-# The esp-idf/ subdirectory is the on-device firmware. It is a standalone ESP-IDF project built
-# with idf.py (see mcu/README.md), not part of this host CMake build, so it is not added here.
+# The host ends of the board gates and benches. They need a board, so the gate scripts run them; none is a registered
+# ctest. The esp-idf*/ firmware projects are standalone ESP-IDF projects built with idf.py, not part of this build.
 if(TARGET plexus::asio)
-    # serial_gate_host drives the real serial line through raw POSIX termios/ioctl
-    # (sys/ioctl.h), so it is excluded from the Windows host build.
+    # The two serial gate hosts drive the line through raw POSIX termios/ioctl (sys/ioctl.h).
     if(NOT WIN32)
         add_executable(serial_gate_host serial_gate_host.cpp)
         target_link_libraries(serial_gate_host PRIVATE plexus::plexus plexus::asio)
 
-        # The host end of the topic-propagation gate drives the same real serial line, so it shares
-        # the raw POSIX termios/ioctl exclusion.
         add_executable(topic_propagation_gate_host topic_propagation_gate_host.cpp)
         target_link_libraries(topic_propagation_gate_host PRIVATE plexus::plexus plexus::asio)
     endif()
@@ -32,8 +25,7 @@ if(TARGET plexus::asio)
     add_executable(lwip_discovery_dial_host lwip_discovery_dial_host.cpp)
     target_link_libraries(lwip_discovery_dial_host PRIVATE plexus::plexus plexus::asio)
 
-    # These host examples read env config through the portable std::getenv, which MSVC's CRT
-    # deprecates (C4996). Silence the deprecation for just these example targets — never globally.
+    # These read their config through std::getenv, which MSVC's CRT deprecates (C4996); silence it here, never globally.
     if(MSVC)
         set_property(TARGET lwip_gate_host lwip_bench_host serial_bench_host multicast_gate_host
             APPEND PROPERTY COMPILE_DEFINITIONS _CRT_SECURE_NO_WARNINGS)

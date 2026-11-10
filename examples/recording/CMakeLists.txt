@@ -1,7 +1,5 @@
-# Capturing a session to a flat record stream over the public byte_sink seam, plus the two
-# end-to-end MCAP examples (the analysis path: capture -> flat stream -> MCAP for Foxglove).
-# The capture leg builds unconditionally; the MCAP examples and the in-process flat->MCAP
-# step compile in only when PLEXUS_BUILD_MCAP_TRANSCODE is on (it defines mcap_transcode_lib).
+# The capture leg builds unconditionally. The MCAP examples and the in-process flat-to-MCAP step need
+# mcap_transcode_lib, which exists only when PLEXUS_BUILD_MCAP_TRANSCODE is on.
 plexus_example(recording_example plexus::plexus plexus::inproc plexus::discovery)
 if(TARGET mcap_transcode_lib)
     target_link_libraries(recording_example PRIVATE mcap_transcode_lib)

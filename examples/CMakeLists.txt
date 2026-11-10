@@ -1,7 +1,4 @@
-# Runnable examples — the public face of the API. Each example is one terminal binary,
-# grouped by the pattern it demonstrates. The helper below is defined here and is visible
-# to every subdirectory; each subdirectory guards itself on the backends it needs, so the
-# tree builds with whatever backends are enabled.
+# Each subdirectory guards itself on the backends it needs, so the tree builds with whatever backends are enabled.
 
 function(plexus_example name)
     add_executable(${name} ${name}.cpp)
@@ -19,8 +16,7 @@ add_subdirectory(same_host)
 add_subdirectory(qos)
 add_subdirectory(mcu)
 
-# The mDNS interop example is opt-in: it FetchContents mdnspp and bumps to C++23, so
-# it stays off the default examples build (which is mdnspp-free and C++20).
+# Opt-in: the mDNS interop example fetches mdnspp and needs C++23, and the default build stays mdnspp-free and C++20.
 option(PLEXUS_BUILD_MDNS_EXAMPLE "Build the opt-in real-mDNS interop example" OFF)
 if(PLEXUS_BUILD_MDNS_EXAMPLE)
     add_subdirectory(mdns_interop)

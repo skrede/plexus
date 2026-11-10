@@ -1,6 +1,4 @@
-# Top-level ESP-IDF project for the onboard intra-node self-delivery example: a single
-# node whose sole transport is the intra-node self-route — it publishes to its own
-# subscriber on-device with zero link (no UART, no Wi-Fi, no lwIP). Cross-builds a
+# The onboard self-delivery example: one node whose only transport is the intra-node self-route, cross-built as a
 # compile-and-link proof against real FreeRTOS for esp32 (xtensa) and esp32c3 (RISC-V):
 #   . /opt/esp-idf/export.sh && idf.py set-target esp32   && idf.py build
 #   . /opt/esp-idf/export.sh && idf.py set-target esp32c3 && idf.py build

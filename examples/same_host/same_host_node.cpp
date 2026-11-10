@@ -17,12 +17,11 @@
 //
 // The Policy is fixed to plexus::asio::asio_policy inside same_host_transports. The set OWNS
 // its leaves (and, on Linux, the shm region broker) and MUST OUTLIVE every node it mints; the
-// io_context must outlive the set — the same single-owner teardown discipline node.h documents.
+// io_context must outlive the set.
 //
-// SCOPE: this example proves the portable composition COMPILES and a live node STANDS UP
-// (constructs + listens) to rc=0. The same-host shm delivery data path — two peers converging
-// on a named ring and round-tripping a value byte-exact — is proven by the shm test suite (see
-// tests/shm/same_host/test_same_host_transports.cpp and tests/shm/broker/test_shm_same_host_roundtrip.cpp).
+// SCOPE: this example proves the portable composition compiles and that a live node constructs and listens, exiting 0.
+// It is not the delivery proof: a single node has no peer to share a ring with, so no value crosses the same-host data
+// path here.
 
 #include "plexus/asio/same_host_transports.h"
 

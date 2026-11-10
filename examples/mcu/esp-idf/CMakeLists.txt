@@ -1,6 +1,5 @@
-# Top-level ESP-IDF project wrapping the header-only plexus core + the FreeRTOS
-# Policy substrate. Cross-builds a minimal compile-and-link proof against real
-# FreeRTOS for esp32 (xtensa) and esp32c3 (RISC-V):
+# The on-device serial example: the header-only plexus core over the FreeRTOS substrate, cross-built as a
+# compile-and-link proof against real FreeRTOS for esp32 (xtensa) and esp32c3 (RISC-V):
 #   . /opt/esp-idf/export.sh && idf.py set-target esp32   && idf.py build
 #   . /opt/esp-idf/export.sh && idf.py set-target esp32c3 && idf.py build
 cmake_minimum_required(VERSION 3.16)

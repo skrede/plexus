@@ -1,16 +1,10 @@
 #!/usr/bin/env bash
-# The reproducible live serial gate driver for the on-device serial example.
+# The live serial gate for the on-device serial example. It cross-builds the firmware for esp32, then loops N>=3
+# times: flash the board, then run the host gate, which dials the device over the serial link, subscribes and asserts
+# receipt of one message. Any iteration that misses the message fails the whole gate; one lucky pass is no link claim.
 #
-# It cross-builds the firmware for the esp32 target (the on-target compile proof of the UART
-# byte_channel + the example firmware), then loops N>=3 times: each iteration flashes the board and
-# runs the host gate program, which dials the device over the real serial link, completes the
-# handshake, subscribes, and asserts receipt of one real message. The whole gate FAILS if ANY
-# iteration misses the message — a single lucky pass is never sufficient for a link claim. On
-# all-pass it prints the run tally and exits 0.
-#
-# It deliberately never runs `idf.py monitor`: the console is disabled (plexus owns UART0) and a
-# monitor would hold the port the host gate needs. Run it from anywhere — paths resolve from the
-# script's own location.
+# It never runs `idf.py monitor`: plexus owns UART0, so the console is disabled, and a monitor would hold the port the
+# host gate needs. Run it from anywhere; paths resolve from the script's location.
 #
 # Usage: run_serial_gate.sh [RUNS] [PORT]
 #   RUNS  number of flash+assert iterations (default 3, clamped to a minimum of 3)
@@ -26,7 +20,6 @@ if [[ "${RUNS}" -lt 3 ]]; then
     RUNS=3
 fi
 
-# Resolve the repo root from this script's location (examples/mcu/run_serial_gate.sh -> root).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 IDF_PROJECT="${REPO_ROOT}/examples/mcu/esp-idf"
@@ -38,18 +31,15 @@ if [[ ! -x "${HOST_GATE}" ]]; then
     exit 1
 fi
 
-# Bring the cross-toolchain into scope (xtensa gcc + idf.py).
 # shellcheck disable=SC1091
 . /opt/esp-idf/export.sh
 
-# The on-target compile: set the target once, then build. A non-zero exit fails the gate before
-# a single flash — the cross-build IS the on-device compile proof of the UART leaf + the example.
+# The cross-build is the on-target compile proof of the UART leaf and the example; it fails the gate before any flash.
 echo "=== cross-building firmware for esp32 ==="
 idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" set-target esp32
 idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" build
 
-# The reproducible flash+assert loop. Each iteration reflashes (the CP2102 auto-resets the board
-# into the app), then the host gate dials + asserts one message. Any miss fails the whole gate.
+# Each flash leaves the board running the app, because the CP2102 auto-resets it.
 passes=0
 for ((run = 1; run <= RUNS; ++run)); do
     echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="

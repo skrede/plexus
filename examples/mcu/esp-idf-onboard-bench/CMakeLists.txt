@@ -1,8 +1,6 @@
-# Top-level ESP-IDF project for the onboard intra-node zero-copy benchmark: a single node whose
-# sole transport is the intra-node self-route — it publishes a typed request to its OWN subscriber
-# on-device, that subscriber echoes a reply, and the round trip is timed, all with zero link (no
-# UART, no Wi-Fi, no lwIP). The typed lane delivers by address, so the codec's encode is never
-# invoked on the path; the firmware emits an encode-count witness alongside the latency samples.
+# The onboard zero-copy benchmark: one node whose only transport is the intra-node self-route times a typed request to
+# its own subscriber and the echoed reply, with no link at all. The typed lane delivers by address, so the codec's
+# encode never runs on the path; the firmware reports an encode count next to the latency samples as the witness.
 #   . /opt/esp-idf/export.sh && idf.py set-target esp32 && idf.py build
 cmake_minimum_required(VERSION 3.16)
 

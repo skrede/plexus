@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
-# The reproducible on-hardware accept gate for the on-device honest-listen example.
+# The on-hardware accept gate for the on-device listening discovery example. It cross-builds the firmware for esp32,
+# then loops N>=3 times. The device is the server: it boots, joins the AP, takes a DHCP lease, announces tcp:7447 on
+# the multicast group and binds the lwIP acceptor. Each iteration flashes the device first, drives the auto-reset
+# lines into RUN and captures its serial log; then the host program discovers the device over multicast, dials the
+# advertised tcp:7447, subscribes and asserts an accepted session (the heartbeat flows). Any iteration that misses
+# fails the whole gate; one lucky accept is no claim that the device serves.
 #
-# It cross-builds the discovery firmware for the esp32 target (the on-target compile proof of the
-# lwIP acceptor leaf + the example firmware), then loops N>=3 times. The device is the SERVER: it
-# boots, joins the AP, takes a DHCP lease, announces tcp:7447 on the multicast group, and binds the
-# real lwIP acceptor. So each iteration flashes the device FIRST (with a 5-attempt auto-reset retry),
-# drives the auto-reset lines into RUN, and captures the device serial to a per-run log; then it runs
-# the host program, which discovers the device over multicast, DIALS the advertised tcp:7447,
-# subscribes, and asserts an accepted session (the heartbeat flows). The whole gate FAILS if ANY
-# iteration misses — a single lucky accept never substantiates the served-card claim. On all-pass it
-# prints the run tally and exits 0.
-#
-# The real SSID/password live in main/wifi_credentials.h (gitignored, operator-supplied); this script
-# never reads, hardcodes, or echoes them. Create it from the .example before running. Run from
-# anywhere — paths resolve from the script's own location.
+# The SSID and password live in main/wifi_credentials.h (gitignored, operator-supplied); this script never reads,
+# hardcodes or echoes them. Create it from the .example before running. Run it from anywhere; paths resolve from the
+# script's location.
 #
 # Usage: run_lwip_discovery_gate.sh [RUNS] [PORT]
 #   RUNS  number of flash+dial+assert iterations (default 3, clamped to a minimum of 3)
@@ -49,11 +44,9 @@ if [[ ! -f "${CREDENTIALS}" ]]; then
     exit 1
 fi
 
-# Reset the board into RUN via the dev-board auto-reset circuit (EN/IO0 tied to the adapter's
-# RTS/DTR): IO0 high (run, not the download ROM), then pulse EN low->high. The SAME open captures the
-# device console (115200) to a per-run log for the capture window, so the join / DHCP / accept
-# diagnostics land in one file. One open means one controlled reset, no second port-open re-resetting
-# the board mid-run. Run in the background; kill after the host gate returns.
+# Resets the board into RUN through the auto-reset circuit (EN/IO0 on the adapter's RTS/DTR): IO0 high to run the app,
+# not the download ROM, then pulse EN. The same open captures the console at 115200, so the join, DHCP and accept
+# diagnostics land in one file, and no second port open resets the board mid-run.
 reset_and_capture() {   # $1=port  $2=device-log  $3=capture-seconds
     exec python3 - "$1" "$2" "$3" <<'PY'
 import sys, time, serial
@@ -76,9 +69,7 @@ PY
 # shellcheck disable=SC1091
 . /opt/esp-idf/export.sh
 
-# The on-target compile: set the target once, then build. A non-zero exit fails the gate before a
-# single flash — the cross-build IS the on-device compile proof of the lwIP acceptor leaf + the
-# example. It is NOT proof of a live accept; that is what the per-run dial below substantiates.
+# The cross-build proves the lwIP acceptor leaf compiles on the target, not that it accepts; the per-run dial does.
 echo "=== cross-building discovery firmware for esp32 ==="
 idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" set-target esp32
 idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" build
@@ -90,9 +81,8 @@ for ((run = 1; run <= RUNS; ++run)); do
     log="${LOG_DIR}/run_${run}_host.log"
     devlog="${LOG_DIR}/run_${run}_device.log"
 
-    # Flash the device-as-server FIRST. The dev-board auto-reset-into-bootloader (esptool DTR/RTS) is
-    # intermittently flaky on this adapter ("chip stopped responding" ~1 in 3); retry so one stuck
-    # reset does not abort the sweep.
+    # The esptool auto-reset into the bootloader fails about 1 in 3 on this adapter ("chip stopped responding"), so the
+    # flash is retried rather than letting one stuck reset abort the sweep.
     echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="
     flashed=0
     for attempt in 1 2 3 4 5; do
@@ -116,8 +106,7 @@ for ((run = 1; run <= RUNS; ++run)); do
         echo "=== run ${run}/${RUNS}: host accepted session (host log: ${log}; device serial: ${devlog}) ==="
         kill "${cap_pid}" 2>/dev/null || true
         wait "${cap_pid}" 2>/dev/null || true
-        # The capture held the serial port; let the USB tty fully release before the next flash, else
-        # esptool races it and fails with "multiple access on port".
+        # The capture held the port; without this pause esptool races the tty release ("multiple access on port").
         sleep 3
     else
         kill "${cap_pid}" 2>/dev/null || true

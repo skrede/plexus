@@ -1,5 +1,4 @@
-# The size-envelope QoS example. Needs only the asio backend (static discovery is in the core),
-# so it is guarded on asio alone rather than the asio+mDNS pair the networked examples use.
+# Static discovery is in the core, so the asio backend is the only dependency.
 if(TARGET plexus::asio)
     plexus_example(size_envelope_qos plexus::plexus plexus::asio)
 endif()

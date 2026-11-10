@@ -1,6 +1,5 @@
-# Same-host nodes over AF_UNIX + plain TCP, crypto-free. shm_local_node composes the shm member
-# directly; same_host_node is the portable composition, which puts shm in front whenever the shm
-# target is linked. Both need a POSIX host (getpid, /tmp).
+# Both examples need a POSIX host (getpid, /tmp). same_host_node also builds without shm, and puts shm in front of its
+# other transports whenever the shm target is linked.
 if(TARGET plexus::asio::shm AND NOT WIN32)
     plexus_example(shm_local_node plexus::plexus plexus::asio plexus::asio::shm plexus::native)
 endif()

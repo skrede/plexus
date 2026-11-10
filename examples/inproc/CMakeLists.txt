@@ -1,3 +1,2 @@
-# The in-process zero-serialization fast path. Header-only inproc backend, so it builds
-# unconditionally and runs as a single self-contained binary.
+# The inproc backend is header-only, so this builds unconditionally.
 plexus_example(typed_inproc_fastpath plexus::plexus plexus::inproc plexus::discovery)

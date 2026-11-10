@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
-# The reproducible onboard intra-node zero-copy bench driver: a request/echo round-trip workload at
-# fixed payload tiers over the node's OWN intra-node self-route — zero link, no Wi-Fi, no host peer,
-# no second node. It cross-builds the bench firmware for esp32 (the on-target compile proof),
-# flashes, drives the auto-reset lines into RUN, captures the device console, then parses the
-# device's machine-parseable sample lines into p50/p99 round-trip latency plus the zero-copy witness
-# (the codec's encode count, which must be 0) and the free-heap reading. It loops N>=3 times and
-# FAILS if fewer than 3 valid runs are collected — a single lucky pass never substantiates a number.
+# The onboard zero-copy bench: a request/echo round-trip workload at fixed payload tiers over the node's own intra-node
+# self-route, with no link, no host peer and no second node. It cross-builds the firmware for esp32, flashes, drives
+# the auto-reset lines into RUN and captures the console, then turns the device's sample lines into p50/p99 round-trip
+# latency, the zero-copy witness (the codec's encode count, which must be 0) and the free heap. It loops N>=3 times
+# and fails with fewer than 3 valid runs; one lucky pass substantiates no number.
 #
 # Usage: run_onboard_bench.sh [RUNS] [PORT]
 #   RUNS  flash+capture iterations (default 3, clamped to a minimum of 3)
@@ -30,10 +28,9 @@ SAMPLES="${LOG_DIR}/samples.txt"
 
 CELL="intra-onboard"
 
-# Reset the board into RUN via the dev-board auto-reset circuit (EN/IO0 tied to the adapter's
-# RTS/DTR): IO0 high (run, not the download ROM), then pulse EN low->high. The SAME open captures the
-# device console (115200) for the capture window, so every BENCH line lands in one file. One open
-# means one controlled reset — no second port-open re-resetting the board mid-run.
+# Resets the board into RUN through the auto-reset circuit (EN/IO0 on the adapter's RTS/DTR): IO0 high to run the app,
+# not the download ROM, then pulse EN. The same open captures the console at 115200, so every BENCH line lands in one
+# file, and no second port open resets the board mid-run.
 reset_and_capture() {   # $1=port  $2=device-log  $3=capture-seconds
     exec python3 - "$1" "$2" "$3" <<'PY'
 import sys, time, serial
@@ -69,9 +66,8 @@ for ((run = 1; run <= RUNS; ++run)); do
     devlog="${LOG_DIR}/run_${run}_device.log"
 
     echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="
-    # The dev-board auto-reset-into-bootloader (esptool DTR/RTS) is intermittently flaky on this
-    # adapter ("chip stopped responding" ~1 in 3); retry the flash so one stuck reset does not abort
-    # the whole sweep.
+    # The esptool auto-reset into the bootloader fails about 1 in 3 on this adapter ("chip stopped responding"), so the
+    # flash is retried rather than letting one stuck reset abort the sweep.
     flashed=0
     for attempt in 1 2 3 4 5; do
         if idf.py -C "${IDF_PROJECT}" -B "${BUILD_DIR}" -p "${PORT}" flash >>"${log}" 2>&1; then
@@ -88,14 +84,12 @@ for ((run = 1; run <= RUNS; ++run)); do
         continue
     fi
 
-    # No network join, no peer dial: the sweep starts the moment the app runs, so a 30 s window is
-    # ample for 3 tiers x (8 warmup + 128 sampled) self-route round trips. Backgrounded so the
-    # function's exec replaces only the subshell, not this driver; wait for the window to close.
+    # With no join or dial the sweep starts at once, so 30 s covers 3 tiers x (8 warmup + 128 sampled) round trips.
+    # Backgrounded so the function's exec replaces only the subshell, not this driver.
     reset_and_capture "${PORT}" "${devlog}" 30 &
     wait "$!" 2>/dev/null || true
 
-    # The console log carries NUL bytes from the ROM boot banner; -a forces grep to treat it as text
-    # so the BENCH lines match (without -a grep reports a binary match and emits no lines).
+    # The ROM boot banner puts NUL bytes in the log; without -a grep reports a binary match and prints no lines.
     if grep -aq "BENCH resource policy=${CELL}" "${devlog}"; then
         grep -aE "^BENCH sample policy=${CELL} " "${devlog}" >>"${SAMPLES}" || true
         valid_runs=$((valid_runs + 1))
@@ -112,9 +106,7 @@ if [[ "${valid_runs}" -lt 3 ]]; then
 fi
 echo "BENCH: produced ${valid_runs}/${RUNS} valid runs"
 
-# Aggregate p50/p99 per tier and emit the standing suite table: a one-cell intra-node transport x
-# payload table, then the per-tier p50/p99 detail plus the zero-copy witness and free heap. p50/p99
-# are nearest-rank order statistics over every sampled round trip across all valid runs.
+# p50/p99 per tier are order statistics at the rounded index q*(n-1), over every sampled round trip of every valid run.
 python3 - "${SAMPLES}" "${LOG_DIR}" "${CELL}" <<'PY'
 import sys, glob, os, re
 

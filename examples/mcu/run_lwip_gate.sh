@@ -1,19 +1,13 @@
 #!/usr/bin/env bash
-# The reproducible live lwIP gate driver for the on-device lwIP examples.
+# The live lwIP gate for the on-device lwIP examples. It cross-builds the firmware for esp32, then loops N>=3 times.
+# The device is the dialer: it boots, joins the network, takes a DHCP lease and dials the fixed host endpoint. Each
+# iteration flashes the board, drives the auto-reset lines into RUN, captures the device serial log to a per-run file
+# and runs the host TCP server CYCLES times in turn, each instance asserting the device's first message or timing out.
+# Any host instance that misses the message fails the whole gate; one lucky pass is no link claim.
 #
-# It cross-builds the firmware for the esp32 target (the on-target compile proof of the lwIP
-# transport + the example firmware), then loops N>=3 times. The device is the DIALER: it boots,
-# joins the network, takes a DHCP lease, then dials the fixed host endpoint. So each iteration
-# flashes the board, drives the auto-reset lines into RUN, captures the device serial log to a
-# per-run file for diagnostics, and runs the host TCP server (it listens/accepts) CYCLES times in
-# turn. Each host instance blocks until it receives the device's first real message or times out,
-# and asserts it. The whole gate FAILS if ANY host instance misses the message — a single lucky pass
-# never substantiates a link claim. On all-pass it prints the run tally and exits 0.
-#
-# For a Wi-Fi project the real SSID/password live in main/wifi_credentials.h (gitignored,
-# operator-supplied); this script only checks that the file exists and never reads, hardcodes, or
-# echoes it. Create it from the .example before running. Run from anywhere — paths resolve from the
-# script's own location.
+# For a Wi-Fi project the SSID and password live in main/wifi_credentials.h (gitignored, operator-supplied); this
+# script only checks that the file exists and never reads, hardcodes or echoes it. Create it from the .example before
+# running. Run it from anywhere; paths resolve from the script's location.
 #
 # Usage: run_lwip_gate.sh [RUNS] [PORT] [HOST_PORT]
 #   RUNS       number of flash+assert iterations (default 3, clamped to a minimum of 3)
@@ -105,14 +99,11 @@ if [[ -f "${BUILD_DIR}/CMakeCache.txt" ]] && ! grep -qxF "CMAKE_HOME_DIRECTORY:I
     exit 1
 fi
 
-# Reset the board into RUN via the dev-board auto-reset circuit (EN/IO0 tied to the adapter's
-# RTS/DTR): IO0 high (run, not the download ROM), then pulse EN low->high. The SAME open then
-# captures the device console (115200) to a per-run log for the capture window, so a missed
-# receipt is diagnosable (link / DHCP lease / dial) — one open means one controlled reset, no
-# second port-open re-resetting the board mid-run. Run in the background; kill after the last cycle.
+# Resets the board into RUN through the auto-reset circuit (EN/IO0 on the adapter's RTS/DTR): IO0 high to run the app,
+# not the download ROM, then pulse EN. The same open captures the console at 115200, so a missed receipt is
+# diagnosable (link, DHCP lease, dial), and no second port open resets the board mid-run.
 reset_and_capture() {   # $1=port  $2=device-log  $3=capture-seconds
-    # exec so the backgrounded job IS the python process (not a wrapping subshell), otherwise
-    # killing the subshell orphans python and it keeps the serial port for its full window.
+    # exec makes the background job python itself; killing a wrapping subshell would orphan python, holding the port.
     exec python3 - "$1" "$2" "$3" <<'PY'
 import sys, time, serial
 port, devlog, dur = sys.argv[1], sys.argv[2], float(sys.argv[3])
@@ -139,8 +130,6 @@ stop_capture() {   # $1=capture pid
 # shellcheck disable=SC1091
 . /opt/esp-idf/export.sh
 
-# The on-target compile: set the target once (unless an sdkconfig is supplied), then build. A
-# non-zero exit fails the gate before a single flash.
 echo "=== cross-building ${IDF_PROJECT} for esp32 ==="
 echo "effective defines: ${IDF_DEFINES:-<none>}"
 # A -D cache entry outlives the run that set it, so a changed knob set starts from a clean build directory.
@@ -164,10 +153,8 @@ mkdir -p "${LOG_DIR}"
 
 passes=0
 for ((run = 1; run <= RUNS; ++run)); do
-    # Flash + reset FIRST, then start the host server. The device is the dialer, but its boot +
-    # link + DHCP after reset takes several seconds, whereas the server listens within ~1s of
-    # launch — so starting it here still wins the race, AND the gate's receive deadline covers only
-    # the device's boot+join+dial, not the ~20s flash.
+    # Flash and reset first, then start the host server: the device's boot, join and DHCP take seconds while the
+    # server listens within about 1 s, so it still wins the race, and the receive deadline excludes the ~20 s flash.
     echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="
     printf 'IDF_DEFINES=%s\nSDKCONFIG_FILE=%s\n' "${IDF_DEFINES:-}" "${SDKCONFIG_FILE}" >"${LOG_DIR}/run_${run}_defines.log"
     idf.py "${IDF_ARGS[@]}" -p "${PORT}" flash >"${LOG_DIR}/run_${run}_flash.log" 2>&1
@@ -189,8 +176,7 @@ for ((run = 1; run <= RUNS; ++run)); do
 
     passes=$((passes + 1))
     stop_capture "${cap_pid}"
-    # The capture held the serial port; let the USB tty fully release before the next flash,
-    # else esptool races it and fails with "multiple access on port".
+    # The capture held the port; without this pause esptool races the tty release ("multiple access on port").
     sleep 3
 done
 

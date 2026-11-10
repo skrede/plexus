@@ -1,24 +1,17 @@
 #!/usr/bin/env bash
-# The reproducible bidirectional on-hardware IGMP gate driver for the on-device native-discovery
-# example.
+# The bidirectional on-hardware IGMP gate for the on-device native-discovery example. It cross-builds the firmware for
+# esp32, then loops N>=3 times. The device boots, joins the AP, takes a DHCP lease, joins the multicast group, and both
+# announces and browses. Each iteration flashes the board, starts the host counterpart (which also announces and
+# browses on the group), drives the auto-reset lines into RUN and captures the device serial log. It then counts
+# GATE_PASS_HOST_TO_ESP in the device log (the device resolved the host) and GATE_PASS_ESP_TO_HOST in the host log
+# (the host resolved the device).
 #
-# It cross-builds the discovery firmware for the esp32 target (the on-target compile proof of the
-# lwIP multicast leaf + the hoisted multicast_discovery template), then loops N>=3 times. The device
-# boots, joins the AP, takes a DHCP lease, joins the multicast group, and both announces AND browses.
-# Each iteration flashes the board (with the 5-attempt auto-reset retry), starts the host counterpart
-# (which also announces and browses on the same group), drives the auto-reset lines into RUN, and
-# captures the device serial to a per-run device log. After each run it greps the device log for
-# GATE_PASS_HOST_TO_ESP (the device resolved the host) and the host log for GATE_PASS_ESP_TO_HOST
-# (the host resolved the device), tallying passes per direction.
+# A green cross-compile proves nothing here: ESP-lwIP arms the IGMP membership-report timer on demand, so only a live
+# join and report on hardware prove the path. The script prints the raw log paths next to its per-direction tally and
+# verdict, so the verdict can be checked against them.
 #
-# A green cross-compile is explicitly NOT proof: ESP-lwIP arms the IGMP membership-report timer on
-# demand, so only a live join + report on hardware proves the path. This script EMITS the raw device
-# and host logs and prints a per-direction tally plus a single BIDIRECTIONAL verdict — it does NOT
-# claim authority over the verdict; the raw logs are read on the main thread.
-#
-# The real SSID/password live in esp-idf-lwip-discovery/main/wifi_credentials.h (gitignored,
-# operator-supplied); this script never reads, hardcodes, or echoes them. Create it from the
-# .example before running. Set PLEXUS_HOST_ENDPOINT to the host's shared-subnet IP:port at run time.
+# The SSID and password live in esp-idf-lwip-discovery/main/wifi_credentials.h (gitignored, operator-supplied); this
+# script never reads, hardcodes or echoes them. Create it from the .example before running.
 #
 # Usage: run_multicast_gate.sh [RUNS] [PORT]
 #   RUNS  flash+capture iterations per direction (default 3, clamped to a minimum of 3)
@@ -64,11 +57,9 @@ if [[ ! -f "${CREDENTIALS}" ]]; then
     exit 1
 fi
 
-# Reset the board into RUN via the dev-board auto-reset circuit (EN/IO0 tied to the adapter's
-# RTS/DTR): IO0 high (run, not the download ROM), then pulse EN low->high. The SAME open captures the
-# device console (115200) to a per-run log for the capture window, so the join / DHCP / resolve
-# diagnostics land in one file. One open means one controlled reset, no second port-open re-resetting
-# the board mid-run.
+# Resets the board into RUN through the auto-reset circuit (EN/IO0 on the adapter's RTS/DTR): IO0 high to run the app,
+# not the download ROM, then pulse EN. The same open captures the console at 115200, so the join, DHCP and resolve
+# diagnostics land in one file, and no second port open resets the board mid-run.
 reset_and_capture() {   # $1=port  $2=device-log  $3=capture-seconds
     exec python3 - "$1" "$2" "$3" <<'PY'
 import sys, time, serial
@@ -91,10 +82,6 @@ PY
 # shellcheck disable=SC1091
 . /opt/esp-idf/export.sh
 
-# The on-target compile: set the target once, then build. A non-zero exit fails the gate before a
-# single flash — the cross-build IS the on-device compile proof of the lwIP multicast leaf + the
-# hoisted discovery template. It is NOT proof of the live join (the on-demand IGMP timer); that is
-# what the per-run capture below substantiates.
 echo "=== cross-building discovery firmware for esp32 ==="
 idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" set-target esp32
 idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" build
@@ -113,9 +100,8 @@ for ((run = 1; run <= RUNS; ++run)); do
     HOSTLOGS+=("${log}")
 
     echo "=== run ${run}/${RUNS}: flashing ${PORT} ==="
-    # The dev-board auto-reset-into-bootloader (esptool DTR/RTS) is intermittently flaky on this
-    # adapter ("chip stopped responding" ~1 in 3); retry the flash so one stuck reset does not abort
-    # the sweep.
+    # The esptool auto-reset into the bootloader fails about 1 in 3 on this adapter ("chip stopped responding"), so the
+    # flash is retried rather than letting one stuck reset abort the sweep.
     flashed=0
     for attempt in 1 2 3 4 5; do
         if idf.py -C "${IDF_PROJECT}" -B "${IDF_PROJECT}/build_esp32" -p "${PORT}" flash >>"${log}" 2>&1; then
@@ -137,8 +123,6 @@ for ((run = 1; run <= RUNS; ++run)); do
     "${HOST_GATE}" "${HOST_PORT}" >"${log}" 2>&1 &
     host_pid=$!
 
-    # Hold the capture window, then tear the host counterpart down. The device serial carries the
-    # inbound resolve (GATE_PASS_HOST_TO_ESP); the host stdout carries GATE_PASS_ESP_TO_HOST.
     wait "${cap_pid}" 2>/dev/null || true
     kill "${host_pid}" 2>/dev/null || true
     wait "${host_pid}" 2>/dev/null || true
