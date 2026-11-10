@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 
 using namespace multicast_discovery_fixture;
@@ -50,7 +51,7 @@ TEST_CASE("multicast_discovery: service_info metadata is byte-identical to assem
 
 TEST_CASE("multicast_discovery: advertise emits an announcement immediately on join", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
@@ -66,11 +67,11 @@ TEST_CASE("multicast_discovery: advertise emits an announcement immediately on j
 
 TEST_CASE("multicast_discovery: a foreign or truncated datagram fires no on_resolved", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     const std::vector<std::byte> bad_magic{std::byte{'X'}, std::byte{'X'}, std::byte{'X'}, std::byte{'X'}, std::byte{0}, std::byte{1}};
@@ -86,7 +87,7 @@ TEST_CASE("multicast_discovery: a foreign or truncated datagram fires no on_reso
 
 TEST_CASE("multicast_discovery: a valid datagram resolves with the datagram source host", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
@@ -104,7 +105,7 @@ TEST_CASE("multicast_discovery: a valid datagram resolves with the datagram sour
 
 TEST_CASE("multicast_discovery: stop while advertising emits one goodbye-flagged datagram before close", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
@@ -125,7 +126,7 @@ TEST_CASE("multicast_discovery: stop while advertising emits one goodbye-flagged
 
 TEST_CASE("multicast_discovery: stop while not advertising emits no goodbye", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
@@ -137,11 +138,11 @@ TEST_CASE("multicast_discovery: stop while not advertising emits no goodbye", "[
 
 TEST_CASE("multicast_discovery: a goodbye datagram fires on_withdrawn and not on_resolved", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     std::optional<plexus::discovery::service_info> withdrawn;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     disc.on_withdrawn([&](const plexus::discovery::service_info &s) { withdrawn = s; });
@@ -158,11 +159,11 @@ TEST_CASE("multicast_discovery: a goodbye datagram fires on_withdrawn and not on
 
 TEST_CASE("multicast_discovery: a goodbye with no withdrawn callback is a safe no-op", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     const auto id  = make_id(0x88);
@@ -174,12 +175,12 @@ TEST_CASE("multicast_discovery: a goodbye with no withdrawn callback is a safe n
 
 TEST_CASE("multicast_discovery: a non-goodbye datagram still resolves and fires no withdrawal", "[multicast_discovery]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
-    int resolved  = 0;
-    int withdrawn = 0;
+    std::int32_t resolved  = 0;
+    std::int32_t withdrawn = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     disc.on_withdrawn([&](const plexus::discovery::service_info &) { ++withdrawn; });
 

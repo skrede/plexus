@@ -1,5 +1,7 @@
 #include "test_contact_card_common.h"
 
+#include <cstdint>
+
 using namespace contact_card_fixture;
 
 TEST_CASE("contact_card carries exactly node_id, per-transport port keys, and the schema", "[discovery][contact_card]")
@@ -95,7 +97,7 @@ TEST_CASE("contact_card lets a browsing peer derive its dial port with no hardco
 TEST_CASE("hex_decode is the exact inverse of hex_encode for arbitrary node ids", "[discovery][contact_card]")
 {
     // Property-style round-trip: decode(encode(id)) == id over a spread of ids.
-    for(int seed = 0; seed < 256; ++seed)
+    for(std::int32_t seed = 0; seed < 256; ++seed)
     {
         const auto id      = node_id_of(seed);
         const auto decoded = hex_decode(hex_encode(id));
