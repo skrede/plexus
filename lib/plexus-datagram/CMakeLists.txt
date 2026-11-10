@@ -1,10 +1,5 @@
-# Header-only datagram transport family: the mechanism-free fragmentation,
-# reassembly, demux, and handshake framing/retransmit discipline shared by every
-# message-oriented wire (udp, udpr, dtls). It is the middle tier of the transport
-# module graph — the core pub/sub engine sits above it, the irreducible per-wire
-# I/O mechanism below: a new datagram wire implements only its byte backend and
-# reuses this family whole. The family is pure logic over the wire codec; it
-# pulls in no asio, OpenSSL, OS, or RTOS header. Auto-discovered by the root glob.
+# Pure logic over the wire codec that pulls in no asio, OpenSSL, OS or RTOS header, so a new datagram wire implements
+# only its byte backend.
 add_library(plexus-datagram INTERFACE)
 add_library(plexus::datagram ALIAS plexus-datagram)
 set_target_properties(plexus-datagram PROPERTIES EXPORT_NAME datagram)

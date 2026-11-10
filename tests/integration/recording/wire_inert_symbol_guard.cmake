@@ -1,7 +1,5 @@
-# The structural-absence symbol guard. A default (non-wire) build never instantiates the
-# recording_channel decorator, so its binary must carry no such template symbol. Run nm over
-# the given default-build artifact and fail if any recording_channel instantiation appears.
-# On a toolchain without nm the guard skips (the compile-time witness in the test still holds).
+# A default (non-wire) build never instantiates the recording_channel decorator, so its binary must carry no such
+# symbol. Without nm the guard skips; the test's compile-time witness still holds.
 
 if(NOT DEFINED BINARY)
     message(FATAL_ERROR "wire_inert_symbol_guard: BINARY not set")

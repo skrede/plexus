@@ -1,10 +1,5 @@
-# Header-only stream transport family: the mechanism-free framing, CRC, and
-# reliable-ordered egress discipline shared by every byte-stream wire (tcp, unix,
-# tls, serial). It is the middle tier of the transport module graph — the core
-# pub/sub engine sits above it, the irreducible per-wire I/O mechanism below: a
-# new stream wire implements only its byte backend and reuses this family whole.
-# The family is pure logic over the wire codec; it pulls in no asio, OpenSSL, OS,
-# or RTOS header. Auto-discovered by the root lib glob.
+# Pure logic over the wire codec that pulls in no asio, OpenSSL, OS or RTOS header, so a new stream wire implements
+# only its byte backend.
 add_library(plexus-stream INTERFACE)
 add_library(plexus::stream ALIAS plexus-stream)
 set_target_properties(plexus-stream PROPERTIES EXPORT_NAME stream)

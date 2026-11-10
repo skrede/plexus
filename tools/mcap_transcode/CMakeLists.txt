@@ -1,6 +1,4 @@
-# The host-side flat-stream to MCAP transcode: a reusable mapping object linked by
-# both the CLI and the gated round-trip test, plus the standalone CLI binary. mcap
-# is resolved here on the dedicated INTERFACE target so it never reaches the core.
+# A library, so the gated round-trip test links the same mapping as the CLI.
 
 include(${PROJECT_SOURCE_DIR}/cmake/plexus-mcap.cmake)
 
@@ -11,14 +9,13 @@ add_library(mcap_transcode_lib STATIC
 target_include_directories(mcap_transcode_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# plexus-hints-robotics is linked PRIVATE: the vendor backend TU reads the neutral concept
-# vocabulary to translate a hint, but the concept enum never leaks to a consumer of this lib.
+# plexus-hints-robotics is PRIVATE: the vendor backend TU reads the concept vocabulary to translate a hint, but the
+# enum never leaks to a consumer of this library.
 target_link_libraries(mcap_transcode_lib
     PUBLIC plexus::core
     PRIVATE plexus_mcap_dep plexus::hints-robotics)
 
-# The TU compiles at the project C++20 (it includes the C++20 header-only core);
-# mcap requires only C++17, so C++20 satisfies both.
+# mcap needs only C++17, but the TU includes the C++20 header-only core.
 set_target_properties(mcap_transcode_lib PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON

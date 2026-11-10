@@ -1,14 +1,6 @@
 #!/bin/sh
-# The real tshark QA gate for the plexus Wireshark dissector. It transcodes a deterministic
-# flat-capture fixture to pcapng, loads the Lua dissector under the installed tshark, and asserts:
-#   - the plexus protocol registers on DLT_USER0 and a data frame's header fields parse;
-#   - at least one decoded field VALUE equals a known fixture input (payload_len == 21, the
-#     17-byte unidirectional header plus the 4-byte reading payload). A little-endian misparse
-#     would render this big-endian u64 as a huge byte-reversed number and fail the equality —
-#     that is the byte-order regression this gate guards.
-#   - a ciphertext-labeled capture shows the opaque sealed item and parses no header field.
-# Where tshark is unavailable, or a fixture is missing, the gate SKIPs (exit 0).
-#
+# Runs the Lua dissector under the installed tshark on pcapng transcodes of deterministic fixtures. A missing tshark
+# or fixture is a SKIP (exit 0).
 # Args: <pcap_transcode exe> <repo root> <cleartext .plxr> <ciphertext .plxr>
 set -eu
 
@@ -48,30 +40,25 @@ fail() {
 MAGIC="$(od -An -tx1 -N4 "$OUT" | tr -d ' \n')"
 [ "$MAGIC" = "0a0d0d0a" ] || fail "cleartext output is not a pcapng (first 4 bytes: $MAGIC)"
 
-# Cleartext: the dissector loads on DLT_USER0 and parses a data frame's header fields.
 CLEAR_V="$("$TSHARK" -X lua_script:"$LUA" -r "$OUT" -V 2>&1)"
 printf '%s' "$CLEAR_V" | grep -q "plexus wire frame" || fail "proto 'plexus wire frame' not in cleartext output" "$CLEAR_V"
 printf '%s' "$CLEAR_V" | grep -qi "Msg type" || fail "no 'Msg type' field in cleartext output" "$CLEAR_V"
 printf '%s' "$CLEAR_V" | grep -qi "Topic hash" || fail "no 'Topic hash' field in cleartext output" "$CLEAR_V"
 
-# Protocol column shows plexus for the data frames.
 "$TSHARK" -X lua_script:"$LUA" -r "$OUT" 2>/dev/null | grep -q "plexus" \
     || fail "protocol column is not 'plexus'"
 
-# VALUE assertion (byte-order regression guard): the first unidirectional data frame's
-# payload_len is the deterministic 21 (17B header + 4B reading). Read it via the dissected
-# field; a little-endian misparse would yield a huge byte-reversed number, not 21.
+# Byte-order guard: payload_len is the 17-byte unidirectional header plus the 4-byte reading, and a little-endian
+# misparse yields a huge byte-reversed number instead.
 PLEN="$("$TSHARK" -X lua_script:"$LUA" -r "$OUT" -T fields -e plexus.payload_len \
         -Y 'plexus.msg_type==1' 2>/dev/null | head -1)"
 [ "$PLEN" = "21" ] || fail "decoded payload_len of first data frame is '$PLEN', expected 21 (byte-order guard)"
 
-# The first data frame's sequence is the deterministic 0 (cross-checked against the carried
-# seq= token); also assert the field is filterable and decodes.
 SEQ="$("$TSHARK" -X lua_script:"$LUA" -r "$OUT" -T fields -e plexus.sequence \
        -Y 'plexus.msg_type==1' 2>/dev/null | head -1)"
 [ "$SEQ" = "0" ] || fail "decoded sequence of first data frame is '$SEQ', expected 0"
 
-# Ciphertext: the carried crypto_position=ciphertext token drives the sealed-blob branch.
+# The carried crypto_position=ciphertext token drives the sealed-blob branch.
 CIPHER_V="$("$TSHARK" -X lua_script:"$LUA" -r "$OUT_CIPHER" -V 2>&1)"
 printf '%s' "$CIPHER_V" | grep -qi "Sealed bytes" || fail "ciphertext capture shows no 'Sealed bytes' item" "$CIPHER_V"
 if printf '%s' "$CIPHER_V" | grep -qi "Topic hash"; then

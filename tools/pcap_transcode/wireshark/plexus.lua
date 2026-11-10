@@ -1,16 +1,7 @@
--- A first-cut Wireshark/tshark dissector for the plexus wire frame, registered on the
--- DLT_USER0 (147) encapsulation a plexus pcapng capture uses. Load with:
+-- Dissects the plexus wire frame on the DLT_USER0 (147) encapsulation a plexus pcapng capture uses:
 --   tshark -X lua_script:plexus.lua -r capture.pcapng -V
---
--- The wire frame is BIG-ENDIAN (network byte order): the plexus wire codec writes every
--- u16/u32/u64 MSB-first, so every multi-byte field is read with the default tvb():uint()/
--- :uint64() (those are big-endian in the Wireshark Lua API). The little-endian :le_uint()
--- variants would byte-reverse every field and emit garbage, so they are never used here.
---
--- plexus is serializer-agnostic and carries opaque application bytes, so this dissector
--- decodes the frame and endpoint headers only and never decodes the payload. A future
--- compiled-plugin upgrade can add richer column/expert support; this Lua file is the
--- portable first cut.
+-- The wire codec writes every multi-byte field big-endian, which is what the Wireshark Lua API's tvb():uint() and
+-- :uint64() read; :le_uint() would byte-reverse every field. The payload is opaque application bytes, never decoded.
 
 local plexus = Proto("plexus", "plexus wire frame")
 
@@ -63,12 +54,9 @@ plexus.fields = {
 local e_magic = ProtoExpert.new("plexus.magic.bad", "Frame magic is not 'VP'", expert.group.MALFORMED, expert.severity.ERROR)
 plexus.experts = { e_magic }
 
--- The capture's crypto tap position is carried two ways by the projector: section-scoped in
--- the Section Header Block opt_comment (the authoritative human/C-plugin record, not reachable
--- from a Lua dissector), and per-packet in each frame comment as a crypto_position=<value>
--- token. Wireshark 4.7.1 DOES surface the per-packet frame comment to a Lua dissector at
--- dissect time, so the carried per-packet token is the primary branch input. The preference
--- below is an explicit override only (default: derive from the carried comment).
+-- The projector records the crypto tap position in the Section Header Block opt_comment, which a Lua dissector cannot
+-- reach, and as a crypto_position=<value> token in each frame comment, which Wireshark 4.7.1 surfaces at dissect
+-- time. The token drives the branch; the preference only overrides it.
 local pref_choices = {
     { 1, "carried", 0 },     -- read the per-packet crypto_position token (default)
     { 2, "cleartext", 1 },   -- force cleartext
@@ -94,8 +82,7 @@ local function resolved_position()
     return carried_position() or "cleartext"
 end
 
--- Read a base-128 LEB128 varint starting at off, returning value, byte length. Best-effort:
--- bounded by the tvb so an over-read surfaces as Wireshark's caught malformed error.
+-- LEB128 varint at off, returning value and byte length; best-effort, it stops at the end of the tvb.
 local function read_varint(tvb, off)
     local value, shift, len = 0, 0, 0
     while off + len < tvb:len() and len < 10 do

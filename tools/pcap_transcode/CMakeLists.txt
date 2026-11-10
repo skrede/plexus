@@ -1,7 +1,5 @@
-# The host-side flat-stream to pcapng transcode: a reusable mapping object linked by both
-# the CLI and the gated round-trip test, plus the standalone CLI binary. Unlike the mcap
-# tool there is no third-party dependency target — the pcapng container is hand-rolled here,
-# so there is nothing to resolve (no find_package, no FetchContent, no cmake fragment).
+# A library, so the gated round-trip test links the same mapping as the CLI. The pcapng container is hand-rolled, so
+# there is no third-party dependency to resolve.
 
 add_library(pcap_transcode_lib STATIC src/flat_to_pcap.cpp)
 

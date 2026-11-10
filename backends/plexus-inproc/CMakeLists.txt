@@ -1,7 +1,3 @@
-# Header-only deterministic in-process backend: the step-executor, bus,
-# virtual-clock timer, byte_channel, and the Policy-satisfying inproc_policy.
-# A second, backend-independent substrate for the Policy seam, with zero
-# dependencies. Auto-discovered by the root lib glob.
 add_library(plexus-inproc INTERFACE)
 add_library(plexus::inproc ALIAS plexus-inproc)
 set_target_properties(plexus-inproc PROPERTIES EXPORT_NAME inproc)

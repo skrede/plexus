@@ -1,9 +1,4 @@
-# Header-only reusable test substrate: the consolidated virtual clock, a pure
-# recording mock byte_channel + the Policy-satisfying mock_policy, and the harness
-# fixture (virtual-clock advance + drain to quiescence). Reuses the deterministic
-# inproc step-executor and virtual-clock timer rather than reinventing them, so it
-# links plexus::inproc alongside the core. Auto-discovered by the root lib glob;
-# an INTERFACE target carries no compiled artifact, so only test targets ever link it.
+# Only test targets link it. It links plexus::inproc to reuse the deterministic step executor and virtual-clock timer.
 add_library(plexus-testing INTERFACE)
 add_library(plexus::testing ALIAS plexus-testing)
 

@@ -1,31 +1,12 @@
-# The native (direct-OS) backend: the gated, compiled POSIX bodies plexus reaches
-# for without an intermediary library (the counterpart to plexus-asio). Today it
-# carries the POSIX shared-memory mechanism — the region broker, the futex notifier
-# primitive, and the same-host fingerprint — and only those bodies are compiled,
-# behind the gate. The header-only core (plexus, plexus-wire) never pulls
-# <sys/mman.h> or the futex syscall — this target, and only this target, carries the
-# POSIX bodies, and only when the backend is ON. Auto-discovered by the root
-# backends glob; self-gated so the core stays shm-free when PLEXUS_ENABLE_SHM_BACKEND
-# is OFF.
-#
-# The option is declared at root (ahead of the lib glob) so every fragment —
-# including the asio backend, globbed before this one — reads it; here it is only
-# read, via the early return.
+# The only target carrying the OS shared-memory bodies, so the core never pulls <sys/mman.h> or the futex syscall.
+# Its option is declared at root because the asio backend, globbed before this fragment, reads it too.
 if(NOT PLEXUS_ENABLE_SHM_BACKEND)
     return()
 endif()
 
-# STATIC archive — deliberately NOT OBJECT. Unlike plexus-crypto (whose single
-# TU transitively instantiates asio's io_context, forcing the OBJECT/COMDAT-fold
-# wiring), this backend never touches asio: the reactor bridge is the
-# plexus-asio adapter's job, not this target's. With no asio-bearing symbols a
-# second STATIC archive cannot fold against the asio backend's copy, so a plain
-# archive is the honest shape. Link deps are PUBLIC plexus::core + plexus::wire
-# + plexus::shm (the family concept headers it satisfies) — explicitly NOT asio.
-# The version stamp and the host fingerprint are platform-neutral; the region
-# broker + handle are POSIX on Linux/macOS and Win32 on Windows, and the futex
-# notifier primitive is Linux-only (Windows and macOS carry their wake in the
-# asio reactor bridge instead).
+# STATIC, not OBJECT like plexus-crypto: this backend never touches asio, so its archive has no asio symbols to fold
+# against the asio backend's copy. The futex notifier primitive is Linux-only because Windows and macOS carry their
+# wake in the asio reactor bridge.
 add_library(plexus-native STATIC
     src/shm_backend_version.cpp
     src/machine_fingerprint.cpp)
@@ -67,8 +48,7 @@ set_target_properties(plexus-native PROPERTIES EXPORT_NAME native)
 
 include(GNUInstallDirs)
 
-# A plain STATIC archive whose only interface deps (plexus::core, plexus::wire) already
-# ship in plexusTargets — no find_dependency is needed in the native config block.
+# Every interface dependency already ships in plexusTargets, so the native config block needs no find_dependency.
 install(TARGETS plexus-native EXPORT plexusNativeTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

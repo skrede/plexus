@@ -1,10 +1,5 @@
-# Structural regression check for the discovery module seam (the one-way
-# arrow: core/api never depend on the discovery implementation, and the
-# platform-enumeration primitives stay leaf-only). Pure CMake string matching
-# so the check runs identically on macOS, Linux, and Windows with no shell
-# grep dependency. Invoked via `cmake -P` from tests/seam/CMakeLists.txt;
-# PLEXUS_SOURCE_DIR is the source tree to check, passed at configure time so
-# this always inspects source, never the build tree.
+# Core and api never depend on the discovery implementation, and the platform-enumeration primitives stay leaf-only.
+# Pure CMake string matching, so the check runs the same on every platform without grep.
 
 if(NOT DEFINED PLEXUS_SOURCE_DIR)
     message(FATAL_ERROR "PLEXUS_SOURCE_DIR must be passed to discovery_layering_check.cmake")
@@ -37,26 +32,17 @@ function(_assert_tree_clean dir forbidden_tokens)
     set(_violations "${_violations}" PARENT_SCOPE)
 endfunction()
 
-# (a) The one-way arrow: core and api link no plexus::discovery.
 _assert_file_clean("${PLEXUS_SOURCE_DIR}/lib/plexus-core/CMakeLists.txt" "plexus::discovery")
 _assert_file_clean("${PLEXUS_SOURCE_DIR}/lib/plexus-api/CMakeLists.txt" "plexus::discovery")
 
-# (a) plexus-discovery links only plexus::core + plexus::wire — no backend, no
-# asio. Matched as target names (plexus::asio), not the bare word "asio",
-# since prose comments legitimately reference "the asio convention" without
-# creating a link edge.
+# Matched as target names, not the bare word "asio", because prose comments legitimately mention asio.
 _assert_file_clean("${PLEXUS_SOURCE_DIR}/lib/plexus-discovery/CMakeLists.txt"
     "plexus::asio;plexus::freertos;plexus::openssl;plexus::mbedtls")
 
-# (b) The api names only the discovery ABC — never the concrete multicast leaf
-# or a backend type. Matched as identifiers (multicast_discovery, asio::),
-# not the bare word "asio", for the same reason.
+# The api names only the discovery ABC; identifiers again, not the bare word, for the same reason.
 _assert_tree_clean("${PLEXUS_SOURCE_DIR}/lib/plexus-api/include"
     "multicast_discovery;asio::;plexus::asio;plexus::freertos")
 
-# (c) Platform-enumeration primitives stay leaf-only: core, discovery, and api
-# grep clean of the socket-enumeration and address-family symbols the asio
-# backend alone may reach.
 foreach(_area core discovery api)
     _assert_tree_clean("${PLEXUS_SOURCE_DIR}/lib/plexus-${_area}/include"
         "getifaddrs;GetAdaptersAddresses;GetAdapters;AF_INET;sin6_")

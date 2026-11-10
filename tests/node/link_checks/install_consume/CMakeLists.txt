@@ -3,12 +3,10 @@ project(plexus_install_consume LANGUAGES CXX)
 
 enable_testing()
 
-# The build's enabled backends, forwarded by the driver. Pulled as explicit COMPONENTS so a
-# backend is never implicit: a base find_package(plexus) resolves only core + facade.
+# Explicit COMPONENTS so a backend is never implicit: a bare find_package(plexus) resolves only the core and facade.
 find_package(plexus CONFIG REQUIRED COMPONENTS ${PLEXUS_CONSUME_COMPONENTS})
 
-# mdnspp is never an installed component (its targets file is intentionally absent); a
-# NON-REQUIRED query for it must set plexus_mdnspp_FOUND FALSE without erroring.
+# mdnspp is never an installed component, so a non-required query for it must report it absent without erroring.
 find_package(plexus CONFIG QUIET COMPONENTS mdnspp)
 if(plexus_mdnspp_FOUND)
     message(FATAL_ERROR "plexus_mdnspp_FOUND is TRUE — mdnspp must report absent (no installed component)")

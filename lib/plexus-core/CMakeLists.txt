@@ -1,7 +1,4 @@
-# Header-only minimal engine: the generic core that pairs with the wire codec.
-# Backends (asio, mbedTLS/OpenSSL) are separate gated targets; the consumable
-# facade is plexus-api. Core headers include plexus/wire/* today, so the wire
-# link is folded in here to keep the target self-contained.
+# The core headers include plexus/wire/*, so the wire link is folded in to keep the target self-contained.
 add_library(plexus-core INTERFACE)
 add_library(plexus::core ALIAS plexus-core)
 set_target_properties(plexus-core PROPERTIES EXPORT_NAME core)

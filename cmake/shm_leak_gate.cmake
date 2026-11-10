@@ -1,17 +1,8 @@
-# The seam assertion: no Linux shared-memory primitive may appear in the generic
-# library tree. The scan set is the WHOLE lib/ tree -- the POSIX bodies live in
-# the backends tree (backends/plexus-native carries the compiled shm mechanism,
-# the gated asio reactor root under shm-include/.../linux carries the bridge), so
-# after they moved out of lib/ no such primitive may appear under lib/ at all.
-# The match runs against a comment-filtered view of each file (// line comments
-# stripped, /* */ block-comment token mentions surfaced as a fatal error) because
-# the generic ring headers describe the futex protocol in prose; the gate keys on
-# actual #include / code tokens, never on comment text. This file is
-# self-dispatching: included from the build it registers an ALL custom target
-# that re-invokes it via -P (cross-platform, no bash dependency); run with
-# -DLEAK_GATE_SCAN it performs the scan.
+# No Linux shared-memory primitive may appear anywhere under lib/; the POSIX bodies live under backends/. Lines are
+# matched with // comments skipped and a token inside /* */ made fatal, because the generic ring headers describe the
+# futex protocol in prose. Included from the build, the file registers an ALL target that re-runs it through -P (no
+# bash dependency); with -DLEAK_GATE_SCAN it performs the scan.
 
-# The Linux shm primitives that may appear ONLY in the allowlisted backend dirs.
 set(LEAK_TOKENS
     "<linux/futex.h>"
     "<sys/mman.h>"
@@ -34,9 +25,8 @@ if(NOT LEAK_GATE_SCAN)
     return()
 endif()
 
-# The dirs where the primitives legitimately live, excluded by path prefix. They
-# sit under backends/, outside the lib/ scan below, so these excludes are a
-# defensive record of the legitimate homes rather than load-bearing filters.
+# The primitives' legitimate homes sit outside the lib/ scan, so these excludes are a defensive record rather than
+# load-bearing filters.
 set(LEAK_ALLOWLIST
     "${LEAK_GATE_BACKENDS_DIR}/plexus-native/"
     "${LEAK_GATE_BACKENDS_DIR}/plexus-asio/shm-include/plexus/asio/shm/linux/"

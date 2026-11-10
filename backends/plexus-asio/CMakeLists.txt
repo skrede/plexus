@@ -1,13 +1,8 @@
-# Gated, compiled asio TCP backend: the production compiled transport backend.
-# The header-only core (plexus-core, plexus-wire) never links asio — this target, and
-# only this target, pulls standalone asio in, and only when the backend is ON.
-# Auto-discovered by the root lib glob; self-gated so the core stays asio-free
-# when PLEXUS_ENABLE_ASIO_BACKEND is OFF.
+# The only target that pulls standalone asio in, so the header-only core stays asio-free.
 if(NOT PLEXUS_ENABLE_ASIO_BACKEND)
     return()
 endif()
 
-# Shared, pinned standalone-asio dependency (one copy across plexus + mdnspp).
 include(${PROJECT_SOURCE_DIR}/cmake/plexus-deps.cmake)
 
 add_library(plexus-asio INTERFACE)
@@ -36,11 +31,9 @@ set_target_properties(plexus-asio PROPERTIES EXPORT_NAME asio)
 
 include(GNUInstallDirs)
 
-# plexus_asio_dep is in plexus-asio's link interface but lives outside plexusTargets;
-# install(EXPORT) hard-errors unless every interface target lands in some export set, so
-# it joins this set. The installed flavor carries no asio include path of its own (the
-# FetchContent branch's path is $<BUILD_INTERFACE>-guarded); an installed consumer resolves
-# asio via the config package's find_dependency on the find_package/pkg-config branch.
+# install(EXPORT) hard-errors unless every interface target lands in some export set, so plexus_asio_dep joins this
+# one. Its installed flavor carries no asio include path; an installed consumer resolves asio through the config
+# package's find_dependency.
 install(TARGETS plexus-asio plexus_asio_dep EXPORT plexusAsioTargets)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(EXPORT plexusAsioTargets
@@ -48,15 +41,9 @@ install(EXPORT plexusAsioTargets
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/plexus
     FILE plexus-asio-targets.cmake)
 
-# The gated shared-memory reactor bridges + composition. Their headers live under a
-# SEPARATE shm-include/ root, NOT the unconditional include/ above: only this
-# fragment puts shm-include/ on the compiler include path, and only when the shm
-# backend is ON. So a bare plexus::asio consumer (crypto, mdnspp, the generic asio
-# part) has no path to plexus/asio/shm/* — the directory boundary is a real
-# compile barrier, not a convention, and PLEXUS_SAME_HOST_SHM_BACKEND travels with
-# that path so the same-host composition selects shm exactly when it is reachable.
-# Linking plexus::asio gives the composition's cross-root includes (udp/asio/unix
-# transports) their include/ path back, and plexus::native supplies the region broker.
+# shm-include/ is a separate root so a bare plexus::asio consumer has no path to plexus/asio/shm/*, a real compile
+# barrier; PLEXUS_SAME_HOST_SHM_BACKEND travels with that path so the same-host composition selects shm exactly when
+# it is reachable. Linking plexus::asio gives the composition's cross-root includes their include/ path back.
 if(PLEXUS_ENABLE_SHM_BACKEND)
     add_library(plexus-asio-shm INTERFACE)
     add_library(plexus::asio::shm ALIAS plexus-asio-shm)
@@ -72,18 +59,15 @@ if(PLEXUS_ENABLE_SHM_BACKEND)
         plexus::shm
         plexus::native)
 
-    # The shm-include/ headers (linux/uring_notifier.h) call io_uring_* directly, so on Linux the
-    # shm target carries liburing as a usage requirement — a consumer linking
-    # plexus::asio::shm resolves io_uring transitively, never by rediscovering liburing
-    # itself. liburing is Linux-only, so a non-Linux shm configure never reaches it.
+    # linux/uring_notifier.h calls io_uring_* directly, so liburing is a usage requirement and a consumer never
+    # rediscovers it.
     if(LINUX)
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
         target_link_libraries(plexus-asio-shm INTERFACE PkgConfig::LIBURING)
 
-        # io_uring_prep_futex_wait landed in liburing 2.6; older distros (e.g. Ubuntu 24.04 ships
-        # 2.5) lack it. Probe rather than version-gate, then let ring_notifier.h select the io_uring
-        # bridge or its portable threaded floor. A distro backport that adds the helper is picked up.
+        # io_uring_prep_futex_wait landed in liburing 2.6 and Ubuntu 24.04 ships 2.5. A probe rather than a version
+        # gate picks up a distro backport; ring_notifier.h selects the io_uring bridge or its portable threaded floor.
         include(CheckCXXSourceCompiles)
         set(CMAKE_REQUIRED_INCLUDES ${LIBURING_INCLUDE_DIRS})
         check_cxx_source_compiles([[

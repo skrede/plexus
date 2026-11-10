@@ -1,5 +1,4 @@
-# Consumable facade target (the name::name library). Re-exports the minimal
-# plexus::core engine and carries the facade-only public headers.
+# The facade consumers link, as the conventional name::name target.
 add_library(plexus-api INTERFACE)
 add_library(plexus::plexus ALIAS plexus-api)
 set_target_properties(plexus-api PROPERTIES EXPORT_NAME plexus)

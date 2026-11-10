@@ -1,5 +1,3 @@
-# Header-only wire layer: the pure-byte codec, frame protocol, and the
-# out-of-band-hardened stream reassembler. Zero dependencies.
 add_library(plexus-wire INTERFACE)
 add_library(plexus::wire ALIAS plexus-wire)
 set_target_properties(plexus-wire PROPERTIES EXPORT_NAME wire)

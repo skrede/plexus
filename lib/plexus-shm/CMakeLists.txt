@@ -1,11 +1,5 @@
-# Header-only shared-memory transport family: the mechanism-free broadcast-ring,
-# slot publish/subscribe, loan lifetime, and topic-registry discipline shared by
-# every same-host zero-copy path. It is the middle tier of the transport module
-# graph — the core pub/sub engine sits above it, the irreducible OS region/notify
-# mechanism below: the family is templated over the region-broker and notifier
-# concepts and a concrete backend (plexus::native) supplies the syscalls. The
-# family is pure logic over those concepts; it pulls in no asio, OpenSSL, OS, or
-# RTOS header. Auto-discovered by the root lib glob.
+# Templated over the region-broker and notifier concepts, with a concrete backend (plexus::native) supplying the
+# syscalls, so the family pulls in no asio, OpenSSL, OS or RTOS header.
 add_library(plexus-shm INTERFACE)
 add_library(plexus::shm ALIAS plexus-shm)
 set_target_properties(plexus-shm PROPERTIES EXPORT_NAME shm)

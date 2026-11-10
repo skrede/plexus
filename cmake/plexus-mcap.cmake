@@ -1,18 +1,6 @@
-# Host-only MCAP container resolution for the flat-stream transcode tool.
-#
-# mcap is the single-header reference C++ implementation of the MCAP log
-# container (the robotics analysis format Foxglove reads). It is resolved only
-# when the transcode tool is enabled and is carried on a dedicated INTERFACE
-# target so it never reaches the header-only core or any MCU-bound target.
-#
-# Resolving order mirrors the asio fragment so an installed copy wins:
-#   1. find_package(mcap CONFIG)  — an installed/vcpkg mcap target.
-#   2. FetchContent at a pinned releases/cpp tag — the header-only source tree
-#      has no CMake package of its own, so the include dir is added directly.
-#
-# Defines the INTERFACE target plexus_mcap_dep carrying the mcap include path
-# and MCAP_COMPRESSION_NO_LZ4 / MCAP_COMPRESSION_NO_ZSTD (compression disabled =>
-# zero transitive deps; no lz4/zstd find_package).
+# MCAP is the log container Foxglove reads. It sits on its own INTERFACE target so it never reaches the header-only
+# core or an MCU-bound target. An installed package wins; the fetched header-only source has no CMake package of its
+# own, so its include dir is added directly.
 
 if(TARGET plexus_mcap_dep)
     return()
@@ -35,8 +23,8 @@ else()
     message(STATUS "plexus: mcap fetched at releases/cpp/v2.1.3")
 endif()
 
-# Compression off: the transcode lays raw payload bytes into the container and
-# names the encoding in the Schema, so the lz4/zstd codecs are never linked.
+# The transcode lays raw payload bytes into the container and names the encoding in the Schema, so the lz4 and zstd
+# codecs are never linked.
 target_compile_definitions(plexus_mcap_dep INTERFACE
     MCAP_COMPRESSION_NO_LZ4
     MCAP_COMPRESSION_NO_ZSTD)

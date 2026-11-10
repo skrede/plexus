@@ -1,36 +1,15 @@
-# The function assertion: no function may exceed the conventions.md function
-# ceiling (25 lines, comments and blank lines included) or the cognitive-
-# complexity ceiling unless it is a registered exception (a function-scoped
-# // NOLINTNEXTLINE(readability-function-size) at the site, justified in the
-# owning file's EXCEPTIONS.md row). clang-tidy owns this check; cmake cannot.
-#
-# Scope: the FULL compile DB, not a positional path subset. A header-only
-# template body is checked ONLY when a TU that instantiates it is visited, so
-# restricting the run to the directly-compiled lib/*/src TUs leaves every
-# header-only lib body unseen (a non-user-code suppression that silently passes
-# the gate). Visiting the whole DB -- including the test TUs that instantiate
-# the library templates -- is the only way to reach those bodies. The
-# diagnostics are then scoped back to the library via -header-filter so only a
-# lib/plexus or backends/plexus overage can fail the build; test and example
-# bodies are out of this gate's scope (their own size is a separate question).
-#
-# -warnings-as-errors keys on the diagnostic CHECK, not its location, so a bare
-# warnings-as-errors run over the full DB would also fail on the test/example
-# main-source bodies that -header-filter cannot suppress (header-filter gates
-# header locations, never a TU's own main file). This gate therefore runs
-# clang-tidy advisory and fails the build itself iff a surviving diagnostic is
-# located in a library path -- the same scan-then-FATAL shape as size_gate
-# and shm_leak_gate. This file is self-dispatching: included from the build it
-# registers an ALL target that re-invokes it via -P with FUNC_GATE_FATAL=ON; a
-# direct -P invocation without it stays advisory for probing by hand.
-
-# The library path fragment a surviving diagnostic must match to fail the build:
-# Tier-1/2 logic under lib/plexus and Tier-3 mechanisms under backends/plexus.
+# No library function may exceed the function ceiling (25 lines, comments and blanks included) or the
+# cognitive-complexity ceiling unless it carries a function-scoped NOLINTNEXTLINE(readability-function-size) and an
+# EXCEPTIONS.md row. The run visits the whole compile database because a header-only template body is checked only
+# through a TU that instantiates it, which for the libraries means the test TUs; -header-filter scopes diagnostics
+# back to the library. clang-tidy runs advisory and the gate fails itself on a surviving library diagnostic, because
+# -warnings-as-errors keys on the check, not its location, and -header-filter cannot suppress a TU's own main file.
+# Included from the build, the file registers an ALL target that re-runs it through -P with FUNC_GATE_FATAL=ON; a
+# bare -P run stays advisory.
 set(FUNC_GATE_SCOPE "/(lib|backends)/plexus")
 
 if(NOT FUNC_GATE_SCAN)
-    # run-clang-tidy drives this gate and runs on the Linux leg only, so the gate is
-    # inert off Linux rather than a configure-time FATAL where run-clang-tidy is absent.
+    # run-clang-tidy runs on the Linux leg only, so the gate is inert elsewhere rather than a configure-time FATAL.
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
         return()
     endif()
@@ -45,12 +24,11 @@ if(NOT FUNC_GATE_SCAN)
     return()
 endif()
 
-# FUNC_GATE_TIDY_LOG replays a recorded clang-tidy output instead of running it,
-# so the gate's own parsing can be tested against fixed diagnostics.
+# FUNC_GATE_TIDY_LOG replays a recorded clang-tidy output so the gate's parsing can be tested against fixed
+# diagnostics.
 if(FUNC_GATE_TIDY_LOG)
     file(READ "${FUNC_GATE_TIDY_LOG}" _tidy_out)
 else()
-    # run-clang-tidy drives the per-TU compile DB; without it the gate cannot run.
     find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)
     if(NOT RUN_CLANG_TIDY)
         message(WARNING
@@ -60,10 +38,7 @@ else()
         return()
     endif()
 
-    # Run advisory over the WHOLE compile DB so header-only lib bodies are reached
-    # through the test TUs that instantiate them; -header-filter scopes the emitted
-    # header diagnostics to the library, -checks restricts the run to the two size
-    # checks so an unrelated diagnostic never enters the result.
+    # -checks keeps an unrelated diagnostic out of the result.
     execute_process(
         COMMAND ${RUN_CLANG_TIDY}
                 -p ${FUNC_GATE_BUILD_DIR}
@@ -75,11 +50,8 @@ else()
         RESULT_VARIABLE _tidy_rc)
 endif()
 
-# Keep only the size/complexity warning lines that point into the library tree;
-# a test or example main-source body is out of this gate's scope. The warning
-# lines are matched out of the raw output rather than splitting it into a list,
-# because CMake does not split a list on ';' inside brackets, and clang-tidy's
-# quoted source lines carry unbalanced ones that would fold many lines into one.
+# Warning lines are matched out of the raw output rather than split into a list, because CMake does not split a list
+# on ';' inside brackets and clang-tidy's quoted source lines carry unbalanced ones.
 set(_violations "")
 string(REGEX MATCHALL
     "[^\n]*warning:[^\n]*(readability-function-size|readability-function-cognitive-complexity)[^\n]*"

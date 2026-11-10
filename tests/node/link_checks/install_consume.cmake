@@ -1,10 +1,5 @@
-# Driven as a ctest entry (cmake -P). Installs the already-configured plexus build
-# tree to a throwaway prefix, then configures + builds + RUNS the out-of-tree consumer
-# project against that prefix via find_package(plexus COMPONENTS ...). Any nonzero step is
-# fatal, so a broken export set, a missing header, an unresolved transitive link, or a
-# crypto symbol that links but fails to run fails the test. Required: -DPLEXUS_BUILD_DIR
-# (the configured build tree) and -DPLEXUS_CONSUME_DIR (the consumer project source).
-# Optional: -DPLEXUS_CONSUME_COMPONENTS (the build's enabled backends, semicolon list).
+# Run through cmake -P: installs the configured build tree to a throwaway prefix, then configures, builds and runs
+# the consumer project against it. -DPLEXUS_CONSUME_COMPONENTS optionally lists the build's enabled backends.
 
 if(NOT DEFINED PLEXUS_BUILD_DIR OR NOT DEFINED PLEXUS_CONSUME_DIR)
     message(FATAL_ERROR "install_consume.cmake requires -DPLEXUS_BUILD_DIR and -DPLEXUS_CONSUME_DIR")
@@ -32,9 +27,8 @@ if(_per_config EQUAL -1)
                         "instead of in the consumer's configuration (${_targets_file})")
 endif()
 
-# Forward the parent's exact toolchain so the nested configure matches this build rather
-# than cmake's platform default (a multi-config Visual Studio generator on Windows, which
-# neither matches this single-config Ninja + cl build nor inherits the vcvars environment).
+# The parent's exact toolchain, because cmake's default on Windows is a multi-config Visual Studio generator that
+# neither matches this single-config Ninja + cl build nor inherits the vcvars environment.
 set(_toolchain_args "")
 if(PLEXUS_CONSUME_GENERATOR)
     list(APPEND _toolchain_args -G "${PLEXUS_CONSUME_GENERATOR}")
@@ -49,10 +43,8 @@ if(PLEXUS_CONSUME_CXX_COMPILER)
     list(APPEND _toolchain_args "-DCMAKE_CXX_COMPILER=${PLEXUS_CONSUME_CXX_COMPILER}")
 endif()
 
-# Forward the build's CXX flags to the consumer. When plexus is built with sanitizers,
-# the installed crypto OBJECT files carry __asan_/__ubsan_ references that only resolve
-# when the consumer link pulls in the matching sanitizer runtime — so the out-of-tree
-# consumer must compile with the same instrumentation, not a bare default.
+# A sanitizer build leaves __asan_/__ubsan_ references in the installed crypto objects, which resolve only when the
+# consumer compiles with the same instrumentation.
 execute_process(
     COMMAND ${CMAKE_COMMAND} -S "${PLEXUS_CONSUME_DIR}" -B "${_consume_build}"
             ${_toolchain_args}

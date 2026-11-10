@@ -1,10 +1,5 @@
-# Header-only discovery family: the concrete discovery mechanisms that sit above
-# the discovery contract (the discovery ABC + options stay in core, included by
-# the api). It holds the multicast leaf, the socket-free static fallback, and the
-# leaf-only card codecs — pure logic over the wire codec, pulling in no asio,
-# OpenSSL, OS, or RTOS header. The one-way arrow holds: core and api link no
-# discovery; only a backend or a test that compiles a concrete leaf reaches here.
-# Auto-discovered by the root glob.
+# Pure logic over the wire codec that pulls in no asio, OpenSSL, OS or RTOS header. The discovery contract stays in
+# core, so core and api never link this; only a backend or a test that compiles a concrete leaf does.
 add_library(plexus-discovery INTERFACE)
 add_library(plexus::discovery ALIAS plexus-discovery)
 set_target_properties(plexus-discovery PROPERTIES EXPORT_NAME discovery)

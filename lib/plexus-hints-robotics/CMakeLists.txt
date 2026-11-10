@@ -1,6 +1,4 @@
-# Opt-in robotics hint vocabulary: a header-only neutral concept enum a consumer sets a
-# codec's schema_hint from. It holds no schema data, names no vendor, and links nothing —
-# an output backend is the only tier that joins a concept to a concrete schema.
+# Holds no schema data and names no vendor: only an output backend joins a concept to a concrete schema.
 add_library(plexus-hints-robotics INTERFACE)
 add_library(plexus::hints-robotics ALIAS plexus-hints-robotics)
 set_target_properties(plexus-hints-robotics PROPERTIES EXPORT_NAME hints-robotics)

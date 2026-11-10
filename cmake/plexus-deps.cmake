@@ -1,14 +1,6 @@
-# Standalone (non-Boost) asio resolution, also shared by the opt-in mDNS interop example.
-#
-# Resolving order mirrors mdnspp's so a single asio copy is shared on this host
-# (no two include trees => no ODR clash across plexus and the mDNS interop example):
-#   1. find_package(asio CONFIG)  — an installed/vcpkg asio::asio target.
-#   2. pkg-config asio            — a system/pkg-config install.
-#   3. FetchContent asio-1-36-0   — the exact tag mdnspp pins, as a last resort.
-# The resolved version is reported so transport runs are reproducible.
-#
-# Defines the INTERFACE target plexus_asio_dep carrying the asio include path and
-# ASIO_STANDALONE (the standalone, header-only, non-Boost configuration).
+# Standalone asio, shared with the mDNS interop example. The resolution order mirrors mdnspp's, down to the tag it
+# pins, so one asio copy serves both and no two include trees clash under the ODR. The resolved version is reported
+# so transport runs are reproducible.
 
 if(TARGET plexus_asio_dep)
     return()
@@ -40,18 +32,15 @@ else()
     endif()
 endif()
 
-# Standalone, non-Boost asio. On Windows: _WIN32_WINNT pins a modern IOCP/AF_UNIX
-# feature level; NOMINMAX drops the min/max function-like macros that clash with the
-# standard library; WIN32_LEAN_AND_MEAN trims windows.h so it does not pull an older
-# winsock.h in ahead of winsock2.h.
+# Windows: _WIN32_WINNT pins a modern IOCP/AF_UNIX feature level, NOMINMAX drops the min/max macros that clash with
+# the standard library, and WIN32_LEAN_AND_MEAN keeps windows.h from pulling winsock.h in ahead of winsock2.h.
 target_compile_definitions(plexus_asio_dep INTERFACE
     ASIO_STANDALONE
     $<$<PLATFORM_ID:Windows>:_WIN32_WINNT=0x0A00>
     $<$<PLATFORM_ID:Windows>:NOMINMAX>
     $<$<PLATFORM_ID:Windows>:WIN32_LEAN_AND_MEAN>)
 
-# Winsock link inputs so every asio-linking Windows target resolves the WSA/socket
-# externals: ws2_32 is Winsock2, mswsock carries the overlapped/extended entry points.
+# ws2_32 is Winsock2; mswsock carries its overlapped and extended entry points.
 target_link_libraries(plexus_asio_dep INTERFACE
     $<$<PLATFORM_ID:Windows>:ws2_32>
     $<$<PLATFORM_ID:Windows>:mswsock>)
