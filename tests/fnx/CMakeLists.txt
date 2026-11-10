@@ -1,33 +1,21 @@
-# The -fno-exceptions audit area. Two compile-gate translation units enumerate the
-# implicit-throw surface and prove the seam pass under -fno-exceptions -fno-rtti (built in
-# the throwaway build-fnx tree configured with those flags via CMAKE_CXX_FLAGS); plus the
-# fail_closed throw-semantics oracle that runs as an ordinary ctest entry under the "fnx."
-# prefix. The audit TUs are compile-only gates — they carry no ctest registration; their
-# value is that they BUILD clean under -fno-exceptions. In the default build/ tree they
-# simply compile the exceptions branch (inert, byte-identical to before).
-# Auto-discovered by the tests glob (gated on PLEXUS_BUILD_TESTS by the parent).
 if(NOT PLEXUS_BUILD_TESTS)
     return()
 endif()
 
-# The fail_closed oracle: header-only core, links plexus::core + Catch2's main.
-add_executable(test_fail_closed test_fail_closed.cpp)
-target_link_libraries(test_fail_closed PRIVATE plexus::core Catch2::Catch2WithMain)
-catch_discover_tests(test_fail_closed TEST_PREFIX "fnx.")
+set(PLEXUS_TEST_PREFIX "fnx.")
 
-# The MCU-floor audit TU: core + wire only (plexus::inproc supplies the concrete policy the
-# routing_engine is instantiated over). No facade, no recorder/value_projection — FNX-03 is
-# structural (those headers are simply not included).
+plexus_add_catch_test(test_fail_closed
+    SOURCES test_fail_closed.cpp
+    LINKS plexus::core)
+
+# The audit translation units are compile-only gates with no ctest entry, proven by building clean in a tree configured
+# with -fno-exceptions -fno-rtti through CMAKE_CXX_FLAGS. The MCU-floor one links plexus::inproc only for the concrete
+# policy its routing engine is instantiated over.
 add_executable(audit_mcu_floor audit_mcu_floor.cpp)
 target_link_libraries(audit_mcu_floor PRIVATE plexus::core plexus::stream plexus::inproc)
 
-# The api-facade audit TU: node.h + publisher.h over the inproc backend, exercising the
-# converted serve_procedure_seam throw and the guarded catch(...) cleanup sites.
 add_executable(audit_api_facade audit_api_facade.cpp)
 target_link_libraries(audit_api_facade PRIVATE plexus::plexus plexus::inproc plexus::discovery)
 
-# The shm-free node-surface audit TU: node.h over the inproc backend, proving a non-shm
-# node instantiates with no member header that reaches the 32-bit ring_layout static_assert.
-# A compile-gate (no catch_discover_tests) — its value is that it BUILDS shm-free.
 add_executable(audit_node_shm_free audit_node_shm_free.cpp)
 target_link_libraries(audit_node_shm_free PRIVATE plexus::plexus plexus::inproc plexus::discovery)

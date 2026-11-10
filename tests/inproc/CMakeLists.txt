@@ -1,63 +1,24 @@
-# Inproc-Policy runtime test: posted-fn ordering + drain quiescence, posted-only
-# byte delivery, close-notifies-partner, static_discovery resolve, the null_logger
-# warn-and-drop seam, and the alloc-counter harness. Links the header-only core,
-# the wire layer, and the inproc backend; the `inproc.` ctest prefix lets
-# `ctest -R inproc` select it. Auto-discovered by the tests glob.
-add_executable(test_inproc_policy test_inproc_policy.cpp)
+set(PLEXUS_TEST_PREFIX "inproc.")
 
-# tests/ is on the include path so the test can pull in support/alloc_counter.h.
-target_include_directories(test_inproc_policy PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-
-target_link_libraries(test_inproc_policy PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-
-# RUN_SERIAL: the alloc-counter harness reads the single-TU global operator-new counter;
-# serializing keeps the count immune to the CPU contention of concurrent test processes.
-catch_discover_tests(test_inproc_policy TEST_PREFIX "inproc."
+# RUN_SERIAL keeps the alloc-counter harness's global operator-new count immune to the contention of concurrent test
+# processes.
+plexus_add_catch_test(test_inproc_policy
+    SOURCES test_inproc_policy.cpp
+    LINKS plexus::core plexus::wire plexus::inproc plexus::discovery
     PROPERTIES RUN_SERIAL TRUE)
 
-# Object-lane runtime test: process-tier object-handle delivery between channels,
-# FIFO ordering vs byte packets on one pair, and leak-free refcount release on the
-# delivered, closed-partner, and vanished-target paths.
-add_executable(test_inproc_object_lane test_inproc_object_lane.cpp)
+plexus_add_catch_test(test_inproc_object_lane
+    SOURCES test_inproc_object_lane.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-target_link_libraries(test_inproc_object_lane PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
+plexus_add_catch_test(test_inproc_retire_quiescence
+    SOURCES test_inproc_retire_quiescence.cpp
+    LINKS plexus::core plexus::inproc)
 
-catch_discover_tests(test_inproc_object_lane TEST_PREFIX "inproc.")
+plexus_add_catch_test(test_inproc_ingress
+    SOURCES test_inproc_ingress.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
 
-# The close contract on the in-process channel: a posted, once-only on_closed after the channel went quiet,
-# its consumer detached at close, and a retired channel drained clean through the graveyard.
-add_executable(test_inproc_retire_quiescence test_inproc_retire_quiescence.cpp)
-target_include_directories(test_inproc_retire_quiescence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_inproc_retire_quiescence PRIVATE
-    plexus::core
-    plexus::inproc
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_inproc_retire_quiescence TEST_PREFIX "inproc.")
-
-# The cross-thread ingress of the step-executor: work posted from another thread runs at a later step on the
-# stepping thread, the in-step fact is per thread, and a foreign thread's plexus::post reaches an inproc node.
-add_executable(test_inproc_ingress test_inproc_ingress.cpp)
-target_link_libraries(test_inproc_ingress PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_inproc_ingress TEST_PREFIX "inproc.")
-
-# A transport's listen set: every endpoint it listens on is dialable and released at close, a taken endpoint is refused.
-add_executable(test_inproc_listen_set test_inproc_listen_set.cpp)
-target_link_libraries(test_inproc_listen_set PRIVATE
-    plexus::core
-    plexus::inproc
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_inproc_listen_set TEST_PREFIX "inproc.")
+plexus_add_catch_test(test_inproc_listen_set
+    SOURCES test_inproc_listen_set.cpp
+    LINKS plexus::core plexus::inproc)

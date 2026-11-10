@@ -1,63 +1,20 @@
-# The handshake_fsm behavioral oracle: the exhaustive isolation suite for the
-# pure, sans-IO session-handshake state machine. Enumerates the full state x event
-# matrix, the outbound and inbound paths, the inbound-only bootstrap common case,
-# the version-compat matrix (with the exact-protocol gate ordering), the
-# identity-collision gate, greater-node_id-wins dedup arbitration plus its symmetry
-# and convergence, the install-once completion latch, the torn-down reset, and the
-# compile-time pins. The FSM is transport-free, so this links only the header-only
-# core and the wire value structs — no inproc backend. A focused zero-alloc gate
-# over a steady step runs through support/alloc_counter.h, so tests/ is on the
-# include path. The `handshake.` ctest prefix lets `ctest -R handshake` select it.
-# Auto-discovered by the tests glob.
-add_executable(test_handshake_fsm test_handshake_fsm.cpp)
+set(PLEXUS_TEST_PREFIX "handshake.")
 
-# tests/ is on the include path so the oracle can pull in support/alloc_counter.h.
-target_include_directories(test_handshake_fsm PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-
-target_link_libraries(test_handshake_fsm PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-
-# RUN_SERIAL: alloc-count contract over the single-TU global operator-new counter; serializing
-# keeps the count immune to the CPU contention of concurrent test processes.
-catch_discover_tests(test_handshake_fsm TEST_PREFIX "handshake."
+# RUN_SERIAL keeps the alloc-count contract over the global operator-new counter immune to the contention of
+# concurrent test processes.
+plexus_add_catch_test(test_handshake_fsm
+    SOURCES test_handshake_fsm.cpp
+    LINKS plexus::core plexus::wire
     PROPERTIES RUN_SERIAL TRUE)
 
-# The widened-frame codec oracle: the same-host fingerprint rides the handshake as
-# an append-only fixed-width field. Re-pins the round-trip across the fingerprint
-# value space, the bounds-safety at the widened size, the status cutoff under the
-# wider frame, and the protocol-version bump that gates the layout change. Links the
-# header-only wire structs only. The `handshake.` ctest prefix groups it with the FSM
-# oracle. Auto-discovered by the tests glob.
-add_executable(test_handshake_codec test_handshake_codec.cpp)
+plexus_add_catch_test(test_handshake_codec
+    SOURCES test_handshake_codec.cpp
+    LINKS plexus::wire)
 
-target_link_libraries(test_handshake_codec PRIVATE
-    plexus::wire
-    Catch2::Catch2WithMain)
+plexus_add_catch_test(test_version_interop
+    SOURCES test_version_interop.cpp
+    LINKS plexus::core plexus::wire)
 
-catch_discover_tests(test_handshake_codec TEST_PREFIX "handshake.")
-
-# The mixed-version interop oracle: a peer whose protocol_version differs from this
-# build's is aborted at the exact-match version gate. Pure FSM logic over the wire
-# value structs, so it links only the header-only core and wire layers. The
-# `handshake.` ctest prefix groups it; `ctest -R interop` selects it by name.
-add_executable(test_version_interop test_version_interop.cpp)
-
-target_link_libraries(test_version_interop PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-
-catch_discover_tests(test_version_interop TEST_PREFIX "handshake.")
-
-# The proven identity of a handshake: written only by an accepted handshake before completion, never rewritten after.
-add_executable(test_handshake_identity test_handshake_identity.cpp test_handshake_refusal.cpp)
-
-target_link_libraries(test_handshake_identity PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-
-catch_discover_tests(test_handshake_identity TEST_PREFIX "handshake.")
+plexus_add_catch_test(test_handshake_identity
+    SOURCES test_handshake_identity.cpp test_handshake_refusal.cpp
+    LINKS plexus::core plexus::wire)

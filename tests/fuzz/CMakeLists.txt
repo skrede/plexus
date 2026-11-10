@@ -1,4 +1,3 @@
-# libFuzzer harnesses over the untrusted-input surfaces, each linking the libraries its decoder's headers reach.
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(WARNING
         "plexus fuzz: PLEXUS_BUILD_FUZZ_TESTS is ON but the compiler is "

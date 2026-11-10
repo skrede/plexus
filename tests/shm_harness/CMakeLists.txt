@@ -4,25 +4,16 @@ if(NOT PLEXUS_ENABLE_SHM_BACKEND OR NOT TARGET plexus::asio::shm)
     return()
 endif()
 
+set(PLEXUS_TEST_PREFIX "shm.")
+
 function(plexus_add_shm_harness_test name)
     cmake_parse_arguments(PARSE_ARGV 1 harness "" "" "PROPERTIES")
-    add_executable(${name} xproc_main.cpp node_role.cpp ${harness_UNPARSED_ARGUMENTS})
-
-    target_include_directories(${name} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${PROJECT_SOURCE_DIR}/tests/shm)
-
-    target_link_libraries(${name} PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::asio::shm
-        plexus::native
-        plexus::testing
-        Catch2::Catch2)
-
-    catch_discover_tests(${name} TEST_PREFIX "shm." PROPERTIES ${harness_PROPERTIES})
+    plexus_add_catch_test(${name}
+        NO_MAIN
+        SOURCES xproc_main.cpp node_role.cpp ${harness_UNPARSED_ARGUMENTS}
+        LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::asio::shm plexus::native plexus::testing
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm
+        PROPERTIES ${harness_PROPERTIES})
 endfunction()
 
 if(LINUX)
@@ -34,9 +25,8 @@ if(LINUX)
         test_shm_harness_write_once.cpp)
 endif()
 
-# Same-host delivery across a burst and across restarts of a ring's creator and of a reader. The probes count a topic's
-# regions under /dev/shm and their registry-level roles use Linux-only process control, so the set is Linux-only. A
-# stalled burst spins for tens of seconds.
+# The probes count a topic's regions under /dev/shm and their registry-level roles use Linux-only process control, so
+# the set is Linux-only. A stalled burst spins for tens of seconds.
 if(LINUX)
     plexus_add_shm_harness_test(test_shm_lane_probes
         registry_role.cpp
@@ -50,47 +40,24 @@ if(LINUX)
     plexus_add_shm_harness_test(test_shm_harness_denial test_shm_harness_denial.cpp)
 endif()
 
-# Burst-then-idle wake stress over one ring with one producer process and one or two consumer processes.
 if(LINUX)
     plexus_add_shm_harness_test(test_shm_wake_stress wake_roles.cpp test_shm_wake_stress.cpp PROPERTIES TIMEOUT 300)
 endif()
 
 function(plexus_add_shm_xproc_test name)
-    add_executable(${name} xproc_main.cpp ${ARGN})
-
-    target_include_directories(${name} PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${PROJECT_SOURCE_DIR}/tests/shm)
-
-    target_link_libraries(${name} PRIVATE
-        plexus::shm
-        plexus::asio
-        plexus::asio::shm
-        plexus::native
-        plexus::wire
-        plexus::testing
-        Catch2::Catch2)
-
-    catch_discover_tests(${name} TEST_PREFIX "shm.")
+    plexus_add_catch_test(${name}
+        NO_MAIN
+        SOURCES xproc_main.cpp ${ARGN}
+        LINKS plexus::shm plexus::asio plexus::asio::shm plexus::native plexus::wire plexus::testing
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm)
 endfunction()
 
-# One publisher process and two subscriber processes, each with its own registry and notifier on one ring; it runs on
-# every platform.
 plexus_add_shm_xproc_test(test_shm_three_process three_process_roles.cpp test_shm_three_process.cpp)
-
-# A slot a child process holds on a region reads held from the parent until the child is killed; it runs on every
-# platform.
 plexus_add_shm_xproc_test(test_shm_slot_liveness liveness_roles.cpp test_shm_slot_liveness.cpp)
-
-# A restarted creator process adopts the ring its reader still holds, after a clean exit or a kill with a claim in
-# flight, and a second live creator is refused; it runs on every platform.
 plexus_add_shm_xproc_test(test_shm_ring_adoption liveness_roles.cpp test_shm_ring_adoption.cpp)
 
-# The POSIX-semaphore notifier, macOS's own and a second notifier on Linux: a disarm while another process's waiter is
-# parked on the ring, a burst of wakes while the reactor is stalled, a semaphore name already taken, a notifier
-# destroyed with a drain pending, and a killed waiter's semaphore unlinked when its cursor is reclaimed. The burst case
-# exercises the wake pipe, which the Windows event notifier does not have. A case that can hang runs its hanging side in
-# a child the parent kills after a bound.
+# The POSIX-semaphore notifier is macOS's own and a second notifier on Linux. Its burst case exercises the wake pipe,
+# which the Windows event notifier does not have.
 if(NOT WIN32)
     plexus_add_shm_xproc_test(test_shm_sem_notifier
         three_process_roles.cpp
@@ -102,8 +69,6 @@ if(NOT WIN32)
         test_shm_sem_reclaim.cpp)
 endif()
 
-# The event notifier on Windows: a disarm while another process's waiter is parked on the ring, and an event name
-# already taken.
 if(WIN32)
     plexus_add_shm_xproc_test(test_shm_event_notifier
         three_process_roles.cpp
@@ -115,22 +80,9 @@ endif()
 # The allocation counter replaces the global operator new for the whole binary, so the signal-path gate has its own
 # executable and runs alone.
 if(LINUX)
-    add_executable(test_shm_sem_alloc test_shm_sem_alloc.cpp)
-
-    target_include_directories(test_shm_sem_alloc PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${PROJECT_SOURCE_DIR}/tests/shm
-        ${PROJECT_SOURCE_DIR}/tests)
-
-    target_link_libraries(test_shm_sem_alloc PRIVATE
-        plexus::shm
-        plexus::asio
-        plexus::asio::shm
-        plexus::native
-        plexus::wire
-        plexus::testing
-        Catch2::Catch2WithMain)
-
-    catch_discover_tests(test_shm_sem_alloc TEST_PREFIX "shm."
+    plexus_add_catch_test(test_shm_sem_alloc
+        SOURCES test_shm_sem_alloc.cpp
+        LINKS plexus::shm plexus::asio plexus::asio::shm plexus::native plexus::wire plexus::testing
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm
         PROPERTIES RUN_SERIAL TRUE)
 endif()
