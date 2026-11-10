@@ -45,7 +45,7 @@ using namespace std::chrono_literals;
 
 constexpr const char *k_group  = "239.255.0.7";
 constexpr std::uint16_t k_port = 7447;
-constexpr unsigned k_ttl       = 4;
+constexpr std::uint8_t k_ttl   = 4;
 constexpr const char *k_topic  = "telemetry";
 
 // Generous: the device must boot, associate, take a DHCP lease, announce on the group, then accept
@@ -152,7 +152,7 @@ int main()
 
     if(received.has_value())
     {
-        std::cout << "GATE_PASS value=" << static_cast<unsigned>(*received) << '\n';
+        std::cout << "GATE_PASS value=" << static_cast<std::uint32_t>(*received) << '\n';
         return 0;
     }
     std::cout << "GATE_FAIL no message within " << k_timeout.count() << "s\n";

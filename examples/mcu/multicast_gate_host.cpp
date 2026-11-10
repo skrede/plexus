@@ -44,7 +44,7 @@ using namespace std::chrono_literals;
 
 constexpr const char *k_group        = "239.255.0.7";
 constexpr std::uint16_t k_port       = 7447;
-constexpr unsigned k_ttl             = 4;
+constexpr std::uint8_t k_ttl         = 4;
 constexpr const char *k_default_port = "7447";
 
 // Generous: the device must boot, associate, take a DHCP lease, join the group, then both ends must
