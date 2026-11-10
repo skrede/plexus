@@ -1,17 +1,11 @@
-# The size assertion: no source unit may exceed the CONVENTIONS.md file ceiling
-# (200 lines, comments and blank lines included) unless it is a registered
-# exception. The scan set is the whole tree -- lib/, backends/, tests/, examples/
-# -- minus the gate's own negative-fixture dir. An over-limit file is legal only when it
-# carries a matching row in EXCEPTIONS.md, and only up to that row's Ceiling: a
-# registered file may shrink freely but never grow past its ceiling. A row for a unit
-# that is no longer over-limit, that names no scanned file, or that lacks an integer
-# ceiling above the limit is itself a violation (stale exceptions are not silently
-# tolerated). This file is self-dispatching: included from the
-# build it registers an ALL custom target that re-invokes it via -P
-# (cross-platform, no bash) with SIZE_GATE_FATAL=ON, so a violation fails the
-# build; run with -DSIZE_GATE_SCAN it performs the scan. A direct -P invocation
-# without -DSIZE_GATE_FATAL=ON stays advisory (WARNING per violation) for
-# probing the tree by hand.
+# Fails the build on any code file over the CONVENTIONS.md file ceiling (200 lines, comments and blank lines
+# included) that EXCEPTIONS.md does not sanction. The code files are C++ sources and headers, CMakeLists.txt, *.cmake,
+# *.sh, *.py and *.lua under lib, backends, tests, examples, cmake, tools and benchmarks, plus the root CMakeLists.txt;
+# a root holding none of those directories, such as a negative-fixture directory, is scanned whole. A registered file
+# may shrink freely but never grow past its row's ceiling, and a row that is stale, duplicated, of another kind or
+# without a valid ceiling is itself a violation.
+# Included from the build, this file registers an ALL target that re-runs it through -P with SIZE_GATE_FATAL=ON, so the
+# check needs no shell and runs the same on Windows; a -P run without SIZE_GATE_FATAL only warns.
 
 set(SIZE_GATE_LIMIT 200)
 
@@ -22,48 +16,48 @@ if(NOT SIZE_GATE_SCAN)
                 -DSIZE_GATE_FATAL=ON
                 -DSIZE_GATE_ROOT=${PROJECT_SOURCE_DIR}
                 -P ${CMAKE_CURRENT_LIST_FILE}
-        COMMENT "Asserting source units stay within the file-size ceiling"
+        COMMENT "Asserting code files stay within the file-size ceiling"
         VERBATIM)
     return()
 endif()
 
-# Scan the conventional tree-wide scope when it exists; otherwise scan the root
-# directly (the targeted negative-fixture invocation passes a leaf dir).
+set(_patterns *.h *.hpp *.cpp *.cc CMakeLists.txt *.cmake *.sh *.py *.lua)
 set(_scan_roots "")
-foreach(_sub IN ITEMS lib backends tests examples)
+foreach(_sub IN ITEMS lib backends tests examples cmake tools benchmarks)
     if(IS_DIRECTORY "${SIZE_GATE_ROOT}/${_sub}")
         list(APPEND _scan_roots "${SIZE_GATE_ROOT}/${_sub}")
     endif()
 endforeach()
+set(_scan_files "")
+if(_scan_roots AND EXISTS "${SIZE_GATE_ROOT}/CMakeLists.txt")
+    list(APPEND _scan_files "${SIZE_GATE_ROOT}/CMakeLists.txt")
+endif()
 if(NOT _scan_roots)
     set(_scan_roots "${SIZE_GATE_ROOT}")
 endif()
 
 set(_globs "")
 foreach(_root IN LISTS _scan_roots)
-    list(APPEND _globs
-        "${_root}/*.h" "${_root}/*.hpp" "${_root}/*.cpp" "${_root}/*.cc")
+    foreach(_pattern IN LISTS _patterns)
+        list(APPEND _globs "${_root}/${_pattern}")
+    endforeach()
 endforeach()
-file(GLOB_RECURSE _scan_files ${_globs})
+file(GLOB_RECURSE _globbed ${_globs})
+list(APPEND _scan_files ${_globbed})
+list(REMOVE_DUPLICATES _scan_files)
 
-# The gate's own deliberately-malformed fixtures live here and must never
-# pollute the tree-wide result; they are scanned only by a targeted invocation
-# that roots SIZE_GATE_ROOT at the fixture dir itself.
+# The gate's own over-limit fixtures would fail every tree-wide run; only a run rooted at their directory scans them.
 set(_fixture_prefix "${SIZE_GATE_ROOT}/tests/size_gate/")
 string(REGEX REPLACE "([][+.*()^$?|\\\\])" "\\\\\\1" _fixture_re "${_fixture_prefix}")
 list(FILTER _scan_files EXCLUDE REGEX "^${_fixture_re}")
 
-# Generated build trees (e.g. an in-tree ESP-IDF cross-build under examples/) are
-# machine output, not hand-written source -- never gate them. Drop any path whose
-# component is a build/, build-<suffix>/, or cmake-build-<suffix>/ artifact dir,
-# matching the .gitignore'd patterns (the JetBrains cmake-build-* layout included).
+# Build trees (an in-tree ESP-IDF build under examples/, FetchContent checkouts) are generated, not written. The
+# pattern matches the gitignored build/, build-*/ and cmake-build-*/ path components.
 list(FILTER _scan_files EXCLUDE REGEX "/(cmake-)?build([-_][^/]*)?/")
 
-# Parse EXCEPTIONS.md once into the registered file paths and their ceilings, two
-# index-aligned lists (CMake has no map). A file row is | path | file | ceiling | ... |
-# whose first cell names a source file; function rows start with a backtick and never match.
-# A path-shaped row under any other kind, or a second row for an already registered path, is
-# rejected rather than registered, so no row can silently shadow or stand in for another.
+# EXCEPTIONS.md becomes two index-aligned lists, paths and ceilings, since CMake has no map. A file row's first cell
+# names a code file; a function row's starts with a backtick and never matches. A path row of another kind, or a second
+# row for one path, is a violation rather than a registration, so no row can shadow or stand in for another.
 set(_registered "")
 set(_ceilings "")
 set(_violations "")
@@ -77,7 +71,7 @@ if(EXISTS "${_exceptions_md}")
         string(STRIP "${CMAKE_MATCH_1}" _cell)
         string(STRIP "${CMAKE_MATCH_2}" _kind)
         string(STRIP "${CMAKE_MATCH_3}" _ceiling)
-        if(NOT _cell MATCHES "\\.(h|hpp|cpp|cc)$")
+        if(NOT _cell MATCHES "(\\.(h|hpp|cpp|cc|cmake|sh|py|lua)|(^|/)CMakeLists\\.txt)$")
             continue()
         endif()
         if(NOT _kind STREQUAL "file")
@@ -90,8 +84,7 @@ if(EXISTS "${_exceptions_md}")
             continue()
         endif()
         list(APPEND _registered "${_cell}")
-        # An invalid cell stores a non-numeric sentinel so a blank or ';'-bearing cell
-        # cannot shift the index alignment with _registered.
+        # An invalid cell stores a non-numeric sentinel so a blank or ';'-bearing cell cannot shift the alignment.
         if(_ceiling MATCHES "^[0-9]+$" AND _ceiling GREATER SIZE_GATE_LIMIT)
             list(APPEND _ceilings "${_ceiling}")
         else()
@@ -102,12 +95,8 @@ if(EXISTS "${_exceptions_md}")
     endforeach()
 endif()
 
-# Count lines exactly as `wc -l` does: the number of newline terminators. We
-# read the raw bytes and take the length delta after stripping newlines, which
-# is immune to the embedded-semicolon corruption that makes file(STRINGS)'s list
-# length over-count (CMake splits a list on both '\n' AND ';', so a ';' inside a
-# C++ source line spuriously inflates the count). A trailing line with no final
-# newline is not counted, matching `wc -l`.
+# Counts newline terminators, as `wc -l` does, from the raw bytes: file(STRINGS) splits its list on ';' as well as on
+# newlines, so a semicolon inside a line would inflate the count. A last line without a newline is not counted.
 function(_size_line_count file out_var)
     file(READ "${file}" _content)
     string(LENGTH "${_content}" _with)
@@ -149,7 +138,6 @@ foreach(_file IN LISTS _scan_files)
     endif()
 endforeach()
 
-# A registered row that names no scanned file at all is a stale exception too.
 foreach(_reg IN LISTS _registered)
     list(FIND _seen_registered "${_reg}" _seen_idx)
     if(_seen_idx EQUAL -1)
