@@ -1,270 +1,98 @@
-# Seam-concept smoke test: compile-time proof the byte_channel / Policy concepts
-# are satisfiable (maintainability evidence) plus the wire_bytes
-# owner-keeps-bytes-alive guarantee. Links the header-only plexus core and the
-# wire layer; the `seam.` ctest prefix lets `ctest -R seam` select it by name.
-add_executable(test_seam_concepts test_seam_concepts.cpp)
-target_link_libraries(test_seam_concepts PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_seam_concepts TEST_PREFIX "seam.")
+set(PLEXUS_TEST_PREFIX "seam.")
 
-# Constrained-target seam proof: fires static_assert(Policy<freertos_policy>) at
-# compile time and instantiates the generic core (peer_context) against the
-# substrate to prove it binds unchanged. Links the constrained-target substrate
-# alongside the core and wire layers; registered under the same `seam.` prefix.
-add_executable(test_freertos_seam test_freertos_seam.cpp)
-target_link_libraries(test_freertos_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_freertos_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_seam_concepts
+    SOURCES test_seam_concepts.cpp
+    LINKS plexus::core plexus::wire)
 
-# Host seam proof for the constrained-target UART byte_channel: fires
-# static_assert(byte_channel<uart_channel>) at compile time and drives synthetic bytes
-# through its reused crc_serial decorator path over a test-local host UART shim (no real
-# device). Links the constrained-target substrate alongside the core and wire layers;
-# the current source dir is on the include path so the shim header resolves. Registered
-# under the same `seam.` prefix.
-add_executable(test_uart_channel_seam test_uart_channel_seam.cpp)
-target_include_directories(test_uart_channel_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_uart_channel_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_uart_channel_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_freertos_seam
+    SOURCES test_freertos_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# The UART byte_channel's payload cap over the same host shim: a frame over the leaf's cap reaches the consumer's
-# frame-dropped seam with its cause, and the next fitting frame is delivered.
-add_executable(test_uart_channel_cap test_uart_channel_cap.cpp)
-target_include_directories(test_uart_channel_cap PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_uart_channel_cap PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_uart_channel_cap TEST_PREFIX "seam.")
+plexus_add_catch_test(test_uart_channel_seam
+    SOURCES test_uart_channel_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# Host proof for the constrained-target device facade: drives the borrow-only tick/run
-# loop discipline (poll -> drain -> watchdog-safe park) over a fake pollable and a
-# host freertos_executor. The host shim's no-op vTaskDelay makes the facade run
-# off-target. Links the constrained-target substrate alongside the core and wire
-# layers; registered under the same `seam.` prefix.
-add_executable(test_device_runtime test_device_runtime.cpp)
-target_link_libraries(test_device_runtime PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_device_runtime TEST_PREFIX "seam.")
+plexus_add_catch_test(test_uart_channel_cap
+    SOURCES test_uart_channel_cap.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# Host compile-check for the constrained-target lwIP byte_channel: forces lwip_channel.h
-# through the host compiler so its in-header byte_channel proof and the stream_inbound /
-# send_queue reuse are validated by the PC build (the lwIP socket is ESP_PLATFORM-gated and
-# never reached). Links the constrained-target substrate alongside the core and wire layers;
-# registered under the same `seam.` prefix.
-add_executable(test_lwip_channel_compile test_lwip_channel_compile.cpp)
-target_link_libraries(test_lwip_channel_compile PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_channel_compile TEST_PREFIX "seam.")
+plexus_add_catch_test(test_device_runtime
+    SOURCES test_device_runtime.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# Host-side test of the constrained-target lwIP byte_channel + dial transport: fires
-# static_assert(byte_channel<lwip_channel<host_tcp_socket>>) and
-# static_assert(transport_backend<lwip_transport, lwip_policy>) at compile time, then round-trips a
-# framed message over a REAL localhost-TCP loopback pair (a genuine POSIX stream_socket declared
-# test-side, no hardware and no mock) exercising real partial reads / EWOULDBLOCK + the P1 poll-drive
-# + the dial path. The current source dir is on the include path so the host socket header resolves.
-# Registered under the same `seam.` prefix.
-# The host loopback pair is a genuine POSIX stream_socket (host_tcp_socket.h pulls netinet/in.h),
-# so the five host-socket lwIP seam slices below are excluded from the Windows build.
+plexus_add_catch_test(test_lwip_channel_compile
+    SOURCES test_lwip_channel_compile.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
+
+# The host loopback pair is a genuine POSIX stream socket (host_tcp_socket.h pulls netinet/in.h), so these slices
+# are excluded from the Windows build.
 if(NOT WIN32)
-add_executable(test_lwip_channel_seam test_lwip_channel_seam.cpp)
-target_include_directories(test_lwip_channel_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_lwip_channel_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_channel_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_channel_seam
+    SOURCES test_lwip_channel_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# Host-side test of the constrained-target lwIP P2 RX-task receive policy: drives the channel's
-# acquire-slot -> recv_into -> post_from_task step inline as the RX context (the spawned task
-# is a no-op stub off-target), then ex.drain() as the executor, proving delivery is POSTED and
-# exactly-once with reassembly over a REAL localhost-TCP loopback pair, and a peer close surfaced as
-# on_error. The current source dir is on the include path so the host socket header resolves.
-# Registered under the same `seam.` prefix.
-add_executable(test_lwip_rx_task_seam test_lwip_rx_task_seam.cpp)
-target_include_directories(test_lwip_rx_task_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_lwip_rx_task_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_rx_task_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_rx_task_seam
+    SOURCES test_lwip_rx_task_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# The lwIP RX step run on a thread against a full executor queue: the step waits for room and
-# delivers once the executor drains, and a channel closed meanwhile releases it.
-add_executable(test_lwip_rx_task_backpressure test_lwip_rx_task_backpressure.cpp)
-target_include_directories(test_lwip_rx_task_backpressure PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_lwip_rx_task_backpressure PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_rx_task_backpressure TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_rx_task_backpressure
+    SOURCES test_lwip_rx_task_backpressure.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-add_executable(test_lwip_rx_task_lifecycle test_lwip_rx_task_lifecycle.cpp)
-target_include_directories(test_lwip_rx_task_lifecycle PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_lwip_rx_task_lifecycle PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_rx_task_lifecycle TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_rx_task_lifecycle
+    SOURCES test_lwip_rx_task_lifecycle.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-add_executable(test_lwip_rx_task_teardown test_lwip_rx_task_teardown.cpp)
-target_include_directories(test_lwip_rx_task_teardown PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_lwip_rx_task_teardown PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_rx_task_teardown TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_rx_task_teardown
+    SOURCES test_lwip_rx_task_teardown.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-add_executable(test_lwip_rx_task_transport_seam test_lwip_rx_task_transport_seam.cpp)
-target_include_directories(test_lwip_rx_task_transport_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_lwip_rx_task_transport_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_rx_task_transport_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_rx_task_transport_seam
+    SOURCES test_lwip_rx_task_transport_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-add_executable(test_lwip_rx_task_adopt_seam test_lwip_rx_task_adopt_seam.cpp)
-target_include_directories(test_lwip_rx_task_adopt_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_lwip_rx_task_adopt_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_rx_task_adopt_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_rx_task_adopt_seam
+    SOURCES test_lwip_rx_task_adopt_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-add_executable(test_lwip_drop_errno_seam test_lwip_drop_errno_seam.cpp)
-target_include_directories(test_lwip_drop_errno_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_lwip_drop_errno_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_drop_errno_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_drop_errno_seam
+    SOURCES test_lwip_drop_errno_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-add_executable(test_lwip_dial_seam test_lwip_dial_seam.cpp)
-target_include_directories(test_lwip_dial_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_lwip_dial_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_dial_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_dial_seam
+    SOURCES test_lwip_dial_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# The node's dial timeout reaches the lwIP dialer through the same probe the node runs, so the deadline cases link the API layer.
-add_executable(test_lwip_dial_deadline_seam test_lwip_dial_deadline_seam.cpp)
-target_include_directories(test_lwip_dial_deadline_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_lwip_dial_deadline_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    plexus::plexus
-    plexus::discovery
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_dial_deadline_seam TEST_PREFIX "seam.")
+# The node's dial timeout reaches the lwIP dialer through the same probe the node runs, so the deadline cases link
+# the API layer.
+plexus_add_catch_test(test_lwip_dial_deadline_seam
+    SOURCES test_lwip_dial_deadline_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos plexus::plexus plexus::discovery)
 
-# Host-side test of the constrained-target lwIP listen/accept transport: fires
-# static_assert(transport_backend<lwip_transport<host_tcp_socket, host_tcp_listener>>) at compile
-# time, then over a REAL localhost-TCP loopback (a genuine POSIX listener test-side, no hardware and
-# no mock) proves accept -> on_accepted -> a poll-able channel, the compile-time accept cap bound
-# (default 1 refuses the second client; cap 2 accepts both), and view invalidation on channel close
-# (poll-all never touches the freed view; the asan tree is the witness). The current source dir is on
-# the include path so the host listener/socket headers resolve. Registered under the `seam.` prefix.
-add_executable(test_lwip_accept_seam test_lwip_accept_seam.cpp)
-target_include_directories(test_lwip_accept_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_lwip_accept_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_accept_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_accept_seam
+    SOURCES test_lwip_accept_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# The lwIP transport refusing a dial while its bounded channel view set is full, over host loopback.
-add_executable(test_lwip_dial_capacity_seam test_lwip_dial_capacity_seam.cpp)
-target_include_directories(test_lwip_dial_capacity_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_lwip_dial_capacity_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_dial_capacity_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_dial_capacity_seam
+    SOURCES test_lwip_dial_capacity_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# Host-side test of the constrained-target lwIP egress backpressure / error-class split: over a REAL
-# localhost-TCP loopback pair (a genuine POSIX stream_socket, no hardware and no mock) it proves a full
-# egress queue drives the congestion QoS (block backpressures via would_block, drop_newest sheds +
-# counts) and NEVER fires on_error / re-dials, a transient short send re-arms with the unsent tail left
-# queued (no success-of-zero-bytes) and flushes once cleared, and a hard send drop fires
-# on_error(connection_reset) DISTINCT from on_protocol_close. The current source dir is on the include
-# path so the host socket header resolves. Registered under the same `seam.` prefix.
-add_executable(test_lwip_backpressure_seam test_lwip_backpressure_seam.cpp)
-target_include_directories(test_lwip_backpressure_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_lwip_backpressure_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_backpressure_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_backpressure_seam
+    SOURCES test_lwip_backpressure_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# Host-side test of the constrained-target lwIP transport's congestion plumbing: over a REAL localhost-TCP
-# connection it proves the transport-level congestion policy reaches the channels it mints (drop_newest
-# sheds + counts, block backpressures via would_block) and that transport.dropped() folds the shed total
-# across its live views. The current source dir is on the include path so the host socket header
-# resolves. Registered under the same `seam.` prefix.
-add_executable(test_lwip_transport_congestion_seam test_lwip_transport_congestion_seam.cpp)
-target_include_directories(test_lwip_transport_congestion_seam PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(test_lwip_transport_congestion_seam PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_transport_congestion_seam TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_transport_congestion_seam
+    SOURCES test_lwip_transport_congestion_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
-# The close contract on the constrained-target lwIP and UART channels, over the host loopback pair and the host UART
-# shim: on_closed posted once through the executor, a late-installed handler posted, nothing delivered after close.
-add_executable(test_freertos_retire_quiescence test_freertos_retire_quiescence.cpp test_freertos_retire_quiescence_uart.cpp)
-target_include_directories(test_freertos_retire_quiescence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_freertos_retire_quiescence PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_freertos_retire_quiescence TEST_PREFIX "seam.")
+plexus_add_catch_test(test_freertos_retire_quiescence
+    SOURCES test_freertos_retire_quiescence.cpp test_freertos_retire_quiescence_uart.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 endif()
 
-# Host-shim proof for the constrained-target executor's task-safe cross-context post:
-# enqueues caller-owned posted_work PODs through the FreeRTOS host queue (widened to
-# carry the whole item by value) and proves pump() invokes them in FIFO order, with
-# m_posted serviced first and no per-post allocation (the asan tree is the witness).
-# Links the constrained-target substrate alongside the core and wire layers; registered
-# under the same `seam.` prefix.
-add_executable(test_freertos_executor_post test_freertos_executor_post.cpp)
-target_link_libraries(test_freertos_executor_post PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_freertos_executor_post TEST_PREFIX "seam.")
+plexus_add_catch_test(test_freertos_executor_post
+    SOURCES test_freertos_executor_post.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
 
 # The program turns the expected abort into exit status 1, because WILL_FAIL does not invert a signal.
 add_executable(test_freertos_live_task_abort test_freertos_live_task_abort.cpp)
@@ -277,62 +105,29 @@ set_tests_properties(seam.freertos_live_task_abort.executor PROPERTIES WILL_FAIL
 add_test(NAME seam.freertos_live_task_abort.channel COMMAND test_freertos_live_task_abort channel)
 set_tests_properties(seam.freertos_live_task_abort.channel PROPERTIES WILL_FAIL TRUE)
 
-# The pooled cross-task ingress of the constrained-target executor on the host shim: work from
-# another thread runs at the next pump, a full slot pool (allocating nothing) or a full queue is a
-# counted drop, and the in-pump fact is per task. RUN_SERIAL keeps the alloc count clean.
-add_executable(test_freertos_ingress test_freertos_ingress.cpp)
-target_include_directories(test_freertos_ingress PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_link_libraries(test_freertos_ingress PRIVATE
-    plexus::core
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_freertos_ingress TEST_PREFIX "seam."
+# RUN_SERIAL keeps the allocation count clean.
+plexus_add_catch_test(test_freertos_ingress
+    SOURCES test_freertos_ingress.cpp
+    LINKS plexus::core plexus::freertos
     PROPERTIES RUN_SERIAL TRUE)
 
-# The permissive/strict reliability enforcement gate on the routing_engine subscribe
-# demand path — a deterministic inproc seam test (no backend socket). Links the inproc
-# Policy substrate for the engine harness. Registered under the `udp.` prefix so
-# `ctest -R udp` selects it with the other udp reliability tests.
-add_executable(test_reliability_enforcement
-    test_reliability_enforcement.cpp
-    test_reliability_enforcement_classifier.cpp)
-target_link_libraries(test_reliability_enforcement PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_reliability_enforcement TEST_PREFIX "udp.")
+# The udp. prefix lets `ctest -R udp` select it with the other reliability tests.
+plexus_add_catch_test(test_reliability_enforcement
+    PREFIX "udp."
+    SOURCES test_reliability_enforcement.cpp test_reliability_enforcement_classifier.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# Host proof for the constrained-target lwIP datagram leaf's endpoint_type: forces the
-# lwip_endpoint wrapper through the host compiler and asserts the .port(uint16) setter and the
-# .address().to_string() bare-host reader the discovery template depends on but the datagram_socket
-# concept does not check (the false-green endpoint-shape trap). The wrapper reaches no lwIP header so
-# it builds off-target; the socket leaf itself is ESP_PLATFORM-gated. Links the constrained-target
-# substrate alongside the core layer; registered under the `seam.` prefix.
-add_executable(test_lwip_multicast_endpoint test_lwip_multicast_endpoint.cpp)
-target_link_libraries(test_lwip_multicast_endpoint PRIVATE
-    plexus::core
-    plexus::freertos
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_lwip_multicast_endpoint TEST_PREFIX "seam.")
+plexus_add_catch_test(test_lwip_multicast_endpoint
+    SOURCES test_lwip_multicast_endpoint.cpp
+    LINKS plexus::core plexus::freertos)
 
-# Host seam proof for the datagram_socket concept: fires static_assert(datagram_socket<
-# udp_multicast_socket>) at compile time (forcing the asio multicast header through the compiler)
-# and runs the construct + bind + IGMP-join path once over an io_context. Needs plexus::asio, which
-# exists only under the asio backend gate; registered under the `seam.` prefix.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
-    add_executable(test_datagram_socket_concept test_datagram_socket_concept.cpp)
-    target_link_libraries(test_datagram_socket_concept PRIVATE
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_datagram_socket_concept TEST_PREFIX "seam.")
+    plexus_add_catch_test(test_datagram_socket_concept
+        SOURCES test_datagram_socket_concept.cpp
+        LINKS plexus::asio)
 endif()
 
-# Structural regression for the discovery module seam: a CMake script test
-# (no C++ needed) asserting from the source tree that core/api link no
-# plexus::discovery, plexus-discovery links only core+wire, the api names only
-# the discovery contract, and the platform-enumeration primitives stay
-# leaf-only. Registered under the `seam.` prefix.
+# A CMake script test: it asserts the discovery module's link layering from the source tree, so it needs no build.
 add_test(NAME seam.discovery_layering
     COMMAND ${CMAKE_COMMAND} -DPLEXUS_SOURCE_DIR=${PROJECT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/discovery_layering_check.cmake)
