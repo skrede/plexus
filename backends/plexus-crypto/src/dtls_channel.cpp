@@ -45,12 +45,19 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
         , m_max_message_bytes(max_message_bytes)
         , m_reassembly_budget(reassembly_budget)
         , m_reassembly_timeout(reassembly_timeout)
+        , m_scheduler_key(io::detail::next_scheduler_key())
         , m_ssl_ctx(detail::share_dtls_context(cred))
+        , m_ssl(nullptr)
+        , m_external_bio(nullptr)
         , m_retransmit(io)
         , m_gate([this](std::span<const std::byte> bytes) { secure_send(bytes); })
         , m_peer_addr_block(detail::pack_peer_addr(m_dest))
+        , m_out_msg_id(0)
+        , m_node_id()
         , m_ops()
         , m_closed()
+        , m_open(true)
+        , m_complete_fired(false)
 {
     m_ops.on_settled([this] { notify_closed(); });
     // One record either direction fits one buffer: the record budget plus headroom for the 13-byte header and worst-case

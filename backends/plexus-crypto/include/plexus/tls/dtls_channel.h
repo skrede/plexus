@@ -215,11 +215,11 @@ private:
     std::size_t m_max_message_bytes;
     std::size_t m_reassembly_budget;
     std::chrono::milliseconds m_reassembly_timeout;
-    std::uint64_t m_scheduler_key{io::detail::next_scheduler_key()}; // stable per-construction egress key
+    std::uint64_t m_scheduler_key; // stable per-construction egress key
 
     detail::shared_ssl_ctx m_ssl_ctx; // up_ref'd shared SSL_CTX
-    ssl_st *m_ssl{nullptr};
-    void *m_external_bio{nullptr}; // BIO* (opaque in the header)
+    ssl_st *m_ssl;
+    void *m_external_bio; // BIO* (opaque in the header)
     plexus::asio::asio_timer m_retransmit;
 
     // A send before the ready edge is dropped, never submitted, so the gate's buffer stays empty.
@@ -232,12 +232,12 @@ private:
     std::vector<unsigned char> m_drain_buf;
 
     std::vector<std::byte> m_frag_scratch;
-    std::uint16_t m_out_msg_id{0}; // per-message fragment grouping id (sender)
+    std::uint16_t m_out_msg_id; // per-message fragment grouping id (sender)
     std::unique_ptr<reassembler_type> m_reassembler;
 
     // The verify callback stashes the leaf's facts here through the SSL ex_data slot, so the cert is extracted once.
     io::security::cert_facts m_peer_facts;
-    node_id m_node_id{};
+    node_id m_node_id;
     std::string m_node_name;
 
     plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
@@ -248,8 +248,8 @@ private:
 
     io::detail::pending_ops m_ops;
     io::detail::close_notification m_closed;
-    bool m_open{true};
-    bool m_complete_fired{false};
+    bool m_open;
+    bool m_complete_fired;
 };
 
 }
