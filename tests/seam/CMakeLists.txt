@@ -27,67 +27,67 @@ plexus_add_catch_test(test_lwip_channel_compile
 # The host loopback pair is a genuine POSIX stream socket (host_tcp_socket.h pulls netinet/in.h), so these slices
 # are excluded from the Windows build.
 if(NOT WIN32)
-plexus_add_catch_test(test_lwip_channel_seam
-    SOURCES test_lwip_channel_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_channel_seam
+        SOURCES test_lwip_channel_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_rx_task_seam
-    SOURCES test_lwip_rx_task_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_rx_task_seam
+        SOURCES test_lwip_rx_task_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_rx_task_backpressure
-    SOURCES test_lwip_rx_task_backpressure.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_rx_task_backpressure
+        SOURCES test_lwip_rx_task_backpressure.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_rx_task_lifecycle
-    SOURCES test_lwip_rx_task_lifecycle.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_rx_task_lifecycle
+        SOURCES test_lwip_rx_task_lifecycle.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_rx_task_teardown
-    SOURCES test_lwip_rx_task_teardown.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_rx_task_teardown
+        SOURCES test_lwip_rx_task_teardown.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_rx_task_transport_seam
-    SOURCES test_lwip_rx_task_transport_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_rx_task_transport_seam
+        SOURCES test_lwip_rx_task_transport_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_rx_task_adopt_seam
-    SOURCES test_lwip_rx_task_adopt_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_rx_task_adopt_seam
+        SOURCES test_lwip_rx_task_adopt_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_drop_errno_seam
-    SOURCES test_lwip_drop_errno_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_drop_errno_seam
+        SOURCES test_lwip_drop_errno_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_dial_seam
-    SOURCES test_lwip_dial_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_dial_seam
+        SOURCES test_lwip_dial_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-# The node's dial timeout reaches the lwIP dialer through the same probe the node runs, so the deadline cases link
-# the API layer.
-plexus_add_catch_test(test_lwip_dial_deadline_seam
-    SOURCES test_lwip_dial_deadline_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos plexus::plexus plexus::discovery)
+    # The node's dial timeout reaches the lwIP dialer through the same probe the node runs, so the deadline cases link
+    # the API layer.
+    plexus_add_catch_test(test_lwip_dial_deadline_seam
+        SOURCES test_lwip_dial_deadline_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos plexus::plexus plexus::discovery)
 
-plexus_add_catch_test(test_lwip_accept_seam
-    SOURCES test_lwip_accept_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_accept_seam
+        SOURCES test_lwip_accept_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_dial_capacity_seam
-    SOURCES test_lwip_dial_capacity_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_dial_capacity_seam
+        SOURCES test_lwip_dial_capacity_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_backpressure_seam
-    SOURCES test_lwip_backpressure_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_backpressure_seam
+        SOURCES test_lwip_backpressure_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_lwip_transport_congestion_seam
-    SOURCES test_lwip_transport_congestion_seam.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_lwip_transport_congestion_seam
+        SOURCES test_lwip_transport_congestion_seam.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 
-plexus_add_catch_test(test_freertos_retire_quiescence
-    SOURCES test_freertos_retire_quiescence.cpp test_freertos_retire_quiescence_uart.cpp
-    LINKS plexus::core plexus::wire plexus::freertos)
+    plexus_add_catch_test(test_freertos_retire_quiescence
+        SOURCES test_freertos_retire_quiescence.cpp test_freertos_retire_quiescence_uart.cpp
+        LINKS plexus::core plexus::wire plexus::freertos)
 endif()
 
 plexus_add_catch_test(test_freertos_executor_post

@@ -22,11 +22,11 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # Its shared fixture reaches raw POSIX (unistd.h), so it is excluded from Windows. A real-loopback leg with a
     # fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
     if(NOT WIN32)
-    plexus_add_catch_test(test_outofbox_message_ceiling
-        SOURCES test_outofbox_message_ceiling.cpp test_outofbox_message_ceiling_udp.cpp
-            test_outofbox_message_ceiling_tls.cpp
-        LINKS plexus::core plexus::wire plexus::asio
-        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+        plexus_add_catch_test(test_outofbox_message_ceiling
+            SOURCES test_outofbox_message_ceiling.cpp test_outofbox_message_ceiling_udp.cpp
+                test_outofbox_message_ceiling_tls.cpp
+            LINKS plexus::core plexus::wire plexus::asio
+            PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
     endif()
 
     if(PLEXUS_ENABLE_CRYPTO_BACKEND)

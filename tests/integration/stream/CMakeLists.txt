@@ -85,9 +85,9 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # Its raw hostile-client socket writes reach unistd.h directly, so it is excluded from Windows.
     if(NOT WIN32)
-    plexus_add_catch_test(test_stream_channel_unix
-        SOURCES test_stream_channel_unix.cpp test_stream_channel_unix_largeframe.cpp
-        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
+        plexus_add_catch_test(test_stream_channel_unix
+            SOURCES test_stream_channel_unix.cpp test_stream_channel_unix_largeframe.cpp
+            LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
     endif()
 
     plexus_add_catch_test(test_egress_saturation_bounded
@@ -95,22 +95,22 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         LINKS plexus::core plexus::wire plexus::asio)
 
     if(NOT WIN32)
-    # The descriptor exhaustion lowers RLIMIT_NOFILE, which is POSIX-only.
-    plexus_add_catch_test(test_listener_accept_retry
-        SOURCES test_listener_accept_retry.cpp
-        LINKS plexus::core plexus::wire plexus::asio)
-    # UBSan's vptr check opens a pipe on a type-cache miss, which aborts inside the exhausted table.
-    if(CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
-        target_compile_options(test_listener_accept_retry PRIVATE -fno-sanitize=vptr)
-    endif()
+        # The descriptor exhaustion lowers RLIMIT_NOFILE, which is POSIX-only.
+        plexus_add_catch_test(test_listener_accept_retry
+            SOURCES test_listener_accept_retry.cpp
+            LINKS plexus::core plexus::wire plexus::asio)
+        # UBSan's vptr check opens a pipe on a type-cache miss, which aborts inside the exhausted table.
+        if(CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
+            target_compile_options(test_listener_accept_retry PRIVATE -fno-sanitize=vptr)
+        endif()
     endif()
 
     # AF_UNIX with SO_NOSIGPIPE is an Apple platform-ism, so the target is macOS-only. A real-loopback leg with a
     # fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
     if(APPLE)
-    plexus_add_catch_test(macos_test_sigpipe_send_to_closed_peer
-        SOURCES macos_test_sigpipe_send_to_closed_peer.cpp
-        LINKS plexus::core plexus::wire plexus::asio
-        PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+        plexus_add_catch_test(macos_test_sigpipe_send_to_closed_peer
+            SOURCES macos_test_sigpipe_send_to_closed_peer.cpp
+            LINKS plexus::core plexus::wire plexus::asio
+            PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
     endif()
 endif()

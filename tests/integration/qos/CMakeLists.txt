@@ -8,9 +8,9 @@ plexus_add_catch_test(test_latch_replay_inproc
 
 # Its live AF_UNIX leg reaches raw POSIX (unistd.h), so the whole target is excluded from the Windows build.
 if(NOT WIN32)
-plexus_add_catch_test(test_locality_confinement
-    SOURCES test_locality_confinement.cpp test_locality_confinement_wire.cpp test_locality_confinement_live.cpp
-    LINKS plexus::core plexus::wire plexus::inproc)
+    plexus_add_catch_test(test_locality_confinement
+        SOURCES test_locality_confinement.cpp test_locality_confinement_wire.cpp test_locality_confinement_live.cpp
+        LINKS plexus::core plexus::wire plexus::inproc)
 endif()
 
 plexus_add_catch_test(test_mux_select_hook
