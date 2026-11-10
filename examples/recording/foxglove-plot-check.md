@@ -1,6 +1,6 @@
 # Foxglove plot spot-check (manual)
 
-The automated MCAP acceptance (`tests/integration/test_mcap_transcode.cpp`) proves a capture
+The automated MCAP acceptance (`tests/integration/recording/test_mcap_transcode.cpp`) proves a capture
 **decodes**: it reads the container back through the mcap reader Summary (`NoFallbackScan`),
 asserts an indexed Summary with a chunk index and statistics, checks that every `json` message
 channel references only a `jsonschema` schema (the Foxglove doctor rule), and confirms the pose

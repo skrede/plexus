@@ -40,7 +40,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     add_executable(affinity_trip_child
         affinity_trip_child.cpp affinity_handover_roles.cpp affinity_freertos_roles.cpp affinity_endpoint_roles.cpp)
     target_include_directories(affinity_trip_child PRIVATE
-        ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/tests/integration)
+        ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/tests/integration/common)
     target_link_libraries(affinity_trip_child PRIVATE
         plexus::plexus
         plexus::asio
