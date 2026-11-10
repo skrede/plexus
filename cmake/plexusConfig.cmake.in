@@ -4,12 +4,9 @@ include(CMakeFindDependencyMacro)
 
 include("${CMAKE_CURRENT_LIST_DIR}/plexusTargets.cmake")
 
-# Resolves standalone asio for an installed consumer. The exported plexus::plexus_asio_dep
-# (shared by the asio and crypto components) links the host-resolved leaf — asio::asio on a
-# find_package host, PkgConfig::plexus_asio_pc on a pkg-config host — so that leaf is recreated
-# here, mirroring cmake/plexus-deps.cmake's order. plexus::plexus_asio_dep itself is NOT
-# recreated (it ships in the export set). A macro, not a function, so the resolved imported
-# targets land in the caller's scope.
+# The exported plexus::plexus_asio_dep links whichever asio leaf the build host resolved, so an installed consumer
+# recreates that leaf here, in cmake/plexus-deps.cmake's order. A macro, not a function, so the imported targets land
+# in the caller's scope.
 macro(_plexus_resolve_asio_leaf)
     if(NOT TARGET asio::asio AND NOT TARGET PkgConfig::plexus_asio_pc)
         find_package(asio CONFIG QUIET)
@@ -22,11 +19,9 @@ macro(_plexus_resolve_asio_leaf)
     endif()
 endmacro()
 
-# Includes a backend component's targets file when present, running its find_dependency wiring
-# first. crypto's targets file references plexus::asio and plexus::plexus_asio_dep, so the asio
-# component's targets file is loaded ahead of it. A component with no installed targets file (e.g.
-# one that links FetchContent build-tree targets install(EXPORT) cannot carry) reports FOUND FALSE
-# without erroring; check_required_components turns a REQUIRED miss into a hard error.
+# crypto's targets file references plexus::asio and plexus::plexus_asio_dep, so the asio component loads ahead of it.
+# A component without an installed targets file reports FOUND FALSE without erroring; check_required_components makes
+# a REQUIRED miss fatal.
 macro(_plexus_load_component comp)
     if(NOT plexus_${comp}_FOUND)
         set(_plexus_comp_file "${CMAKE_CURRENT_LIST_DIR}/plexus-${comp}-targets.cmake")
