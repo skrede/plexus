@@ -20,7 +20,7 @@ for dev in glob.glob(os.path.join(log_dir, "*_device.log")):
 cells = [c for c in ("serial", "lwip-p1", "lwip-p2") if any(k[0] == c for k in rtt)]
 tiers = sorted({k[1] for k in rtt})
 
-# Nearest-rank order statistic over every sampled round trip across all valid runs of the cell.
+# Order statistics at the rounded index q*(n-1), over every sampled round trip of every valid run of the cell.
 def pct(values, q):
     s = sorted(values)
     if not s:
