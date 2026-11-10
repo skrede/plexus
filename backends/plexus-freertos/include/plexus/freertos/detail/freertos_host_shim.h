@@ -154,7 +154,7 @@ namespace plexus::freertos::detail {
 // A host spy for the RX-task self-delete: on-target a task that returns aborts, so the trampoline calls
 // vTaskDelete(nullptr) at loop exit. Off-target it is a no-op the seam test reads to prove the trampoline
 // self-deletes rather than falling off the end.
-inline int host_vtask_delete_calls           = 0;
+inline std::int32_t host_vtask_delete_calls  = 0;
 inline TaskHandle_t host_vtask_delete_last   = nullptr;
 inline TaskFunction_t host_task_created_code = nullptr;
 inline void *host_task_created_arg           = nullptr;

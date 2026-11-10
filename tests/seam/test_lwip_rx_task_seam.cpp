@@ -40,10 +40,10 @@ std::vector<std::byte> on_wire(std::span<const std::byte> payload)
                                       payload);
 }
 
-std::vector<std::byte> bytes_of(std::initializer_list<int> vs)
+std::vector<std::byte> bytes_of(std::initializer_list<std::int32_t> vs)
 {
     std::vector<std::byte> out;
-    for(int v : vs)
+    for(std::int32_t v : vs)
         out.push_back(std::byte(v));
     return out;
 }
@@ -80,7 +80,7 @@ TEST_CASE("lwip rx task delivers a framed message POSTED, exactly once", "[seam]
     host_tcp_socket sender = std::move(pair->dialed);
     auto receiver          = make_channel(std::move(pair->accepted), ex);
 
-    int deliveries = 0;
+    std::int32_t deliveries = 0;
     receiver.on_data([&](std::span<const std::byte>) { ++deliveries; });
 
     const auto payload = bytes_of({0xDE, 0xAD, 0xBE, 0xEF});
@@ -103,7 +103,7 @@ TEST_CASE("lwip rx task reassembles a split frame into one posted delivery", "[s
     host_tcp_socket sender = std::move(pair->dialed);
     auto receiver          = make_channel(std::move(pair->accepted), ex);
 
-    int deliveries = 0;
+    std::int32_t deliveries = 0;
     receiver.on_data([&](std::span<const std::byte>) { ++deliveries; });
 
     const auto frame = on_wire(bytes_of({0x01, 0x02, 0x03, 0x04, 0x05}));
@@ -111,7 +111,7 @@ TEST_CASE("lwip rx task reassembles a split frame into one posted delivery", "[s
     const auto tail  = std::span<const std::byte>{frame}.subspan(plexus::wire::header_size);
 
     sender.send(head);
-    for(int turn = 0; turn < 50; ++turn)
+    for(std::int32_t turn = 0; turn < 50; ++turn)
         rx_turn(receiver, ex);
     ex.drain();
     REQUIRE(deliveries == 0); // the header alone is a partial frame — nothing delivered yet
@@ -126,7 +126,7 @@ TEST_CASE("lwip rx task reassembles a split frame into one posted delivery", "[s
 TEST_CASE("lwip rx task surfaces a peer close as on_error, never on_protocol_close", "[seam]")
 {
     plexus::test::rx_rig rig;
-    int errors          = 0;
+    std::int32_t errors = 0;
     bool protocol_close = false;
     rig.channel->on_error([&](plexus::io::io_error) { ++errors; });
     rig.channel->on_protocol_close([&](plexus::wire::close_cause) { protocol_close = true; });
@@ -147,7 +147,7 @@ TEST_CASE("lwip rx trampoline self-deletes on channel close instead of returning
     REQUIRE(rig.spawn() == pdTRUE);
 
     rig.sender.close();
-    const int before = plexus::freertos::detail::host_vtask_delete_calls;
+    const std::int32_t before = plexus::freertos::detail::host_vtask_delete_calls;
     plexus::test::run_spawned_task();
     REQUIRE(plexus::freertos::detail::host_vtask_delete_calls == before + 1);
     REQUIRE(plexus::freertos::detail::host_vtask_delete_last == nullptr);
