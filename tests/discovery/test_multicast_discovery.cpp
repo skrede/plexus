@@ -23,7 +23,7 @@ namespace {
 plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
-    id[0] = std::byte{seed};
+    id[0]  = std::byte{seed};
     id[15] = std::byte{static_cast<unsigned char>(seed ^ 0xff)};
     return id;
 }
@@ -76,8 +76,8 @@ TEST_CASE("multicast_discovery: a foreign or truncated datagram fires no on_reso
     const std::vector<std::byte> bad_magic{std::byte{'X'}, std::byte{'X'}, std::byte{'X'}, std::byte{'X'}, std::byte{0}, std::byte{1}};
     socket.inject("10.0.0.9", bad_magic);
 
-    const auto id    = make_id(0x33);
-    const auto good  = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, 0));
+    const auto id   = make_id(0x33);
+    const auto good = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, 0));
     const std::vector<std::byte> truncated{good.begin(), good.begin() + 5};
     socket.inject("10.0.0.9", truncated);
 
@@ -147,8 +147,7 @@ TEST_CASE("multicast_discovery: a goodbye datagram fires on_withdrawn and not on
     disc.on_withdrawn([&](const plexus::discovery::service_info &s) { withdrawn = s; });
 
     const auto id  = make_id(0x77);
-    const auto bye = plexus::wire::encode_announcement(
-            plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+    const auto bye = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
     socket.inject("10.1.2.3", bye);
 
     REQUIRE(resolved == 0);
@@ -167,8 +166,7 @@ TEST_CASE("multicast_discovery: a goodbye with no withdrawn callback is a safe n
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     const auto id  = make_id(0x88);
-    const auto bye = plexus::wire::encode_announcement(
-            plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+    const auto bye = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(id, sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
     socket.inject("10.1.2.4", bye);
 
     REQUIRE(resolved == 0);
