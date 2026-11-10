@@ -43,7 +43,7 @@ inline std::string hex_encode(const node_id &id)
     out.reserve(id.size() * 2);
     for(const std::byte b : id)
     {
-        const auto v = static_cast<unsigned>(b);
+        const auto v = static_cast<std::uint8_t>(b);
         out.push_back(digits[(v >> 4) & 0x0f]);
         out.push_back(digits[v & 0x0f]);
     }
@@ -59,7 +59,7 @@ inline std::optional<node_id> hex_decode(std::string_view hex)
     node_id id{};
     if(hex.size() != id.size() * 2)
         return std::nullopt;
-    const auto nibble = [](char c) -> int
+    const auto nibble = [](char c) -> std::int32_t
     {
         if(c >= '0' && c <= '9')
             return c - '0';
@@ -69,8 +69,8 @@ inline std::optional<node_id> hex_decode(std::string_view hex)
     };
     for(std::size_t i = 0; i < id.size(); ++i)
     {
-        const int hi = nibble(hex[2 * i]);
-        const int lo = nibble(hex[2 * i + 1]);
+        const std::int32_t hi = nibble(hex[2 * i]);
+        const std::int32_t lo = nibble(hex[2 * i + 1]);
         if(hi < 0 || lo < 0)
             return std::nullopt;
         id[i] = static_cast<std::byte>((hi << 4) | lo);
