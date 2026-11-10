@@ -33,7 +33,7 @@ std::vector<plexus::discovery::listening_transport> sample_listens()
     return {{"tcp", 7000}, {"udp", 7100}};
 }
 
-} // namespace
+}
 
 TEST_CASE("multicast_discovery: service_info metadata is byte-identical to assemble_contact_card", "[multicast_discovery]")
 {
