@@ -32,12 +32,6 @@
 #include <cstdint>
 #include <optional>
 
-// The shared inproc harness the graph-change observer suites drive against. It mirrors the
-// recording-observer-on-a-real-engine + manual virtual clock + drain-then-assert oracle in
-// tests/integration/test_peer_observer_inproc.cpp, narrowed to the graph mutation seams and the
-// observer surface over them: plexus::io::observer::on_graph_changed/on_graph_delta/observes_graph,
-// plexus::graph::graph_change, and routing_engine::graph_generation.
-
 namespace plexus::testing::graph_change_fixture {
 
 struct manual_clock
@@ -75,8 +69,7 @@ static_assert(plexus::Policy<manual_policy>);
 using transport_t = plexus::inproc::inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
 
-// The bounded-profile engine: the fixed-capacity peer + topic twins the MCU path selects. The
-// zero-alloc gate proves its coarse graph path allocation-free; the host edge-log is structurally absent.
+// The fixed-capacity peer and topic storage the MCU profile selects, which carries no host edge-log.
 using bounded_engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock, plexus::io::fixed_peer_storage<8>, plexus::graph::fixed_topic_storage<8>>;
 
 constexpr auto k_long_timeout  = std::chrono::hours(1);
@@ -107,9 +100,7 @@ inline plexus::io::reconnect_config forever_cfg()
     return plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
-// Counts each graph EDGE the engine posts. The coarse counter and the last generation prove the
-// single-wakeup coalescing and the generation each fire reports; the deltas vector captures the
-// host {who, kind} payload; graph_opt_in drives the observes_graph opt-in gate.
+// Counts each graph edge the engine posts, so mutations coalesced into one wakeup count once.
 struct recording_graph_observer final : public plexus::io::observer
 {
     int changed_fires{0};
@@ -134,8 +125,7 @@ struct recording_graph_observer final : public plexus::io::observer
     }
 };
 
-// A single engine over the inproc backend — the graph mutation seams (note_peer/forget,
-// note_local_topic/forget_local_topic) are driven directly and every assertion is made after drain().
+// The graph mutation seams are driven directly, and every assertion is made after drain().
 template<typename Engine>
 struct basic_one_node
 {
@@ -161,8 +151,7 @@ struct basic_one_node
 using one_node         = basic_one_node<engine>;
 using bounded_one_node = basic_one_node<bounded_engine>;
 
-// A two-node rendezvous on one bus, mirroring the peer-observer oracle: A dials B so the redial +
-// mid-flight teardown legs have a real session to tear down.
+// Two nodes on one bus, so the redial and mid-flight teardown legs have a real session to tear down.
 struct two_node
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
