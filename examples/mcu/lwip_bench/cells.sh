@@ -37,16 +37,12 @@ if [[ "${WORKLOAD}" == "pipeline" && "${BENCH_SERIAL_ONLY:-0}" == "1" ]]; then
     exit 2
 fi
 
-has_cell() {
-    local c
-    for c in "${CELLS[@]}"; do [[ "${c}" == "$1" ]] && return 0; done
-    return 1
-}
-
 need_lwip=0
-for c in "${CELLS[@]}"; do [[ "${c}" == lwip-* ]] && need_lwip=1; done
 need_serial=0
-if has_cell serial; then need_serial=1; fi
+for c in "${CELLS[@]}"; do
+    [[ "${c}" == lwip-* ]] && need_lwip=1
+    [[ "${c}" == serial* ]] && need_serial=1
+done
 
 if [[ "${need_lwip}" == "1" && ! -x "${HOST_PEER}" ]]; then
     echo "host bench peer not found at ${HOST_PEER}"
