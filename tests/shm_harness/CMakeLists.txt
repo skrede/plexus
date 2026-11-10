@@ -12,7 +12,7 @@ function(plexus_add_shm_harness_test name)
         NO_MAIN
         SOURCES xproc_main.cpp node_role.cpp ${harness_UNPARSED_ARGUMENTS}
         LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::asio::shm plexus::native plexus::testing
-        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm ${PROJECT_SOURCE_DIR}/tests/shm/common
         PROPERTIES ${harness_PROPERTIES})
 endfunction()
 

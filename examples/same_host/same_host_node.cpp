@@ -22,7 +22,7 @@
 // SCOPE: this example proves the portable composition COMPILES and a live node STANDS UP
 // (constructs + listens) to rc=0. The same-host shm delivery data path — two peers converging
 // on a named ring and round-tripping a value byte-exact — is proven by the shm test suite (see
-// tests/shm/test_same_host_transports.cpp and tests/shm/test_shm_same_host_roundtrip.cpp).
+// tests/shm/same_host/test_same_host_transports.cpp and tests/shm/broker/test_shm_same_host_roundtrip.cpp).
 
 #include "plexus/asio/same_host_transports.h"
 
