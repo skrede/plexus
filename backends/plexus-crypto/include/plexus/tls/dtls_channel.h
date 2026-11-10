@@ -46,7 +46,7 @@
 #include <utility>
 
 // Forward-declared OpenSSL handle: the header never sees a complete SSL — only
-// dtls_channel.cpp includes <openssl/ssl.h>, so OpenSSL stays out of every
+// the channel's sources include <openssl/ssl.h>, so OpenSSL stays out of every
 // consumer translation unit (the seam split tls_credential.h uses).
 struct ssl_st;
 

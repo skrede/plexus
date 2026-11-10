@@ -19,6 +19,7 @@ add_library(plexus-crypto OBJECT
     src/dtls_cookie.cpp
     src/dtls_identity.cpp
     src/dtls_channel.cpp
+    src/dtls_channel_retransmit.cpp
     src/aead_cipher.cpp
     src/key_schedule.cpp)
 add_library(plexus::crypto ALIAS plexus-crypto)
