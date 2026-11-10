@@ -24,7 +24,7 @@ namespace plexus::mdnspp {
 struct mdnspp_discovery::impl
 {
     explicit impl(::asio::io_context &io)
-            : context(io)
+        : context(io)
     {
     }
 
@@ -70,9 +70,9 @@ std::vector<std::pair<std::string, std::string>> from_txt_entries(const std::vec
 }
 
 mdnspp_discovery::mdnspp_discovery(::asio::io_context &io, std::string service_type)
-        : m_io(io)
-        , m_service_type(std::move(service_type))
-        , m_impl(std::make_unique<impl>(io))
+    : m_io(io)
+    , m_service_type(std::move(service_type))
+    , m_impl(std::make_unique<impl>(io))
 {
 }
 

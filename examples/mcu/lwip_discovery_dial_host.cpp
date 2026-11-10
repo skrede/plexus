@@ -43,10 +43,10 @@ namespace {
 
 using namespace std::chrono_literals;
 
-constexpr const char *k_group   = "239.255.0.7";
-constexpr std::uint16_t k_port    = 7447;
-constexpr unsigned      k_ttl     = 4;
-constexpr const char *k_topic    = "telemetry";
+constexpr const char *k_group  = "239.255.0.7";
+constexpr std::uint16_t k_port = 7447;
+constexpr unsigned k_ttl       = 4;
+constexpr const char *k_topic  = "telemetry";
 
 // Generous: the device must boot, associate, take a DHCP lease, announce on the group, then accept
 // the dial and publish — seconds, not the serial gate's sub-second boot.
@@ -59,7 +59,7 @@ class dial_tee final : public plexus::discovery::discovery
 {
 public:
     explicit dial_tee(plexus::discovery::discovery &inner)
-            : m_inner(inner)
+        : m_inner(inner)
     {
     }
 
@@ -76,13 +76,13 @@ public:
     void browse(const resolved_callback &on_resolved) override
     {
         m_inner.browse(
-                [this, on_resolved](const plexus::discovery::service_info &peer)
-                {
-                    if(m_on_peer_cb)
-                        m_on_peer_cb(peer);
-                    if(on_resolved)
-                        on_resolved(peer);
-                });
+            [this, on_resolved](const plexus::discovery::service_info &peer)
+            {
+                if(m_on_peer_cb)
+                    m_on_peer_cb(peer);
+                if(on_resolved)
+                    on_resolved(peer);
+            });
     }
 
     void on_withdrawn(const withdrawn_callback &cb) override
@@ -130,21 +130,23 @@ int main()
     // A discovered peer's service_info.name is the hex node_id; our own announcement loops back over
     // multicast, so compare against this node's own id to skip self and dial only the device.
     const std::string self_id = plexus::discovery::detail::hex_encode(node.id());
-    bool dialed = false;
+    bool dialed               = false;
     disc.set_on_peer(
-            [&](const plexus::discovery::service_info &peer)
-            {
-                if(dialed || peer.name == self_id)
-                    return;
-                dialed = true;
-                // The node's own card handling dials the advertised endpoint under the peer's real id,
-                // which the telemetry demand then binds to; an explicit dial here would mint a second
-                // provisional-id slot that claims the endpoint and never carries the subscription.
-                std::cout << "GATE_DIAL device=" << peer.endpoint.address << '\n' << std::flush;
-            });
+        [&](const plexus::discovery::service_info &peer)
+        {
+            if(dialed || peer.name == self_id)
+                return;
+            dialed = true;
+            // The node's own card handling dials the advertised endpoint under the peer's real id,
+            // which the telemetry demand then binds to; an explicit dial here would mint a second
+            // provisional-id slot that claims the endpoint and never carries the subscription.
+            std::cout << "GATE_DIAL device=" << peer.endpoint.address << '\n'
+                      << std::flush;
+        });
 
     ::asio::steady_timer deadline{io, k_timeout};
-    deadline.async_wait([&](std::error_code) { io.stop(); });
+    deadline.async_wait([&](std::error_code)
+                        { io.stop(); });
 
     io.run();
 

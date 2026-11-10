@@ -36,20 +36,20 @@
 
 namespace {
 
-using lwip_socket    = plexus::freertos::detail::lwip_socket;
-using lwip_acceptor  = plexus::freertos::detail::lwip_acceptor;
-using lwip_policy    = plexus::freertos::lwip_policy<lwip_socket>;
-using lwip_transport = plexus::freertos::lwip_transport<lwip_socket, lwip_acceptor>;
-using lwip_mcast     = plexus::freertos::lwip_multicast_socket;
+using lwip_socket     = plexus::freertos::detail::lwip_socket;
+using lwip_acceptor   = plexus::freertos::detail::lwip_acceptor;
+using lwip_policy     = plexus::freertos::lwip_policy<lwip_socket>;
+using lwip_transport  = plexus::freertos::lwip_transport<lwip_socket, lwip_acceptor>;
+using lwip_mcast      = plexus::freertos::lwip_multicast_socket;
 using mcast_discovery = plexus::discovery::multicast_discovery<lwip_mcast, lwip_policy>;
 
-constexpr const char *k_group    = "239.255.0.7";
-constexpr std::uint16_t k_port    = 7447;
-constexpr std::uint8_t  k_ttl     = 4;
+constexpr const char *k_group  = "239.255.0.7";
+constexpr std::uint16_t k_port = 7447;
+constexpr std::uint8_t k_ttl   = 4;
 // The accept -> session -> handshake path on the P1 single-task policy peaks ~12.6 KB (measured
 // stack high-water); 20 KB holds it with margin. 12 KB overflowed the task and panicked on connect.
 constexpr std::uint32_t k_plexus_task_stack = 20480; // bytes
-constexpr UBaseType_t   k_plexus_task_prio  = 5;
+constexpr UBaseType_t k_plexus_task_prio    = 5;
 
 // A discovery decorator the node consumes: it forwards the abstract surface to the borrowed native
 // discovery and tees browse so the node's own awareness wiring AND the gate marker both fire on a
@@ -59,8 +59,8 @@ class gate_discovery final : public plexus::discovery::discovery
 {
 public:
     explicit gate_discovery(plexus::discovery::discovery &inner)
-            : m_inner(inner)
-            , m_marked(false)
+        : m_inner(inner)
+        , m_marked(false)
     {
     }
 
@@ -72,18 +72,18 @@ public:
     void browse(const resolved_callback &on_resolved) override
     {
         m_inner.browse(
-                [this, on_resolved](const plexus::discovery::service_info &peer)
+            [this, on_resolved](const plexus::discovery::service_info &peer)
+            {
+                // Latch the marker to the first resolution: the announce repeats on the group, and
+                // an unthrottled printf per announce floods the console and the task stack.
+                if(!m_marked)
                 {
-                    // Latch the marker to the first resolution: the announce repeats on the group, and
-                    // an unthrottled printf per announce floods the console and the task stack.
-                    if(!m_marked)
-                    {
-                        m_marked = true;
-                        std::printf("GATE_PASS_HOST_TO_ESP host=%s name=%s\n", peer.endpoint.address.c_str(), peer.name.c_str());
-                    }
-                    if(on_resolved)
-                        on_resolved(peer);
-                });
+                    m_marked = true;
+                    std::printf("GATE_PASS_HOST_TO_ESP host=%s name=%s\n", peer.endpoint.address.c_str(), peer.name.c_str());
+                }
+                if(on_resolved)
+                    on_resolved(peer);
+            });
     }
 
     void on_withdrawn(const withdrawn_callback &cb) override
@@ -98,7 +98,7 @@ public:
 
 private:
     plexus::discovery::discovery &m_inner;
-    bool                          m_marked;
+    bool m_marked;
 };
 
 // A 1-byte counter published on the served topic so a dialing-and-subscribing host observes the

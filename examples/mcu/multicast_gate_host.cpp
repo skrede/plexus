@@ -42,9 +42,9 @@ namespace {
 
 using namespace std::chrono_literals;
 
-constexpr const char *k_group       = "239.255.0.7";
+constexpr const char *k_group        = "239.255.0.7";
 constexpr std::uint16_t k_port       = 7447;
-constexpr unsigned      k_ttl        = 4;
+constexpr unsigned k_ttl             = 4;
 constexpr const char *k_default_port = "7447";
 
 // Generous: the device must boot, associate, take a DHCP lease, join the group, then both ends must
@@ -57,7 +57,7 @@ class gate_discovery final : public plexus::discovery::discovery
 {
 public:
     explicit gate_discovery(plexus::discovery::discovery &inner)
-            : m_inner(inner)
+        : m_inner(inner)
     {
     }
 
@@ -69,13 +69,13 @@ public:
     void browse(const resolved_callback &on_resolved) override
     {
         m_inner.browse(
-                [on_resolved](const plexus::discovery::service_info &peer)
-                {
-                    std::cout << "GATE_PASS_ESP_TO_HOST device=" << peer.endpoint.address << " name=" << peer.name << '\n'
-                              << std::flush;
-                    if(on_resolved)
-                        on_resolved(peer);
-                });
+            [on_resolved](const plexus::discovery::service_info &peer)
+            {
+                std::cout << "GATE_PASS_ESP_TO_HOST device=" << peer.endpoint.address << " name=" << peer.name << '\n'
+                          << std::flush;
+                if(on_resolved)
+                    on_resolved(peer);
+            });
     }
 
     void on_withdrawn(const withdrawn_callback &cb) override
@@ -122,7 +122,8 @@ int main(int argc, char **argv)
     node.listen({"tcp", listen_address(argc, argv)});
 
     ::asio::steady_timer window{io, k_window};
-    window.async_wait([&](std::error_code) { io.stop(); });
+    window.async_wait([&](std::error_code)
+                      { io.stop(); });
 
     io.run();
     return 0;
