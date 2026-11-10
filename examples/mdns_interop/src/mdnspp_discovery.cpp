@@ -78,7 +78,7 @@ mdnspp_discovery::mdnspp_discovery(::asio::io_context &io, std::string service_t
 
 mdnspp_discovery::~mdnspp_discovery() = default;
 
-void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
+bool mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
 {
     ::mdnspp::service_info info;
     info.service_name = service.name;
@@ -87,7 +87,7 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
     // The plexus endpoint address is "host:port"; split it back into the SRV
     // hostname/port + the A-record IPv4 the responder announces. The port tail is parsed
     // with from_chars into a uint16 (mirroring contact_card::read_transport_port) so a
-    // non-numeric, out-of-range, or trailing-garbage port skips the advertisement rather
+    // non-numeric, out-of-range, or trailing-garbage port makes advertise refuse the card rather
     // than throwing (std::stoul) or silently truncating a >65535 value into a wrong port.
     const auto &addr = service.endpoint.address;
     auto colon       = addr.rfind(':');
@@ -99,7 +99,7 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
         const char *last  = port_tail.data() + port_tail.size();
         const auto parsed = std::from_chars(first, last, port);
         if(parsed.ec != std::errc{} || parsed.ptr != last)
-            return;
+            return false;
         info.address_ipv4 = addr.substr(0, colon);
         info.port         = port;
     }
@@ -123,12 +123,13 @@ void mdnspp_discovery::advertise(const plexus::discovery::service_info &service)
     if(m_impl->server && service.name == m_impl->advertised_name)
     {
         m_impl->server->update_service_info(std::move(info));
-        return;
+        return true;
     }
 
     m_impl->advertised_name = service.name;
     m_impl->server          = std::make_unique<::mdnspp::basic_service_server<::mdnspp::AsioPolicy>>(m_io, std::move(info));
     m_impl->server->async_start();
+    return true;
 }
 
 void mdnspp_discovery::browse(const resolved_callback &on_resolved)

@@ -86,6 +86,16 @@ inline std::string port_key(std::string_view transport)
     return key;
 }
 
+inline std::optional<std::uint16_t> parse_port(std::string_view value)
+{
+    std::uint16_t port{};
+    const char *last     = value.data() + value.size();
+    const auto [end, ec] = std::from_chars(value.data(), last, port);
+    if(ec != std::errc{} || end != last)
+        return std::nullopt;
+    return port;
+}
+
 }
 
 // Assemble the card for one node (one record per node): the authenticated node_id,
@@ -107,16 +117,16 @@ inline std::optional<std::uint16_t> read_transport_port(const std::vector<std::p
 {
     const std::string key = detail::port_key(transport);
     for(const auto &[k, v] : card)
-    {
-        if(k != key)
-            continue;
-        std::uint16_t port{};
-        const char *first = v.data();
-        const char *last  = v.data() + v.size();
-        if(std::from_chars(first, last, port).ec == std::errc{})
-            return port;
-        return std::nullopt;
-    }
+        if(k == key)
+            return detail::parse_port(v);
+    return std::nullopt;
+}
+
+inline std::optional<node_id> read_node_id(const std::vector<std::pair<std::string, std::string>> &card)
+{
+    for(const auto &[k, v] : card)
+        if(k == k_card_node_id_key)
+            return detail::hex_decode(v);
     return std::nullopt;
 }
 

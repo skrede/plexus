@@ -131,3 +131,16 @@ TEST_CASE("hex_decode rejects everything but exactly 32 lowercase hex characters
     if(mixed != valid) // only meaningful when the first nibble was a letter
         REQUIRE_FALSE(hex_decode(mixed).has_value());
 }
+
+TEST_CASE("read_transport_port reads a port only from a value that is wholly a decimal port in range", "[discovery][contact_card]")
+{
+    const auto port_of = [](const char *value) { return read_transport_port({{"plexus/tcp/port", value}}, "tcp"); };
+
+    for(const char *refused : {"80abc", "80 ", "8 0", "0x50", "", "65536", "-1", "+80", " 80"})
+    {
+        CAPTURE(refused);
+        CHECK_FALSE(port_of(refused).has_value());
+    }
+    REQUIRE(port_of("80") == std::uint16_t{80});
+    REQUIRE(port_of("0080") == std::uint16_t{80});
+}

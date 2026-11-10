@@ -26,7 +26,9 @@ public:
 
     virtual ~discovery() = default;
 
-    virtual void advertise(const service_info &service) = 0;
+    // False when this backend cannot advertise the card (one it cannot encode, for example). A refused
+    // card leaves any earlier advertisement in place.
+    virtual bool advertise(const service_info &service) = 0;
 
     virtual void browse(const resolved_callback &on_resolved) = 0;
 

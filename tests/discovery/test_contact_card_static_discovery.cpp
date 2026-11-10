@@ -79,3 +79,17 @@ TEST_CASE("static_discovery stop() drops retained browsers so a later advertise 
 
     REQUIRE(seen.empty()); // the browser was dropped at stop()
 }
+
+TEST_CASE("static_discovery advertise reports every card as advertised", "[discovery][static_discovery]")
+{
+    static_discovery disco{{}};
+
+    service_info svc;
+    svc.name     = "node-r";
+    svc.endpoint = {"tcp", "192.0.2.44:5000"};
+    REQUIRE(disco.advertise(svc));
+
+    std::vector<std::string> seen;
+    disco.browse([&](const service_info &s) { seen.push_back(s.name); });
+    REQUIRE(seen == std::vector<std::string>{"node-r"});
+}

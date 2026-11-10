@@ -9,10 +9,13 @@
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
 
+#include <limits>
 #include <string>
 #include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <algorithm>
 #include <string_view>
 
 namespace plexus::discovery::detail {
@@ -39,16 +42,26 @@ inline std::vector<::plexus::discovery::listening_transport> listens_from_card(c
     return listens;
 }
 
+// The announcement prefixes its listen count and each transport name's length with one byte.
+inline bool listens_fit_announcement(const std::vector<::plexus::discovery::listening_transport> &listens)
+{
+    constexpr std::size_t k_one_byte_max = std::numeric_limits<std::uint8_t>::max();
+    return listens.size() <= k_one_byte_max && std::ranges::all_of(listens, [](const auto &t) { return t.transport.size() <= k_one_byte_max; });
+}
+
 // Build the wire announcement for a card once (at advertise time), so the per-emit path only
 // re-encodes it into the reused scratch and never rebuilds the listens. nullopt for a card with
-// an unparsable node_id key (nothing to advertise).
+// no decodable node_id key, or with listens that overflow those one-byte fields (nothing to advertise).
 inline std::optional<wire::announcement> announcement_from_service_info(const ::plexus::discovery::service_info &card, std::uint64_t ttl_secs, std::uint32_t universe,
                                                                         std::string_view universe_pattern = k_default_universe_label)
 {
-    const auto id = ::plexus::discovery::detail::hex_decode(card.metadata.empty() ? std::string_view{} : std::string_view{card.metadata.front().second});
+    const auto id = ::plexus::discovery::read_node_id(card.metadata);
     if(!id)
         return std::nullopt;
-    return announcement_from_card(*id, listens_from_card(card.metadata), ttl_secs, 0, universe, universe_pattern);
+    const auto listens = listens_from_card(card.metadata);
+    if(!listens_fit_announcement(listens))
+        return std::nullopt;
+    return announcement_from_card(*id, listens, ttl_secs, 0, universe, universe_pattern);
 }
 
 }

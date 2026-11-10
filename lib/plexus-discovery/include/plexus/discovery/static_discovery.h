@@ -25,7 +25,7 @@ public:
     {
     }
 
-    void advertise(const service_info &service) override
+    bool advertise(const service_info &service) override
     {
         const auto it = std::find_if(m_table.begin(), m_table.end(), [&](const service_info &e) { return e.name == service.name; });
         if(it != m_table.end())
@@ -34,6 +34,7 @@ public:
             m_table.push_back(service);
         for(const auto &browser : m_browsers)
             browser(service);
+        return true;
     }
 
     void browse(const resolved_callback &on_resolved) override

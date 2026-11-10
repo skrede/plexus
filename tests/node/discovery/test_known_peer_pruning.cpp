@@ -42,8 +42,9 @@ using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
 class scripted_discovery final : public plexus::discovery::discovery
 {
 public:
-    void advertise(const service_info &) override
+    bool advertise(const service_info &) override
     {
+        return true;
     }
 
     void browse(const resolved_callback &on_resolved) override

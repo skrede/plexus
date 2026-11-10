@@ -52,7 +52,8 @@ void fan_demands_to(Node &n, const plexus::node_id &id)
 template<typename Node>
 void advertise_card(Node &n)
 {
-    n.m_disc.advertise({n.m_service_name, io::endpoint{"", n.m_host}, discovery::assemble_contact_card(n.m_id, n.m_listens)});
+    if(!n.m_disc.advertise({n.m_service_name, io::endpoint{"", n.m_host}, discovery::assemble_contact_card(n.m_id, n.m_listens)}))
+        n.m_logger.warn("plexus: discovery card_not_advertised");
 }
 
 // The card is untrusted multicast input: a malformed/missing node_id, a self card, a host-less
@@ -60,7 +61,7 @@ void advertise_card(Node &n)
 template<typename Node>
 void note_from_card(Node &n, const discovery::service_info &peer)
 {
-    const auto peer_id = plexus::detail::card_node_id(peer.metadata);
+    const auto peer_id = discovery::read_node_id(peer.metadata);
     if(!peer_id || *peer_id == n.m_id)
         return;
     const std::string host = plexus::detail::host_of(peer.endpoint.address);
@@ -77,7 +78,7 @@ void note_from_card(Node &n, const discovery::service_info &peer)
 template<typename Node>
 void forget_from_card(Node &n, const discovery::service_info &peer)
 {
-    const auto peer_id = plexus::detail::card_node_id(peer.metadata);
+    const auto peer_id = discovery::read_node_id(peer.metadata);
     if(!peer_id || *peer_id == n.m_id)
         return;
     n.m_engine.forget(*peer_id);

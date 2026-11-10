@@ -36,7 +36,7 @@ public:
     mdnspp_discovery &operator=(const mdnspp_discovery &) = delete;
 
     // Publish a local service so peers can resolve it (mDNS announce).
-    void advertise(const plexus::discovery::service_info &service) override;
+    bool advertise(const plexus::discovery::service_info &service) override;
 
     // Start an mDNS browse; on_resolved fires once per resolved peer, carrying
     // the peer's name and the tcp endpoint reconstructed from its mDNS records.

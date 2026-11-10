@@ -68,9 +68,9 @@ public:
         m_on_peer_cb = std::move(cb);
     }
 
-    void advertise(const plexus::discovery::service_info &service) override
+    bool advertise(const plexus::discovery::service_info &service) override
     {
-        m_inner.advertise(service);
+        return m_inner.advertise(service);
     }
 
     void browse(const resolved_callback &on_resolved) override

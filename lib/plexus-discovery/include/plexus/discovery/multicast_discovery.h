@@ -83,9 +83,12 @@ public:
         return discovery_health::not_yet;
     }
 
-    void advertise(const ::plexus::discovery::service_info &service) override
+    bool advertise(const ::plexus::discovery::service_info &service) override
     {
-        m_announcement             = detail::announcement_from_service_info(service, ttl_secs(), m_options.universe, m_options.universe_pattern);
+        auto announcement = detail::announcement_from_service_info(service, ttl_secs(), m_options.universe, m_options.universe_pattern);
+        if(!announcement)
+            return false;
+        m_announcement             = std::move(announcement);
         const bool was_advertising = m_advertising;
         m_advertising              = true;
         detail::emit_announcement(*this);
@@ -94,6 +97,7 @@ public:
             m_jitter.seed(detail::jitter_seed_from(m_announcement->node_id));
             detail::arm_timer(*this);
         }
+        return true;
     }
 
     void browse(const resolved_callback &on_resolved) override
