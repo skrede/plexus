@@ -63,10 +63,11 @@ Keep public headers lean by moving internal helpers into a `detail/` directory a
 `detail::` namespace. Make `detail/` files and `detail::` types as needed — but a `detail/`
 file is still a real file and obeys these same rules.
 
-Enforcement: the size gate **fails the build** on any code file over the file ceiling,
-`.clang-tidy` fails it on a C++ function over the function ceiling or the cognitive-complexity
-limit, and for CMake, shell, Python and Lua the function ceiling holds by review. A change is
-not done until it is within budget or its overage is a registered exception.
+Enforcement: the size gate **fails the build** on any code file over the file ceiling, and
+`.clang-tidy` fails it on a function in `lib/` or `backends/` over the function ceiling or the
+cognitive-complexity limit. Everywhere else — C++ in tests, examples, tools and benchmarks, and
+all CMake, shell, Python and Lua — the function ceiling holds by review. A change is not done
+until it is within budget or its overage is a registered exception.
 
 ### Exceptions
 
