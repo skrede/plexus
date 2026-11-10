@@ -114,53 +114,53 @@ local function dissect_bidirectional(tvb, root, off)
     return off + 41
 end
 
-function plexus.dissector(tvb, pinfo, tree)
-    pinfo.cols.protocol = "plexus"
-    local root = tree:add(plexus, tvb())
-
-    if resolved_position() == "ciphertext" then
-        root:add(f_sealed, tvb())
-        pinfo.cols.info = "plexus (sealed)"
-        return
-    end
-
-    if tvb:len() < 28 or tvb(0, 1):uint() ~= 0x56 or tvb(1, 1):uint() ~= 0x50 then
-        root:add(f_magic, tvb(0, math.min(2, tvb:len())))
-        root:add_proto_expert_info(e_magic)
-        return
-    end
-
+local function dissect_frame_header(tvb, root)
     local hdr = root:add(plexus, tvb(0, 28), "Frame header")
     hdr:add(f_magic, tvb(0, 2))
-    local mt = tvb(2, 1):uint()
     hdr:add(f_msg_type, tvb(2, 1))
     local flags = hdr:add(f_flags, tvb(3, 1))
     flags:add(f_flag_source, tvb(3, 1))
     hdr:add(f_session_id, tvb(4, 8))
     hdr:add(f_timestamp, tvb(12, 8))
     hdr:add(f_payload_len, tvb(20, 8))
+    return tvb(2, 1):uint()
+end
 
-    local off, seq_text = 28, ""
+local function dissect_message_header(tvb, root, mt)
     if mt == 0x01 then
-        local seq = tvb(29, 8):uint64()
-        seq_text = " seq=" .. tostring(seq)
-        off = dissect_unidirectional(tvb, root, off)
+        local seq_text = " seq=" .. tostring(tvb(29, 8):uint64())
+        local off = dissect_unidirectional(tvb, root, 28)
         if (tvb(3, 1):uint() % 2) == 1 then
             local _, vlen = read_varint(tvb, off)
             off = off + vlen
         end
+        return off, seq_text
     elseif mt == 0x02 then
-        local seq = tvb(29, 8):uint64()
-        seq_text = " seq=" .. tostring(seq)
-        off = dissect_bidirectional(tvb, root, off)
+        local seq_text = " seq=" .. tostring(tvb(29, 8):uint64())
+        return dissect_bidirectional(tvb, root, 28), seq_text
     end
+    return 28, ""
+end
 
+function plexus.dissector(tvb, pinfo, tree)
+    pinfo.cols.protocol = "plexus"
+    local root = tree:add(plexus, tvb())
+    if resolved_position() == "ciphertext" then
+        root:add(f_sealed, tvb())
+        pinfo.cols.info = "plexus (sealed)"
+        return
+    end
+    if tvb:len() < 28 or tvb(0, 1):uint() ~= 0x56 or tvb(1, 1):uint() ~= 0x50 then
+        root:add(f_magic, tvb(0, math.min(2, tvb:len())))
+        root:add_proto_expert_info(e_magic)
+        return
+    end
+    local mt = dissect_frame_header(tvb, root)
+    local off, seq_text = dissect_message_header(tvb, root, mt)
     if off < tvb:len() then
         root:add(f_payload, tvb(off))
     end
-
-    local name = msg_type_names[mt] or string.format("0x%02x", mt)
-    pinfo.cols.info = name .. seq_text
+    pinfo.cols.info = (msg_type_names[mt] or string.format("0x%02x", mt)) .. seq_text
 end
 
 local encap = DissectorTable.get("wtap_encap")
