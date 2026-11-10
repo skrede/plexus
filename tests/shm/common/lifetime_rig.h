@@ -1,8 +1,8 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_LIFETIME_RIG_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_LIFETIME_RIG_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_LIFETIME_RIG_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_LIFETIME_RIG_H
 
-#include "support/bus_notifier.h"
-#include "support/region_names.h"
+#include "bus_notifier.h"
+#include "region_names.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_layout.h"

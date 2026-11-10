@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_TOPOLOGY_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_TOPOLOGY_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_TOPOLOGY_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_TOPOLOGY_H
 
-#include "support/hold_probe.h"
-#include "support/hold_tally.h"
-#include "support/co_host_node.h"
+#include "hold_probe.h"
+#include "hold_tally.h"
+#include "co_host_node.h"
 
 #include "plexus/asio/stream_socket_options.h"
 

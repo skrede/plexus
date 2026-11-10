@@ -1,4 +1,4 @@
-#include "support/coordinator_lanes.h"
+#include "coordinator_lanes.h"
 
 #include "plexus/io/companion_event.h"
 #include "plexus/io/upgrade_channel.h"

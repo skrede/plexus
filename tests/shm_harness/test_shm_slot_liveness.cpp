@@ -1,7 +1,7 @@
 #include "launch_helpers.h"
 
-#include "support/region_names.h"
-#include "support/xproc_process.h"
+#include "region_names.h"
+#include "xproc_process.h"
 
 #include "plexus/native/shm_region_broker.h"
 

@@ -2,9 +2,9 @@
 #include "topic_regions.h"
 #include "launch_helpers.h"
 
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
-#include "support/xproc_process.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
+#include "xproc_process.h"
 
 #include "plexus/testing/platform.h"
 

@@ -1,6 +1,6 @@
-#include "support/bus_notifier.h"
-#include "support/lifetime_rig.h"
-#include "support/minter_entry.h"
+#include "bus_notifier.h"
+#include "lifetime_rig.h"
+#include "minter_entry.h"
 
 #include "plexus/shm/detail/shm_ring_names.h"
 #include "plexus/shm/detail/shm_ring_lifetime.h"

@@ -3,8 +3,8 @@
     #include "tls_retire_drain_common.h"
 #endif
 #if defined(PLEXUS_HAVE_SHM)
-    #include "support/posted_queue.h"
-    #include "support/noop_notifier.h"
+    #include "posted_queue.h"
+    #include "noop_notifier.h"
 #endif
 
 #include "plexus/asio/asio_policy.h"

@@ -3,7 +3,7 @@
 
 #include "test_node_xproc_shm_common.h"
 
-#include "support/region_names.h"
+#include "region_names.h"
 
 #include "plexus/native/region_handle.h"
 #include "plexus/native/posix_shm_region_broker.h"

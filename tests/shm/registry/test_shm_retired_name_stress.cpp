@@ -1,7 +1,7 @@
-#include "support/bus_notifier.h"
-#include "support/lifetime_rig.h"
-#include "support/region_names.h"
-#include "support/sidecar_probe.h"
+#include "bus_notifier.h"
+#include "lifetime_rig.h"
+#include "region_names.h"
+#include "sidecar_probe.h"
 
 #include "plexus/shm/detail/shm_ring_names.h"
 

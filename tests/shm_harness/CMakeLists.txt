@@ -12,7 +12,7 @@ function(plexus_add_shm_harness_test name)
         NO_MAIN
         SOURCES xproc_main.cpp node_role.cpp ${harness_UNPARSED_ARGUMENTS}
         LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::asio::shm plexus::native plexus::testing
-        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm ${PROJECT_SOURCE_DIR}/tests/shm/common
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm/common
         PROPERTIES ${harness_PROPERTIES})
 endfunction()
 
@@ -49,7 +49,7 @@ function(plexus_add_shm_xproc_test name)
         NO_MAIN
         SOURCES xproc_main.cpp ${ARGN}
         LINKS plexus::shm plexus::asio plexus::asio::shm plexus::native plexus::wire plexus::testing
-        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm)
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm/common)
 endfunction()
 
 plexus_add_shm_xproc_test(test_shm_three_process three_process_roles.cpp test_shm_three_process.cpp)
@@ -83,6 +83,6 @@ if(LINUX)
     plexus_add_catch_test(test_shm_sem_alloc
         SOURCES test_shm_sem_alloc.cpp
         LINKS plexus::shm plexus::asio plexus::asio::shm plexus::native plexus::wire plexus::testing
-        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm/common
         PROPERTIES RUN_SERIAL TRUE)
 endif()

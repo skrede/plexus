@@ -37,7 +37,7 @@ if(PLEXUS_ENABLE_CRYPTO_BACKEND)
     endforeach()
 endif()
 if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::native)
-    target_include_directories(test_unclaimed_retire_wrap PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)
+    target_include_directories(test_unclaimed_retire_wrap PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm/common)
     target_link_libraries(test_unclaimed_retire_wrap PRIVATE plexus::shm plexus::native)
     target_compile_definitions(test_unclaimed_retire_wrap PRIVATE PLEXUS_HAVE_SHM)
 endif()
@@ -80,7 +80,7 @@ if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm AND NOT WIN32)
     plexus_add_catch_test(test_node_xproc_shm
         SOURCES test_node_xproc_shm.cpp
         LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::asio::shm plexus::native
-        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm)
+        INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm/common)
 endif()
 
 plexus_add_catch_test(test_subscribe_retry_udp

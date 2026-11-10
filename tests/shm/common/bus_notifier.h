@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_BUS_NOTIFIER_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_BUS_NOTIFIER_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_BUS_NOTIFIER_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_BUS_NOTIFIER_H
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/notifier_concept.h"

@@ -4,7 +4,7 @@
 #include "fuzz_sink.h"
 #include "fuzz_region.h"
 
-#include "support/noop_notifier.h"
+#include "noop_notifier.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_header.h"

@@ -1,8 +1,8 @@
 #include "child_args.h"
 
-#include "support/region_names.h"
-#include "support/noop_notifier.h"
-#include "support/xproc_harness.h"
+#include "region_names.h"
+#include "noop_notifier.h"
+#include "xproc_harness.h"
 
 #include "plexus/native/shm_region_broker.h"
 

@@ -1,9 +1,9 @@
 #include "launch_helpers.h"
 #include "three_process_block.h"
 
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
-#include "support/xproc_process.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
+#include "xproc_process.h"
 
 #include "plexus/testing/platform.h"
 

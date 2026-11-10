@@ -1,7 +1,7 @@
-#include "support/member_lanes.h"
-#include "support/region_names.h"
-#include "support/noop_notifier.h"
-#include "support/delaying_broker.h"
+#include "member_lanes.h"
+#include "region_names.h"
+#include "noop_notifier.h"
+#include "delaying_broker.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"

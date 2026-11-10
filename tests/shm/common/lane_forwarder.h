@@ -1,8 +1,8 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_LANE_FORWARDER_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_LANE_FORWARDER_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_LANE_FORWARDER_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_LANE_FORWARDER_H
 
-#include "support/order_forwarder.h"
-#include "support/coordinator_lanes.h"
+#include "order_forwarder.h"
+#include "coordinator_lanes.h"
 
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/upgrade_channel.h"

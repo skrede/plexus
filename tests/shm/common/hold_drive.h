@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_DRIVE_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_DRIVE_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_DRIVE_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_DRIVE_H
 
-#include "support/hold_tally.h"
-#include "support/hold_drivers.h"
-#include "support/hold_topology.h"
+#include "hold_tally.h"
+#include "hold_drivers.h"
+#include "hold_topology.h"
 
 #include "plexus/io/upgrade_channel.h"
 

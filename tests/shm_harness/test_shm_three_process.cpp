@@ -6,10 +6,10 @@
     #include "region_doorbells.h"
 #endif
 
-#include "support/region_names.h"
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
-#include "support/xproc_process.h"
+#include "region_names.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
+#include "xproc_process.h"
 
 #include "plexus/shm/region_naming.h"
 

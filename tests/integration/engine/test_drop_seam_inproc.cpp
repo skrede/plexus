@@ -51,9 +51,9 @@
 #include "plexus/wire/handshake.h"
 #include "plexus/wire/frame_codec.h"
 
-#include "shm/support/posted_queue.h"
-#include "shm/support/noop_notifier.h"
-#include "shm/support/always_live_slots.h"
+#include "shm/common/posted_queue.h"
+#include "shm/common/noop_notifier.h"
+#include "shm/common/always_live_slots.h"
 
 #include <catch2/catch_test_macros.hpp>
 

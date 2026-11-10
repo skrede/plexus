@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_SWITCH_RIG_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_SWITCH_RIG_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SWITCH_RIG_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_SWITCH_RIG_H
 
-#include "support/order_forwarder.h"
+#include "order_forwarder.h"
 
 #include "plexus/io/upgrade_channel.h"
 

@@ -1,7 +1,7 @@
-#include "support/posted_queue.h"
-#include "support/noop_notifier.h"
-#include "support/always_live_slots.h"
-#include "support/heap_region_store.h"
+#include "posted_queue.h"
+#include "noop_notifier.h"
+#include "always_live_slots.h"
+#include "heap_region_store.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_layout.h"

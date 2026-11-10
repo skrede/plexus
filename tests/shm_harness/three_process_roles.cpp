@@ -5,9 +5,9 @@
     #include "sem_support.h"
 #endif
 
-#include "support/region_names.h"
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
+#include "region_names.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
 
 #include "plexus/asio/shm/shm_member.h"
 

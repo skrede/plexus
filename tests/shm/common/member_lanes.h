@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MEMBER_LANES_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MEMBER_LANES_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_MEMBER_LANES_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_MEMBER_LANES_H
 
-#include "support/posted_queue.h"
-#include "support/delaying_broker.h"
-#include "support/coordinator_lanes.h"
+#include "posted_queue.h"
+#include "delaying_broker.h"
+#include "coordinator_lanes.h"
 
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/region_broker_concept.h"

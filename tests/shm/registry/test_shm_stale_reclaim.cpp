@@ -1,7 +1,7 @@
-#include "support/bus_notifier.h"
-#include "support/lifetime_rig.h"
-#include "support/minter_entry.h"
-#include "support/xproc_child_main.h"
+#include "bus_notifier.h"
+#include "lifetime_rig.h"
+#include "minter_entry.h"
+#include "xproc_child_main.h"
 
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/ring_geometry.h"
@@ -17,7 +17,7 @@
 #include <cstdlib>
 
 #if !defined(_WIN32)
-    #include "support/sidecar_probe.h"
+    #include "sidecar_probe.h"
 
     #include <fcntl.h>
 

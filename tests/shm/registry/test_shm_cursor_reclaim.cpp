@@ -1,5 +1,5 @@
-#include "support/noop_notifier.h"
-#include "support/region_names.h"
+#include "region_names.h"
+#include "noop_notifier.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/shm_channel.h"

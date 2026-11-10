@@ -1,5 +1,5 @@
-#include "support/hold_probe.h"
-#include "support/co_host_node.h"
+#include "hold_probe.h"
+#include "co_host_node.h"
 
 #include "plexus/shm/region_naming.h"
 

@@ -5,7 +5,7 @@
 #include "fuzz_region.h"
 #include "fuzz_ring_readers.h"
 
-#include "support/noop_notifier.h"
+#include "noop_notifier.h"
 
 #include "plexus/shm/detail/shm_ring_lifetime.h"
 

@@ -1,7 +1,7 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_PROBE_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_PROBE_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_PROBE_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_PROBE_H
 
-#include "support/region_names.h"
+#include "region_names.h"
 
 #include "plexus/native/region_handle.h"
 #include "plexus/native/posix_shm_region_broker.h"

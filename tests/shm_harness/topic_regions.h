@@ -1,7 +1,7 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPIC_REGIONS_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_TOPIC_REGIONS_H
 
-#include "support/region_names.h"
+#include "region_names.h"
 
 #include "plexus/native/shm_region_broker.h"
 

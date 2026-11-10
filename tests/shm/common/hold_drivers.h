@@ -1,8 +1,8 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_DRIVERS_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_DRIVERS_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_DRIVERS_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_DRIVERS_H
 
-#include "support/co_host_node.h"
-#include "support/hold_topology.h"
+#include "co_host_node.h"
+#include "hold_topology.h"
 
 #include "plexus/post.h"
 

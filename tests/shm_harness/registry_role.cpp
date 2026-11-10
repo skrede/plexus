@@ -3,8 +3,8 @@
 #include "node_driver.h"
 #include "topology_block.h"
 
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
 
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/same_host_transports.h"

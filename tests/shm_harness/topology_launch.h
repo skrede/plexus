@@ -7,9 +7,9 @@
 #include "topology_block.h"
 #include "topology_rounds.h"
 
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
-#include "support/xproc_process.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
+#include "xproc_process.h"
 
 #include <array>
 #include <chrono>

@@ -2,9 +2,9 @@
 #include "wake_block.h"
 #include "wake_producer.h"
 
-#include "support/region_names.h"
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
+#include "region_names.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
 
 #include "plexus/asio/shm/shm_member.h"
 #include "plexus/asio/shm/shm_notifier.h"

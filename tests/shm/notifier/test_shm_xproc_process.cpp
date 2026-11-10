@@ -1,6 +1,6 @@
-#include "support/xproc_control.h"
-#include "support/xproc_process.h"
-#include "support/xproc_child_main.h"
+#include "xproc_control.h"
+#include "xproc_process.h"
+#include "xproc_child_main.h"
 
 #include "plexus/native/shm_region_broker.h"
 

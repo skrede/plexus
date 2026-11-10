@@ -1,5 +1,5 @@
-#include "support/bus_notifier.h"
-#include "support/lifetime_rig.h"
+#include "bus_notifier.h"
+#include "lifetime_rig.h"
 
 #include "plexus/shm/slot_liveness.h"
 #include "plexus/shm/shm_acquire_result.h"

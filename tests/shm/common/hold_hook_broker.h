@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_HOOK_BROKER_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_HOLD_HOOK_BROKER_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_HOOK_BROKER_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_HOOK_BROKER_H
 
 #include "plexus/shm/slot_liveness.h"
 #include "plexus/shm/region_broker_concept.h"

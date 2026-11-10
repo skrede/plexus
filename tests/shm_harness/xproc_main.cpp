@@ -1,5 +1,5 @@
-#include "support/xproc_launch.h"
-#include "support/xproc_child_main.h"
+#include "xproc_launch.h"
+#include "xproc_child_main.h"
 
 #include <catch2/catch_session.hpp>
 

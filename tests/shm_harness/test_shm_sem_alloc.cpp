@@ -1,8 +1,9 @@
 #include "sem_support.h"
 #include "region_doorbells.h"
 
-#include "support/heap_ring.h"
-#include "support/region_names.h"
+#include "heap_ring.h"
+#include "region_names.h"
+
 #include "support/alloc_counter.h"
 
 #include "plexus/shm/arm_status.h"

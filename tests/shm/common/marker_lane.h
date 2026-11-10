@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MARKER_LANE_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MARKER_LANE_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_MARKER_LANE_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_MARKER_LANE_H
 
-#include "support/hold_probe.h"
-#include "support/co_host_node.h"
-#include "support/region_names.h"
+#include "hold_probe.h"
+#include "co_host_node.h"
+#include "region_names.h"
 
 #include "plexus/asio/shm/shm_member.h"
 

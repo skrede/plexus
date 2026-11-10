@@ -1,6 +1,6 @@
-#include "support/noop_notifier.h"
-#include "support/region_names.h"
-#include "support/delaying_broker.h"
+#include "region_names.h"
+#include "noop_notifier.h"
+#include "delaying_broker.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_geometry.h"

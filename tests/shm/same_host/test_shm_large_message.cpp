@@ -1,6 +1,6 @@
-#include "support/posted_queue.h"
-#include "support/region_names.h"
-#include "support/noop_notifier.h"
+#include "posted_queue.h"
+#include "region_names.h"
+#include "noop_notifier.h"
 
 #include "plexus/native/region_handle.h"
 #include "plexus/native/posix_shm_region_broker.h"

@@ -1,10 +1,10 @@
 #include "sem_support.h"
 #include "region_doorbells.h"
 
-#include "support/heap_ring.h"
-#include "support/region_names.h"
-#include "support/xproc_control.h"
-#include "support/xproc_harness.h"
+#include "heap_ring.h"
+#include "region_names.h"
+#include "xproc_control.h"
+#include "xproc_harness.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/region_naming.h"

@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_REGISTRY_ROLES_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_REGISTRY_ROLES_COMMON_H
 
-#include "support/region_names.h"
-#include "support/delaying_broker.h"
+#include "region_names.h"
+#include "delaying_broker.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_header.h"

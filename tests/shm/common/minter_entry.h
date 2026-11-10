@@ -1,9 +1,9 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MINTER_ENTRY_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_SUPPORT_MINTER_ENTRY_H
+#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_MINTER_ENTRY_H
+#define HPP_GUARD_PLEXUS_TESTS_SHM_MINTER_ENTRY_H
 
-#include "support/bus_notifier.h"
-#include "support/lifetime_rig.h"
-#include "support/region_names.h"
+#include "bus_notifier.h"
+#include "lifetime_rig.h"
+#include "region_names.h"
 
 #include "plexus/shm/detail/shm_topic_join.h"
 #include "plexus/shm/detail/shm_ring_lifetime.h"

@@ -19,7 +19,7 @@
 
 #include "plexus/detail/compat.h"
 
-#include "support/noop_notifier.h"
+#include "noop_notifier.h"
 
 #include <catch2/catch_test_macros.hpp>
 

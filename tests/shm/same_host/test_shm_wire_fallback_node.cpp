@@ -1,6 +1,6 @@
-#include "support/posted_queue.h"
-#include "support/noop_notifier.h"
-#include "support/local_stream_member.h"
+#include "posted_queue.h"
+#include "noop_notifier.h"
+#include "local_stream_member.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
 

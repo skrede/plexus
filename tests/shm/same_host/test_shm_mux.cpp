@@ -1,8 +1,8 @@
-#include "support/posted_queue.h"
-#include "support/noop_notifier.h"
-#include "support/always_live_slots.h"
-#include "support/heap_region_store.h"
-#include "support/local_stream_member.h"
+#include "posted_queue.h"
+#include "noop_notifier.h"
+#include "always_live_slots.h"
+#include "heap_region_store.h"
+#include "local_stream_member.h"
 
 #include "plexus/shm/shm_mux_member.h"
 #include "plexus/shm/shm_slot_owner.h"

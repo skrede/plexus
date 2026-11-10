@@ -1,6 +1,6 @@
 #include "region_doorbells.h"
 
-#include "support/region_names.h"
+#include "region_names.h"
 
 #include "plexus/asio/shm/macos/sem_doorbell.h"
 
