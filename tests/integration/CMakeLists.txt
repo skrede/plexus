@@ -1,1217 +1,347 @@
-# Integration proofs for the live transports: the live TCP loopback round-trip and
-# the shared-executor test (asio + mdnspp on one io_context) are gated; the
-# hot-path allocation audit is a deterministic inproc test and needs no backend.
-# Auto-discovered by the tests glob; the `integration.` ctest prefix lets
-# `ctest -R integration` select the whole area. The root tests/CMakeLists.txt is
-# never edited.
+set(PLEXUS_TEST_PREFIX "integration.")
 
-# The hot-path allocation audit is deterministic (inproc Policy) — always built.
-add_executable(test_hot_path_alloc test_hot_path_alloc.cpp)
-target_link_libraries(test_hot_path_alloc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-# tests/ is on the include path so the test can pull in support/alloc_counter.h.
-target_include_directories(test_hot_path_alloc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: the alloc gate snapshots the single-TU global operator-new counter across a
-# steady-state loop and asserts a zero delta. Run concurrently with other test processes,
-# CPU contention can perturb the measurement window; serializing keeps the count immune.
-catch_discover_tests(test_hot_path_alloc TEST_PREFIX "integration."
+# The alloc gate snapshots the single-TU global operator-new counter across a steady-state loop and asserts a zero
+# delta; concurrent test processes perturb that window, so it runs alone.
+plexus_add_catch_test(test_hot_path_alloc
+    SOURCES test_hot_path_alloc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc
     PROPERTIES RUN_SERIAL TRUE)
 
-# The typed in-process fast-path alloc gate: a warmed steady-state borrow->publish->drain
-# loop over the node facade allocates zero (the zero-serialization lane), with a forced-
-# fallback variant documenting the serialize path's allocation for contrast. Links the
-# facade (plexus::plexus) for the typed endpoints; tests/ is on the include path for
-# support/alloc_counter.h.
-add_executable(test_typed_inproc_alloc test_typed_inproc_alloc.cpp)
-target_link_libraries(test_typed_inproc_alloc PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_typed_inproc_alloc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_typed_inproc_alloc TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_typed_inproc_alloc
+    SOURCES test_typed_inproc_alloc.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery
     PROPERTIES RUN_SERIAL TRUE)
 
-# The typed value_logger: the codec decodes one topic at the handle, a projection (or the
-# operator<< floor) formats CSV/JSON-Lines/text into a reused buffer. The alloc-gate
-# section needs the replaceable new/delete, so tests/ is on the include path for
-# support/alloc_counter.h (the test_typed_inproc_alloc precedent).
-add_executable(test_value_logger test_value_logger.cpp)
-target_link_libraries(test_value_logger PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_value_logger PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_value_logger TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_value_logger
+    SOURCES test_value_logger.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery
     PROPERTIES RUN_SERIAL TRUE)
 
-# The recorder numeric-defaults chosen-cell assertion: the recorded-sweep precedent
-# (tests/crypto/test_rekey_threshold_sweep) pinned for the recorder ring budget. Drives a
-# saturating burst at the SHIPPED ring_bytes default and asserts full recall at every
-# measured payload (a regression below the knee fails), plus the keep-all + exact-1/N
-# decimation guarantees on the typed object lane. Links the facade for the typed endpoints;
-# tests/ is on the include path for in_memory_byte_sink.h.
-add_executable(test_recorder_defaults_sweep test_recorder_defaults_sweep.cpp)
-target_link_libraries(test_recorder_defaults_sweep PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_recorder_defaults_sweep PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_recorder_defaults_sweep TEST_PREFIX "integration.")
+plexus_add_catch_test(test_recorder_defaults_sweep
+    SOURCES test_recorder_defaults_sweep.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
 
-# The public recording-QoS declaration gate: drive the capture decision through the node
-# facade alone (node_options.capture + typed_publisher_options.capture), a counting codec
-# witnessing the per-publish encode decision. Links the facade for the typed endpoints;
-# tests/ is on the include path (unused here, kept for the area convention).
-add_executable(test_recording_qos_api
-    test_recording_qos_api.cpp
-    test_recording_qos_api_override.cpp)
-target_link_libraries(test_recording_qos_api PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_recording_qos_api PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_recording_qos_api TEST_PREFIX "integration.")
+plexus_add_catch_test(test_recording_qos_api
+    SOURCES test_recording_qos_api.cpp test_recording_qos_api_override.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
 
-# The payload-fidelity capture oracle: a payload-fidelity topic's recorded sample carries
-# the BARE codec bytes (byte-identical to encode(), no frame prefix), proving the producer
-# surfaces the bare span at the tap. Links the facade for the typed endpoints; tests/ is on
-# the include path for in_memory_byte_sink.h. Not gated on mcap — it links plexus + inproc only.
-add_executable(test_payload_fidelity_capture test_payload_fidelity_capture.cpp)
-target_link_libraries(test_payload_fidelity_capture PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_payload_fidelity_capture PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_payload_fidelity_capture TEST_PREFIX "integration.")
+plexus_add_catch_test(test_payload_fidelity_capture
+    SOURCES test_payload_fidelity_capture.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
 
-# The self-describing capture oracle: a declared type_schema + crypto position + producer
-# type_id round-trip through the version-3 preamble, an empty-schema recorder still recovers,
-# and a schema blob larger than the writer's default scratch round-trips. Links the facade
-# for the typed endpoints; tests/ is on the include path for in_memory_byte_sink.h. Not gated
-# on mcap — it links plexus + inproc only.
-add_executable(test_self_describing_capture
-    test_self_describing_capture.cpp
-    test_self_describing_capture_schema.cpp)
-target_link_libraries(test_self_describing_capture PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_self_describing_capture PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_self_describing_capture TEST_PREFIX "integration.")
+plexus_add_catch_test(test_self_describing_capture
+    SOURCES test_self_describing_capture.cpp test_self_describing_capture_schema.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
 
-# The codec-derived identity carry oracle: a typed publisher's type_info() id + name + opaque
-# schema_hint auto-populate the endpoint record with zero consumer restatement, and an unset
-# hint round-trips as 0. Links the facade for the typed endpoints; tests/ is on the include path.
-add_executable(test_type_identity_carry
-    test_type_identity_carry.cpp)
-target_link_libraries(test_type_identity_carry PRIVATE
-    plexus::plexus
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_type_identity_carry PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_type_identity_carry TEST_PREFIX "integration.")
+plexus_add_catch_test(test_type_identity_carry
+    SOURCES test_type_identity_carry.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
 
-# The inproc stamp-demand behavioral gate: a 3-arg subscriber sees populated message_info
-# timestamps; a 3-arg subscriber that opts out through subscriber_qos sees a documented 0;
-# the per-topic latch OR-reduces over local subscriber demand. Links the facade for the
-# typed endpoints; tests/ is on the include path for support headers.
-add_executable(test_inproc_stamp_demand
-    test_inproc_stamp_demand.cpp
-    test_inproc_stamp_demand_latch.cpp)
-target_link_libraries(test_inproc_stamp_demand PRIVATE
-    plexus::plexus
-    plexus::wire
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_inproc_stamp_demand PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_inproc_stamp_demand TEST_PREFIX "integration.")
+plexus_add_catch_test(test_inproc_stamp_demand
+    SOURCES test_inproc_stamp_demand.cpp test_inproc_stamp_demand_latch.cpp
+    LINKS plexus::plexus plexus::wire plexus::inproc plexus::discovery)
 
-# The reassembly-DoS bound: each reassembler bound (total-memory cap, per-message
-# ceiling, malformed rejection, timeout eviction) is forced + looped and the in-flight
-# state asserted bounded, plus the demux peer-cap bounding the spoofed-source channel
-# count. Deterministic (inproc test clock via plexus::testing, no backend); tests/ is on
-# the include path for support headers.
-add_executable(test_reassembler_dos
-    test_reassembler_dos.cpp
-    test_reassembler_dos_eviction.cpp)
-target_link_libraries(test_reassembler_dos PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::datagram
-    plexus::testing
-    Catch2::Catch2WithMain)
-target_include_directories(test_reassembler_dos PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_reassembler_dos TEST_PREFIX "integration.")
+plexus_add_catch_test(test_reassembler_dos
+    SOURCES test_reassembler_dos.cpp test_reassembler_dos_eviction.cpp
+    LINKS plexus::core plexus::wire plexus::datagram plexus::testing)
 
-# The deterministic inproc req/res roundtrip + concurrent-outstanding + zero-alloc
-# rpc-dispatch gate — always built (inproc Policy, no backend needed).
-add_executable(test_reqres_roundtrip_inproc
-    test_reqres_roundtrip_inproc.cpp
-    test_reqres_roundtrip_inproc_noalloc.cpp)
-target_link_libraries(test_reqres_roundtrip_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_reqres_roundtrip_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_reqres_roundtrip_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_reqres_roundtrip_inproc
+    SOURCES test_reqres_roundtrip_inproc.cpp test_reqres_roundtrip_inproc_noalloc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The deterministic inproc latch-replay roundtrip: a late subscriber recovers the
-# retained value through a real frame_router::on_unidirectional, plus the
-# non-latched negative and the LATCH-NOALLOC retention gate — always built (inproc
-# Policy, no backend needed). tests/ is on the include path for support/alloc_counter.h.
-add_executable(test_latch_replay_inproc
-    test_latch_replay_inproc.cpp
-    test_latch_replay_inproc_noalloc.cpp)
-target_link_libraries(test_latch_replay_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_latch_replay_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_latch_replay_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_latch_replay_inproc
+    SOURCES test_latch_replay_inproc.cpp test_latch_replay_inproc_noalloc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The deterministic peer_session bridge oracle: two paired peer_sessions handshake
-# over the inproc backend, install the node-shared forwarders once, flow a real
-# published message AND a real RPC, prove the data-path staleness gate fires on a
-# mismatched epoch, and prove the handshake timeout (virtual clock) aborts while a
-# completed handshake cancels the timer — always built (inproc Policy, no backend).
-add_executable(test_peer_session_inproc
-    test_peer_session_inproc.cpp
-    test_peer_session_inproc_flow.cpp
-    test_peer_session_inproc_staleness.cpp
-    test_peer_session_inproc_lifecycle.cpp)
-target_link_libraries(test_peer_session_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_peer_session_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_peer_session_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_peer_session_inproc
+    SOURCES test_peer_session_inproc.cpp test_peer_session_inproc_flow.cpp test_peer_session_inproc_staleness.cpp
+        test_peer_session_inproc_lifecycle.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The same-host eligibility verdict: after the handshake the session records
-# whether the peer's advertised fingerprint equals its own (the fingerprint rides the
-# widened frame), and a non-same-host pair never reaches the shared-memory medium.
-add_executable(test_peer_session_same_host_inproc test_peer_session_same_host_inproc.cpp)
-target_link_libraries(test_peer_session_same_host_inproc PRIVATE
-    plexus::core
-    plexus::shm
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_peer_session_same_host_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_peer_session_same_host_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_peer_session_same_host_inproc
+    SOURCES test_peer_session_same_host_inproc.cpp
+    LINKS plexus::core plexus::shm plexus::wire plexus::inproc)
 
-# The DIALED inproc transport oracle: two paired peer_sessions stood up entirely
-# through the bus-mediated listen/dial rendezvous (no hand-dial), handshake to
-# completion, mint non-zero epochs, and a dial to an unregistered endpoint surfaces
-# connection_refused — always built (inproc Policy, no backend needed).
-add_executable(test_transport_dial_inproc test_transport_dial_inproc.cpp)
-target_link_libraries(test_transport_dial_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_transport_dial_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_transport_dial_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_transport_dial_inproc
+    SOURCES test_transport_dial_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The deterministic single-connection reconnect oracle on the virtual clock:
-# refused-dial → backoff → re-dial, surrender bounds, fresh epoch per reconnect —
-# always built (inproc Policy, no backend needed).
-add_executable(test_reconnect_inproc test_reconnect_inproc.cpp)
-target_link_libraries(test_reconnect_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_reconnect_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_reconnect_inproc TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_reconnect_inproc
+    SOURCES test_reconnect_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc
     PROPERTIES RUN_SERIAL TRUE)
 
-# The reconnect-survives-observer oracle on the virtual clock: an observer installed
-# once on a node still receives the post-reconnect lifecycle edge after a forced
-# down-then-up cycle, proving the registry re-threads its observer wiring on every
-# reconnect rebuild. The shared recording_observer.h resolves via the tests/integration
-# include dir — always built (inproc Policy, no backend needed).
-add_executable(test_reconnect_observer_inproc test_reconnect_observer_inproc.cpp)
-target_link_libraries(test_reconnect_observer_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_reconnect_observer_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_reconnect_observer_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_reconnect_observer_inproc
+    SOURCES test_reconnect_observer_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The deterministic two-node routing oracle on the virtual clock: two engines over
-# one inproc bus prove lazy-no-dial-until-demand, eager-dial-on-awareness, awareness-
-# without-connect, receive-path identity, single-slot reconnect isolation, and
-# publish-does-not-dial — always built (inproc Policy, no backend needed).
-add_executable(test_routing_engine_inproc
-    test_routing_engine_inproc.cpp
-    test_routing_engine_inproc_isolation.cpp)
-target_link_libraries(test_routing_engine_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_routing_engine_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_routing_engine_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_routing_engine_inproc
+    SOURCES test_routing_engine_inproc.cpp test_routing_engine_inproc_isolation.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The node-shared receive-route oracle on the virtual clock: a route installed once
-# via routing_engine::on_message_route delivers a published message with a populated
-# message_info, SURVIVES a forced reconnect rebuild with no re-install (looped over
-# several reconnects), and yields to a per-session on_message when both are set —
-# always built (inproc Policy, no backend needed).
-add_executable(test_shared_receive_route test_shared_receive_route.cpp)
-target_link_libraries(test_shared_receive_route PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_shared_receive_route PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_shared_receive_route TEST_PREFIX "integration.")
+plexus_add_catch_test(test_shared_receive_route
+    SOURCES test_shared_receive_route.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The process-tier object-route oracle: an object published on one engine's forwarder
-# (publish_object) reaches the peer engine's object route in-process with zero
-# serialization (the route observes the SAME slot object address the publisher handed
-# off), an unresolvable topic_hash releases without delivering, and the node-shared
-# object route survives a forced reconnect rebuild with no re-install (looped). Every
-# delivered reference is released. Always built (inproc Policy, no backend needed).
-add_executable(test_object_route_inproc test_object_route_inproc.cpp)
-target_link_libraries(test_object_route_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_object_route_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_object_route_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_object_route_inproc
+    SOURCES test_object_route_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The deterministic drop+surrender oracle on the virtual clock: an established
-# session's REAL transport drop (the partner's accepted end closes) drives an
-# automatic per-slot re-dial through the production receive path with no injection;
-# a clean tear_down drives none; crossing a surrender bound marks is_dead(id) while
-# a co-resident live peer is untouched — always built (inproc Policy, no backend).
-add_executable(test_drop_seam_inproc test_drop_seam_inproc.cpp)
-target_link_libraries(test_drop_seam_inproc PRIVATE
-    plexus::core
-    plexus::shm
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_drop_seam_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_drop_seam_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_drop_seam_inproc
+    SOURCES test_drop_seam_inproc.cpp
+    LINKS plexus::core plexus::shm plexus::wire plexus::inproc)
 
-# The deterministic N>=3-peer concurrent-drop oracle on the virtual clock: one
-# dialer engine holds N established peers, several drop AT ONCE (the remote accepted
-# ends close before the backoff fires), and each dropped slot re-dials independently
-# while every survivor is left bit-for-bit undisturbed; one peer crossing a surrender
-# bound is is_dead with the live peers untouched; a reconnected peer's previous-epoch
-# straggler is dropped by the staleness gate — always built (inproc Policy, no backend).
-add_executable(test_multipeer_reconnect_inproc test_multipeer_reconnect_inproc.cpp)
-target_link_libraries(test_multipeer_reconnect_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_multipeer_reconnect_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_multipeer_reconnect_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_multipeer_reconnect_inproc
+    SOURCES test_multipeer_reconnect_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The deterministic peer-observer behavior oracle: a recording observer registered on
-# a real routing_engine forces the full lifecycle + readiness matrix over the inproc
-# backend — connected/reconnected/disconnected/rejected/dead plus the readiness loop
-# (ready fires once per cycle, re-arms across a reconnect, the zero-subscribe immediate
-# fire, the premature-ready window, the forged-frame underflow guard). The shared
-# recording_observer.h resolves via the tests/integration include dir — always built
-# (inproc Policy, no backend needed).
-add_executable(test_peer_observer_inproc test_peer_observer_inproc.cpp)
-target_link_libraries(test_peer_observer_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_peer_observer_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_peer_observer_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_peer_observer_inproc
+    SOURCES test_peer_observer_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The destroy-peer-mid-redial non-abort oracle: a graph observer registered on a real inproc engine,
-# a peer dropped mid-redial, the engine driven to quiescence with no re-entry into the freed
-# slot_block. Drives the shared support/graph_change_inproc.h harness, so tests/ is on the include
-# path.
-add_executable(test_graph_change_reentrancy_inproc test_graph_change_reentrancy_inproc.cpp)
-target_link_libraries(test_graph_change_reentrancy_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_graph_change_reentrancy_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_graph_change_reentrancy_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_graph_change_reentrancy_inproc
+    SOURCES test_graph_change_reentrancy_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The coarse graph-change zero-alloc gate: it OWNS the single replaceable operator new
-# (support/alloc_counter.h) for its binary, so it is its own executable and needs tests/ on the include
-# path. A warmed coarse mutation->drain->fire loop allocates zero over the heap and bounded engines.
-add_executable(test_graph_change_alloc test_graph_change_alloc.cpp)
-target_link_libraries(test_graph_change_alloc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_graph_change_alloc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_graph_change_alloc TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_graph_change_alloc
+    SOURCES test_graph_change_alloc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc
     PROPERTIES RUN_SERIAL TRUE)
 
-# The data-path tap-point oracle: a recording observer on a publishing routing_engine
-# forces the message-fan-out taps — one publish to N subscribers fires on_message_published
-# once and on_message_delivered once per destination, both posted, and the delivered view
-# borrows the surfaced owner (a shared addref, not a copy). The runtime assertions activate
-# once the data-path emit sites land; this target is BUILT as the compile gate but its ctest
-# discovery is intentionally withheld until the taps make it green. The shared
-# recording_observer.h resolves via the tests/integration include dir.
-add_executable(test_obs_tap_points
-    test_obs_tap_points.cpp
-    test_obs_tap_points_rpc.cpp)
-target_link_libraries(test_obs_tap_points PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_obs_tap_points PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_obs_tap_points TEST_PREFIX "integration.")
+plexus_add_catch_test(test_obs_tap_points
+    SOURCES test_obs_tap_points.cpp test_obs_tap_points_rpc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The declaration-lifecycle timeline oracle: a custom observer reconstructs a node's
-# create/destroy + endpoint declare/drop/register/retire over a single-node inproc
-# composition, witnessing the posted edges by pumping the fixture-owned executor. Uses the
-# node facade (plexus::plexus); the shared recording_observer.h resolves via the integration
-# include dir.
-add_executable(test_spine_lifecycle_inproc
-    test_spine_lifecycle_inproc.cpp
-    test_spine_lifecycle_inproc_edges.cpp)
-target_link_libraries(test_spine_lifecycle_inproc PRIVATE
-    plexus::plexus
-    plexus::wire
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_spine_lifecycle_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_spine_lifecycle_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_spine_lifecycle_inproc
+    SOURCES test_spine_lifecycle_inproc.cpp test_spine_lifecycle_inproc_edges.cpp
+    LINKS plexus::plexus plexus::wire plexus::inproc plexus::discovery)
 
-# The last local subscriber's removal unsubscribes from the publisher once.
-add_executable(test_unsubscribe_e2e_inproc test_unsubscribe_e2e_inproc.cpp)
-target_link_libraries(test_unsubscribe_e2e_inproc PRIVATE
-    plexus::plexus
-    plexus::wire
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_unsubscribe_e2e_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_unsubscribe_e2e_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_unsubscribe_e2e_inproc
+    SOURCES test_unsubscribe_e2e_inproc.cpp
+    LINKS plexus::plexus plexus::wire plexus::inproc plexus::discovery)
 
-# A topic keeps its dispatch hint while the node holds a local endpoint for it.
-add_executable(test_dispatch_hint_retention_inproc test_dispatch_hint_retention_inproc.cpp)
-target_link_libraries(test_dispatch_hint_retention_inproc PRIVATE
-    plexus::plexus
-    plexus::wire
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_dispatch_hint_retention_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_dispatch_hint_retention_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_dispatch_hint_retention_inproc
+    SOURCES test_dispatch_hint_retention_inproc.cpp
+    LINKS plexus::plexus plexus::wire plexus::inproc plexus::discovery)
 
-# Data nobody demands is dropped and its unsubscribe re-sent at a bounded rate.
-add_executable(test_unsolicited_data_inproc test_unsolicited_data_inproc.cpp)
-target_link_libraries(test_unsolicited_data_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_unsolicited_data_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_unsolicited_data_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_unsolicited_data_inproc
+    SOURCES test_unsolicited_data_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The per-topic capture-gate oracle: a counting encode thunk witnesses the gate's pre-encode
-# decision over a connected inproc node pair (publish_object), proving metadata-only forces no
-# encode, payload forces one, wire degrades to payload, both decimation mechanisms drop the
-# expected fraction, the folded gate matches the observer x selected matrix, and a lifecycle-only
-# observer never admits a payload post. The shared recording_observer.h resolves via the
-# integration include dir.
-add_executable(test_capture_gate test_capture_gate.cpp)
-target_link_libraries(test_capture_gate PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_capture_gate PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_capture_gate TEST_PREFIX "integration.")
+plexus_add_catch_test(test_capture_gate
+    SOURCES test_capture_gate.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The read-buffer partial-read oracle: one framed wire message fed to the frame_reassembler
-# in many small sub-header and mid-payload chunks still produces exactly one byte-identical
-# complete_frame — the accumulation behavior any later read-buffer resize must preserve.
-# Header-only wire codec (no backend needed) — always built.
-add_executable(test_read_buffer_partial_read test_read_buffer_partial_read.cpp)
-target_link_libraries(test_read_buffer_partial_read PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_read_buffer_partial_read TEST_PREFIX "integration.")
+plexus_add_catch_test(test_read_buffer_partial_read
+    SOURCES test_read_buffer_partial_read.cpp
+    LINKS plexus::core plexus::wire)
 
-# The locality confinement matrix: the deterministic fan-out gate (synthetic schemes)
-# + the engine demand-side gate (inproc bus) are always built (no backend); the live
-# AF_UNIX/TCP confinement legs compile in only when the asio backend is on (guarded by
-# PLEXUS_HAVE_ASIO_MUX, wired below inside the asio gate). tests/ is on the include path
-# for support headers and the shared make_cfg helpers.
-# The live AF_UNIX confinement leg reaches raw POSIX (unistd.h under PLEXUS_HAVE_ASIO_MUX),
-# so the whole target is excluded from the Windows build.
+# Its live AF_UNIX leg reaches raw POSIX (unistd.h), so the whole target is excluded from the Windows build.
 if(NOT WIN32)
-add_executable(test_locality_confinement
-    test_locality_confinement.cpp
-    test_locality_confinement_wire.cpp
-    test_locality_confinement_live.cpp)
-target_link_libraries(test_locality_confinement PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_locality_confinement PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_locality_confinement TEST_PREFIX "integration.")
+plexus_add_catch_test(test_locality_confinement
+    SOURCES test_locality_confinement.cpp test_locality_confinement_wire.cpp test_locality_confinement_live.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 endif()
 
-# The selection-hook substitutability proof: dummy members composed over the header-only
-# core multiplexer (no backend) prove the DEFAULT hook routes to the first candidate and an
-# INJECTED hook overrides that to a different candidate — the behavioral substitutability of
-# the type-erased selection seam. Always built (pure core, no backend needed).
-add_executable(test_mux_select_hook test_mux_select_hook.cpp)
-target_link_libraries(test_mux_select_hook PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_mux_select_hook TEST_PREFIX "integration.")
+plexus_add_catch_test(test_mux_select_hook
+    SOURCES test_mux_select_hook.cpp
+    LINKS plexus::core plexus::wire)
 
-# The transport-steering gate: a PURE value-object proof that a publisher's declared
-# topic_qos.reliability and dispatch observably steer the transport_selector's class
-# verdict (the no-silent-downgrade rule + the dispatch-preference consultation), and that
-# the selector verdict mirrors the engine reliability gate for every scheme. Header-only
-# core (no backend) — always built; the `integration.` ctest prefix selects it, the
-# "transport steering" case substrings let `ctest -R 'transport steering'` match.
-add_executable(test_transport_steering test_transport_steering.cpp)
-target_link_libraries(test_transport_steering PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_transport_steering TEST_PREFIX "integration.")
+plexus_add_catch_test(test_transport_steering
+    SOURCES test_transport_steering.cpp
+    LINKS plexus::core plexus::wire)
 
-# The deterministic deadline/liveliness behavioral gate on the virtual clock: a
-# subscriber drives subscribe(id, fqn, qos) with its requested periods, the engine
-# arms the one router-level monitor at the ready edge, a data gap fires exactly one
-# missed-deadline, a presence (data+heartbeat) silence fires exactly one lease-expiry,
-# and a continuing keepalive heartbeat keeps the lease alive while data lapses (the
-# two-stamp distinction end-to-end). Each timing leg is looped over the virtual clock.
-# Always built (inproc Policy, no backend needed); the `integration.` ctest prefix and
-# the "deadline liveliness" case substrings let `ctest -R 'deadline liveliness'` match.
-add_executable(test_deadline_liveliness
-    test_deadline_liveliness.cpp
-    test_deadline_liveliness_lease.cpp)
-target_link_libraries(test_deadline_liveliness PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_deadline_liveliness PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_deadline_liveliness TEST_PREFIX "integration.")
+plexus_add_catch_test(test_deadline_liveliness
+    SOURCES test_deadline_liveliness.cpp test_deadline_liveliness_lease.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The fused peer-liveliness verdict edge end-to-end through the inproc engine: a subscribed observer
-# sees one alive/lost truth from the awareness/heartbeat/session feeds, and an unsubscribed node emits
-# zero verdicts while aging identically (the byte-identical floor). Always built (inproc Policy, no
-# backend needed); the `integration.` ctest prefix plus the "liveliness.verdict" case tokens let
-# `ctest -R liveliness.verdict` match. The shared liveliness_inproc_common.h resolves via the current dir.
-add_executable(test_liveliness_verdict_inproc test_liveliness_verdict_inproc.cpp)
-target_link_libraries(test_liveliness_verdict_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_liveliness_verdict_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_liveliness_verdict_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_liveliness_verdict_inproc
+    SOURCES test_liveliness_verdict_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The fused peer-liveliness precedence + hysteresis oracle: a real transport drop dominates a fresh
-# heartbeat (lost within one tick), an awareness loss under a live session does not flap, post-drop
-# silence stays lost with no stale-heartbeat resurrection, and a rejected handshake settles lost under
-# session_authoritative. Always built (inproc Policy, no backend needed); the `integration.` ctest
-# prefix plus the "liveliness.arbitration" case tokens let `ctest -R liveliness.arbitration` match. The
-# shared liveliness_inproc_common.h resolves via the current dir.
-add_executable(test_liveliness_arbitration_inproc test_liveliness_arbitration_inproc.cpp)
-target_link_libraries(test_liveliness_arbitration_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_liveliness_arbitration_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_liveliness_arbitration_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_liveliness_arbitration_inproc
+    SOURCES test_liveliness_arbitration_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The end-to-end request-vs-offered compatibility gate over the inproc rendezvous: a
-# subscriber demands a producer's topic carrying its requested QoS + chosen rxo_mode;
-# the producer runs the compatibility check at the fan-out gate and the outcome is
-# surfaced subscriber-side. Per soft field a strict incompatible pair is refused (no
-# data) while a compatible pair communicates, the same pair under permissive connects
-# and surfaces a NON-EMPTY degraded set, and a requires-source-identity subscriber is
-# refused regardless of mode against a non-offering producer. Each behavioral leg is
-# looped. Always built (inproc Policy, no backend needed); the `integration.` ctest
-# prefix and the "rxo compatibility" case substrings let `ctest -R 'rxo compatibility'`
-# match.
-add_executable(test_rxo_compatibility
-    test_rxo_compatibility.cpp
-    test_rxo_compatibility_soft.cpp)
-target_link_libraries(test_rxo_compatibility PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_rxo_compatibility PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_rxo_compatibility TEST_PREFIX "integration.")
+plexus_add_catch_test(test_rxo_compatibility
+    SOURCES test_rxo_compatibility.cpp test_rxo_compatibility_soft.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The subscriber-QoS wire round-trip identity unit: from_wire_region(to_wire_region(q))
-# reproduces q over every requested_flags bit, the scalar/enum fields, and a couple of
-# combinations. Pure header-only core (no backend needed) — always built; the
-# `integration.` ctest prefix and the "subscribe qos wire" case substrings let
-# `ctest -R subscribe_qos_wire` and `ctest -R 'subscribe qos wire'` both match.
-add_executable(test_subscribe_qos_wire test_subscribe_qos_wire.cpp)
-target_link_libraries(test_subscribe_qos_wire PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_subscribe_qos_wire TEST_PREFIX "integration.")
+plexus_add_catch_test(test_subscribe_qos_wire
+    SOURCES test_subscribe_qos_wire.cpp
+    LINKS plexus::core plexus::wire)
 
-# The security attach-gate bridge oracle: two peer_sessions over the inproc backend
-# drive the end-to-end attach surface — the dedicated security_event, the lifecycle
-# rejected edge, the AEAD install hook, the stream-tamper teardown, and the auth-only
-# + datagram posture refusal. No OpenSSL (the transcript seam is a deterministic fake,
-# the attach_policy a test double) — always built (inproc Policy, no backend needed).
-add_executable(test_security_attach_inproc test_security_attach_inproc.cpp)
-target_link_libraries(test_security_attach_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_security_attach_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_security_attach_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_security_attach_inproc
+    SOURCES test_security_attach_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The downgrade + posture-mismatch refusal oracle: a transcript-bound proof failure (a
-# forced cipher/version downgrade) is refused with downgrade_refused BOTH ways, and a
-# secured-vs-plain posture mismatch is refused with posture_mismatch BOTH ways —
-# fail-closed, no silent plaintext fallback. No OpenSSL (test policy + fake transcript
-# seam) — always built (inproc Policy, no backend needed).
-add_executable(test_downgrade_inproc test_downgrade_inproc.cpp)
-target_link_libraries(test_downgrade_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_downgrade_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_downgrade_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_downgrade_inproc
+    SOURCES test_downgrade_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The recorder write-path spine oracle: the bounded grown-once SPSC byte-ring's
-# hard invariants — backing store allocated once (the alloc counter delta is zero
-# across a saturating push loop), never-block + drop-newest on a full ring, the
-# exact dropout accounting (sum(dropout.count)+drained==produced, looped), the
-# byte-budget residency bound, the no-thread cooperative drain into the in-memory
-# byte_sink, and the drop-oldest overwrite discipline. Deterministic header-only
-# core (no backend). tests/ is on the include path for support/alloc_counter.h and
-# the current dir for in_memory_byte_sink.h.
-add_executable(test_byte_ring test_byte_ring.cpp)
-target_link_libraries(test_byte_ring PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-target_include_directories(test_byte_ring PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_byte_ring TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_byte_ring
+    SOURCES test_byte_ring.cpp
+    LINKS plexus::core plexus::wire
     PROPERTIES RUN_SERIAL TRUE)
 
-# The flat record-stream format oracle: the canonical encoding round-trips through the
-# reader (mixed categories, a payload sample byte-identical with no codec in the path),
-# the envelope union reserves the wire-record variant, a mid-write truncation recovers
-# every complete record and loses only the trailing partial, and the recording_sink ->
-# flat_recorder -> byte_ring -> byte_sink chain captures synthetic observer edges that
-# decode offline. Deterministic header-only core (no backend). tests/ is on the include
-# path and the current dir for in_memory_byte_sink.h.
-add_executable(test_record_stream
-    test_record_stream.cpp
-    test_record_stream_offline.cpp
-    test_record_stream_schema.cpp)
-target_link_libraries(test_record_stream PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-target_include_directories(test_record_stream PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_record_stream TEST_PREFIX "integration.")
+plexus_add_catch_test(test_record_stream
+    SOURCES test_record_stream.cpp test_record_stream_offline.cpp test_record_stream_schema.cpp
+    LINKS plexus::core plexus::wire)
 
-# The projector-seam lifetime oracle: read_projection_input decodes the shared
-# (definitions, records, recovery) every host projector consumes and OWNS its payloads —
-# the drop-input-first case frees + overwrites the source bytes before reading a recovered
-# payload and asserts byte-identity (a borrowed span would be a use-after-free the mcap
-# round-trip cannot catch), plus a non-flat buffer returns nullopt. Deterministic header-only
-# core (no backend); not gated on mcap. tests/ + the current dir for in_memory_byte_sink.h.
-add_executable(test_record_projection test_record_projection.cpp)
-target_link_libraries(test_record_projection PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_record_projection PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_record_projection TEST_PREFIX "integration.")
+plexus_add_catch_test(test_record_projection
+    SOURCES test_record_projection.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The host recording-sink oracle: the bundled std::filesystem file_sink writes a stream
-# byte-identical to the in-memory sink; the rotating_sink honors keep-N retention and re-emits the
-# recorder's cached head+defs preamble per segment so each rotated segment decodes standalone; and
-# the per-topic record-rate QoS (every-Nth / disable / max-Hz) drops before the ring push. Links
-# the host lib (plexus::core only, ungated) — no mcap, no serializer. tests/ + the current dir on
-# the include path for in_memory_byte_sink.h.
-add_executable(test_recording_host_sink
-    test_recording_host_sink.cpp
-    test_recording_host_sink_qos.cpp)
-target_link_libraries(test_recording_host_sink PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::recording-host
-    Catch2::Catch2WithMain)
-target_include_directories(test_recording_host_sink PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_recording_host_sink TEST_PREFIX "integration.")
+plexus_add_catch_test(test_recording_host_sink
+    SOURCES test_recording_host_sink.cpp test_recording_host_sink_qos.cpp
+    LINKS plexus::core plexus::wire plexus::recording-host)
 
-# The lossless recording_channel decorator oracle: send/recv byte-fidelity (forwarded ==
-# input on both directions), the OUT/IN taps fire once each with verbatim bytes, the inert
-# (no-tap) edge, and a captured frame reaching the recorder as a wire_frame record through
-# recording_sink. Deterministic header-only core (no backend). tests/ is on the include path
-# and the current dir for in_memory_byte_sink.h.
-add_executable(test_recording_channel
-    test_recording_channel.cpp
-    test_recording_channel_sink.cpp)
-target_link_libraries(test_recording_channel PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_recording_channel PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_recording_channel TEST_PREFIX "integration.")
+plexus_add_catch_test(test_recording_channel
+    SOURCES test_recording_channel.cpp test_recording_channel_sink.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The two-node cross-node loss-join oracle: a sender's recording_channel stamps a per-direction
-# OUT sequence and a receiver's an IN sequence; a relay drops one frame in transit, and decoding
-# both recorded streams offline identifies the lost packet by sequence arithmetic alone (present
-# in the sender OUT run, absent in the receiver IN run) with no cross-node clock — proven over
-# several runs on deliberately skewed recorder clocks. Deterministic header-only core (no
-# backend). tests/ is on the include path and the current dir for in_memory_byte_sink.h.
-add_executable(test_wire_loss_join test_wire_loss_join.cpp)
-target_link_libraries(test_wire_loss_join PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-target_include_directories(test_wire_loss_join PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_wire_loss_join TEST_PREFIX "integration.")
+plexus_add_catch_test(test_wire_loss_join
+    SOURCES test_wire_loss_join.cpp
+    LINKS plexus::core plexus::wire)
 
-# The construction-time per-transport wire-capture public-API oracle: a node composed over the
-# wire-capturing policy + transport (node_options.wire opted in) mints the recording_channel
-# decorator and a make_recorder attach captures wire_frame records; a default node mints bare
-# channels and records none (the structural-absence witness holds). Public node facade only.
-# Links the facade for the typed endpoints + recorder; tests/ + the current dir on the include
-# path for in_memory_byte_sink.h.
-add_executable(test_wire_public_api
-    test_wire_public_api.cpp
-    test_wire_public_api_absence.cpp)
-target_link_libraries(test_wire_public_api PRIVATE
-    plexus::plexus
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_wire_public_api PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_wire_public_api TEST_PREFIX "integration.")
+plexus_add_catch_test(test_wire_public_api
+    SOURCES test_wire_public_api.cpp test_wire_public_api_absence.cpp
+    LINKS plexus::plexus plexus::core plexus::wire plexus::inproc plexus::discovery)
 
-# The structural-absence symbol guard: a default (non-wire) build artifact must contain NO
-# recording_channel template instantiation symbol. test_routing_engine_inproc composes a full
-# inproc node WITHOUT wire capture, so its binary is the witness — nm must find no
-# recording_channel symbol. A ctest-runnable guard over the known default-build artifact.
+# A default build must hold no recording_channel instantiation symbol. test_routing_engine_inproc composes a full
+# inproc node without wire capture, so nm over its binary is the witness.
 add_test(NAME integration.wire_inert_no_decorator_symbol
     COMMAND ${CMAKE_COMMAND}
         -DBINARY=$<TARGET_FILE:test_routing_engine_inproc>
         -P ${CMAKE_CURRENT_SOURCE_DIR}/wire_inert_symbol_guard.cmake)
 
-# The recorder oracle, in two halves: the pre-buffer / FDR mode (drop-oldest, freeze =
-# two indices with zero allocation, three trigger sources, captured_span) AND the public-
-# API end-to-end capture (node.make_recorder attach + the RAII handle over a live multi-
-# endpoint inproc session, offline recovery, dropout accounting closed, a post-dtor-pump
-# teardown section). Links the public facade + inproc for the end-to-end half. tests/ is on
-# the include path for support/alloc_counter.h and the current dir for in_memory_byte_sink.h.
-add_executable(test_recorder_capture
-    test_recorder_capture.cpp
-    test_recorder_capture_fdr.cpp
-    test_recorder_capture_endtoend.cpp
-    test_recorder_capture_teardown.cpp)
-target_link_libraries(test_recorder_capture PRIVATE
-    plexus::plexus
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    plexus::discovery
-    Catch2::Catch2WithMain)
-target_include_directories(test_recorder_capture PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_recorder_capture TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_recorder_capture
+    SOURCES test_recorder_capture.cpp test_recorder_capture_fdr.cpp test_recorder_capture_endtoend.cpp
+        test_recorder_capture_teardown.cpp
+    LINKS plexus::plexus plexus::core plexus::wire plexus::inproc plexus::discovery
     PROPERTIES RUN_SERIAL TRUE)
 
-# The recorder-attached alloc gate: with a recorder draining, the steady-state push ->
-# encode -> ring -> drain path allocates ZERO after attach (grown-once ring + reused encode
-# scratch, a pre-grown fixed-capacity drain target isolating the recorder's own path). A
-# contrast cell shows the inert baseline is itself zero on the same loop. The replaceable
-# global new/delete constrains it to its own TU. tests/ is on the include path for
-# support/alloc_counter.h.
-add_executable(test_recorder_attached_alloc test_recorder_attached_alloc.cpp)
-target_link_libraries(test_recorder_attached_alloc PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-target_include_directories(test_recorder_attached_alloc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_recorder_attached_alloc TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_recorder_attached_alloc
+    SOURCES test_recorder_attached_alloc.cpp
+    LINKS plexus::core plexus::wire
     PROPERTIES RUN_SERIAL TRUE)
 
-# The host-identity accessor oracle: the authenticated peer's host identity is
-# read from the security step (SPKI-derived for TLS, attach-bound for PSK), never a
-# self-asserted TXT/wire claim. Pure free-function legs + a bridge accessor leg — always
-# built (inproc Policy, no backend needed).
-add_executable(test_host_identity_inproc
-    test_host_identity_inproc.cpp
-    test_host_identity_inproc_plaintext.cpp)
-target_link_libraries(test_host_identity_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_host_identity_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_host_identity_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_host_identity_inproc
+    SOURCES test_host_identity_inproc.cpp test_host_identity_inproc_plaintext.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# The live TCP round-trip needs the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
-    add_executable(test_asio_roundtrip test_asio_roundtrip.cpp)
-    target_link_libraries(test_asio_roundtrip PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    # Serialized + RESOURCE_LOCK on the shared loopback resource: this real-TCP leg
-    # (and the other *over asio* legs below) flaked only under contended parallel ctest
-    # -- many real-loopback handshake/reconnect tests piling onto the kernel TCP stack at
-    # once squeezed each test's fixed wall-clock pump deadline. RUN_SERIAL keeps them off
-    # each other; the shared loopback RESOURCE_LOCK keeps them off any other socket leg.
-    catch_discover_tests(test_asio_roundtrip TEST_PREFIX "integration."
+    # Real-loopback legs flaked under contended parallel ctest, which squeezed each test's fixed wall-clock pump
+    # deadline. RUN_SERIAL keeps them off each other; the loopback RESOURCE_LOCK keeps them off any other socket leg.
+    plexus_add_catch_test(test_asio_roundtrip
+        SOURCES test_asio_roundtrip.cpp
+        LINKS plexus::core plexus::wire plexus::asio
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-    # The asio control-frame demux smoke test: a frame_header-wrapped subscribe
-    # pushed through the real asio reassembler + frame_router over TCP loopback
-    # demuxes to the subscribe consumer — proving the frame_header.type byte
-    # survives the asio receive path (the receive-contract proof, at the point of
-    # change). Same asio gate + `integration.` ctest prefix.
-    add_executable(test_asio_frame_contract test_asio_frame_contract.cpp)
-    target_link_libraries(test_asio_frame_contract PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_asio_frame_contract TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_asio_frame_contract
+        SOURCES test_asio_frame_contract.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The live TCP loopback req/res roundtrip: a server-side provider and a
-    # client-side caller over a real bidirectional asio connection, each on_data
-    # wired straight to a frame_router (the settled header-on receive contract).
-    # Loops the FULL roundtrip N>=100 in-body; the ctest invocation is re-run
-    # >=3 process runs for cross-process reproducibility. Includes the
-    # concurrent-outstanding stress (distinct correlation_ids in flight at once).
-    add_executable(test_reqres_roundtrip_asio
-        test_reqres_roundtrip_asio.cpp
-        test_reqres_roundtrip_asio_concurrent.cpp)
-    target_link_libraries(test_reqres_roundtrip_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_reqres_roundtrip_asio TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_reqres_roundtrip_asio
+        SOURCES test_reqres_roundtrip_asio.cpp test_reqres_roundtrip_asio_concurrent.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The live TCP loopback req/res TIMEOUT proof: a real provider that receives the
-    # request but never replies; the caller's asio steady_timer fires the per-call
-    # deadline as rpc_status::timeout over the production receive path. Loops the
-    # behavior in-body; the ctest invocation is re-run >=3 process runs for
-    # cross-process reproducibility (a live-timing claim is never made from one run).
-    add_executable(test_reqres_timeout_asio test_reqres_timeout_asio.cpp)
-    target_link_libraries(test_reqres_timeout_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_reqres_timeout_asio TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_reqres_timeout_asio
+        SOURCES test_reqres_timeout_asio.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The live TCP loopback latch-replay: a publisher latches + publishes, then a
-    # SECOND client connects and subscribes and receives the RETAINED value over the
-    # real reassembler-framed stream through frame_router::on_unidirectional (the
-    # replay is byte-identical to a normal data frame, so it must). Carries the
-    # non-latched negative over asio. Loops the full roundtrip N>=100 in-body; the
-    # ctest invocation is re-run >=3 process runs for cross-process reproducibility.
-    add_executable(test_latch_replay_asio test_latch_replay_asio.cpp)
-    target_link_libraries(test_latch_replay_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_latch_replay_asio TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_latch_replay_asio
+        SOURCES test_latch_replay_asio.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The live peer_session bridge oracle over real TCP loopback: a hand-dialed
-    # client and an accepted server end of ONE bidirectional connection stand up two
-    # peer_sessions that complete the handshake (the simultaneous-connect path), mint
-    # non-zero epochs, flow a real published message over the reassembler-framed TCP
-    # stream, and prove the data-path staleness gate fires over TCP (a mismatched
-    # non-zero session_id is dropped; the latched epoch is delivered). Loops the full
-    # scenario N>=100 in-body; the ctest invocation is re-run >=3 process runs for
-    # cross-process reproducibility (a live networking claim is never made from one
-    # run). Links plexus::inproc too: the synthetic stale gate-frame is produced by
-    # the production framing path over an inproc capture link, then fed verbatim to
-    # the asio receiver's on_receive.
-    add_executable(test_peer_session_asio
-        test_peer_session_asio.cpp
-        test_peer_session_asio_staleness.cpp)
-    target_link_libraries(test_peer_session_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_peer_session_asio TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_peer_session_asio
+        SOURCES test_peer_session_asio.cpp test_peer_session_asio_staleness.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
 
-    # The DIALED asio transport oracle over real TCP loopback: the transport's
-    # listen + async-connect dial stand up two peer_sessions (no hand-dial,
-    # no manual socket().connect / poll loop) that handshake to completion, mint
-    # non-zero epochs, and flow a real published message carrying the minted epoch.
-    # Loops the full scenario N>=100 in-body; the ctest invocation is re-run >=3
-    # process runs for cross-process reproducibility. Links plexus::inproc for the
-    # forwarder framing path the oracle reuses.
-    add_executable(test_transport_dial_asio test_transport_dial_asio.cpp)
-    target_link_libraries(test_transport_dial_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_transport_dial_asio TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_transport_dial_asio
+        SOURCES test_transport_dial_asio.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
 
-    # The gated real-TCP routing oracle: the routing_engine over asio_transport (no
-    # hand-dial) proves BOTH dial knobs over loopback — lazy (no connection until a
-    # demand call, then dial+handshake) and eager (dial on awareness) — flows a real
-    # published message carrying the minted epoch, and proves the two-peer receive-
-    # path source identity leg over the wire (one node dialing two peers near-
-    # simultaneously resolves each frame to its own source, no cross-attribution; the
-    # overlapping in-flight dials also exercise the dial-completion correlation).
-    # Loops the behavioral paths N>=100 in-body; the ctest invocation is re-run >=3
-    # process runs. Links plexus::inproc for the forwarder framing path.
-    add_executable(test_routing_engine_asio
-        test_routing_engine_asio.cpp
-        test_routing_engine_asio_identity.cpp)
-    target_link_libraries(test_routing_engine_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_routing_engine_asio TEST_PREFIX "integration."
+    # A real-loopback leg with a fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
+    plexus_add_catch_test(test_routing_engine_asio
+        SOURCES test_routing_engine_asio.cpp test_routing_engine_asio_identity.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-    # The gated real-TCP peer-observer behavior oracle: a recording observer on a
-    # routing_engine over asio_transport proves the lifecycle + readiness matrix over a
-    # real socket — connected/reconnected/disconnected/rejected/dead plus the readiness
-    # loop (ready once per cycle over the real subscribe->ack loop, double-fire
-    # prevention across a real reconnect, the premature-ready window, the accepted-peer
-    # edge subset, posted re-entrant delivery). Reuses the shared recording_observer.h
-    # via the tests/integration include dir. Loops N>=100 in-body; re-run >=3 process
-    # runs. Links plexus::inproc for the forwarder framing path the peers reuse.
-    add_executable(test_peer_observer_asio
-        test_peer_observer_asio.cpp
-        test_peer_observer_asio_readiness.cpp
-        test_peer_observer_asio_reentrancy.cpp)
-    target_link_libraries(test_peer_observer_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    target_include_directories(test_peer_observer_asio PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..
-        ${CMAKE_CURRENT_SOURCE_DIR})
-    catch_discover_tests(test_peer_observer_asio TEST_PREFIX "integration."
+    # A real-loopback leg with a fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
+    plexus_add_catch_test(test_peer_observer_asio
+        SOURCES test_peer_observer_asio.cpp test_peer_observer_asio_readiness.cpp test_peer_observer_asio_reentrancy.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-    # The gated real-TCP reconnect oracle: an established session whose channel
-    # drops re-dials + re-handshakes over real loopback; the initial-refused path
-    # re-dials a closed port. Links plexus::inproc for the forwarder framing path.
-    add_executable(test_reconnect_asio
-        test_reconnect_asio.cpp
-        test_reconnect_asio_coldstart.cpp)
-    target_link_libraries(test_reconnect_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_reconnect_asio TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_reconnect_asio
+        SOURCES test_reconnect_asio.cpp test_reconnect_asio_coldstart.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
 
-    # The gated real-TCP N>=3-peer concurrent-drop oracle: one dialer engine over
-    # asio_transport holds N established peers; several drop AT ONCE by closing the
-    # accepted sockets, and the engine's OWN production drop route re-dials each slot
-    # independently while every survivor is undisturbed; one peer crossing a surrender
-    # bound is is_dead with the live peers connected. Every drop is a real socket().close
-    # on the accepted end (no injection). Loops in-body; re-run >=3 process runs. Links
-    # plexus::inproc for the forwarder framing path the peers reuse.
-    add_executable(test_multipeer_reconnect_asio
-        test_multipeer_reconnect_asio.cpp
-        test_multipeer_reconnect_asio_surrender.cpp)
-    target_link_libraries(test_multipeer_reconnect_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_multipeer_reconnect_asio TEST_PREFIX "integration."
+    # A real-loopback leg with a fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
+    plexus_add_catch_test(test_multipeer_reconnect_asio
+        SOURCES test_multipeer_reconnect_asio.cpp test_multipeer_reconnect_asio_surrender.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-    # The gated real-TCP stream-channel hardening leg: a raw client socket writes
-    # hostile bytes (a bad-magic run; a header with a withheld payload) into a live
-    # asio_channel stamped with a SHORT-floor stream::stream_inbound_config, and the
-    # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
-    # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
-    # real socket. Loops each path in-body; re-run >=3 process runs.
-    add_executable(test_stream_channel_asio
-        test_stream_channel_asio.cpp
-        test_stream_channel_asio_backpressure.cpp
-        test_stream_channel_asio_largeframe.cpp)
-    target_link_libraries(test_stream_channel_asio PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_stream_channel_asio TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_stream_channel_asio
+        SOURCES test_stream_channel_asio.cpp test_stream_channel_asio_backpressure.cpp
+            test_stream_channel_asio_largeframe.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
 
-    # The stream-channel teardown-quiescence leg: a channel retired after a read-EOF fail with a stalled write in
-    # flight is erased only after the aborted write completion ran, and on_closed is posted exactly once on both the
-    # close() and fail paths, including a retire between the fail and the next poll. The load-bearing signal is the
-    # ASan-clean run over the live loopback.
-    add_executable(test_stream_channel_asio_teardown test_stream_channel_asio_teardown.cpp)
-    target_link_libraries(test_stream_channel_asio_teardown PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    target_include_directories(test_stream_channel_asio_teardown PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_stream_channel_asio_teardown TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_stream_channel_asio_teardown
+        SOURCES test_stream_channel_asio_teardown.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
 
-    # Retire-then-drain over TCP and AF_UNIX: a channel retired with a delivery queued, after a fail, or with a write,
-    # a read or a no-progress wait pending is erased once, from its own close notification, after every one of them
-    # ran. The allocation watch replaces operator new, so the allocation cases share this executable only.
-    add_executable(test_stream_retire_drain test_stream_retire_drain.cpp test_stream_retire_drain_alloc.cpp)
-    target_link_libraries(test_stream_retire_drain PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    target_include_directories(test_stream_retire_drain PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_stream_retire_drain TEST_PREFIX "integration.")
+    # The allocation watch replaces operator new, so the allocation cases share this executable only.
+    plexus_add_catch_test(test_stream_retire_drain
+        SOURCES test_stream_retire_drain.cpp test_stream_retire_drain_alloc.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The serial egress atomic-admission gate: a sans-IO drive of serial_bootstrap::submit against
-    # a mock channel forwarding to a real stream send_queue with a tiny byte cap. Pins the
-    # all-or-nothing payload+trailer admission (no torn frame under backpressure) and the
-    # no-read-after-move owner path on a full queue (the dangling-view UAF, ASan). No socket, no
-    # pty — links the asio headers for serial_bootstrap plus stream/core/wire.
-    add_executable(test_serial_atomic_admission test_serial_atomic_admission.cpp)
-    target_link_libraries(test_serial_atomic_admission PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::stream
-        plexus::asio
-        Catch2::Catch2WithMain)
-    target_include_directories(test_serial_atomic_admission PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_atomic_admission TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_atomic_admission
+        SOURCES test_serial_atomic_admission.cpp
+        LINKS plexus::core plexus::wire plexus::stream plexus::asio)
 
-    # The cross-class UDP reproducibility gate: a best_effort clean-path flow
-    # AND a reliable-datagram-over-loss flow, each looped 100x in-body; the ctest
-    # invocation is re-run across >=3 process runs (a timing/transport claim is never made
-    # from a single run). Header-only inside plexus::asio; the `udp.` ctest prefix selects
-    # it alongside the asio-dir udp legs.
-    add_executable(test_udp_reproducibility
-        test_udp_reproducibility.cpp
-        test_udp_reproducibility_reliable.cpp)
-    target_link_libraries(test_udp_reproducibility PRIVATE
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_udp_reproducibility TEST_PREFIX "udp.")
+    plexus_add_catch_test(test_udp_reproducibility
+        PREFIX "udp."
+        SOURCES test_udp_reproducibility.cpp test_udp_reproducibility_reliable.cpp
+        LINKS plexus::asio)
 
-    # The outbound-send-lifetime gate: a BURST of sends issued in one turn (no drain
-    # between them) each transmit their OWN bytes — the proof that the shared udp_server
-    # owns each in-flight datagram across its async_send_to (a serial owned queue), not a
-    # reused caller scratch. Covers a best_effort burst, a two-peer same-turn overlap, and
-    # a reliable retransmit interleaved with fresh sends. Looped 100x in-body; re-run >=3
-    # process runs. Header-only inside plexus::asio; the `udp.` ctest prefix selects it.
-    add_executable(test_udp_send_burst
-        test_udp_send_burst.cpp
-        test_udp_send_burst_relay.cpp)
-    target_link_libraries(test_udp_send_burst PRIVATE
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_udp_send_burst TEST_PREFIX "udp.")
+    plexus_add_catch_test(test_udp_send_burst
+        PREFIX "udp."
+        SOURCES test_udp_send_burst.cpp test_udp_send_burst_relay.cpp
+        LINKS plexus::asio)
 
-    # The large-payload datagram capability gate: a 1 MB and a 4 MB message round-trip
-    # byte-identically through the existing fragmenter + reassembler over BOTH best-effort
-    # ("udp") and reliable ("udpr") legs, looped in-body and re-run across >=3 process runs.
-    # The deterministic loss/reorder shim (tests/support, reused by the fragment-scale sweep
-    # and the lossy benchmark cell) drives the injected-loss legs and records the measured
-    # loss policy (best-effort drops the whole message; reliable retransmit-reassembles); the
-    # shim's own cross-run determinism is asserted first. Header-only inside plexus::asio;
-    # tests/ is on the include path for support/loss_reorder_shim.h.
-    add_executable(test_udp_large_payload
-        test_udp_large_payload.cpp
-        test_udp_large_payload_roundtrip.cpp
-        test_udp_large_payload_probe.cpp
-        test_udp_large_payload_fragment.cpp)
-    target_link_libraries(test_udp_large_payload PRIVATE
-        plexus::asio
-        Catch2::Catch2WithMain)
-    target_include_directories(test_udp_large_payload PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_udp_large_payload TEST_PREFIX "udp.")
+    plexus_add_catch_test(test_udp_large_payload
+        PREFIX "udp."
+        SOURCES test_udp_large_payload.cpp test_udp_large_payload_roundtrip.cpp test_udp_large_payload_probe.cpp
+            test_udp_large_payload_fragment.cpp
+        LINKS plexus::asio)
 
-    # The out-of-box message-ceiling regression guard: an 8 MiB message (the shipped default
-    # per-message ceiling) round-trips byte-identically over tcp / unix / udpr at FULL SHIPPED
-    # DEFAULTS — no write-queue / back-pressure / ceiling / budget bump — proving the local
-    # back-pressure caps can never silently strangle the shipped ceiling. The TLS leg is added
-    # inside the crypto gate below (it needs the secure backend + OpenSSL). Looped in-body;
-    # re-run >=3 process runs. tests/ is on the include path for shared headers.
-    # The shared fixture reaches raw POSIX (unistd.h), so the target is excluded from Windows.
+    # Its shared fixture reaches raw POSIX (unistd.h), so it is excluded from Windows. A real-loopback leg with a
+    # fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
     if(NOT WIN32)
-    add_executable(test_outofbox_message_ceiling
-        test_outofbox_message_ceiling.cpp
-        test_outofbox_message_ceiling_udp.cpp
-        test_outofbox_message_ceiling_tls.cpp)
-    target_link_libraries(test_outofbox_message_ceiling PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    target_include_directories(test_outofbox_message_ceiling PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_outofbox_message_ceiling TEST_PREFIX "integration."
+    plexus_add_catch_test(test_outofbox_message_ceiling
+        SOURCES test_outofbox_message_ceiling.cpp test_outofbox_message_ceiling_udp.cpp
+            test_outofbox_message_ceiling_tls.cpp
+        LINKS plexus::core plexus::wire plexus::asio
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
     endif()
 
-    # The DIALED AF_UNIX transport oracle over a real local socket: the transport's
-    # listen + async-connect dial stand up two peer_sessions (no hand-dial) that
-    # handshake to completion, mint non-zero epochs, and flow a real published
-    # message carrying the minted epoch. Loops N>=100 in-body; re-run >=3 process
-    # runs. Links plexus::inproc for the forwarder framing path the oracle reuses.
-    add_executable(test_transport_dial_unix
-        test_transport_dial_unix.cpp
-        test_transport_dial_unix_flow.cpp)
-    target_link_libraries(test_transport_dial_unix PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_transport_dial_unix TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_transport_dial_unix
+        SOURCES test_transport_dial_unix.cpp test_transport_dial_unix_flow.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
 
-    # A dial still connecting or handshaking, or an accept completed but not yet handled, when its transport closes: the
-    # dial reports one aborted failure and the accepted socket is dropped. TCP and UDP here, AF_UNIX off Windows, TLS and
-    # DTLS with crypto.
-    add_executable(test_transport_dial_cancel test_transport_dial_cancel.cpp)
-    target_link_libraries(test_transport_dial_cancel PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
+    plexus_add_catch_test(test_transport_dial_cancel
+        SOURCES test_transport_dial_cancel.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
     if(NOT WIN32)
         target_sources(test_transport_dial_cancel PRIVATE test_transport_dial_cancel_unix.cpp)
     endif()
@@ -1221,43 +351,25 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
             $<TARGET_OBJECTS:plexus-crypto>)
         target_link_libraries(test_transport_dial_cancel PRIVATE plexus::crypto)
     endif()
-    catch_discover_tests(test_transport_dial_cancel TEST_PREFIX "integration.")
 
-    # A dial that does not complete within its timeout fails.
-    add_executable(test_dial_deadline_asio test_dial_deadline_asio.cpp)
-    target_link_libraries(test_dial_deadline_asio PRIVATE
-        plexus::plexus
-        plexus::asio
-        plexus::discovery
-        Catch2::Catch2WithMain)
+    plexus_add_catch_test(test_dial_deadline_asio
+        SOURCES test_dial_deadline_asio.cpp
+        LINKS plexus::plexus plexus::asio plexus::discovery)
     if(PLEXUS_ENABLE_CRYPTO_BACKEND)
         target_sources(test_dial_deadline_asio PRIVATE test_dial_deadline_tls.cpp
             $<TARGET_OBJECTS:plexus-crypto>)
         target_link_libraries(test_dial_deadline_asio PRIVATE plexus::crypto)
     endif()
-    catch_discover_tests(test_dial_deadline_asio TEST_PREFIX "integration.")
 
-    # A transport or listener with no consumer installed retires the channel it would have handed over instead of
-    # destroying it under its pending read, handshake wait or posted delivery. Stream families (TCP, AF_UNIX, TLS,
-    # serial) in one binary; datagram, inproc, shared-memory and the core wrappers in the other.
-    add_executable(test_unclaimed_retire_stream test_unclaimed_retire_stream.cpp)
-    target_link_libraries(test_unclaimed_retire_stream PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::testing
-        Catch2::Catch2WithMain)
+    plexus_add_catch_test(test_unclaimed_retire_stream
+        SOURCES test_unclaimed_retire_stream.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::testing)
     if(NOT WIN32)
         target_link_libraries(test_unclaimed_retire_stream PRIVATE util)
     endif()
-    add_executable(test_unclaimed_retire_wrap test_unclaimed_retire_wrap.cpp)
-    target_link_libraries(test_unclaimed_retire_wrap PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        plexus::testing
-        Catch2::Catch2WithMain)
+    plexus_add_catch_test(test_unclaimed_retire_wrap
+        SOURCES test_unclaimed_retire_wrap.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc plexus::testing)
     if(PLEXUS_ENABLE_CRYPTO_BACKEND)
         foreach(unclaimed_target test_unclaimed_retire_stream test_unclaimed_retire_wrap)
             target_sources(${unclaimed_target} PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
@@ -1270,227 +382,95 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         target_link_libraries(test_unclaimed_retire_wrap PRIVATE plexus::shm plexus::native)
         target_compile_definitions(test_unclaimed_retire_wrap PRIVATE PLEXUS_HAVE_SHM)
     endif()
-    catch_discover_tests(test_unclaimed_retire_stream TEST_PREFIX "integration.")
-    catch_discover_tests(test_unclaimed_retire_wrap TEST_PREFIX "integration.")
 
-    # The AF_UNIX capability gate — the ONE unix leg that builds on Windows too (NOT
-    # NOT-WIN32-excluded): an in-process listener+client round-trip over a real local
-    # stream socket proves AF_UNIX delivers bytes both ways, and the platform-divergent
-    # fail-closed leg proves a non-accept-any peer policy is refused at listen where peer
-    # credentials are unavailable. Reaches no raw POSIX (temp dir/pid via plexus::testing),
-    # so it compiles + runs on MSVC and both Linux toolchains.
-    add_executable(test_af_unix_capability test_af_unix_capability.cpp)
-    target_link_libraries(test_af_unix_capability PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_af_unix_capability TEST_PREFIX "integration.")
+    # Unlike the other AF_UNIX legs it reaches no raw POSIX, so it also builds and runs on Windows.
+    plexus_add_catch_test(test_af_unix_capability
+        SOURCES test_af_unix_capability.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The gated real-AF_UNIX reconnect oracle: an established session whose channel
-    # drops re-dials + re-handshakes over a real local socket; the cold-start
-    # missing-socket path re-dials until a listener appears (the same-host demand
-    # resurrection). Links plexus::inproc for the forwarder framing path.
-    add_executable(test_reconnect_unix
-        test_reconnect_unix.cpp
-        test_reconnect_unix_coldstart.cpp)
-    target_link_libraries(test_reconnect_unix PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_reconnect_unix TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_reconnect_unix
+        SOURCES test_reconnect_unix.cpp test_reconnect_unix_coldstart.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
 
-    # The gated real-AF_UNIX stream-channel hardening leg: a raw client socket writes
-    # hostile bytes (a bad-magic run; a header with a withheld payload) into a live
-    # unix_channel stamped with a SHORT-floor stream::stream_inbound_config, and the
-    # channel's on_protocol_close fires with the matching close_cause (invalid_magic;
-    # no_progress_timeout) — the byte-stream slowloris/garbage defense proven over a
-    # real local socket. Loops each path in-body; re-run >=3 process runs.
-    # The raw hostile-client socket writes reach unistd.h directly, so this is Windows-excluded.
+    # Its raw hostile-client socket writes reach unistd.h directly, so it is excluded from Windows.
     if(NOT WIN32)
-    add_executable(test_stream_channel_unix
-        test_stream_channel_unix.cpp
-        test_stream_channel_unix_largeframe.cpp)
-    target_link_libraries(test_stream_channel_unix PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_stream_channel_unix TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_stream_channel_unix
+        SOURCES test_stream_channel_unix.cpp test_stream_channel_unix_largeframe.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc)
     endif()
 
-    # The hardware-free host serial loopback oracle over an openpty pair: two serial_channels,
-    # one adopting each pty fd on one io_context, prove a production-framed message round-trips
-    # host<->host and a peer_session pair completes the point-at-port bring-up handshake
-    # over the framed serial link, reusing the handshake_fsm unchanged. Loops each path
-    # in-body; the ctest invocation is re-run >=3 process runs. Links util for openpty(3).
-    # openpty(3) + pty.h — POSIX-only, so this is excluded from the Windows build.
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_pty_roundtrip test_serial_pty_roundtrip.cpp)
-    target_link_libraries(test_serial_pty_roundtrip PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    catch_discover_tests(test_serial_pty_roundtrip TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_pty_roundtrip
+        SOURCES test_serial_pty_roundtrip.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # The corruption->resync recovery oracle over the same openpty pair: corrupt bytes
-    # (a flipped byte AND a dropped byte) are written RAW onto the master fd, and the slave-end
-    # serial_channel's CRC decorator must drop them, fire the non-fatal on_frame_dropped seam,
-    # magic-resync, and still deliver the following valid frame — with on_protocol_close /
-    # on_closed NEVER fired. Each leg loops in-body; the ctest invocation is re-run >=3 process
-    # runs. Links util for openpty(3).
-    # openpty(3) + pty.h — POSIX-only, so this is excluded from the Windows build.
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_resync test_serial_resync.cpp)
-    target_link_libraries(test_serial_resync PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_resync PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_resync TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_resync
+        SOURCES test_serial_resync.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # A serial channel retired with a verified frame queued or its read pending, over an openpty pair: nothing reaches
-    # the consumer after close and the channel is erased once, after its read and posts drained. POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_retire_drain test_serial_retire_drain.cpp)
-    target_link_libraries(test_serial_retire_drain PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_retire_drain PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_retire_drain TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_retire_drain
+        SOURCES test_serial_retire_drain.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # The host serial channel's egress read off an openpty master equals a serial known-answer row byte for byte.
-    # POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_egress_kat test_serial_egress_kat.cpp)
-    target_link_libraries(test_serial_egress_kat PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_egress_kat PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_egress_kat TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_egress_kat
+        SOURCES test_serial_egress_kat.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # A dropped serial header byte over an openpty pair: the next frame and the peer's liveliness must
-    # survive it. POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_header_drop test_serial_header_drop.cpp)
-    target_link_libraries(test_serial_header_drop PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_header_drop PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_header_drop TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_header_drop
+        SOURCES test_serial_header_drop.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # A publish over a serial leg's frame ceiling is refused at the sender with its own drop cause and never reaches
-    # the wire, while a fitting one on the same leg is delivered. POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_oversize test_serial_oversize.cpp)
-    target_link_libraries(test_serial_oversize PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_oversize PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_oversize TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_oversize
+        SOURCES test_serial_oversize.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # A receiver at the default payload cap refuses a larger peer's over-cap frame as too large, not as line noise, and
-    # delivers the next frame. POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_cap_refusal test_serial_cap_refusal.cpp)
-    target_link_libraries(test_serial_cap_refusal PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_cap_refusal PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_cap_refusal TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_cap_refusal
+        SOURCES test_serial_cap_refusal.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # Each serial egress refuses a frame larger than its leg's ceiling before writing it, and a refused send leaves the
-    # channel and both sessions up. POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_send_refusal test_serial_send_refusal.cpp)
-    target_link_libraries(test_serial_send_refusal PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_send_refusal PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_send_refusal TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_send_refusal
+        SOURCES test_serial_send_refusal.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # A subscriber over a serial leg learns at subscribe time whether the topic fits the leg's frame ceiling, and the
-    # erased and recording wrappers report that ceiling. POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_qos_ceiling test_serial_qos_ceiling.cpp)
-    target_link_libraries(test_serial_qos_ceiling PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_qos_ceiling PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_qos_ceiling TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_qos_ceiling
+        SOURCES test_serial_qos_ceiling.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # The serial options aggregate keeps the serial payload cap under a partial override, on a channel, the test helper
-    # and a listened transport channel. POSIX-only (openpty).
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_serial_options test_serial_options.cpp)
-    target_link_libraries(test_serial_options PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_serial_options PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_serial_options TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_options
+        SOURCES test_serial_options.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
     # Paced openpty measurement rigs (the serial payload-cap sweep and the hold after a dropped header byte), run by
-    # hand: they report numbers and assert nothing, so no ctest is registered. POSIX-only (openpty).
+    # hand and POSIX-only: they report numbers and assert nothing, so no ctest is registered.
     if(NOT WIN32)
     add_executable(test_serial_cap_sweep test_serial_cap_sweep.cpp)
     target_link_libraries(test_serial_cap_sweep PRIVATE
@@ -1501,283 +481,107 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         Catch2::Catch2WithMain
         util)
     target_include_directories(test_serial_cap_sweep PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+        ${PROJECT_SOURCE_DIR}/tests)
     endif()
 
-    # The control-plane acceptance gate over the openpty serial link: a consumer node enumerates a
-    # serial-attached origin THROUGH a relay end-to-end, host-side, before hardware. The origin's
-    # declaration folds over the real serial wire into the relay's topic table; the relay lifts the
-    # handshake-proven identity + topics and emits a peer_report (real emitter + wire codec) the
-    # consumer ingests and surfaces AS relayed, then retires on a kill-origin withdrawal with no
-    # identity churn. Loops the scenario in-body; the ctest invocation is re-run >=3 process runs.
-    # Links util for openpty(3) and inproc for the consumer node — POSIX-only, excluded on Windows.
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_relay_serial_e2e test_relay_serial_e2e.cpp)
-    target_link_libraries(test_relay_serial_e2e PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    catch_discover_tests(test_relay_serial_e2e TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_relay_serial_e2e
+        SOURCES test_relay_serial_e2e.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::inproc util)
 
-    # The two-live-transport acceptance: a relay owning a serial AND a TCP session carries control and
-    # data across the second live session end-to-end (pub/sub + request/response), driven through the
-    # public node facade over a real openpty serial link and a real TCP loopback. POSIX-only (openpty).
-    add_executable(test_forward_serial_e2e test_forward_serial_e2e.cpp)
-    target_link_libraries(test_forward_serial_e2e PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    catch_discover_tests(test_forward_serial_e2e TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_forward_serial_e2e
+        SOURCES test_forward_serial_e2e.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::inproc util)
 
-    # The relay arms no redial to a killed origin's serial line, whose pts name the kernel may already have handed on.
-    add_executable(test_forward_serial_kill_origin test_forward_serial_kill_origin.cpp)
-    target_link_libraries(test_forward_serial_kill_origin PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    catch_discover_tests(test_forward_serial_kill_origin TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_forward_serial_kill_origin
+        SOURCES test_forward_serial_kill_origin.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::inproc util)
 
-    # The consumer-side origination robustness arms over the same cold relay fixture: a dead relay
-    # session fails a caller cleanly as a bounded timeout with a forward-drop count, and a single call
-    # executes the origin's served handler exactly once (no direct+forwarded double-fire).
-    add_executable(test_forward_reqres_robustness test_forward_reqres_robustness.cpp)
-    target_link_libraries(test_forward_reqres_robustness PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    catch_discover_tests(test_forward_reqres_robustness TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_forward_reqres_robustness
+        SOURCES test_forward_reqres_robustness.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # The splice-time envelope gate: an oversized forwarded frame drops-with-count over a narrow
-    # serial leg (openpty) rather than tearing the session down, and a multi-fragment UDP message
-    # reassembles-then-refragments byte-for-byte across an asymmetric-budget relay. POSIX-only.
+    # openpty(3) lives in libutil and is POSIX-only, hence the util link and the Windows exclusion.
     if(NOT WIN32)
-    add_executable(test_forward_envelope_gate test_forward_envelope_gate.cpp)
-    target_link_libraries(test_forward_envelope_gate PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        plexus::inproc
-        Catch2::Catch2WithMain
-        util)
-    target_include_directories(test_forward_envelope_gate PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_forward_envelope_gate TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_forward_envelope_gate
+        SOURCES test_forward_envelope_gate.cpp
+        LINKS plexus::core plexus::wire plexus::asio plexus::inproc util)
     endif()
 
-    # The saturating-publisher memory-bound gate: a producer outrunning a never-reading
-    # peer drives each stream channel's bounded write queue to its cap and no further — the
-    # byte budget is the structural memory bound. Looped per tcp/unix transport; re-run >=3
-    # process runs. The byte cap IS the residency bound (no RSS sampling needed).
-    add_executable(test_egress_saturation_bounded test_egress_saturation_bounded.cpp)
-    target_link_libraries(test_egress_saturation_bounded PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_egress_saturation_bounded TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_egress_saturation_bounded
+        SOURCES test_egress_saturation_bounded.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The af_unix permissions model gate: a real unix_listener over a per-test owner-only
-    # temp dir, stat the on-disk socket inode for the configured mode (0700 default + a
-    # widened knob), and exercise the accept-time peer-credential gate (admit/refuse fail-
-    # closed) plus the closed unlink-before-bind TOCTOU window.
-    # The AF_UNIX filesystem permissions model (chmod/stat via unistd.h) is POSIX-only, so
-    # this is excluded from the Windows build (Windows AF_UNIX carries no mode bits).
+    # The AF_UNIX filesystem permissions model (chmod/stat via unistd.h) is POSIX-only; Windows AF_UNIX carries no
+    # mode bits.
     if(NOT WIN32)
-    add_executable(test_unix_permissions test_unix_permissions.cpp)
-    target_link_libraries(test_unix_permissions PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_unix_permissions TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_unix_permissions
+        SOURCES test_unix_permissions.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # Interposes umask (dlsym RTLD_NEXT) to prove the unix listener's bind never reads or writes it.
-    add_executable(test_unix_bind_umask test_unix_bind_umask.cpp)
-    target_link_libraries(test_unix_bind_umask PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain
-        ${CMAKE_DL_LIBS})
-    catch_discover_tests(test_unix_bind_umask TEST_PREFIX "integration.")
+    # It interposes umask through dlsym(RTLD_NEXT), hence the dl link.
+    plexus_add_catch_test(test_unix_bind_umask
+        SOURCES test_unix_bind_umask.cpp
+        LINKS plexus::core plexus::wire plexus::asio ${CMAKE_DL_LIBS})
 
-    # The asio and unix listeners keep accepting after an EMFILE accept once descriptors free; the exhaustion lowers
-    # RLIMIT_NOFILE, which is POSIX-only.
-    add_executable(test_listener_accept_retry test_listener_accept_retry.cpp)
-    target_link_libraries(test_listener_accept_retry PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    target_include_directories(test_listener_accept_retry PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    # The descriptor exhaustion lowers RLIMIT_NOFILE, which is POSIX-only.
+    plexus_add_catch_test(test_listener_accept_retry
+        SOURCES test_listener_accept_retry.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
     # UBSan's vptr check opens a pipe on a type-cache miss, which aborts inside the exhausted table.
     if(CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
         target_compile_options(test_listener_accept_retry PRIVATE -fno-sanitize=vptr)
     endif()
-    catch_discover_tests(test_listener_accept_retry TEST_PREFIX "integration.")
     endif()
 
-    # The macOS send-to-closed-peer proof: a real plexus asio TCP-loopback and AF_UNIX stream
-    # channel sends into a peer that has abortively closed, and the write surfaces as a hard error
-    # on on_error with the process still alive — the proof that asio's per-fd SO_NOSIGPIPE on Apple
-    # keeps the real transports off the SIGPIPE-on-send process kill. Each socket family loops
-    # in-body; the ctest invocation is re-run >=3 process runs. AF_UNIX + SO_NOSIGPIPE are Apple
-    # platform-isms, so the whole target is macOS-only.
+    # AF_UNIX with SO_NOSIGPIPE is an Apple platform-ism, so the target is macOS-only. A real-loopback leg with a
+    # fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
     if(APPLE)
-    add_executable(macos_test_sigpipe_send_to_closed_peer macos_test_sigpipe_send_to_closed_peer.cpp)
-    target_link_libraries(macos_test_sigpipe_send_to_closed_peer PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(macos_test_sigpipe_send_to_closed_peer TEST_PREFIX "integration."
+    plexus_add_catch_test(macos_test_sigpipe_send_to_closed_peer
+        SOURCES macos_test_sigpipe_send_to_closed_peer.cpp
+        LINKS plexus::core plexus::wire plexus::asio
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
     endif()
 
-    # The multiplexing transport now composes a secure (TLS) member alongside the local
-    # and remote ones, so its header pulls in plexus::crypto and these mux oracles link it
-    # (and only build when the secure backend is ON). The secure member stays inert on
-    # these unix/tcp routes — its credential is a default (invalid) one, never touched
-    # because no "tls" channel is ever dialed/accepted here.
+    # The multiplexing transport composes a TLS member, so the mux oracles here need the crypto backend; that member
+    # stays inert, as no tls channel is dialed or accepted.
     if(PLEXUS_ENABLE_CRYPTO_BACKEND)
-        # The drop-observability coverage oracle: each datagram-path drop cause is forced on
-        # a real component, the engine's posted drop-observer hook delivers it, and the
-        # per-cause occupancy counter is asserted. Needs crypto (the AEAD datagram channel)
-        # and asio (the udp channel/transport drop sites); the engine + reassembler ride the
-        # inproc virtual-clock executor. Loops each leg.
-        add_executable(test_drop_coverage test_drop_coverage.cpp
-            $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_drop_coverage PRIVATE
-            plexus::core
-            plexus::wire
-            plexus::asio
-            plexus::crypto
-            plexus::inproc
-            Catch2::Catch2WithMain)
-        target_include_directories(test_drop_coverage PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/..)
-        catch_discover_tests(test_drop_coverage TEST_PREFIX "integration.")
+        plexus_add_catch_test(test_drop_coverage
+            SOURCES test_drop_coverage.cpp $<TARGET_OBJECTS:plexus-crypto>
+            LINKS plexus::core plexus::wire plexus::asio plexus::crypto plexus::inproc)
 
-        # The live per-peer mux-selection oracle over real AF_UNIX: a multiplexing_transport
-        # over a unix + tcp + tls triple, dialing a same-host ("unix") endpoint, completes
-        # over the local stream — the dialed AND accepted mux_channels report the "unix"
-        # scheme through the erasure, and the dialed endpoint is passed back unchanged. Loops
-        # N>=100 in-body; the ctest invocation is re-run >=3 process runs.
-        add_executable(test_mux_select_unix test_mux_select_unix.cpp
-            $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_mux_select_unix PRIVATE
-            plexus::core
-            plexus::wire
-            plexus::asio
-            plexus::crypto
-            Catch2::Catch2WithMain)
-        catch_discover_tests(test_mux_select_unix TEST_PREFIX "integration.")
+        plexus_add_catch_test(test_mux_select_unix
+            SOURCES test_mux_select_unix.cpp $<TARGET_OBJECTS:plexus-crypto>
+            LINKS plexus::core plexus::wire plexus::asio plexus::crypto)
 
-        # The live per-peer mux-selection oracle over real TCP loopback: a
-        # multiplexing_transport over a unix + tcp + tls triple, dialing a remote ("tcp")
-        # endpoint, completes over the network stream — the dialed AND accepted mux_channels
-        # report the "tcp" scheme through the erasure, and the dialed endpoint is passed back
-        # unchanged. Loops N>=100 in-body; the ctest invocation is re-run >=3 process runs.
-        add_executable(test_mux_select_asio test_mux_select_asio.cpp
-            $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_mux_select_asio PRIVATE
-            plexus::core
-            plexus::wire
-            plexus::asio
-            plexus::crypto
-            Catch2::Catch2WithMain)
-        catch_discover_tests(test_mux_select_asio TEST_PREFIX "integration.")
+        plexus_add_catch_test(test_mux_select_asio
+            SOURCES test_mux_select_asio.cpp $<TARGET_OBJECTS:plexus-crypto>
+            LINKS plexus::core plexus::wire plexus::asio plexus::crypto)
 
-        # The gated real-TLS bounded-outbox hardening leg: the SECOND composition of the
-        # shared stream::detail::send_queue block (the plaintext asio_channel pins the
-        # first). A real mutual-TLS pair handshakes over loopback; the server end never
-        # reads, the encrypted async_write stalls, and the dialed channel's outbox cap
-        # engages — congestion=drop sheds, congestion=block surfaces would_block, the
-        # outbox never grows past the cap. Serialized + RESOURCE_LOCK on the shared
-        # loopback resource alongside the other real-socket legs.
-        add_executable(test_tls_channel_backpressure_asio test_tls_channel_backpressure_asio.cpp
-            $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_tls_channel_backpressure_asio PRIVATE
-            plexus::core
-            plexus::wire
-            plexus::asio
-            plexus::crypto
-            Catch2::Catch2WithMain)
-        catch_discover_tests(test_tls_channel_backpressure_asio TEST_PREFIX "integration."
+        # A real-loopback leg with a fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
+        plexus_add_catch_test(test_tls_channel_backpressure_asio
+            SOURCES test_tls_channel_backpressure_asio.cpp $<TARGET_OBJECTS:plexus-crypto>
+            LINKS plexus::core plexus::wire plexus::asio plexus::crypto
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-        # The TLS pending-dial teardown asan proof: a dial whose io_context and transport are
-        # destroyed mid-handshake leaks nothing, and a dial whose transport closes mid-handshake
-        # is not freed under its pending handshake read. Serialized + RESOURCE_LOCK on the
-        # shared loopback resource alongside the other real-socket legs.
-        add_executable(test_tls_dial_teardown test_tls_dial_teardown.cpp
-            $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_tls_dial_teardown PRIVATE
-            plexus::core
-            plexus::wire
-            plexus::asio
-            plexus::crypto
-            Catch2::Catch2WithMain)
-        catch_discover_tests(test_tls_dial_teardown TEST_PREFIX "integration."
+        # A real-loopback leg with a fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
+        plexus_add_catch_test(test_tls_dial_teardown
+            SOURCES test_tls_dial_teardown.cpp $<TARGET_OBJECTS:plexus-crypto>
+            LINKS plexus::core plexus::wire plexus::asio plexus::crypto
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-        # The TLS retire-then-drain leg: a retired channel drops a queued delivery, is erased after a fail, and
-        # frees its ssl::stream only after the aborted handshake drained.
-        add_executable(test_tls_retire_drain test_tls_retire_drain.cpp
-            $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_tls_retire_drain PRIVATE
-            plexus::core
-            plexus::wire
-            plexus::asio
-            plexus::crypto
-            Catch2::Catch2WithMain)
-        target_include_directories(test_tls_retire_drain PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/..)
-        catch_discover_tests(test_tls_retire_drain TEST_PREFIX "integration."
+        # A real-loopback leg with a fixed wall-clock pump deadline, so it runs alone and holds the loopback lock.
+        plexus_add_catch_test(test_tls_retire_drain
+            SOURCES test_tls_retire_drain.cpp $<TARGET_OBJECTS:plexus-crypto>
+            LINKS plexus::core plexus::wire plexus::asio plexus::crypto
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 
-        # The AEAD x fragment composition proof: the per-fragment seal composes with
-        # io::split + the reassembler end to end — a sealed-fragment large message
-        # round-trips byte-identically in order and under fragment-scale reorder (the
-        # deterministic loss/reorder scheduler), and a forged fragment dies at the tag
-        # check before reaching the reassembler. Deterministic (no socket, no wall clock:
-        # the receiver reassembler runs on the inproc test clock via plexus::testing);
-        # tests/ is on the include path for support/loss_reorder_shim.h.
-        add_executable(test_aead_fragment test_aead_fragment.cpp
-            $<TARGET_OBJECTS:plexus-crypto>)
-        target_link_libraries(test_aead_fragment PRIVATE
-            plexus::core
-            plexus::wire
-            plexus::crypto
-            plexus::testing
-            Catch2::Catch2WithMain)
-        target_include_directories(test_aead_fragment PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/..)
-        catch_discover_tests(test_aead_fragment TEST_PREFIX "integration.")
+        plexus_add_catch_test(test_aead_fragment
+            SOURCES test_aead_fragment.cpp $<TARGET_OBJECTS:plexus-crypto>
+            LINKS plexus::core plexus::wire plexus::crypto plexus::testing)
 
-        # The out-of-box ceiling guard gains its mutual-TLS leg when the secure backend is on:
-        # the same 8 MiB shipped-ceiling round-trip over a live mutual-TLS loopback pair at full
-        # defaults. Linking crypto + the crypto objects and defining PLEXUS_HAVE_TLS_OUTOFBOX
-        # compiles in the guarded TLS test case (the cert fixture needs OpenSSL).
-        # The target is Windows-excluded above (its fixture reaches raw POSIX).
         if(NOT WIN32)
             target_sources(test_outofbox_message_ceiling PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
             target_link_libraries(test_outofbox_message_ceiling PRIVATE plexus::crypto)
@@ -1785,211 +589,84 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         endif()
     endif()
 
-    # The minimal-composition proof: the core multiplexer instantiated DIRECTLY over a
-    # unix + tcp member subset (NOT the all_backends_mux alias) compiles, constructs, and
-    # satisfies the erased transport_backend surface. It links plexus::asio but NEITHER
-    # plexus::crypto NOR OpenSSL — the composability payoff: a node that omits the secure
-    # member pulls in none of the crypto stack.
-    add_executable(test_mux_minimal_composition test_mux_minimal_composition.cpp)
-    target_link_libraries(test_mux_minimal_composition PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_mux_minimal_composition TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_mux_minimal_composition
+        SOURCES test_mux_minimal_composition.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
 
-    # The companion node-level proof: the variadic node ctor that builds the mux itself from
-    # the borrowed leaves (the consumer-facing node<Policy, T1, T2, ...> shape). Links the
-    # node facade; the unix+tcp pack still pulls in no secure member.
-    add_executable(test_mux_node_composition test_mux_node_composition.cpp)
-    target_link_libraries(test_mux_node_composition PRIVATE
-        plexus::plexus
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_mux_node_composition TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_mux_node_composition
+        SOURCES test_mux_node_composition.cpp
+        LINKS plexus::plexus plexus::asio)
 
-    # Proves serial_transport is now mux-composable: node<relay<asio_policy>, serial_transport,
-    # asio_transport> constructs from borrowed leaves and a serial:// dial resolves a candidate
-    # (the misclassified-scheme no-op is closed). Construct-only; links the node facade + the asio
-    # backend for both leaves.
-    add_executable(test_serial_mux_member test_serial_mux_member.cpp)
-    target_link_libraries(test_serial_mux_member PRIVATE
-        plexus::plexus
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_serial_mux_member TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_serial_mux_member
+        SOURCES test_serial_mux_member.cpp
+        LINKS plexus::plexus plexus::asio)
 
-    # The hot-path allocation audit gains a type-erased polymorphic_byte_channel variant when the asio
-    # backend is on: the same steady-state 0-alloc invariant must hold across the single
-    # virtual hop the erasure adds. The mux headers are header-only inside plexus::asio, so
-    # the variant is compiled in (guarded by PLEXUS_HAVE_ASIO_MUX) only here. The same gate
-    # arms the live-loopback UDP best-effort send variants (the idle fast-path and the warm
-    # pooled queued path both proven 0-alloc over a real bound udp_server).
     target_link_libraries(test_hot_path_alloc PRIVATE plexus::asio)
     target_compile_definitions(test_hot_path_alloc PRIVATE PLEXUS_HAVE_ASIO_MUX)
 
-    # The AEAD datagram lane inherits the UDP send path's 0-alloc when the crypto backend is
-    # on: datagram_authenticated_channel seals ABOVE send_to into reused scratch, so the
-    # encrypted datagram boundary adds no steady-state heap. Linked + guarded only here.
     if(PLEXUS_ENABLE_CRYPTO_BACKEND)
         target_sources(test_hot_path_alloc PRIVATE $<TARGET_OBJECTS:plexus-crypto>)
         target_link_libraries(test_hot_path_alloc PRIVATE plexus::crypto)
         target_compile_definitions(test_hot_path_alloc PRIVATE PLEXUS_HAVE_CRYPTO_DATAGRAM)
     endif()
 
-    # The locality confinement test gains its LIVE AF_UNIX/TCP legs when the asio backend
-    # is on: real local + remote channels prove the same fan-out confinement over the wire.
-    # (The target itself is Windows-excluded above — its live leg reaches raw POSIX.)
     if(NOT WIN32)
         target_link_libraries(test_locality_confinement PRIVATE plexus::asio)
         target_compile_definitions(test_locality_confinement PRIVATE PLEXUS_HAVE_ASIO_MUX)
     endif()
 
-    # The co-host shared-memory proof forks its two nodes and maps POSIX shared memory, so it builds wherever the shm
-    # backend is on and the platform is not Windows.
+    # It forks its two nodes and maps POSIX shared memory, so it is excluded from Windows.
     if(PLEXUS_ENABLE_SHM_BACKEND AND TARGET plexus::asio::shm AND NOT WIN32)
-        add_executable(test_node_xproc_shm test_node_xproc_shm.cpp)
-        target_include_directories(test_node_xproc_shm PRIVATE ${PROJECT_SOURCE_DIR}/tests/shm)
-        target_link_libraries(test_node_xproc_shm PRIVATE
-            plexus::plexus
-            plexus::core
-            plexus::wire
-            plexus::asio
-            plexus::asio::shm
-            plexus::native
-            Catch2::Catch2WithMain)
-        catch_discover_tests(test_node_xproc_shm TEST_PREFIX "integration.")
+        plexus_add_catch_test(test_node_xproc_shm
+            SOURCES test_node_xproc_shm.cpp
+            LINKS plexus::plexus plexus::core plexus::wire plexus::asio plexus::asio::shm plexus::native
+            INCLUDES ${PROJECT_SOURCE_DIR}/tests/shm)
     endif()
 
-    # The out-of-box discovery acceptance proof: two configless nodes (default_discovery + node, no
-    # hand-wired socket or leaf) reach mutual awareness over REAL multicast with loopback engaged,
-    # reproduced over several runs with medians. A same-host loopback PROXY for the discovery
-    # MECHANISM only — NOT the two-host same-LAN claim (that stays a hardware-gated manual step). The
-    # hidden [.sweep] case in the same TU is the on-demand announce period/jitter measurement rig.
-    # RUN_SERIAL + the loopback lock keep the real-multicast leg off the other socket legs.
-    add_executable(test_default_discovery_lan
-        test_default_discovery_lan.cpp
-        test_default_discovery_lan_sweep.cpp)
-    target_link_libraries(test_default_discovery_lan PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::discovery
-        plexus::asio
-        plexus::testing
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_default_discovery_lan TEST_PREFIX "integration."
+    # RUN_SERIAL and the loopback lock keep the real-multicast leg off the other socket legs.
+    plexus_add_catch_test(test_default_discovery_lan
+        SOURCES test_default_discovery_lan.cpp test_default_discovery_lan_sweep.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::discovery plexus::asio plexus::testing
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback LABELS "live-multicast")
 
-    # The universe-partition acceptance proof over REAL multicast: (1) a cross-universe pair stays
-    # mutually unaware on the shared group while a same-run same-universe control rendezvous (the
-    # inbound compare partitions, gated by the positive control so a dead network cannot false-pass),
-    # and (2) two hard-scoped same-universe nodes rendezvous on the universe-derived group even with a
-    # deliberately unparsable base group — the failable proof that the factory joins the effective
-    # group. RUN_SERIAL + the loopback lock keep the real-multicast leg off the other socket legs.
-    add_executable(test_default_discovery_universe test_default_discovery_universe.cpp)
-    target_link_libraries(test_default_discovery_universe PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::discovery
-        plexus::asio
-        plexus::testing
-        Catch2::Catch2WithMain)
-    target_include_directories(test_default_discovery_universe PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR})
-    catch_discover_tests(test_default_discovery_universe TEST_PREFIX "integration."
+    # RUN_SERIAL and the loopback lock keep the real-multicast leg off the other socket legs.
+    plexus_add_catch_test(test_default_discovery_universe
+        SOURCES test_default_discovery_universe.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::discovery plexus::asio plexus::testing
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback LABELS "live-multicast")
 
-    # The two-PROCESS out-of-box discovery proof: two configless nodes in separate forked processes
-    # discover each other over same-host multicast loopback, reproduced over several runs.
-    # Fork is POSIX, so the target is Windows-excluded. RUN_SERIAL + the loopback lock as above.
+    # Its two nodes run in forked processes, which is POSIX-only. RUN_SERIAL and the loopback lock keep the
+    # real-multicast leg off the other socket legs.
     if(NOT WIN32)
-        add_executable(test_default_discovery_xproc test_default_discovery_xproc.cpp)
-        target_link_libraries(test_default_discovery_xproc PRIVATE
-            plexus::plexus
-            plexus::core
-            plexus::wire
-            plexus::discovery
-            plexus::asio
-            plexus::testing
-            Catch2::Catch2WithMain)
-        catch_discover_tests(test_default_discovery_xproc TEST_PREFIX "integration."
+        plexus_add_catch_test(test_default_discovery_xproc
+            SOURCES test_default_discovery_xproc.cpp
+            LINKS plexus::plexus plexus::core plexus::wire plexus::discovery plexus::asio plexus::testing
             PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback LABELS "live-multicast")
     endif()
 
-    # Two nodes over real UDP behind a relay that reorders and drops, recovered by the bounded subscribe re-send.
-    add_executable(test_subscribe_retry_udp test_subscribe_retry_udp.cpp)
-    target_link_libraries(test_subscribe_retry_udp PRIVATE
-        plexus::plexus
-        plexus::asio
-        plexus::testing
-        plexus::discovery
-        Catch2::Catch2WithMain)
-    target_include_directories(test_subscribe_retry_udp PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..)
-    catch_discover_tests(test_subscribe_retry_udp TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_subscribe_retry_udp
+        SOURCES test_subscribe_retry_udp.cpp
+        LINKS plexus::plexus plexus::asio plexus::testing plexus::discovery)
 endif()
 
-# The host-side flat-stream to MCAP transcode round-trip: a live wire-capturing inproc
-# session captured into an in-memory flat stream, transcoded to an MCAP file, read back with
-# the mcap reader, and the channel/schema/message mapping asserted (per-topic sample channel,
-# synthetic plexus-events channels, the wire channel). Registered ONLY when the transcode tool
-# is enabled (it links mcap_transcode_lib, which pulls in the host-only mcap dependency); the
-# default suite never builds or registers it. tests/ + the current dir on the include path for
-# in_memory_byte_sink.h, and mcap_transcode_lib carries the transcode + mcap include paths.
 if(PLEXUS_BUILD_MCAP_TRANSCODE)
-    add_executable(test_mcap_transcode test_mcap_transcode.cpp)
-    target_link_libraries(test_mcap_transcode PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::inproc
-        plexus::discovery
-        plexus::hints-robotics
-        plexus::recording-host
-        mcap_transcode_lib
-        plexus_mcap_dep
-        Catch2::Catch2WithMain)
-    target_include_directories(test_mcap_transcode PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..
-        ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_definitions(test_mcap_transcode PRIVATE
-        PLEXUS_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-    catch_discover_tests(test_mcap_transcode TEST_PREFIX "integration.")
+    plexus_add_catch_test(test_mcap_transcode
+        SOURCES test_mcap_transcode.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::inproc plexus::discovery plexus::hints-robotics
+            plexus::recording-host mcap_transcode_lib plexus_mcap_dep
+        DEFINES PLEXUS_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 endif()
 
-# The host-side flat-stream to pcapng transcode round-trip: a live wire-capturing inproc
-# session captured into an in-memory flat stream, transcoded to a pcapng file, parsed back
-# in-test (no external dependency), and the block structure asserted (SHB byte-order magic +
-# crypto-position comment, IDB DLT_USER0, one EPB per wire frame with direction flags, ns
-# timestamps, verbatim packet bytes). Registered ONLY when the pcap tool is enabled; the
-# default suite never builds it. The test also writes the captured flat stream to a
-# deterministic build-dir path (PLEXUS_QA_CAPTURE_PATH) as the fixture the dependent QA gate
-# consumes. pcapng is hand-rolled, so the test links pcap_transcode_lib and pulls no third party.
 if(PLEXUS_BUILD_PCAP_TRANSCODE)
-    add_executable(test_pcap_transcode test_pcap_transcode.cpp)
-    target_link_libraries(test_pcap_transcode PRIVATE
-        plexus::plexus
-        plexus::core
-        plexus::wire
-        plexus::inproc
-        plexus::discovery
-        pcap_transcode_lib
-        Catch2::Catch2WithMain)
-    target_include_directories(test_pcap_transcode PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/..
-        ${CMAKE_CURRENT_SOURCE_DIR})
-    target_compile_definitions(test_pcap_transcode PRIVATE
-        PLEXUS_QA_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture.plxr"
-        PLEXUS_QA_CIPHER_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture_ciphertext.plxr")
-    catch_discover_tests(test_pcap_transcode TEST_PREFIX "integration.")
+    # It writes the captured streams to these build-dir paths as the fixtures the dissector QA test reads.
+    plexus_add_catch_test(test_pcap_transcode
+        SOURCES test_pcap_transcode.cpp
+        LINKS plexus::plexus plexus::core plexus::wire plexus::inproc plexus::discovery pcap_transcode_lib
+        DEFINES PLEXUS_QA_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture.plxr"
+            PLEXUS_QA_CIPHER_CAPTURE_PATH="${CMAKE_CURRENT_BINARY_DIR}/plexus_qa_capture_ciphertext.plxr")
 
-    # The tshark QA gate: load the projector's pcapng under the Lua dissector and assert a
-    # decoded field VALUE matches a known fixture input (a big-endian byte-order guard) plus a
-    # sealed-blob branch for the ciphertext capture. It consumes the deterministic build-dir
-    # fixtures the C++ test above produces, so it is ordered after it. Skips gracefully where
-    # tshark is absent.
+    # Runs the projector's pcapng through the Lua dissector under tshark, skipping where tshark is absent, and reads
+    # the fixtures the transcode test writes, so it depends on that test.
     add_test(NAME integration.pcap_dissector_qa
              COMMAND ${CMAKE_COMMAND} -E env sh
                      ${CMAKE_CURRENT_SOURCE_DIR}/test_pcap_dissector_qa.sh
@@ -2001,399 +678,149 @@ if(PLEXUS_BUILD_PCAP_TRANSCODE)
         DEPENDS "integration.pcap transcode round-trips a captured session through a parsed pcapng")
 endif()
 
-# The user-owned-shared-executor proof: a native multicast_discovery and an asio
-# transport co-progress on ONE io_context. It reuses the wired datagram seam from
-# the node tests, so it runs deterministically in the default set (no real
-# multicast). RUN_SERIAL + the loopback lock keep it off the other real-TCP legs.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
-    add_executable(test_native_shared_executor test_native_shared_executor.cpp)
-    target_link_libraries(test_native_shared_executor PRIVATE
-        plexus::core
-        plexus::wire
-        plexus::asio
-        Catch2::Catch2WithMain)
-    catch_discover_tests(test_native_shared_executor TEST_PREFIX "integration."
+    # RUN_SERIAL and the loopback lock keep its asio transport off the other real-TCP legs.
+    plexus_add_catch_test(test_native_shared_executor
+        SOURCES test_native_shared_executor.cpp
+        LINKS plexus::core plexus::wire plexus::asio
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
 endif()
 
-# The evolved awareness-path alloc gate: re-noting a known direct peer and looking it up adds zero
-# allocation on the existing direct-only path (heap and fixed twins), the fixed twin allocating nothing
-# at all. It owns the single replaceable operator new (support/alloc_counter.h), so it is its own
-# executable and needs tests/ on the include path.
-add_executable(test_route_note_noalloc test_route_note_noalloc.cpp)
-target_link_libraries(test_route_note_noalloc PRIVATE
-    plexus::core
-    Catch2::Catch2WithMain)
-target_include_directories(test_route_note_noalloc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_route_note_noalloc TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_route_note_noalloc
+    SOURCES test_route_note_noalloc.cpp
+    LINKS plexus::core
     PROPERTIES RUN_SERIAL TRUE)
 
-# The discovery re-announce/expiry alloc gate: a warmed multicast_discovery over a sink Policy and
-# a non-allocating sink datagram socket re-announces and re-resolves the same card and asserts the
-# re-announce path churns zero and the inbound resolve build is a bounded per-call constant. The
-# generic discovery template is pure-core (no backend), so this is always built; tests/ is on the
-# include path for support/alloc_counter.h.
-add_executable(test_discovery_noalloc test_discovery_noalloc.cpp)
-target_link_libraries(test_discovery_noalloc PRIVATE
-    plexus::core
-    plexus::discovery
-    plexus::wire
-    plexus::stream
-    Catch2::Catch2WithMain)
-target_include_directories(test_discovery_noalloc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_discovery_noalloc TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_discovery_noalloc
+    SOURCES test_discovery_noalloc.cpp
+    LINKS plexus::core plexus::discovery plexus::wire plexus::stream
     PROPERTIES RUN_SERIAL TRUE)
 
-# The mixed-version oracle: an encoded peer_report frame routed through a bare frame_router carrying
-# only the pre-peer_report consumer set produces no peer and is warn-dropped whole, and a
-# genuinely-unknown type pins the default arm. Header-only frame_router + wire codecs over core.
-add_executable(test_peer_report_oracle test_peer_report_oracle.cpp)
-target_link_libraries(test_peer_report_oracle PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_peer_report_oracle TEST_PREFIX "integration.")
+plexus_add_catch_test(test_peer_report_oracle
+    SOURCES test_peer_report_oracle.cpp
+    LINKS plexus::core plexus::wire)
 
-# The mixed-version oracle for the forwarded verb: an encoded forwarded frame routed through a bare
-# frame_router carrying only the pre-forwarded consumer set delivers nothing and is
-# warn-dropped whole, while installing a forwarded consumer proves the dispatch arm fires. Header-only
-# frame_router + wire codecs over core.
-add_executable(test_forwarded_frame_oracle test_forwarded_frame_oracle.cpp)
-target_link_libraries(test_forwarded_frame_oracle PRIVATE
-    plexus::core
-    plexus::wire
-    Catch2::Catch2WithMain)
-catch_discover_tests(test_forwarded_frame_oracle TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forwarded_frame_oracle
+    SOURCES test_forwarded_frame_oracle.cpp
+    LINKS plexus::core plexus::wire)
 
-# The delivery-edge dedup + origin-override oracle: a forwarded unidirectional injected twice into a
-# completed session delivers exactly once with the trailer origin (not the relay peer) as the message
-# source, and a duplicated forwarded rpc_request runs its served handler exactly once. Drives a real
-# inproc session_link handshake plus inject_receive. Links the core, wire, and inproc layers.
-add_executable(test_forwarded_dedup_delivery test_forwarded_dedup_delivery.cpp)
-target_link_libraries(test_forwarded_dedup_delivery PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forwarded_dedup_delivery PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forwarded_dedup_delivery TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forwarded_dedup_delivery
+    SOURCES test_forwarded_dedup_delivery.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_heartbeat_decline_gate test_heartbeat_decline_gate.cpp)
-target_link_libraries(test_heartbeat_decline_gate PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_heartbeat_decline_gate PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_heartbeat_decline_gate TEST_PREFIX "integration.")
+plexus_add_catch_test(test_heartbeat_decline_gate
+    SOURCES test_heartbeat_decline_gate.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# Every message type against every session state, on both ingress lanes, over real inproc peer_sessions.
-add_executable(test_session_gate test_session_gate_matrix.cpp test_session_gate_object_lane.cpp test_session_gate_latch.cpp)
-target_link_libraries(test_session_gate PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_session_gate PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_session_gate TEST_PREFIX "integration.")
+plexus_add_catch_test(test_session_gate
+    SOURCES test_session_gate_matrix.cpp test_session_gate_object_lane.cpp test_session_gate_latch.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# A proven identity against a later handshake on the same established session.
-add_executable(test_session_identity test_session_identity.cpp)
-target_link_libraries(test_session_identity PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_session_identity PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_session_identity TEST_PREFIX "integration.")
+plexus_add_catch_test(test_session_identity
+    SOURCES test_session_identity.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# A callback that tears the session down stops the rest of its consumer.
-add_executable(test_session_teardown_in_callback test_session_teardown_in_callback.cpp)
-target_link_libraries(test_session_teardown_in_callback PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_session_teardown_in_callback PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_session_teardown_in_callback TEST_PREFIX "integration.")
+plexus_add_catch_test(test_session_teardown_in_callback
+    SOURCES test_session_teardown_in_callback.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# A subscribe response refusing an undeclared type, or carrying a status outside the wire set, attaches nothing.
-add_executable(test_subscribe_refusal_set test_subscribe_refusal_set.cpp)
-target_link_libraries(test_subscribe_refusal_set PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_subscribe_refusal_set PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_subscribe_refusal_set TEST_PREFIX "integration.")
+plexus_add_catch_test(test_subscribe_refusal_set
+    SOURCES test_subscribe_refusal_set.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# Every inbound decode failure counted and its warning rate-limited, with an alloc gate over the malformed path.
-add_executable(test_session_malformed_logging test_session_malformed_logging.cpp test_session_malformed_clock.cpp test_session_malformed_sites.cpp)
-target_link_libraries(test_session_malformed_logging PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_session_malformed_logging PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-# RUN_SERIAL: alloc gate over the single-TU global operator-new counter (see test_hot_path_alloc).
-catch_discover_tests(test_session_malformed_logging TEST_PREFIX "integration."
+# An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
+plexus_add_catch_test(test_session_malformed_logging
+    SOURCES test_session_malformed_logging.cpp test_session_malformed_clock.cpp test_session_malformed_sites.cpp
+    LINKS plexus::core plexus::wire plexus::inproc
     PROPERTIES RUN_SERIAL TRUE)
 
-# A dialed slot whose peer proves an identity other than the one its discovery card advertised.
-add_executable(test_dialed_identity
-    test_dialed_identity_inproc.cpp
-    test_dialed_identity_redial_inproc.cpp
-    test_dialed_identity_binding_inproc.cpp)
-target_link_libraries(test_dialed_identity PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_dialed_identity PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_dialed_identity TEST_PREFIX "integration.")
+plexus_add_catch_test(test_dialed_identity
+    SOURCES test_dialed_identity_inproc.cpp test_dialed_identity_redial_inproc.cpp
+        test_dialed_identity_binding_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# An accepted or unclaimed slot is erased once it drains.
-add_executable(test_slot_reclaim_inproc test_slot_reclaim_inproc.cpp)
-target_link_libraries(test_slot_reclaim_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_slot_reclaim_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_slot_reclaim_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_slot_reclaim_inproc
+    SOURCES test_slot_reclaim_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# Connect/disconnect cycles leave every count at baseline (PLEXUS_SOAK_CYCLES overrides the default 1,000).
-add_executable(test_session_soak_inproc test_session_soak_inproc.cpp)
-target_link_libraries(test_session_soak_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_session_soak_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
+plexus_add_catch_test(test_session_soak_inproc
+    SOURCES test_session_soak_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 # std::getenv is portable, but MSVC's CRT deprecates it (C4996).
 if(MSVC)
     target_compile_definitions(test_session_soak_inproc PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
-catch_discover_tests(test_session_soak_inproc TEST_PREFIX "integration.")
 
-# Subscribes and declarations on a link that reorders and loses frames, recovered by the bounded re-send.
-add_executable(test_subscribe_retry_inproc test_subscribe_retry_inproc.cpp)
-target_link_libraries(test_subscribe_retry_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_subscribe_retry_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_subscribe_retry_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_subscribe_retry_inproc
+    SOURCES test_subscribe_retry_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_splice_pubsub test_forward_splice_pubsub.cpp)
-target_link_libraries(test_forward_splice_pubsub PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_splice_pubsub PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_splice_pubsub TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_splice_pubsub
+    SOURCES test_forward_splice_pubsub.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_splice_hardening test_forward_splice_hardening.cpp)
-target_link_libraries(test_forward_splice_hardening PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_splice_hardening PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_splice_hardening TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_splice_hardening
+    SOURCES test_forward_splice_hardening.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_splice_no_hol test_forward_splice_no_hol.cpp)
-target_link_libraries(test_forward_splice_no_hol PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_splice_no_hol PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_splice_no_hol TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_splice_no_hol
+    SOURCES test_forward_splice_no_hol.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_reqres test_forward_reqres.cpp)
-target_link_libraries(test_forward_reqres PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_reqres PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_reqres TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_reqres
+    SOURCES test_forward_reqres.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_pubsub test_forward_pubsub.cpp)
-target_link_libraries(test_forward_pubsub PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_pubsub PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_pubsub TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_pubsub
+    SOURCES test_forward_pubsub.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_dedup_pruning_inproc test_forward_dedup_pruning_inproc.cpp)
-target_link_libraries(test_forward_dedup_pruning_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_dedup_pruning_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_dedup_pruning_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_dedup_pruning_inproc
+    SOURCES test_forward_dedup_pruning_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_reply_reresolve test_forward_reply_reresolve.cpp)
-target_link_libraries(test_forward_reply_reresolve PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_reply_reresolve PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_reply_reresolve TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_reply_reresolve
+    SOURCES test_forward_reply_reresolve.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# A forwarded envelope can neither complete a direct call nor be served or delivered where it was not addressed or demanded.
-add_executable(test_forwarded_rpc_tables test_forwarded_rpc_tables.cpp)
-target_link_libraries(test_forwarded_rpc_tables PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forwarded_rpc_tables PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forwarded_rpc_tables TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forwarded_rpc_tables
+    SOURCES test_forwarded_rpc_tables.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-add_executable(test_forward_demand_propagation test_forward_demand_propagation.cpp)
-target_link_libraries(test_forward_demand_propagation PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_forward_demand_propagation PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..)
-catch_discover_tests(test_forward_demand_propagation TEST_PREFIX "integration.")
+plexus_add_catch_test(test_forward_demand_propagation
+    SOURCES test_forward_demand_propagation.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# Two nodes that dial each other keep one session per pair, chosen identically at both ends.
-add_executable(test_crossed_dial_inproc
-    test_crossed_dial_common.cpp
-    test_crossed_dial_inproc.cpp
-    test_crossed_dial_quiet_inproc.cpp
-    test_crossed_dial_order_inproc.cpp
-    test_crossed_dial_remote_inproc.cpp)
-target_link_libraries(test_crossed_dial_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_crossed_dial_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_crossed_dial_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_crossed_dial_inproc
+    SOURCES test_crossed_dial_common.cpp test_crossed_dial_inproc.cpp test_crossed_dial_quiet_inproc.cpp
+        test_crossed_dial_order_inproc.cpp test_crossed_dial_remote_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# An accepted peer is known only by the identity it proved.
-add_executable(test_proven_identity_inproc
-    test_proven_identity_common.cpp
-    test_proven_identity_inproc.cpp)
-target_link_libraries(test_proven_identity_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_proven_identity_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
+plexus_add_catch_test(test_proven_identity_inproc
+    SOURCES test_proven_identity_common.cpp test_proven_identity_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 target_sources(test_proven_identity_inproc PRIVATE
     test_crossed_dial_common.cpp
     test_proven_identity_crossed_inproc.cpp)
-catch_discover_tests(test_proven_identity_inproc TEST_PREFIX "integration.")
 
-# Two sessions of one kind for one identity keep the newer.
-add_executable(test_same_kind_duplicate_inproc
-    test_crossed_dial_common.cpp
-    test_same_kind_duplicate_inproc.cpp)
-target_link_libraries(test_same_kind_duplicate_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_same_kind_duplicate_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_same_kind_duplicate_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_same_kind_duplicate_inproc
+    SOURCES test_crossed_dial_common.cpp test_same_kind_duplicate_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# Each reported id is announced up and down once per live-session transition.
-add_executable(test_identity_edges_inproc
-    test_crossed_dial_common.cpp
-    test_identity_edges_inproc.cpp)
-target_link_libraries(test_identity_edges_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_identity_edges_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_identity_edges_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_identity_edges_inproc
+    SOURCES test_crossed_dial_common.cpp test_identity_edges_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# A peer silent for the session teardown timeout is torn down.
-add_executable(test_session_stale_inproc
-    test_session_stale_inproc.cpp
-    test_session_stale_edge_inproc.cpp
-    test_session_stale_timeout_inproc.cpp)
-target_link_libraries(test_session_stale_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_session_stale_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_session_stale_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_session_stale_inproc
+    SOURCES test_session_stale_inproc.cpp test_session_stale_edge_inproc.cpp test_session_stale_timeout_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# A reach never disturbs a live session and a completed session resets the backoff.
-add_executable(test_reach_guard_inproc
-    test_reach_guard_inproc.cpp
-    test_reach_guard_backoff_inproc.cpp)
-target_link_libraries(test_reach_guard_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_reach_guard_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_reach_guard_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_reach_guard_inproc
+    SOURCES test_reach_guard_inproc.cpp test_reach_guard_backoff_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
 
-# A dialed slot that will not redial ends its session, and an idle one yields its identity to an accepted session.
-add_executable(test_idle_dialed_slot_inproc
-    test_idle_dialed_slot_inproc.cpp
-    test_idle_dialed_slot_accept_inproc.cpp)
-target_link_libraries(test_idle_dialed_slot_inproc PRIVATE
-    plexus::core
-    plexus::wire
-    plexus::inproc
-    Catch2::Catch2WithMain)
-target_include_directories(test_idle_dialed_slot_inproc PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR})
-catch_discover_tests(test_idle_dialed_slot_inproc TEST_PREFIX "integration.")
+plexus_add_catch_test(test_idle_dialed_slot_inproc
+    SOURCES test_idle_dialed_slot_inproc.cpp test_idle_dialed_slot_accept_inproc.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
