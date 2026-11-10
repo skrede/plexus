@@ -20,31 +20,33 @@ macro(_plexus_resolve_asio_leaf)
 endmacro()
 
 # crypto's targets file references plexus::asio and plexus::plexus_asio_dep, so the asio component loads ahead of it.
+macro(_plexus_load_component_deps comp)
+    if("${comp}" STREQUAL "asio")
+        _plexus_resolve_asio_leaf()
+    elseif("${comp}" STREQUAL "crypto")
+        _plexus_resolve_asio_leaf()
+        find_dependency(OpenSSL)
+        _plexus_load_component(asio)
+    elseif("${comp}" STREQUAL "asio-shm")
+        # On Linux the shm-include headers call io_uring_* directly and the exported
+        # targets file references PkgConfig::LIBURING, so an installed consumer
+        # recreates that imported target here; other hosts carry no liburing.
+        _plexus_resolve_asio_leaf()
+        _plexus_load_component(asio)
+        _plexus_load_component(native)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            find_dependency(PkgConfig)
+            pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
+        endif()
+    endif()
+endmacro()
+
 # A component without an installed targets file reports FOUND FALSE without erroring; check_required_components makes
 # a REQUIRED miss fatal.
 macro(_plexus_load_component comp)
     if(NOT plexus_${comp}_FOUND)
-        set(_plexus_comp_file "${CMAKE_CURRENT_LIST_DIR}/plexus-${comp}-targets.cmake")
-        if(EXISTS "${_plexus_comp_file}")
-            if("${comp}" STREQUAL "asio")
-                _plexus_resolve_asio_leaf()
-            elseif("${comp}" STREQUAL "crypto")
-                _plexus_resolve_asio_leaf()
-                find_dependency(OpenSSL)
-                _plexus_load_component(asio)
-            elseif("${comp}" STREQUAL "asio-shm")
-                # On Linux the shm-include headers call io_uring_* directly and the exported
-                # targets file references PkgConfig::LIBURING, so an installed consumer
-                # recreates that imported target here; other hosts carry no liburing.
-                _plexus_resolve_asio_leaf()
-                _plexus_load_component(asio)
-                _plexus_load_component(native)
-                if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-                    find_dependency(PkgConfig)
-                    pkg_check_modules(LIBURING REQUIRED IMPORTED_TARGET liburing)
-                endif()
-            endif()
-            # The nested loads above share this macro's variables, so the path is rebuilt from the argument.
+        if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/plexus-${comp}-targets.cmake")
+            _plexus_load_component_deps(${comp})
             include("${CMAKE_CURRENT_LIST_DIR}/plexus-${comp}-targets.cmake")
             set(plexus_${comp}_FOUND TRUE)
         else()
