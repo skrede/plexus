@@ -32,7 +32,8 @@ for narrative scaffolding from how the code was built — "the slice", "the gate
 ## File and function size
 
 These limits and the comment rules apply to every code file — C++, CMake (`CMakeLists.txt`,
-`*.cmake`), shell (`*.sh`), Python (`*.py`) and Lua (`*.lua`) — and Markdown is exempt.
+`*.cmake`, `*.cmake.in`), shell (`*.sh`), Python (`*.py`) and Lua (`*.lua`) — and Markdown is
+exempt.
 
 The limits, lines **including comments and blank lines** — the budget is the whole thing as
 it sits on screen:

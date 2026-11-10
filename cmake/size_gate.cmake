@@ -1,9 +1,9 @@
 # Fails the build on any code file over the CONVENTIONS.md file ceiling (200 lines, comments and blank lines
 # included) that EXCEPTIONS.md does not sanction. The code files are C++ sources and headers, CMakeLists.txt, *.cmake,
-# *.sh, *.py and *.lua under lib, backends, tests, examples, cmake, tools and benchmarks, plus the root CMakeLists.txt;
-# a root holding none of those directories, such as a negative-fixture directory, is scanned whole. A registered file
-# may shrink freely but never grow past its row's ceiling, and a row that is stale, duplicated, of another kind or
-# without a valid ceiling is itself a violation.
+# *.cmake.in, *.sh, *.py and *.lua under lib, backends, tests, examples, cmake, tools and benchmarks, plus the root
+# CMakeLists.txt; a root holding none of those directories, such as a negative-fixture directory, is scanned whole. A
+# registered file may shrink freely but never grow past its row's ceiling, and a row that is stale, duplicated, of
+# another kind or without a valid ceiling is itself a violation.
 # Included from the build, this file registers an ALL target that re-runs it through -P with SIZE_GATE_FATAL=ON, so the
 # check needs no shell and runs the same on Windows; a -P run without SIZE_GATE_FATAL only warns.
 
@@ -21,7 +21,7 @@ if(NOT SIZE_GATE_SCAN)
     return()
 endif()
 
-set(_patterns *.h *.hpp *.cpp *.cc CMakeLists.txt *.cmake *.sh *.py *.lua)
+set(_patterns *.h *.hpp *.cpp *.cc CMakeLists.txt *.cmake *.cmake.in *.sh *.py *.lua)
 set(_scan_roots "")
 foreach(_sub IN ITEMS lib backends tests examples cmake tools benchmarks)
     if(IS_DIRECTORY "${SIZE_GATE_ROOT}/${_sub}")
@@ -71,7 +71,7 @@ if(EXISTS "${_exceptions_md}")
         string(STRIP "${CMAKE_MATCH_1}" _cell)
         string(STRIP "${CMAKE_MATCH_2}" _kind)
         string(STRIP "${CMAKE_MATCH_3}" _ceiling)
-        if(NOT _cell MATCHES "(\\.(h|hpp|cpp|cc|cmake|sh|py|lua)|(^|/)CMakeLists\\.txt)$")
+        if(NOT _cell MATCHES "(\\.(h|hpp|cpp|cc|cmake|cmake\\.in|sh|py|lua)|(^|/)CMakeLists\\.txt)$")
             continue()
         endif()
         if(NOT _kind STREQUAL "file")

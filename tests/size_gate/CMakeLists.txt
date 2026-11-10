@@ -1,6 +1,6 @@
-# The size gate's own rejections: an unregistered overage of a C++, CMakeLists.txt, CMake, shell, Python or Lua file, a
-# registered C++ or shell file grown past its ceiling, a second row for one path, and a path-shaped row under a non-file
-# kind.
+# The size gate's own rejections: an unregistered overage of a C++, CMakeLists.txt, CMake, CMake template, shell,
+# Python or Lua file, a registered C++ or shell file grown past its ceiling, a second row for one path, and a
+# path-shaped row under a non-file kind.
 add_test(NAME size_gate.unregistered_overage_rejected
     COMMAND ${CMAKE_COMMAND} -DSIZE_GATE_SCAN=ON -DSIZE_GATE_FATAL=ON
             -DSIZE_GATE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}
@@ -30,9 +30,9 @@ add_test(NAME size_gate.non_file_kind_rejected
 set_tests_properties(size_gate.non_file_kind_rejected PROPERTIES
     PASS_REGULAR_EXPRESSION "kind_fixture\\.h: EXCEPTIONS\\.md row kind 'function' is not file")
 
-set(_script_kinds cmakelists cmake shell python lua)
-set(_script_fixtures CMakeLists\\.txt over_limit_fixture\\.cmake over_limit_fixture\\.sh over_limit_fixture\\.py
-    over_limit_fixture\\.lua)
+set(_script_kinds cmakelists cmake cmake_in shell python lua)
+set(_script_fixtures CMakeLists\\.txt over_limit_fixture\\.cmake over_limit_fixture\\.cmake\\.in
+    over_limit_fixture\\.sh over_limit_fixture\\.py over_limit_fixture\\.lua)
 foreach(_kind _fixture IN ZIP_LISTS _script_kinds _script_fixtures)
     add_test(NAME size_gate.${_kind}_overage_rejected
         COMMAND ${CMAKE_COMMAND} -DSIZE_GATE_SCAN=ON -DSIZE_GATE_FATAL=ON
