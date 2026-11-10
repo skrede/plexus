@@ -42,7 +42,8 @@ inline std::vector<::plexus::discovery::listening_transport> listens_from_card(c
 // Build the wire announcement for a card once (at advertise time), so the per-emit path only
 // re-encodes it into the reused scratch and never rebuilds the listens. nullopt for a card with
 // an unparsable node_id key (nothing to advertise).
-inline std::optional<wire::announcement> announcement_from_service_info(const ::plexus::discovery::service_info &card, std::uint64_t ttl_secs, std::uint32_t universe, std::string_view universe_pattern = k_default_universe_label)
+inline std::optional<wire::announcement> announcement_from_service_info(const ::plexus::discovery::service_info &card, std::uint64_t ttl_secs, std::uint32_t universe,
+                                                                        std::string_view universe_pattern = k_default_universe_label)
 {
     const auto id = ::plexus::discovery::detail::hex_decode(card.metadata.empty() ? std::string_view{} : std::string_view{card.metadata.front().second});
     if(!id)

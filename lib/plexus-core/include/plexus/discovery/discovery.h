@@ -34,7 +34,9 @@ public:
 
     // A backend that can observe a peer leaving (a goodbye) calls this so the node removes
     // awareness immediately; a backend with no leave signal does not override the no-op default.
-    virtual void on_withdrawn(const withdrawn_callback &) {}
+    virtual void on_withdrawn(const withdrawn_callback &)
+    {
+    }
 };
 
 }
