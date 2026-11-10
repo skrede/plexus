@@ -1,7 +1,7 @@
 // A self-contained, single-process scalability probe for plexus over the header-only in-process backend. It sweeps
 // nodes x topics x payload and reports, per cell, the setup wall-time (construct all nodes + endpoints to readiness),
-// the steady-state one-way delivery latency (p50 of a steady_clock stamp carried in the payload), and the process
-// footprint (VmRSS, open fds, threads). It measures only plexus's own cost against its own axes.
+// the steady-state one-way delivery latency (p50 and p99 of a steady_clock stamp carried in the payload), and the
+// process footprint (VmRSS, open fds, threads). It measures only plexus's own cost against its own axes.
 
 #include "scale_cell.h"
 #include "scale_report.h"

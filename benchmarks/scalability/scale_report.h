@@ -57,20 +57,26 @@ void print_table(std::ostream &out, const sweep_axes &axes, const cell_grid &gri
     }
 }
 
-inline void print_latency(std::ostream &out, const latency &lat)
+inline void print_latency(std::ostream &out, const latency &lat, double latency::*quantile)
 {
     if(lat.delivered == 0)
     {
         out << " n/a |";
         return;
     }
-    put_fixed3(out, lat.p50_us);
+    put_fixed3(out, lat.*quantile);
+}
+
+inline void print_latency_table(std::ostream &out, const sweep_axes &axes, std::string_view name, std::size_t payload, const cell_grid &grid, double latency::*quantile)
+{
+    out << "\n### " << name << " one-way latency (us) -- payload " << payload << " B\n\n";
+    print_table(out, axes, grid, [&out, quantile](const cell_result &c) { print_latency(out, c.lat, quantile); });
 }
 
 inline void print_matrix(std::ostream &out, const sweep_axes &axes, std::size_t payload, const cell_grid &grid)
 {
-    out << "\n### p50 one-way latency (us) -- payload " << payload << " B\n\n";
-    print_table(out, axes, grid, [&out](const cell_result &c) { print_latency(out, c.lat); });
+    print_latency_table(out, axes, "p50", payload, grid, &latency::p50_us);
+    print_latency_table(out, axes, "p99", payload, grid, &latency::p99_us);
 }
 
 inline void print_setup_table(std::ostream &out, const sweep_axes &axes, const cell_grid &grid)
