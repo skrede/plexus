@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <algorithm>
 
 namespace contact_card_fixture {
@@ -33,11 +34,11 @@ using plexus::discovery::static_discovery;
 using plexus::discovery::detail::hex_encode;
 using plexus::discovery::detail::hex_decode;
 
-inline plexus::node_id node_id_of(int seed)
+inline plexus::node_id node_id_of(std::int32_t seed)
 {
     plexus::node_id id{};
     for(std::size_t i = 0; i < id.size(); ++i)
-        id[i] = static_cast<std::byte>((seed + static_cast<int>(i)) & 0xff);
+        id[i] = static_cast<std::byte>((seed + static_cast<std::int32_t>(i)) & 0xff);
     return id;
 }
 

@@ -91,7 +91,7 @@ private:
 class fake_timer
 {
 public:
-    explicit fake_timer(int &)
+    explicit fake_timer(std::int32_t &)
     {
     }
 
@@ -108,7 +108,7 @@ public:
     }
 };
 
-struct fake_policy : plexus::testing::inline_verbs<int &>
+struct fake_policy : plexus::testing::inline_verbs<std::int32_t &>
 {
     using timer_type = fake_timer;
 };

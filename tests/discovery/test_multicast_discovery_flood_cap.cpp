@@ -57,7 +57,7 @@ plexus::discovery::discovery_options capped_options(std::size_t max_peers, std::
 TEST_CASE("multicast_discovery: a flood of distinct sources admits at most the cap", "[multicast_discovery]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(3, 0, false)};
 
@@ -76,7 +76,7 @@ TEST_CASE("multicast_discovery: a flood of distinct sources admits at most the c
 TEST_CASE("multicast_discovery: an established peer still resolves after the cap fills with others", "[multicast_discovery]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(2, 0, false)};
 
@@ -100,7 +100,7 @@ TEST_CASE("multicast_discovery: an established peer still resolves after the cap
 TEST_CASE("multicast_discovery: with evict_lru the newest source replaces the oldest", "[multicast_discovery]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(2, 0, true)};
 
@@ -120,7 +120,7 @@ TEST_CASE("multicast_discovery: with evict_lru the newest source replaces the ol
 TEST_CASE("multicast_discovery: a single source past the per-source rate is dropped within the window", "[multicast_discovery]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(0, 2, false)}; // unlimited cap, 2 per 1s window
 
@@ -143,7 +143,7 @@ TEST_CASE("multicast_discovery: a single source past the per-source rate is drop
 TEST_CASE("multicast_discovery: with the cap disabled every distinct source resolves", "[multicast_discovery]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(0, 0, false)}; // unlimited + no rate limit
 
@@ -162,7 +162,7 @@ TEST_CASE("multicast_discovery: with the cap disabled every distinct source reso
 TEST_CASE("multicast_discovery: the cap does not gate the goodbye path", "[multicast_discovery]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(1, 1, false)}; // cap of 1, fills then never admits a new source
 

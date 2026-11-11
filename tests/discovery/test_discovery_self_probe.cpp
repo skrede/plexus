@@ -63,7 +63,7 @@ plexus::discovery::service_info card_for(const plexus::node_id &id)
 
 TEST_CASE("discovery_self_probe: a node never notes its own echo and reads healthy on seeing it", "[multicast_discovery][discovery_self_probe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket};
 
@@ -91,7 +91,7 @@ TEST_CASE("discovery_self_probe: a node never notes its own echo and reads healt
 TEST_CASE("discovery_self_probe: the probe reaches no_self_echo once the window elapses unseen", "[multicast_discovery][discovery_self_probe]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket};
 

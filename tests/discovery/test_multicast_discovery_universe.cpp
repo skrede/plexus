@@ -79,7 +79,7 @@ plexus::discovery::service_info card_for(std::uint8_t seed)
 
 TEST_CASE("multicast_discovery: a foreign-universe announcement fires no on_resolved", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
@@ -92,7 +92,7 @@ TEST_CASE("multicast_discovery: a foreign-universe announcement fires no on_reso
 
 TEST_CASE("multicast_discovery: a browse-only node filters a foreign universe", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
@@ -106,7 +106,7 @@ TEST_CASE("multicast_discovery: a browse-only node filters a foreign universe", 
 
 TEST_CASE("multicast_discovery: a foreign-universe goodbye fires no on_withdrawn", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
@@ -120,7 +120,7 @@ TEST_CASE("multicast_discovery: a foreign-universe goodbye fires no on_withdrawn
 
 TEST_CASE("multicast_discovery: a same-universe announcement resolves", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
@@ -152,7 +152,7 @@ TEST_CASE("multicast_discovery: two configless leaves rendezvous on the default 
 
 TEST_CASE("multicast_discovery: a self-echo latches the self-probe under a custom universe", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
@@ -169,7 +169,7 @@ TEST_CASE("multicast_discovery: a self-echo latches the self-probe under a custo
 
 TEST_CASE("multicast_discovery: a wildcard universe resolves a concrete peer it covers", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("factory/line/*")};
 
@@ -182,7 +182,7 @@ TEST_CASE("multicast_discovery: a wildcard universe resolves a concrete peer it 
 
 TEST_CASE("multicast_discovery: a wildcard universe drops a concrete peer it does not cover", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("factory/line/*")};
 
@@ -195,7 +195,7 @@ TEST_CASE("multicast_discovery: a wildcard universe drops a concrete peer it doe
 
 TEST_CASE("multicast_discovery: concrete rendezvous is unchanged via the uint32 fast-path", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("depot")};
 
@@ -211,7 +211,7 @@ TEST_CASE("multicast_discovery: concrete rendezvous is unchanged via the uint32 
 
 TEST_CASE("multicast_discovery: the default universe never matches a foreign concrete universe", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket}; // configless: the concrete default label, never match-all
 
@@ -228,7 +228,7 @@ TEST_CASE("multicast_discovery: the default universe never matches a foreign con
 
 TEST_CASE("multicast_discovery: a malformed peer universe pattern fails closed", "[multicast_discovery][universe]")
 {
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("factory/line/*")};
 

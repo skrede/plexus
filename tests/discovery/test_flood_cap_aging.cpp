@@ -102,7 +102,7 @@ TEST_CASE("flood cap: a full cap of fresh sources still refuses a new one", "[fl
 TEST_CASE("multicast_discovery: a node is still discovered after max_peers sources have come and gone", "[multicast_discovery]")
 {
     fake_clock::reset();
-    int ex = 0;
+    std::int32_t ex = 0;
     fake_datagram_socket socket;
     plexus::discovery::discovery_options options;
     options.cap.max_peers = 3;
