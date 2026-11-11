@@ -16,8 +16,7 @@
 #include <optional>
 #include <algorithm>
 
-namespace
-{
+namespace {
 
 using plexus::node_id;
 using plexus::graph::observation;
@@ -38,34 +37,20 @@ node_id id_with(std::uint8_t tag)
 
 route_candidate relayed(std::uint8_t hop, std::uint64_t tag)
 {
-    return route_candidate{
-        route{endpoint{"udp", "203.0.113.9:9000"}, id_with(0xFE)},
-        provenance{observation::reported, id_with(0xFE)},
-        hop,
-        plexus::wire::udp_dedup_window{},
-        tag};
+    return route_candidate{route{endpoint{"udp", "203.0.113.9:9000"}, id_with(0xFE)}, provenance{observation::reported, id_with(0xFE)}, hop, plexus::wire::udp_dedup_window{}, tag};
 }
 
 route_candidate direct(std::uint64_t tag)
 {
-    return route_candidate{
-        route{endpoint{"udp", "203.0.113.7:9000"}, std::nullopt},
-        provenance{observation::directly_observed, std::nullopt},
-        0,
-        plexus::wire::udp_dedup_window{},
-        tag};
+    return route_candidate{route{endpoint{"udp", "203.0.113.7:9000"}, std::nullopt}, provenance{observation::directly_observed, std::nullopt}, 0, plexus::wire::udp_dedup_window{}, tag};
 }
 
 using plexus::graph::reachability;
 
 route_candidate relayed_via(std::uint8_t via_tag, std::uint8_t hop, std::uint64_t tag, reachability reach_status)
 {
-    return route_candidate{
-        route{endpoint{"udp", "203.0.113.9:9000"}, id_with(via_tag)},
-        provenance{observation::reported, id_with(via_tag), reach_status},
-        hop,
-        plexus::wire::udp_dedup_window{},
-        tag};
+    return route_candidate{route{endpoint{"udp", "203.0.113.9:9000"}, id_with(via_tag)}, provenance{observation::reported, id_with(via_tag), reach_status}, hop,
+                           plexus::wire::udp_dedup_window{}, tag};
 }
 
 }

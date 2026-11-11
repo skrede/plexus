@@ -33,7 +33,8 @@ TEST_CASE("forward_reqres: relayed req/res transits end-to-end through a statele
     // A responder that echoes its param back to the caller, proving the reply bytes transit the relay.
     std::string served_param;
     line.server.procedures().serve("demo.echo",
-                                   [&](std::span<const std::byte> param, rpc_forwarder::reply_fn &reply) {
+                                   [&](std::span<const std::byte> param, rpc_forwarder::reply_fn &reply)
+                                   {
                                        served_param = to_string(param);
                                        reply(rpc_status::success, param);
                                    });
@@ -41,7 +42,8 @@ TEST_CASE("forward_reqres: relayed req/res transits end-to-end through a statele
     std::optional<rpc_status> status;
     std::string response;
     line.caller.call(line.id_server, "demo.echo", as_bytes(std::string{"ping"}),
-                     [&](rpc_status s, std::span<const std::byte> ret) {
+                     [&](rpc_status s, std::span<const std::byte> ret)
+                     {
                          status   = s;
                          response = to_string(ret);
                      });

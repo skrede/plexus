@@ -78,8 +78,7 @@ struct relay_link
     bool relay_knows_publisher(std::string_view fqn) const
     {
         bool found = false;
-        relay.topic_table().for_each([&](const graph::topic_record &r)
-                                     { found = found || (r.node == origin_id && r.role == graph::topic_role::publisher && r.name == fqn); });
+        relay.topic_table().for_each([&](const graph::topic_record &r) { found = found || (r.node == origin_id && r.role == graph::topic_role::publisher && r.name == fqn); });
         return found;
     }
 
@@ -158,7 +157,7 @@ TEST_CASE("demand propagation: a forward-scope pattern refuses an out-of-scope t
     link.origin_publish("sensor/temp", "in-scope");
     link.origin_publish("cmd/reset", "out-of-scope");
 
-    REQUIRE(link.relay_got("sensor/temp"));       // in-scope demand propagated upstream
-    REQUIRE_FALSE(link.relay_got("cmd/reset"));   // out of scope: refused, never propagated, never transits
+    REQUIRE(link.relay_got("sensor/temp"));     // in-scope demand propagated upstream
+    REQUIRE_FALSE(link.relay_got("cmd/reset")); // out of scope: refused, never propagated, never transits
     REQUIRE(link.relay_received.size() == 1u);
 }

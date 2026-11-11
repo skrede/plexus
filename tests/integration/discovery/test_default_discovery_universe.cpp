@@ -143,9 +143,9 @@ TEST_CASE("two hard-scoped same-universe nodes rendezvous on the derived group o
             SKIP("multicast loopback unavailable on this host: the soft liveness control reached no awareness within the bound");
         REQUIRE(control);
 
-        const auto t0      = std::chrono::steady_clock::now();
+        const auto t0         = std::chrono::steady_clock::now();
         const bool hard_aware = plexus::testing::pump_until(io, [&] { return h1.router().known().contains(id_h2) && h2.router().known().contains(id_h1); }, k_bound);
-        const auto hard_dt = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+        const auto hard_dt    = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
         REQUIRE(hard_aware); // fails iff the factory ignores the effective group
 
         hard_ms.push_back(hard_dt);

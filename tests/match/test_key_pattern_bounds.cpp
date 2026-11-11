@@ -24,12 +24,8 @@ TEST_CASE("key_pattern length ceiling sits below the wire fqn lid", "[match][key
 
 TEST_CASE("key_pattern refusal values are mutually distinct", "[match][key_pattern]")
 {
-    const std::array<key_pattern_error, 5> refusals{
-        key_pattern_error::empty,
-        key_pattern_error::too_long,
-        key_pattern_error::too_deep,
-        key_pattern_error::malformed,
-        key_pattern_error::non_canonical};
+    const std::array<key_pattern_error, 5> refusals{key_pattern_error::empty, key_pattern_error::too_long, key_pattern_error::too_deep, key_pattern_error::malformed,
+                                                    key_pattern_error::non_canonical};
 
     for(std::size_t i = 0; i < refusals.size(); ++i)
     {

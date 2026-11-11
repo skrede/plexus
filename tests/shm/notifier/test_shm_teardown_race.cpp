@@ -157,11 +157,11 @@ TEST_CASE("shm.teardown_race a wake racing teardown never touches freed state", 
             pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>> channel(ring, bridge, plexus::io::reliability::best_effort, plexus::io::congestion::drop_newest);
 
             bridge.arm(*channel.engage_subscriber(),
-                    [&]
-                    {
-                        pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};
-                        channel.drain(deliver); // touches the subscriber -- must be alive here
-                    });
+                       [&]
+                       {
+                           pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [](plexus::wire_bytes<pio::shm_slot_owner>) {};
+                           channel.drain(deliver); // touches the subscriber -- must be alive here
+                       });
 
             c->regions_ready.store(1, std::memory_order_release);
 

@@ -78,10 +78,10 @@ namespace {
 // the same manual_clock the routing oracle uses.
 struct manual_clock
 {
-    using duration                  = std::chrono::nanoseconds;
-    using rep                       = duration::rep;
-    using period                    = duration::period;
-    using time_point                = std::chrono::time_point<manual_clock>;
+    using duration                                   = std::chrono::nanoseconds;
+    using rep                                        = duration::rep;
+    using period                                     = duration::period;
+    using time_point                                 = std::chrono::time_point<manual_clock>;
     [[maybe_unused]] static constexpr bool is_steady = false;
 
     static inline time_point current{};

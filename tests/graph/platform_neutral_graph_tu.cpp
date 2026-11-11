@@ -36,8 +36,7 @@
 #include <string_view>
 #include <type_traits>
 
-namespace
-{
+namespace {
 
 using plexus::graph::observation;
 using plexus::graph::participant_record;
@@ -91,17 +90,14 @@ struct edge_log_policy_tag
 {
 };
 
-static_assert(std::is_same_v<plexus::detail::profile_traits<edge_log_policy_tag>::graph_change_log,
-                             plexus::graph::vector_graph_change_log>);
-static_assert(std::is_same_v<plexus::detail::profile_traits<plexus::bounded<edge_log_policy_tag, 2, 4>>::graph_change_log,
-                             plexus::graph::null_graph_change_log>);
+static_assert(std::is_same_v<plexus::detail::profile_traits<edge_log_policy_tag>::graph_change_log, plexus::graph::vector_graph_change_log>);
+static_assert(std::is_same_v<plexus::detail::profile_traits<plexus::bounded<edge_log_policy_tag, 2, 4>>::graph_change_log, plexus::graph::null_graph_change_log>);
 static_assert(std::is_empty_v<plexus::graph::null_graph_change_log>);
 
 // The coarse edge is byte-identical across both profiles by construction: on_graph_changed lives on
 // the profile-independent io::observer seam, so neither twin can shift its signature. Pinning the
 // pointer-to-member type proves the coarse surface is exactly on_graph_changed(std::uint64_t).
-static_assert(std::is_same_v<decltype(&plexus::io::observer::on_graph_changed),
-                             void (plexus::io::observer::*)(std::uint64_t)>);
+static_assert(std::is_same_v<decltype(&plexus::io::observer::on_graph_changed), void (plexus::io::observer::*)(std::uint64_t)>);
 
 plexus::node_id id_with(std::uint8_t tag)
 {
@@ -128,24 +124,19 @@ bool folds_and_answers(Table &table)
         return false;
 
     std::array<topic_record, 4> out{};
-    const auto matched = plexus::detail::sweep_topics(
-            table, std::span<topic_record>{out},
-            [filter = pattern_of("telemetry")](const topic_record &rec) { return plexus::detail::topic_in(rec.name, filter); });
-    const auto missed = plexus::detail::sweep_topics(
-            table, std::span<topic_record>{out},
-            [filter = pattern_of("command")](const topic_record &rec) { return plexus::detail::topic_in(rec.name, filter); });
+    const auto matched = plexus::detail::sweep_topics(table, std::span<topic_record>{out},
+                                                      [filter = pattern_of("telemetry")](const topic_record &rec) { return plexus::detail::topic_in(rec.name, filter); });
+    const auto missed  = plexus::detail::sweep_topics(table, std::span<topic_record>{out},
+                                                      [filter = pattern_of("command")](const topic_record &rec) { return plexus::detail::topic_in(rec.name, filter); });
 
-    return matched.count == 2 && !matched.truncated && missed.count == 0
-           && out[0].types.count == 1 && out[0].types.names[0] == "reading"
-           && plexus::detail::count_topic_role(table, "telemetry", topic_role::publisher) == 1
-           && plexus::detail::count_topic_role(table, "telemetry", topic_role::subscriber) == 1
-           && table.dropped() == 0 && table.truncations() == 0;
+    return matched.count == 2 && !matched.truncated && missed.count == 0 && out[0].types.count == 1 && out[0].types.names[0] == "reading" &&
+            plexus::detail::count_topic_role(table, "telemetry", topic_role::publisher) == 1 && plexus::detail::count_topic_role(table, "telemetry", topic_role::subscriber) == 1 &&
+            table.dropped() == 0 && table.truncations() == 0;
 }
 
 bool declaration_round_trips()
 {
-    const plexus::wire::topic_declaration declared{
-            0xA1A2A3A4ull, k_reading_type_id, "telemetry", "reading", plexus::wire::type_state::declared};
+    const plexus::wire::topic_declaration declared{0xA1A2A3A4ull, k_reading_type_id, "telemetry", "reading", plexus::wire::type_state::declared};
     const auto encoded = plexus::wire::encode_topic_declaration(declared);
     const auto decoded = plexus::wire::decode_topic_declaration(encoded);
     return decoded.has_value() && *decoded == declared;
@@ -153,12 +144,8 @@ bool declaration_round_trips()
 
 bool participant_reads_back_direct_only()
 {
-    const participant_record rec{
-            id_with(0x01),
-            route{plexus::io::endpoint{"udp", "203.0.113.7:9000"}, std::nullopt},
-            provenance{observation::directly_observed, std::nullopt}};
-    return rec.reach.via == std::nullopt && rec.origin.how == observation::directly_observed
-           && rec.origin.reporter == std::nullopt;
+    const participant_record rec{id_with(0x01), route{plexus::io::endpoint{"udp", "203.0.113.7:9000"}, std::nullopt}, provenance{observation::directly_observed, std::nullopt}};
+    return rec.reach.via == std::nullopt && rec.origin.how == observation::directly_observed && rec.origin.reporter == std::nullopt;
 }
 
 }

@@ -17,12 +17,12 @@ TEST_CASE("graph.topics: a declaration and a subscriber's type_name reach the pe
     imu_subscriber sub{n.b, k_imu_topic, [](const std::uint32_t &) {}};
     n.drive();
 
-    const auto on_b = edges_of(n.b);
+    const auto on_b      = edges_of(n.b);
     const auto *declared = find_edge(on_b, k_imu_topic, topic_role::publisher);
     REQUIRE(declared != nullptr);
     REQUIRE(declared->types == std::vector<std::string>{k_imu_type_name});
 
-    const auto on_a = edges_of(n.a);
+    const auto on_a      = edges_of(n.a);
     const auto *demanded = find_edge(on_a, k_imu_topic, topic_role::subscriber);
     REQUIRE(demanded != nullptr);
     REQUIRE(demanded->types == std::vector<std::string>{k_imu_type_name});

@@ -31,12 +31,12 @@ TEST_CASE("forward_pubsub_transit: a directly-attached publisher's plain publish
 
     line.publish("telemetry/temp", "24.5C");
 
-    REQUIRE(line.sub_got.size() == 1u);                       // reached the one demanded subscriber, exactly once
+    REQUIRE(line.sub_got.size() == 1u); // reached the one demanded subscriber, exactly once
     REQUIRE(line.sub_got.front().fqn == "telemetry/temp");
-    REQUIRE(line.sub_got.front().body == "24.5C");            // delivered bytes == published bytes
+    REQUIRE(line.sub_got.front().body == "24.5C"); // delivered bytes == published bytes
     REQUIRE(line.sub_got.front().info.source_identity.has_value());
     REQUIRE(line.sub_got.front().info.source_identity->node_id() == line.id_pub); // origin is the publisher, not the relay
-    REQUIRE(line.pub_got.empty());                            // the publisher never receives its own frame back (arrival-excluded)
+    REQUIRE(line.pub_got.empty());                                                // the publisher never receives its own frame back (arrival-excluded)
 }
 
 TEST_CASE("forward_pubsub_transit: an accepted publisher session (the publisher dials the relay) still stamps the "
@@ -72,8 +72,7 @@ TEST_CASE("forward_pubsub_transit: a source-identity publish round-trips the end
     REQUIRE(line.sub_got.front().info.source_identity->endpoint_counter() != 0u); // the counter survived decode_unidirectional
 }
 
-TEST_CASE("forward_pubsub_transit: an out-of-scope topic originates nothing while an in-scope topic transits",
-          "[integration][forward_pubsub][scope]")
+TEST_CASE("forward_pubsub_transit: an out-of-scope topic originates nothing while an in-scope topic transits", "[integration][forward_pubsub][scope]")
 {
     manual_clock::reset();
     plexus::io::forward_options scoped;

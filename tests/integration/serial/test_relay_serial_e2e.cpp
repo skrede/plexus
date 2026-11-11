@@ -47,8 +47,7 @@ const wire::topic_declaration *topic_named(const std::vector<wire::topic_declara
 }
 }
 
-TEST_CASE("a relay lifts a serial-attached origin's real-wire declaration into a peer_report and withdraws it on kill-origin, looped",
-          "[integration][serial][relay][e2e]")
+TEST_CASE("a relay lifts a serial-attached origin's real-wire declaration into a peer_report and withdraws it on kill-origin, looped", "[integration][serial][relay][e2e]")
 {
     constexpr int k_runs = 5;
 
@@ -73,8 +72,13 @@ TEST_CASE("a relay lifts a serial-attached origin's real-wire declaration into a
         // The origin's declaration folds over the REAL serial wire into the relay's topic table,
         // attributed by the receive consumers to the handshake-proven origin id.
         topic_type_table table;
-        bool             folded = false;
-        relay_messages.on_topic_edge([&](const graph::topic_edge &e) { table.upsert(e); folded = true; });
+        bool folded = false;
+        relay_messages.on_topic_edge(
+                [&](const graph::topic_edge &e)
+                {
+                    table.upsert(e);
+                    folded = true;
+                });
         origin_messages.declare("sensor/temp", plexus::topic_qos{}, std::optional<std::uint64_t>{42}, false, "Temp");
         origin.start();
         relay.start();
@@ -86,7 +90,7 @@ TEST_CASE("a relay lifts a serial-attached origin's real-wire declaration into a
         // The relay lifts the proven identity + real-wire-folded topics into a peer_report through the
         // production emitter + wire codec — no report is hand-stitched onto a downstream node.
         const node_id origin_id = relay.peer_identity();
-        peer_report_emitter                   emitter;
+        peer_report_emitter emitter;
         std::optional<std::vector<std::byte>> asserted;
         emitter.note_origin(make_report_ctx(report_options{}), origin_id, plexus::discovery::k_default_universe, table,
                             [&](const wire::peer_report &pr) { asserted = wire::encode_peer_report(pr); });

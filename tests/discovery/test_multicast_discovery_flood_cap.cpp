@@ -39,8 +39,7 @@ std::vector<std::byte> announce_bytes(std::uint8_t seed)
 
 std::vector<std::byte> goodbye_bytes(std::uint8_t seed)
 {
-    return plexus::wire::encode_announcement(
-            plexus::discovery::detail::announcement_from_card(make_id(seed), sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
+    return plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(make_id(seed), sample_listens(), 30, plexus::wire::k_announcement_goodbye_flag));
 }
 
 plexus::discovery::discovery_options capped_options(std::size_t max_peers, std::size_t per_source_max, bool evict_lru)
@@ -135,7 +134,7 @@ TEST_CASE("multicast_discovery: a single source past the per-source rate is drop
     REQUIRE(resolved == 2);
 
     fake_clock::advance(std::chrono::milliseconds(1000)); // window rolls over
-    socket.inject("10.0.0.1", announce_bytes(1)); // fresh window, admit
+    socket.inject("10.0.0.1", announce_bytes(1));         // fresh window, admit
 
     REQUIRE(resolved == 3);
 }

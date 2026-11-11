@@ -145,8 +145,8 @@ static_assert(plexus::stream::datagram_socket<sink_datagram_socket>);
 inline plexus::discovery::service_info make_card()
 {
     plexus::node_id id{};
-    id[0]  = std::byte{0x11};
-    id[15] = std::byte{0xb4};
+    id[0]          = std::byte{0x11};
+    id[15]         = std::byte{0xb4};
     const auto hex = plexus::discovery::detail::hex_encode(id);
     return {hex, {}, plexus::discovery::assemble_contact_card(id, {{"tcp", 5555}})};
 }

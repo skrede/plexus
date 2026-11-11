@@ -67,7 +67,7 @@ TEST_CASE("peer_liveliness holds alive until the heartbeat misses past the windo
     const node_id id = id_of(1);
     h.arb.note_heartbeat(id, k_base_ns);
     h.arb.evaluate(k_base_ns);
-    h.arb.evaluate(k_base_ns + k_window_ns);     // at the window edge: still fresh
+    h.arb.evaluate(k_base_ns + k_window_ns); // at the window edge: still fresh
     REQUIRE(h.log.size() == 1);
     h.arb.evaluate(k_base_ns + k_window_ns + 1); // one past: dead
     REQUIRE(h.log.size() == 2);

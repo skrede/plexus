@@ -46,12 +46,14 @@ TEST_CASE("topic_table: surfaces two publisher types of one topic as a polytype 
     REQUIRE(table.upsert(publisher_of(0x02, "sensor/imu", "custom/Imu", 9)) == upsert_outcome::stored);
 
     std::size_t records = 0;
-    table.for_each([&](const topic_record &r) {
-        ++records;
-        REQUIRE(r.types.count == 2);
-        REQUIRE(r.types.names[0] == "sensor_msgs/Imu");
-        REQUIRE(r.types.names[1] == "custom/Imu");
-    });
+    table.for_each(
+            [&](const topic_record &r)
+            {
+                ++records;
+                REQUIRE(r.types.count == 2);
+                REQUIRE(r.types.names[0] == "sensor_msgs/Imu");
+                REQUIRE(r.types.names[1] == "custom/Imu");
+            });
     REQUIRE(records == 2);
 }
 
@@ -62,10 +64,12 @@ TEST_CASE("topic_table: leaves two publishers agreeing on one type conflict-free
     table.upsert(publisher_of(0x02, "sensor/imu", "sensor_msgs/Imu", 7));
 
     std::size_t records = 0;
-    table.for_each([&](const topic_record &r) {
-        ++records;
-        REQUIRE(r.types.count == 1);
-    });
+    table.for_each(
+            [&](const topic_record &r)
+            {
+                ++records;
+                REQUIRE(r.types.count == 1);
+            });
     REQUIRE(records == 2);
 }
 
@@ -76,10 +80,12 @@ TEST_CASE("topic_table: the default table agrees with the fixed twin on the conf
     table.upsert(publisher_of(0x02, "sensor/imu", "custom/Imu", 9));
 
     std::size_t records = 0;
-    table.for_each([&](const topic_record &r) {
-        ++records;
-        REQUIRE(r.types.count == 2);
-    });
+    table.for_each(
+            [&](const topic_record &r)
+            {
+                ++records;
+                REQUIRE(r.types.count == 2);
+            });
     REQUIRE(records == 2);
 }
 
@@ -92,10 +98,12 @@ TEST_CASE("topic_table: reject-and-counts a topic past capacity without evicting
     REQUIRE(table.dropped() == 1);
 
     std::size_t records = 0;
-    table.for_each([&](const topic_record &r) {
-        ++records;
-        REQUIRE(r.name != "sensor/lidar");
-    });
+    table.for_each(
+            [&](const topic_record &r)
+            {
+                ++records;
+                REQUIRE(r.name != "sensor/lidar");
+            });
     REQUIRE(records == k_topics);
 }
 
@@ -108,13 +116,15 @@ TEST_CASE("topic_table: flags a topic whose distinct types outrun the cap and ke
     REQUIRE(table.truncations() == 1);
 
     std::size_t records = 0;
-    table.for_each([&](const topic_record &r) {
-        ++records;
-        REQUIRE(r.truncated);
-        REQUIRE(r.name == "sensor/imu");
-        REQUIRE(r.role == topic_role::publisher);
-        REQUIRE(r.types.count == k_topic_type_list_cap);
-    });
+    table.for_each(
+            [&](const topic_record &r)
+            {
+                ++records;
+                REQUIRE(r.truncated);
+                REQUIRE(r.name == "sensor/imu");
+                REQUIRE(r.role == topic_role::publisher);
+                REQUIRE(r.types.count == k_topic_type_list_cap);
+            });
     REQUIRE(records == k_topic_type_list_cap + 1);
 }
 
@@ -126,11 +136,13 @@ TEST_CASE("topic_table: clips an over-long type name and flags what it clipped",
     REQUIRE(table.upsert(publisher_of(0x01, "sensor/imu", name, 7)) == upsert_outcome::truncated);
     REQUIRE(table.truncations() == 1);
 
-    table.for_each([&](const topic_record &r) {
-        REQUIRE(r.truncated);
-        REQUIRE(r.types.count == 1);
-        REQUIRE(r.types.names[0].size() == plexus::wire::detail::k_max_type_name);
-    });
+    table.for_each(
+            [&](const topic_record &r)
+            {
+                REQUIRE(r.truncated);
+                REQUIRE(r.types.count == 1);
+                REQUIRE(r.types.names[0].size() == plexus::wire::detail::k_max_type_name);
+            });
 }
 
 TEST_CASE("topic_table: refuses an over-long topic name rather than alias it onto another topic", "[graph][topic_table]")

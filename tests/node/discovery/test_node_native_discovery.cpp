@@ -121,7 +121,7 @@ TEST_CASE("node_native_discovery: a goodbye flushes the leaver from a peer's awa
 TEST_CASE("node_native_discovery: two nodes discover each other over real multicast", "[.multicast]")
 {
     ::asio::io_context io;
-    const auto group = ::asio::ip::make_address_v4("239.255.0.73");
+    const auto group                = ::asio::ip::make_address_v4("239.255.0.73");
     constexpr std::uint16_t mc_port = 17453;
     constexpr unsigned mc_ttl       = 1;
 

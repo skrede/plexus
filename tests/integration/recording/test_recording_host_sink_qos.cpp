@@ -17,7 +17,7 @@ TEST_CASE("recording_host_sink record-rate every_nth decimation drops before the
     {
         message_info info{};
         info.publication_sequence = static_cast<std::uint64_t>(i);
-        const std::string body = "d" + std::to_string(i);
+        const std::string body    = "d" + std::to_string(i);
         tap.on_message_delivered("t/dec", info, message_view{bytes_of(body), {}});
     }
     while(rec.pump())

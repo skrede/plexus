@@ -75,8 +75,7 @@ bool rejected_in_handler(asio_rig &rig, std::string_view expected, Query query)
 
 }
 
-TEST_CASE("graph_blocking_helper_rejected participants_blocking called inside a handler of the node's executor is rejected instead of deadlocking",
-          "[graph]")
+TEST_CASE("graph_blocking_helper_rejected participants_blocking called inside a handler of the node's executor is rejected instead of deadlocking", "[graph]")
 {
     asio_rig rig;
     std::array<plexus::graph::participant_record, 4> buffer{};
@@ -84,8 +83,7 @@ TEST_CASE("graph_blocking_helper_rejected participants_blocking called inside a 
     REQUIRE(rejected_in_handler(rig, "plexus: participants_blocking called inside a handler of the node's own executor", query));
 }
 
-TEST_CASE("graph_blocking_helper_rejected topics_blocking called inside a handler of the node's executor is rejected instead of deadlocking",
-          "[graph]")
+TEST_CASE("graph_blocking_helper_rejected topics_blocking called inside a handler of the node's executor is rejected instead of deadlocking", "[graph]")
 {
     asio_rig rig;
     std::array<plexus::graph::topic_record, 4> buffer{};

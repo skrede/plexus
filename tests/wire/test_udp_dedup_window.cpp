@@ -101,7 +101,7 @@ TEST_CASE("dedup window: explicit anchor latches the window and reset re-arms fi
     // deduped (too_old). reset() re-arms the first-sighting anchor so the post-restart replay re-admits.
     REQUIRE(w.admit(2) == outcome::too_old); // delta 199 > depth, behind 201
     w.reset();
-    REQUIRE(w.admit(2) == outcome::fresh);   // re-anchored on the restarted counter
+    REQUIRE(w.admit(2) == outcome::fresh); // re-anchored on the restarted counter
     REQUIRE(w.admit(2) == outcome::duplicate);
 }
 

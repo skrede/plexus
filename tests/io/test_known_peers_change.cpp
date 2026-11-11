@@ -39,13 +39,13 @@ void exercise_change_signal(Table &table)
 {
     const node_id a = id_of(std::byte{0x01});
 
-    REQUIRE(table.note_peer(a, ep_of("a:1")) == true);        // new id
-    REQUIRE(table.note_peer(a, ep_of("a:1")) == false);       // idempotent re-announce
-    REQUIRE(table.note_peer(a, ep_of("a:2")) == true);        // endpoint moved (reachability change)
-    REQUIRE(table.note_peer(a, ep_of("a:2")) == false);       // settled again
+    REQUIRE(table.note_peer(a, ep_of("a:1")) == true);  // new id
+    REQUIRE(table.note_peer(a, ep_of("a:1")) == false); // idempotent re-announce
+    REQUIRE(table.note_peer(a, ep_of("a:2")) == true);  // endpoint moved (reachability change)
+    REQUIRE(table.note_peer(a, ep_of("a:2")) == false); // settled again
 
-    REQUIRE(table.forget(a) == true);                         // erased
-    REQUIRE(table.forget(a) == false);                        // nothing to erase
+    REQUIRE(table.forget(a) == true);  // erased
+    REQUIRE(table.forget(a) == false); // nothing to erase
 }
 
 } // namespace

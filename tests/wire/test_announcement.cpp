@@ -52,7 +52,7 @@ announcement make_sample()
 
 TEST_CASE("announcement codec: encode then decode round-trips every field in order", "[wire][announcement][discovery]")
 {
-    const auto ann = make_sample();
+    const auto ann   = make_sample();
     const auto bytes = encode_announcement(ann);
 
     const auto decoded = decode_announcement(bytes);
@@ -65,7 +65,7 @@ TEST_CASE("announcement codec: encode then decode round-trips every field in ord
 
 TEST_CASE("announcement codec: the goodbye flag round-trips set", "[wire][announcement][discovery]")
 {
-    auto ann   = make_sample();
+    auto ann = make_sample();
     ann.flags |= k_announcement_goodbye_flag;
 
     const auto decoded = decode_announcement(encode_announcement(ann));
@@ -139,9 +139,9 @@ TEST_CASE("announcement codec: a universe pattern round-trips when the pattern-p
 {
     // The value is a grammar-legal slash-notation whole-segment wildcard only for readability; the
     // codec carries the bytes verbatim and never validates pattern shape (the discovery leaf does).
-    auto ann              = make_sample();
-    ann.universe_pattern  = "factory/line/*";
-    ann.flags            |= k_announcement_universe_pattern_flag;
+    auto ann             = make_sample();
+    ann.universe_pattern = "factory/line/*";
+    ann.flags |= k_announcement_universe_pattern_flag;
 
     const auto decoded = decode_announcement(encode_announcement(ann));
     REQUIRE(decoded.has_value());
@@ -152,9 +152,9 @@ TEST_CASE("announcement codec: a universe pattern round-trips when the pattern-p
 
 TEST_CASE("announcement codec: the goodbye and pattern flags are independent and both round-trip set", "[wire][announcement][discovery]")
 {
-    auto ann              = make_sample();
-    ann.universe_pattern  = "site/*/gateway";
-    ann.flags            |= k_announcement_goodbye_flag | k_announcement_universe_pattern_flag;
+    auto ann             = make_sample();
+    ann.universe_pattern = "site/*/gateway";
+    ann.flags |= k_announcement_goodbye_flag | k_announcement_universe_pattern_flag;
 
     const auto decoded = decode_announcement(encode_announcement(ann));
     REQUIRE(decoded.has_value());
@@ -184,9 +184,9 @@ TEST_CASE("announcement codec: an oversized universe pattern decodes to nullopt 
 {
     // A wire-legal but over-ceiling length-prefixed pattern: encode carries it (no encode cap),
     // decode must refuse it before retaining the bytes off the untrusted datagram.
-    auto ann              = make_sample();
-    ann.universe_pattern  = std::string(300, 'x');
-    ann.flags            |= k_announcement_universe_pattern_flag;
+    auto ann             = make_sample();
+    ann.universe_pattern = std::string(300, 'x');
+    ann.flags |= k_announcement_universe_pattern_flag;
 
     REQUIRE(!decode_announcement(encode_announcement(ann)).has_value());
 }

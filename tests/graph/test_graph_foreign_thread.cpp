@@ -59,8 +59,8 @@ constexpr std::array<std::string_view, 4> k_topic_names{"sensor/imu", "sensor/po
 
 plexus::graph::topic_edge edge_for(int slot)
 {
-    return plexus::graph::topic_edge{make_id(static_cast<std::uint8_t>(0x10 + slot)), k_topic_names[static_cast<std::size_t>(slot)], "sensor/Imu",
-                                     std::optional<std::uint64_t>{0x1A2Bu}, plexus::graph::topic_role::publisher};
+    return plexus::graph::topic_edge{make_id(static_cast<std::uint8_t>(0x10 + slot)), k_topic_names[static_cast<std::size_t>(slot)], "sensor/Imu", std::optional<std::uint64_t>{0x1A2Bu},
+                                     plexus::graph::topic_role::publisher};
 }
 
 }
@@ -71,10 +71,10 @@ plexus::graph::topic_edge edge_for(int slot)
 // -fsanitize=thread the run reports no data race on the live table.
 TEST_CASE("foreign_thread: participants_blocking reads a churning table race-free", "[graph]")
 {
-    ::asio::io_context      io;
-    pasio::asio_transport   transport{io};
+    ::asio::io_context io;
+    pasio::asio_transport transport{io};
     plexus::discovery::static_discovery disc{{}};
-    asio_node               node{io, disc, make_id(0x01), transport, lazy_opts()};
+    asio_node node{io, disc, make_id(0x01), transport, lazy_opts()};
 
     constexpr int k_peers              = 6;
     constexpr int k_foreign_iterations = 2000;
@@ -127,13 +127,13 @@ TEST_CASE("foreign_thread: participants_blocking reads a churning table race-fre
 // construction, and under -fsanitize=thread the run reports no data race on the live table.
 TEST_CASE("foreign_thread: topics_blocking reads a churning topic table race-free", "[graph]")
 {
-    ::asio::io_context                  io;
-    pasio::asio_transport               transport{io};
+    ::asio::io_context io;
+    pasio::asio_transport transport{io};
     plexus::discovery::static_discovery disc{{}};
-    asio_node                           node{io, disc, make_id(0x01), transport, lazy_opts()};
+    asio_node node{io, disc, make_id(0x01), transport, lazy_opts()};
 
     constexpr int k_foreign_iterations = 2000;
-    const auto    sensors              = plexus::match::key_pattern::make("sensor/*");
+    const auto sensors                 = plexus::match::key_pattern::make("sensor/*");
     REQUIRE(sensors.has_value());
 
     std::atomic<bool> foreign_done{false};

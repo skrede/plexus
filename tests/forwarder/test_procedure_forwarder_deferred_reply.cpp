@@ -80,8 +80,8 @@ TEST_CASE("procedure_forwarder deferred reply: two interleaved forwarded request
     deferred[1](rpc_status::success, {}); // answer request B
 
     REQUIRE(forwarded.size() == 2u);
-    REQUIRE(forwarded[0].first == origin_a);                  // A's reply addressed to A's origin
+    REQUIRE(forwarded[0].first == origin_a); // A's reply addressed to A's origin
     REQUIRE(reply_correlation(forwarded[0].second) == 100u);
-    REQUIRE(forwarded[1].first == origin_b);                  // B's reply addressed to B's origin
+    REQUIRE(forwarded[1].first == origin_b); // B's reply addressed to B's origin
     REQUIRE(reply_correlation(forwarded[1].second) == 200u);
 }

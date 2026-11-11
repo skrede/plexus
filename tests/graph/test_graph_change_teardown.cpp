@@ -34,13 +34,12 @@ TEST_CASE("graph change teardown: an observer removed before the drain receives 
     net.eng.add_observer(rec);
 
     net.eng.note_peer(make_id(0xB2), ep_for("node-b")); // posts a wakeup
-    net.eng.remove_observer(rec);                        // handle teardown BEFORE the drain
+    net.eng.remove_observer(rec);                       // handle teardown BEFORE the drain
     net.drain();
     REQUIRE(rec.changed_fires == 0);
 }
 
-TEST_CASE("graph change teardown: after remove_observer a later mutation + drain fires nothing into it",
-          "[graph][change][teardown]")
+TEST_CASE("graph change teardown: after remove_observer a later mutation + drain fires nothing into it", "[graph][change][teardown]")
 {
     one_node net;
     recording_graph_observer rec;

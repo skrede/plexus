@@ -36,7 +36,7 @@ namespace wire = plexus::wire;
 
 namespace {
 
-using forwarder = io::message_forwarder<inproc::inproc_policy>;
+using forwarder  = io::message_forwarder<inproc::inproc_policy>;
 using fwd_splice = io::forward_splice<inproc::inproc_policy>;
 
 std::span<const std::byte> as_bytes(const std::string &s)
@@ -136,8 +136,8 @@ TEST_CASE("forward_splice_pubsub: an admitted frame re-fans to the subscriber wi
     const auto payload = std::span<const std::byte>{fx.dest_got[0]}.subspan(wire::header_size);
     auto ff            = wire::decode_forwarded_frame(payload);
     REQUIRE(ff.has_value());
-    REQUIRE(ff->origin == origin);                                            // the trailer origin survives the splice
-    REQUIRE(ff->hop == 2);                                                    // hop incremented on re-wrap
+    REQUIRE(ff->origin == origin);                                                       // the trailer origin survives the splice
+    REQUIRE(ff->hop == 2);                                                               // hop incremented on re-wrap
     REQUIRE(std::equal(ff->inner.begin(), ff->inner.end(), inner.begin(), inner.end())); // the inner frame is carried verbatim
 }
 
@@ -155,8 +155,8 @@ TEST_CASE("forward_splice_pubsub: an undemanded topic is not fanned (registry sc
     // A different topic nobody on this relay subscribes: the interest lookup finds no destination.
     sp.refan(fx.fwd, wire::fqn_topic_hash("other.topic"), id_of(0x10), 1, inner, nullptr, nullptr);
     fx.ex.drain();
-    REQUIRE(fx.dest_got.empty());              // undemanded: nothing fanned
-    REQUIRE(sp.exhaustion_drops() == 0u);      // and no pool slot was even taken (built lazily on the first destination)
+    REQUIRE(fx.dest_got.empty());         // undemanded: nothing fanned
+    REQUIRE(sp.exhaustion_drops() == 0u); // and no pool slot was even taken (built lazily on the first destination)
 }
 
 TEST_CASE("forward_splice_pubsub: the refcounted zero-copy knob retains an inbound owner, never an empty "
@@ -172,18 +172,18 @@ TEST_CASE("forward_splice_pubsub: the refcounted zero-copy knob retains an inbou
     // A synthesized inbound owner (the owner-carrying receive seam the host relay retains): a complete
     // forwarded frame the zero-copy checkout shares to the destination with no slot copy.
     wire::forwarded_frame carried;
-    carried.origin = id_of(0xC0);
-    carried.hop    = 3;
-    carried.seq    = 9;
-    carried.inner  = capture_inner("relayed.topic", "zc-body");
-    std::vector<std::byte> owned_bytes = wire::encode_frame(
-            wire::frame_header{.type = wire::msg_type::forwarded, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0}, wire::encode_forwarded_frame(carried));
+    carried.origin                     = id_of(0xC0);
+    carried.hop                        = 3;
+    carried.seq                        = 9;
+    carried.inner                      = capture_inner("relayed.topic", "zc-body");
+    std::vector<std::byte> owned_bytes = wire::encode_frame(wire::frame_header{.type = wire::msg_type::forwarded, .flags = 0, .session_id = 0, .timestamp_ns = 0, .payload_len = 0},
+                                                            wire::encode_forwarded_frame(carried));
     wire::shared_bytes owner{owned_bytes};
 
     fwd_splice sp{ctx_of(io::splice_ownership::refcounted_zero_copy)};
     sp.refan(fx.fwd, wire::fqn_topic_hash("relayed.topic"), carried.origin, carried.hop, carried.inner, nullptr, &owner);
     fx.ex.drain();
 
-    REQUIRE(fx.dest_got.size() == 1u);                     // the retained owner was enqueued (never an empty owner)
-    REQUIRE(fx.dest_got[0].size() == owned_bytes.size());  // the destination received the retained bytes, uncopied
+    REQUIRE(fx.dest_got.size() == 1u);                    // the retained owner was enqueued (never an empty owner)
+    REQUIRE(fx.dest_got[0].size() == owned_bytes.size()); // the destination received the retained bytes, uncopied
 }

@@ -38,8 +38,7 @@ TEST_CASE("peer_liveliness any_signal_alive unions the bits of every live signal
 
     REQUIRE(h.log.size() == 1);
     REQUIRE(h.log[0].verdict == liveliness_verdict::alive);
-    REQUIRE(h.log[0].contributing
-            == (liveliness_signal::awareness | liveliness_signal::heartbeat | liveliness_signal::session));
+    REQUIRE(h.log[0].contributing == (liveliness_signal::awareness | liveliness_signal::heartbeat | liveliness_signal::session));
 }
 
 TEST_CASE("peer_liveliness session_authoritative keeps the table empty until a session edge", "[io][peer_liveliness]")
@@ -90,8 +89,8 @@ TEST_CASE("peer_liveliness all_required reads lost when a present signal is dead
     const node_id id = id_of(1);
     h.arb.note_session_up(id);
     h.arb.note_heartbeat(id, k_base_ns);
-    h.arb.evaluate(k_base_ns);                    // session up + heartbeat fresh -> alive
-    h.arb.evaluate(k_base_ns + k_window_ns + 1);  // heartbeat dead, session still up -> lost
+    h.arb.evaluate(k_base_ns);                   // session up + heartbeat fresh -> alive
+    h.arb.evaluate(k_base_ns + k_window_ns + 1); // heartbeat dead, session still up -> lost
 
     REQUIRE(h.log.size() == 2);
     REQUIRE(h.log[0].verdict == liveliness_verdict::alive);

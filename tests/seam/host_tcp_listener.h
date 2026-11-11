@@ -83,7 +83,7 @@ public:
     }
 
 private:
-    int           m_fd;
+    int m_fd;
     std::uint16_t m_port;
 };
 

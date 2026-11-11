@@ -160,15 +160,15 @@ TEST_CASE("shm.dual_delivery a same-host SHM topic and a cross-host wire topic c
 
         std::uint32_t shm_got = 0;
         bridge.arm(*channel.engage_subscriber(),
-                [&]
-                {
-                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
-                    {
-                        std::memcpy(&shm_got, wb.data(), sizeof(shm_got));
-                        c->shm_value_seen.store(1u, std::memory_order_release);
-                    };
-                    channel.drain(deliver);
-                });
+                   [&]
+                   {
+                       pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                       {
+                           std::memcpy(&shm_got, wb.data(), sizeof(shm_got));
+                           c->shm_value_seen.store(1u, std::memory_order_release);
+                       };
+                       channel.drain(deliver);
+                   });
 
         c->regions_ready.store(1, std::memory_order_release);
 

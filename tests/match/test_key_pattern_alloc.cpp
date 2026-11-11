@@ -26,11 +26,11 @@ TEST_CASE("key_pattern construction allocates nothing", "[match][key_pattern][al
     const std::string_view dstar     = "**";
 
     const std::size_t before = plexus::testing::alloc_count();
-    const auto        a      = key_pattern::make(literal);
-    const auto        b      = key_pattern::make(canonical);
-    const auto        c      = key_pattern::make(dstar);
-    const auto        d      = key_pattern::make(adversarial);
-    const auto        e      = key_pattern::make(over_long);
+    const auto a             = key_pattern::make(literal);
+    const auto b             = key_pattern::make(canonical);
+    const auto c             = key_pattern::make(dstar);
+    const auto d             = key_pattern::make(adversarial);
+    const auto e             = key_pattern::make(over_long);
     const std::size_t after  = plexus::testing::alloc_count();
 
     REQUIRE(a.has_value());
@@ -46,11 +46,11 @@ TEST_CASE("key_pattern intersects allocates nothing", "[match][key_pattern][allo
     // The greedy hot path (concrete vs pattern), the rolling-DP path (wildcard
     // pair), and an adversarial deep single-star run must all be alloc-free — the
     // DP row and segment tables are stack-resident std::array.
-    const auto concrete   = key_pattern::make("a/b/c/d");
-    const auto wildcard   = key_pattern::make("a/**/d");
-    const auto other      = key_pattern::make("**/c/d");
-    const auto adv_pat    = key_pattern::make("a/*/a/*/a/*/a/*/a");
-    const auto adv_key    = key_pattern::make("a/a/a/a/a/a/a/a/a");
+    const auto concrete = key_pattern::make("a/b/c/d");
+    const auto wildcard = key_pattern::make("a/**/d");
+    const auto other    = key_pattern::make("**/c/d");
+    const auto adv_pat  = key_pattern::make("a/*/a/*/a/*/a/*/a");
+    const auto adv_key  = key_pattern::make("a/a/a/a/a/a/a/a/a");
     REQUIRE(concrete.has_value());
     REQUIRE(wildcard.has_value());
     REQUIRE(other.has_value());
@@ -58,11 +58,11 @@ TEST_CASE("key_pattern intersects allocates nothing", "[match][key_pattern][allo
     REQUIRE(adv_key.has_value());
 
     const std::size_t before = plexus::testing::alloc_count();
-    const bool        r1     = wildcard->intersects(*concrete);
-    const bool        r2     = wildcard->intersects(*other);
-    const bool        r3     = adv_pat->intersects(*adv_key);
-    const bool        r4     = wildcard->includes(*concrete);
-    const bool        r5     = adv_pat->includes(*adv_key);
+    const bool r1            = wildcard->intersects(*concrete);
+    const bool r2            = wildcard->intersects(*other);
+    const bool r3            = adv_pat->intersects(*adv_key);
+    const bool r4            = wildcard->includes(*concrete);
+    const bool r5            = adv_pat->includes(*adv_key);
     const std::size_t after  = plexus::testing::alloc_count();
 
     REQUIRE(r1);

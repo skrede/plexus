@@ -51,7 +51,7 @@ wire::peer_report reported_origin(const plexus::node_id &origin, std::string_vie
 
 TEST_CASE("participants surfaces a reported peer as relayed beside an unblended direct peer", "[graph]")
 {
-    host        h;
+    host h;
     inproc_node node{h.ex, h.disc, make_id(0x01), h.transport, make_opts()};
 
     const auto id_direct = make_id(0x0B);
@@ -95,7 +95,7 @@ TEST_CASE("participants surfaces a reported peer as relayed beside an unblended 
 
 TEST_CASE("topics folds a reported origin's topics-with-types under the origin's node_id", "[graph]")
 {
-    host        h;
+    host h;
     inproc_node node{h.ex, h.disc, make_id(0x01), h.transport, make_opts()};
 
     const auto id_relay  = make_id(0x0A);

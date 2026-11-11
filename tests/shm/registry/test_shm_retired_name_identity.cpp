@@ -160,8 +160,7 @@ TEST_CASE("retired_name_identity a retirer killed after it retired a ring it nev
 
 // The dead minter created the control region and left before its creator-slot take; the name is removed from outside
 // the protocol, and another producer mints, between the adopter's attach and its take.
-TEST_CASE("retired_name_identity an adopter whose dead minter's name another producer took over before its creator-slot take removes nothing",
-          "[shm][retired_name_identity]")
+TEST_CASE("retired_name_identity an adopter whose dead minter's name another producer took over before its creator-slot take removes nothing", "[shm][retired_name_identity]")
 {
     wake_bus bus;
     ring_view view{lifetime_fqn("retired_adopter")};

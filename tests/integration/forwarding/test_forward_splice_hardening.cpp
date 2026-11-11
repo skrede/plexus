@@ -36,7 +36,7 @@ namespace wire = plexus::wire;
 
 namespace {
 
-using forwarder = io::message_forwarder<inproc::inproc_policy>;
+using forwarder  = io::message_forwarder<inproc::inproc_policy>;
 using fwd_splice = io::forward_splice<inproc::inproc_policy>;
 
 node_id id_of(std::uint8_t base)
@@ -137,9 +137,9 @@ TEST_CASE("forward_splice hardening: an envelope larger than a pooled slot drops
     sp.refan(fx.fwd, hash, id_of(0xB0), /*hop=*/1, oversized, /*arrival=*/nullptr, nullptr);
     fx.ex.drain();
 
-    REQUIRE(dest.got.empty());                                          // never put on the wire
+    REQUIRE(dest.got.empty());                                           // never put on the wire
     REQUIRE(fx.drops_of(io::detail::drop_cause::splice_oversize) == 1u); // counted once (one destination)
-    REQUIRE(sp.exhaustion_drops() == 0u);                              // not a pool-exhaustion drop
+    REQUIRE(sp.exhaustion_drops() == 0u);                                // not a pool-exhaustion drop
 
     // A fitting frame on the SAME relay transits — the drop above was size-selective, not a dead leg.
     const auto fitting = capture_inner("relayed.topic", 32);

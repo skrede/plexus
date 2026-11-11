@@ -61,7 +61,7 @@ void run_script(Storage &s)
     s.upsert_deadline(key_of(0x01, 0xBB), 300, 10);
     s.upsert_lease(id_of(0x02), 500, 20);
     s.upsert_lease(id_of(0x02), 500, 40); // re-stamp: same key, no new slot
-    s.erase_endpoint(id_of(0x01));         // drops both 0x01 deadlines + the 0x01 lease
+    s.erase_endpoint(id_of(0x01));        // drops both 0x01 deadlines + the 0x01 lease
 }
 
 } // namespace

@@ -46,7 +46,8 @@ liveliness_options opts_for(combine policy)
 class harness
 {
 public:
-    explicit harness(combine policy) : arb(opts_for(policy))
+    explicit harness(combine policy)
+            : arb(opts_for(policy))
     {
         arb.add_subscriber();
         arb.on_verdict([this](const peer_liveliness_event &e) { log.push_back(e); });

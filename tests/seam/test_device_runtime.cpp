@@ -22,8 +22,8 @@ namespace {
 struct fake_pollable
 {
     plexus::freertos::freertos_executor &ex;
-    int                                  polls{0};
-    int                                  drained_after_poll{0};
+    int polls{0};
+    int drained_after_poll{0};
 
     void poll()
     {
@@ -38,8 +38,8 @@ struct fake_pollable
 struct fake_pollable_b
 {
     plexus::freertos::freertos_executor &ex;
-    int                                  polls{0};
-    int                                  drained_after_poll{0};
+    int polls{0};
+    int drained_after_poll{0};
 
     void poll()
     {
@@ -53,7 +53,7 @@ struct fake_pollable_b
 TEST_CASE("device tick polls a single handle once, then drains, then parks", "[seam]")
 {
     plexus::freertos::freertos_executor ex;
-    fake_pollable                       p{ex};
+    fake_pollable p{ex};
 
     plexus::freertos::tick(ex, plexus::freertos::run_options{}, p);
 
@@ -64,8 +64,8 @@ TEST_CASE("device tick polls a single handle once, then drains, then parks", "[s
 TEST_CASE("device tick folds over two distinct pollable types in one tick", "[seam]")
 {
     plexus::freertos::freertos_executor ex;
-    fake_pollable                       a{ex};
-    fake_pollable_b                     b{ex};
+    fake_pollable a{ex};
+    fake_pollable_b b{ex};
 
     plexus::freertos::tick(ex, a, b);
 
@@ -78,8 +78,8 @@ TEST_CASE("device tick folds over two distinct pollable types in one tick", "[se
 TEST_CASE("device tick over a span polls each once with a single drain", "[seam]")
 {
     plexus::freertos::freertos_executor ex;
-    fake_pollable                       a{ex};
-    fake_pollable                       b{ex};
+    fake_pollable a{ex};
+    fake_pollable b{ex};
 
     plexus::freertos::tick(ex, a, b);
 
@@ -102,7 +102,5 @@ TEST_CASE("device run_options park of zero is clamped up to the non-zero floor",
 // run_task forces the caller to name a measured stack: task_options has no default
 // constructor, so a stack-less spawn cannot compile. The spawn itself is not exercised
 // on the host — the trampoline runs the [[noreturn]] loop, validated on hardware.
-static_assert(!std::is_default_constructible_v<plexus::freertos::task_options>,
-              "task_options must require an explicit stack size");
-static_assert(std::is_constructible_v<plexus::freertos::task_options, std::uint32_t>,
-              "task_options is constructed from an explicit stack size");
+static_assert(!std::is_default_constructible_v<plexus::freertos::task_options>, "task_options must require an explicit stack size");
+static_assert(std::is_constructible_v<plexus::freertos::task_options, std::uint32_t>, "task_options is constructed from an explicit stack size");

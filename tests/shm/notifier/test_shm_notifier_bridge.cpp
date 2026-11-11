@@ -176,15 +176,15 @@ TEST_CASE("shm.notifier_bridge a producer wake reaches the user's asio reactor a
         // The arm()'d drain runs on a posted reactor turn, the registry's
         // drain-this-channel callback shape.
         bridge.arm(*channel.engage_subscriber(),
-                [&]
-                {
-                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
-                    {
-                        std::memcpy(&got, wb.data(), sizeof(got));
-                        c->value_seen.store(1u, std::memory_order_release);
-                    };
-                    channel.drain(deliver);
-                });
+                   [&]
+                   {
+                       pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                       {
+                           std::memcpy(&got, wb.data(), sizeof(got));
+                           c->value_seen.store(1u, std::memory_order_release);
+                       };
+                       channel.drain(deliver);
+                   });
 
         c->regions_ready.store(1, std::memory_order_release);
 
@@ -251,15 +251,15 @@ TEST_CASE("shm.notifier_bridge a gated signal wakes a parked io_uring waiter (su
 
         std::uint32_t got = 0;
         bridge.arm(*channel.engage_subscriber(),
-                [&]
-                {
-                    pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
-                    {
-                        std::memcpy(&got, wb.data(), sizeof(got));
-                        c->value_seen.store(1u, std::memory_order_release);
-                    };
-                    channel.drain(deliver);
-                });
+                   [&]
+                   {
+                       pio::shm_channel<plexus::asio::shm::ring_notifier<test_policy>>::deliver_fn deliver = [&](plexus::wire_bytes<pio::shm_slot_owner> wb)
+                       {
+                           std::memcpy(&got, wb.data(), sizeof(got));
+                           c->value_seen.store(1u, std::memory_order_release);
+                       };
+                       channel.drain(deliver);
+                   });
 
         // arm() parked the consumer in its park slot; release the producer only now so
         // its gate must observe PARKED to land the wake.

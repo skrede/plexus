@@ -31,8 +31,7 @@ wire::peer_report assert_report(const node_id &origin, std::uint16_t seq, std::s
     pr.seq             = seq;
     pr.flags           = wire::k_peer_report_consent_flag | wire::k_peer_report_topics_flag;
     for(std::size_t i = 0; i < topics; ++i)
-        pr.topics.push_back(wire::topic_declaration{
-                .topic_hash = i + 1, .type_id = 0, .fqn = "t/" + std::to_string(i), .type_name = "", .state = wire::type_state::undeclared});
+        pr.topics.push_back(wire::topic_declaration{.topic_hash = i + 1, .type_id = 0, .fqn = "t/" + std::to_string(i), .type_name = "", .state = wire::type_state::undeclared});
     return pr;
 }
 
@@ -87,9 +86,9 @@ TEST_CASE("peer_report flood: a reporter's origin flood is capped, a direct peer
     for(int i = 0; i < 50; ++i)
         held += static_cast<std::size_t>(n.rows(make_id(static_cast<std::uint8_t>(0x10 + i))) != 0);
 
-    REQUIRE(held == 4);                              // exactly the per-reporter ceiling
-    REQUIRE(n.eng.reported_dropped_count() == 46);   // honest reject-and-count
-    REQUIRE(n.rows(direct) == 1);                    // the direct peer never yielded a row
+    REQUIRE(held == 4);                            // exactly the per-reporter ceiling
+    REQUIRE(n.eng.reported_dropped_count() == 46); // honest reject-and-count
+    REQUIRE(n.rows(direct) == 1);                  // the direct peer never yielded a row
 }
 
 TEST_CASE("peer_report flood: a per-origin topic flood drops the whole report", "[graph][peer_report][flood]")

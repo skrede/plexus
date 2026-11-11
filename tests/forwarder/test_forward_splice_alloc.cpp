@@ -45,9 +45,9 @@ TEST_CASE("forward_splice_alloc: the pooled buffer-build allocates nothing in st
     const auto ff = sample_envelope();
 
     plexus::io::forward_options opts;
-    opts.splice_pool_slots  = 4;
-    opts.splice_slot_bytes  = 256;
-    const auto ctx = plexus::io::make_forward_ctx(opts);
+    opts.splice_pool_slots = 4;
+    opts.splice_slot_bytes = 256;
+    const auto ctx         = plexus::io::make_forward_ctx(opts);
     plexus::io::splice_pool pool{ctx.splice_pool_slots, ctx.splice_slot_bytes};
 
     // The shape the pool replaces: a fresh owning buffer per publish — the make_shared placeholder the
@@ -63,12 +63,7 @@ TEST_CASE("forward_splice_alloc: the pooled buffer-build allocates nothing in st
 
     // Pooled owned copy (the default): checkout claims a free slot, the envelope encodes into it, and
     // the returned wire_bytes<> returns the slot to the pool on release — zero per-iteration alloc.
-    const auto pool_build = [&]
-    {
-        return pool.checkout_owned_copy(
-                [&](std::span<std::byte> slot)
-                { return plexus::wire::encode_forwarded_frame_into(slot, ff); });
-    };
+    const auto pool_build = [&] { return pool.checkout_owned_copy([&](std::span<std::byte> slot) { return plexus::wire::encode_forwarded_frame_into(slot, ff); }); };
     REQUIRE(per_iteration_alloc_delta(pool_build) == 0);
 }
 
@@ -91,8 +86,7 @@ TEST_CASE("forward_splice_alloc: pool exhaustion counts a drop and allocates not
     const auto ff = sample_envelope();
     plexus::io::splice_pool pool{2, 256};
 
-    const auto enc = [&](std::span<std::byte> slot)
-    { return plexus::wire::encode_forwarded_frame_into(slot, ff); };
+    const auto enc = [&](std::span<std::byte> slot) { return plexus::wire::encode_forwarded_frame_into(slot, ff); };
 
     plexus::wire_bytes<> a = pool.checkout_owned_copy(enc);
     plexus::wire_bytes<> b = pool.checkout_owned_copy(enc);
@@ -101,9 +95,9 @@ TEST_CASE("forward_splice_alloc: pool exhaustion counts a drop and allocates not
 
     const auto drops_before = pool.exhaustion_drops();
     plexus::testing::reset_alloc_count();
-    const auto before = plexus::testing::alloc_count();
+    const auto before              = plexus::testing::alloc_count();
     plexus::wire_bytes<> exhausted = pool.checkout_owned_copy(enc);
-    const auto after = plexus::testing::alloc_count();
+    const auto after               = plexus::testing::alloc_count();
 
     REQUIRE(exhausted.empty());
     REQUIRE(after == before);

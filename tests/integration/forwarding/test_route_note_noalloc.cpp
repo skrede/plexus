@@ -17,8 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace
-{
+namespace {
 
 using plexus::node_id;
 using plexus::io::basic_known_peers;

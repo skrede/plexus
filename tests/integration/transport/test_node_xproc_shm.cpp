@@ -27,9 +27,9 @@ TEST_CASE("node_xproc_shm the subscriber callback receives the fitting message o
 
         const medium_result r = one_run(fqn, small, large, /*same_host=*/true);
 
-        REQUIRE(r.region_observed);      // the /dev/shm companion ring mapped while live
-        REQUIRE(r.small_at_callback);    // the subscriber callback received the fitting payload (over
-                                         // SHM)
+        REQUIRE(r.region_observed);   // the /dev/shm companion ring mapped while live
+        REQUIRE(r.small_at_callback); // the subscriber callback received the fitting payload (over
+                                      // SHM)
 #if !defined(PLEXUS_TEST_UNDER_TSAN)
         // A second, independent /dev/shm consumer in the forked child corroborating the fitting
         // payload on the ring. ThreadSanitizer cannot instrument cross-process shared-memory

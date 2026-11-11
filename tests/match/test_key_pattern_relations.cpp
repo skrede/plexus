@@ -109,8 +109,7 @@ TEST_CASE("key_pattern intersects pins the pattern-vs-pattern truth table", "[ma
 
 TEST_CASE("key_pattern intersects is symmetric and reflexive", "[match][key_pattern][intersects]")
 {
-    constexpr std::array<std::string_view, 8> patterns{
-            "a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
+    constexpr std::array<std::string_view, 8> patterns{"a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
     for(const std::string_view p : patterns)
     {
         REQUIRE(rel(p, p));
@@ -149,8 +148,7 @@ TEST_CASE("key_pattern includes pins the containment truth table", "[match][key_
 
 TEST_CASE("key_pattern includes is reflexive and not generally symmetric", "[match][key_pattern][includes]")
 {
-    constexpr std::array<std::string_view, 8> patterns{
-            "a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
+    constexpr std::array<std::string_view, 8> patterns{"a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
     for(const std::string_view p : patterns)
         REQUIRE(inc(p, p));
     REQUIRE(inc("a/**", "a/b"));
@@ -159,8 +157,7 @@ TEST_CASE("key_pattern includes is reflexive and not generally symmetric", "[mat
 
 TEST_CASE("key_pattern includes implies intersects on every covered pair", "[match][key_pattern][includes]")
 {
-    constexpr std::array<std::string_view, 8> patterns{
-            "a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
+    constexpr std::array<std::string_view, 8> patterns{"a", "*", "**", "a/*", "a/**", "**/c", "a/**/c", "a/*/c"};
     for(const std::string_view p : patterns)
         for(const std::string_view q : patterns)
             if(inc(p, q))

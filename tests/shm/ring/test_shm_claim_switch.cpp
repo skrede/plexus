@@ -49,8 +49,12 @@ struct placing_publisher
             , placed()
             , lanes(registry)
     {
-        lanes.on_gate([this](std::string_view)
-                      { return plexus::io::upgrade_mint<order_channel>{std::make_unique<order_channel>(ring_log, ring_occupancy, 99), [](std::size_t) { return true; }, [this](reader_claim claim) { return land(claim); }}; });
+        lanes.on_gate(
+                [this](std::string_view)
+                {
+                    return plexus::io::upgrade_mint<order_channel>{std::make_unique<order_channel>(ring_log, ring_occupancy, 99), [](std::size_t) { return true; },
+                                                                   [this](reader_claim claim) { return land(claim); }};
+                });
         lanes.on_lane_released([this](order_channel &channel) { fwd.forget_channel(channel); });
         lanes.set_topic_hint("t", plexus::io::dispatch_hint::frequent);
         lanes.on_local_publisher("t", true);

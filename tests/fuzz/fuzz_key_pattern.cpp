@@ -14,8 +14,7 @@
 #include <utility>
 #include <string_view>
 
-namespace
-{
+namespace {
 
 using plexus::match::key_pattern;
 
@@ -33,8 +32,8 @@ std::pair<std::string_view, std::string_view> split(const uint8_t *data, std::si
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, std::size_t size)
 {
     const auto [text_a, text_b] = split(data, size);
-    const auto a = key_pattern::make(text_a);
-    const auto b = key_pattern::make(text_b);
+    const auto a                = key_pattern::make(text_a);
+    const auto b                = key_pattern::make(text_b);
     if(a && b)
     {
         const bool a_meets_b = a->intersects(*b);

@@ -30,15 +30,13 @@
 namespace pasio = plexus::asio;
 namespace pio   = plexus::io;
 
-static_assert(pio::mux_member<pasio::serial_transport>,
-              "serial_transport must satisfy mux_member — check channel_type + mux_schemes + mux_tier");
+static_assert(pio::mux_member<pasio::serial_transport>, "serial_transport must satisfy mux_member — check channel_type + mux_schemes + mux_tier");
 static_assert(pasio::serial_transport::mux_tier == pio::transport_kind::remote,
               "a cabled UART crosses the host boundary: serial classifies remote, agreeing with transport_selector::select");
 
 using relay_serial_node = plexus::node<plexus::relay<pasio::asio_policy>, pasio::serial_transport, pasio::asio_transport>;
 
-static_assert(std::is_same_v<relay_serial_node::engine_policy, plexus::muxify<pasio::asio_policy>>,
-              "a two-transport relay node resolves its engine through the muxify policy path");
+static_assert(std::is_same_v<relay_serial_node::engine_policy, plexus::muxify<pasio::asio_policy>>, "a two-transport relay node resolves its engine through the muxify policy path");
 
 TEST_CASE("a relay node composes a serial+tcp node from its borrowed leaves", "[integration][mux][node][serial]")
 {

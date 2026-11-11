@@ -90,11 +90,10 @@ TEST_CASE("native discovery and plexus asio transport progress on one io_context
     // node_id and "plexus/<transport>/port" keys; a hand-rolled card would fail the
     // strict decode and emit no announcement).
     plexus::node_id advertised_id{};
-    advertised_id[0]  = std::byte{0x11};
-    advertised_id[15] = std::byte{0xb4};
+    advertised_id[0]          = std::byte{0x11};
+    advertised_id[15]         = std::byte{0xb4};
     const auto advertised_hex = plexus::discovery::detail::hex_encode(advertised_id);
-    plexus::discovery::service_info card{advertised_hex, {"tcp", "127.0.1.1:5555"},
-                                         plexus::discovery::assemble_contact_card(advertised_id, {{"tcp", 5555}})};
+    plexus::discovery::service_info card{advertised_hex, {"tcp", "127.0.1.1:5555"}, plexus::discovery::assemble_contact_card(advertised_id, {{"tcp", 5555}})};
     advertiser.advertise(card);
 
     // --- Transport round-trip on the SAME context ---

@@ -8,8 +8,7 @@
 
 #include <type_traits>
 
-namespace
-{
+namespace {
 
 using policy = plexus::inproc::inproc_policy;
 

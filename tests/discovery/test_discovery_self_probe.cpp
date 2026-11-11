@@ -130,8 +130,8 @@ TEST_CASE("discovery_self_probe: default_discovery with no self-echo reaches no_
 
     plexus::asio::default_discovery disc{io, options, log};
 
-    discovery_health health   = discovery_health::not_yet;
-    const auto bound          = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    discovery_health health = discovery_health::not_yet;
+    const auto bound        = std::chrono::steady_clock::now() + std::chrono::seconds(2);
     while(std::chrono::steady_clock::now() < bound)
     {
         health = disc.self_check();

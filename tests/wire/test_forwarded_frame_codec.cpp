@@ -76,10 +76,10 @@ TEST_CASE("forwarded_frame codec: the envelope and inner bytes round-trip byte-e
 
 TEST_CASE("forwarded_frame codec: an empty inner region round-trips", "[wire][forwarded]")
 {
-    auto ff  = make_sample();
+    auto ff = make_sample();
     ff.inner.clear();
 
-    const auto bytes   = encode_forwarded_frame(ff);
+    const auto bytes = encode_forwarded_frame(ff);
     REQUIRE(bytes.size() == 36 + 4);
     const auto decoded = decode_forwarded_frame(bytes);
     REQUIRE(decoded.has_value());
@@ -89,7 +89,7 @@ TEST_CASE("forwarded_frame codec: an empty inner region round-trips", "[wire][fo
 
 TEST_CASE("forwarded_frame codec: the relay-consent flag round-trips", "[wire][forwarded]")
 {
-    auto ff   = make_sample();
+    auto ff = make_sample();
     ff.flags |= k_forwarded_relay_consent_flag;
 
     const auto decoded = decode_forwarded_frame(encode_forwarded_frame(ff));

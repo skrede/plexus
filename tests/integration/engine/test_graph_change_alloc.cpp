@@ -38,8 +38,8 @@ void assert_coarse_path_allocates_nothing()
         net.drain();
     }
 
-    REQUIRE(rec.changed_fires >= k_iterations);        // the coarse path actually fired every turn
-    REQUIRE(plexus::testing::alloc_count() == 0);      // and allocated nothing on the steady path
+    REQUIRE(rec.changed_fires >= k_iterations);   // the coarse path actually fired every turn
+    REQUIRE(plexus::testing::alloc_count() == 0); // and allocated nothing on the steady path
 }
 
 }

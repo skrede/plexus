@@ -41,7 +41,7 @@ inline plexus::node_options make_opts()
 
 struct host
 {
-    plexus::inproc::inproc_bus<>      bus;
+    plexus::inproc::inproc_bus<> bus;
     plexus::inproc::inproc_executor<> ex{bus};
     plexus::inproc::inproc_transport<> transport{ex, bus};
     plexus::discovery::static_discovery disc{{}};

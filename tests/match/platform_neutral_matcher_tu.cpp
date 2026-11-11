@@ -6,8 +6,7 @@
 
 #include "plexus/match/key_pattern.h"
 
-namespace
-{
+namespace {
 
 using plexus::match::key_pattern;
 
@@ -39,7 +38,5 @@ static_assert(disjoint_literals_never_meet());
 
 int main()
 {
-    return (star_covers_literal() && deep_pattern_reflexive() && disjoint_literals_never_meet())
-                   ? 0
-                   : 1;
+    return (star_covers_literal() && deep_pattern_reflexive() && disjoint_literals_never_meet()) ? 0 : 1;
 }

@@ -35,8 +35,7 @@ using relay_multi_node = plexus::node<plexus::relay<pasio::asio_policy>, pasio::
 // threads the byte-identical null twin that reaches no forwarding-send code.
 static_assert(std::is_same_v<relay_multi_node::engine_type::forward_splice_type, plexus::io::forward_splice<relay_multi_node::engine_policy>>,
               "a relay-spelled node's engine must carry the real forward_splice keyed on the engine policy");
-static_assert(std::is_same_v<leaf_multi_node::engine_type::forward_splice_type, plexus::io::null_forward_splice>,
-              "a non-relay node's engine must carry the null forward-splice twin");
+static_assert(std::is_same_v<leaf_multi_node::engine_type::forward_splice_type, plexus::io::null_forward_splice>, "a non-relay node's engine must carry the null forward-splice twin");
 
 TEST_CASE("a variadic node composes a unix+tcp node from its borrowed leaves", "[integration][mux][node]")
 {

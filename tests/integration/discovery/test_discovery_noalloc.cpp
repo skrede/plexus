@@ -102,8 +102,7 @@ TEST_CASE("discovery re-announce is allocation-free; the inbound resolve build i
     REQUIRE(per_call <= 12); // but it is a small bounded constant, not a growth with K
 }
 
-TEST_CASE("discovery drops a foreign universe allocation-free before the resolve build",
-          "[integration][discovery]")
+TEST_CASE("discovery drops a foreign universe allocation-free before the resolve build", "[integration][discovery]")
 {
     // The inbound universe compare returns before service_info_from_announcement's bounded build,
     // before from.address().to_string(), and before flood_cap.admit — so a foreign-universe
@@ -120,11 +119,10 @@ TEST_CASE("discovery drops a foreign universe allocation-free before the resolve
     disco.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     plexus::node_id fid{};
-    fid[0]  = std::byte{0x91};
-    fid[15] = std::byte{0x6e};
+    fid[0]                      = std::byte{0x91};
+    fid[15]                     = std::byte{0x6e};
     const std::uint32_t foreign = opts.universe ^ 0xFFFFFFFFu;
-    const auto bytes            = plexus::wire::encode_announcement(
-            plexus::discovery::detail::announcement_from_card(fid, {}, 30, 0, foreign));
+    const auto bytes            = plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(fid, {}, 30, 0, foreign));
 
     const std::string source = "127.0.2.9";
     sock.replay_bytes(source, bytes); // warm the handler path once
@@ -162,9 +160,9 @@ TEST_CASE("discovery re-announce stays allocation-free with announce jitter enga
     disco.advertise(make_card()); // seeds the per-node RNG and arms the jittered timer
     REQUIRE(ex.armed != nullptr);
 
-    constexpr int K              = 1000;
-    const std::int64_t period    = opts.announce_period.count();
-    const std::int64_t max_span  = static_cast<std::int64_t>(opts.jitter_fraction * static_cast<double>(period));
+    constexpr int K             = 1000;
+    const std::int64_t period   = opts.announce_period.count();
+    const std::int64_t max_span = static_cast<std::int64_t>(opts.jitter_fraction * static_cast<double>(period));
 
     // Warm one tick so the reused callback slot and the send scratch are at steady state.
     ex.armed->fire();

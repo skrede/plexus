@@ -93,7 +93,8 @@ TEST_CASE("forward_reply_reresolve: a relayed reply re-resolves onto an alternat
     rpc_forwarder::reply_fn *deferred = nullptr;
     bool served                       = false;
     line.server.procedures().serve("demo.defer",
-                                   [&](std::span<const std::byte>, rpc_forwarder::reply_fn &reply) {
+                                   [&](std::span<const std::byte>, rpc_forwarder::reply_fn &reply)
+                                   {
                                        served   = true;
                                        deferred = &reply;
                                    });
@@ -101,14 +102,15 @@ TEST_CASE("forward_reply_reresolve: a relayed reply re-resolves onto an alternat
     std::optional<rpc_status> status;
     std::string response;
     line.caller.call(line.id_server, "demo.defer", as_bytes(std::string{"q"}),
-                     [&](rpc_status s, std::span<const std::byte> ret) {
+                     [&](rpc_status s, std::span<const std::byte> ret)
+                     {
                          status   = s;
                          response = to_string(ret);
                      });
     line.drive();
 
-    REQUIRE(served);          // the request transited via relay-1 and reached the responder
-    REQUIRE_FALSE(status);    // the reply is deferred, not yet emitted
+    REQUIRE(served);       // the request transited via relay-1 and reached the responder
+    REQUIRE_FALSE(status); // the reply is deferred, not yet emitted
 
     // Retire relay-1's route back to the caller (relay-1's withdrawal, or its death propagated as one):
     // the responder's only remaining return candidate is via relay-2.
@@ -140,20 +142,20 @@ TEST_CASE("forward_reply_reresolve: a relayed reply with no live route back fail
 
     bool served = false;
     line.server.procedures().serve("demo.void",
-                                   [&](std::span<const std::byte>, rpc_forwarder::reply_fn &reply) {
+                                   [&](std::span<const std::byte>, rpc_forwarder::reply_fn &reply)
+                                   {
                                        served = true;
                                        reply(rpc_status::success, {});
                                    });
 
     std::optional<rpc_status> status;
-    line.caller.call(line.id_server, "demo.void", as_bytes(std::string{"q"}),
-                     [&](rpc_status s, std::span<const std::byte>) { status = s; });
+    line.caller.call(line.id_server, "demo.void", as_bytes(std::string{"q"}), [&](rpc_status s, std::span<const std::byte>) { status = s; });
     line.drive();
 
-    REQUIRE(served);                                            // the request transited the relay
-    REQUIRE(line.server.forward_rpc_dropped_count() == 1);      // the reply dropped over empty candidates
-    REQUIRE_FALSE(status);                                      // no reply, no route manufactured
-    REQUIRE(line.relay.procedures().outstanding() == 0);        // the relay held no correlation
+    REQUIRE(served);                                       // the request transited the relay
+    REQUIRE(line.server.forward_rpc_dropped_count() == 1); // the reply dropped over empty candidates
+    REQUIRE_FALSE(status);                                 // no reply, no route manufactured
+    REQUIRE(line.relay.procedures().outstanding() == 0);   // the relay held no correlation
 
     // The caller's pending call fails through its own deadline, not a forged reply.
     line.advance(std::chrono::hours(2));

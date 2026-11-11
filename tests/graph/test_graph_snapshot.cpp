@@ -25,7 +25,7 @@ const plexus::graph::participant_record *record_for(std::span<const plexus::grap
 
 TEST_CASE("participants enumerates known peers keyed by node_id as direct-only records", "[graph]")
 {
-    host       h;
+    host h;
     inproc_node node{h.ex, h.disc, make_id(0x01), h.transport, make_opts()};
 
     const auto id_b = make_id(0x0B);

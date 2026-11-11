@@ -18,7 +18,7 @@ namespace {
 
 struct sentinel_ctx
 {
-    int                sentinel;
+    int sentinel;
     std::vector<int> *sink;
 };
 
@@ -33,8 +33,8 @@ void append_sentinel(void *ctx) noexcept
 TEST_CASE("post_from_task runs caller-owned PODs in FIFO order", "[seam]")
 {
     plexus::freertos::freertos_executor exec;
-    std::vector<int>                    ran;
-    sentinel_ctx                        slots[3] = {{1, &ran}, {2, &ran}, {3, &ran}};
+    std::vector<int> ran;
+    sentinel_ctx slots[3] = {{1, &ran}, {2, &ran}, {3, &ran}};
 
     for(auto &slot : slots)
         REQUIRE(exec.post_from_task({&append_sentinel, &slot}, 0));
@@ -46,8 +46,8 @@ TEST_CASE("post_from_task runs caller-owned PODs in FIFO order", "[seam]")
 TEST_CASE("pump services m_posted before the queued posted_work", "[seam]")
 {
     plexus::freertos::freertos_executor exec;
-    std::vector<int>                    ran;
-    sentinel_ctx                        queued{2, &ran};
+    std::vector<int> ran;
+    sentinel_ctx queued{2, &ran};
 
     REQUIRE(exec.post_from_task({&append_sentinel, &queued}, 0));
     exec.post([&ran] { ran.push_back(1); });
@@ -60,8 +60,8 @@ TEST_CASE("pump services m_posted before the queued posted_work", "[seam]")
 TEST_CASE("the queue path runs the enqueued invokers without touching m_posted", "[seam]")
 {
     plexus::freertos::freertos_executor exec;
-    std::vector<int>                    ran;
-    sentinel_ctx                        slots[2] = {{7, &ran}, {9, &ran}};
+    std::vector<int> ran;
+    sentinel_ctx slots[2] = {{7, &ran}, {9, &ran}};
 
     for(auto &slot : slots)
         REQUIRE(exec.post_from_task({&append_sentinel, &slot}, 0));
@@ -74,8 +74,8 @@ TEST_CASE("the queue path runs the enqueued invokers without touching m_posted",
 TEST_CASE("park runs a posted work item (the wakeable-park drain)", "[seam]")
 {
     plexus::freertos::freertos_executor exec;
-    std::vector<int>                    ran;
-    sentinel_ctx                        queued{5, &ran};
+    std::vector<int> ran;
+    sentinel_ctx queued{5, &ran};
 
     REQUIRE(exec.post_from_task({&append_sentinel, &queued}, 0));
     exec.park(std::chrono::milliseconds{1});

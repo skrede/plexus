@@ -31,11 +31,11 @@
 // compiler without __has_feature (gcc < 14) replaces the identifier with 0 in a single #if and
 // then fails to parse `0(thread_sanitizer)`, so the token is only reached under an outer guard.
 #if defined(__SANITIZE_THREAD__)
-#define PLEXUS_TEST_UNDER_TSAN 1
+    #define PLEXUS_TEST_UNDER_TSAN 1
 #elif defined(__has_feature)
-#if __has_feature(thread_sanitizer)
-#define PLEXUS_TEST_UNDER_TSAN 1
-#endif
+    #if __has_feature(thread_sanitizer)
+        #define PLEXUS_TEST_UNDER_TSAN 1
+    #endif
 #endif
 
 namespace node_xproc_shm_fixture {

@@ -130,8 +130,7 @@ TEST_CASE("peer_report emitter: a pattern-universe relay carries the pattern so 
     std::optional<wire::peer_report> got;
     // With a non-concrete local pattern the relay must still admit its own-universe origin (not
     // silently refuse every origin against an empty peer pattern) AND stamp the pattern on the wire.
-    f.emitter.note_origin(make_report_ctx(opts), f.origin, plexus::discovery::k_default_universe, f.table,
-                          [&](const wire::peer_report &pr) { got = pr; });
+    f.emitter.note_origin(make_report_ctx(opts), f.origin, plexus::discovery::k_default_universe, f.table, [&](const wire::peer_report &pr) { got = pr; });
 
     REQUIRE(got.has_value());
     REQUIRE((got->flags & wire::k_peer_report_universe_pattern_flag) != 0);

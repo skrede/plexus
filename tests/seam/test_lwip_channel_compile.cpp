@@ -9,8 +9,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 // The explicit witness at the test site (mirrors the gate in the header).
-static_assert(plexus::io::byte_channel<plexus::freertos::lwip_channel<plexus::freertos::detail::null_stream_socket>>,
-              "lwip_channel must satisfy byte_channel at the seam-test site");
+static_assert(plexus::io::byte_channel<plexus::freertos::lwip_channel<plexus::freertos::detail::null_stream_socket>>, "lwip_channel must satisfy byte_channel at the seam-test site");
 
 TEST_CASE("lwip_channel constructs over a null stream_socket and exposes the byte_channel seam", "[seam]")
 {

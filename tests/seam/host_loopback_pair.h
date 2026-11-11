@@ -20,7 +20,7 @@ struct loopback_pair
 {
     host_tcp_socket dialed;
     host_tcp_socket accepted;
-    std::string     dial_address;
+    std::string dial_address;
 };
 
 inline std::optional<loopback_pair> make_loopback_pair()
@@ -55,7 +55,7 @@ inline std::optional<loopback_pair> make_loopback_pair()
 // Drive a pollable until a predicate holds or a wall-clock budget expires, yielding briefly between
 // polls. Real localhost-TCP delivery is not instantaneous, so a fixed poll count races the OS under
 // CI load; a time budget keeps the seam round-trips robust without changing what they assert.
-template <typename Poll, typename Ready>
+template<typename Poll, typename Ready>
 bool poll_until(Poll poll, Ready ready, std::chrono::milliseconds budget = std::chrono::seconds{2})
 {
     const auto deadline = std::chrono::steady_clock::now() + budget;

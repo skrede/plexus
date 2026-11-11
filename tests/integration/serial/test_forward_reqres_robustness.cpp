@@ -46,9 +46,7 @@ TEST_CASE("forward_reqres_robustness: a caller through a destroyed relay session
     cluster.bring_up_serial();
     REQUIRE(connected(*cluster.relay, cluster.origin_id));
 
-    plexus::procedure<> echo{*cluster.origin, k_procedure,
-                             [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
-                             { reply(plexus::wire::rpc_status::success, param); }};
+    plexus::procedure<> echo{*cluster.origin, k_procedure, [&](std::span<const std::byte> param, plexus::io::reply_fn &reply) { reply(plexus::wire::rpc_status::success, param); }};
 
     cluster.bring_up_tcp();
     REQUIRE(connected(cluster.consumer, cluster.relay_id));
@@ -63,8 +61,7 @@ TEST_CASE("forward_reqres_robustness: a caller through a destroyed relay session
     plexus::call_options opts;
     opts.deadline = std::chrono::milliseconds(300);
     plexus::caller<> call{cluster.consumer, k_procedure};
-    call.call(as_bytes(std::string{"ping"}), opts,
-              [&](plexus::expected<plexus::reply, std::error_code> r) { result = std::move(r); });
+    call.call(as_bytes(std::string{"ping"}), opts, [&](plexus::expected<plexus::reply, std::error_code> r) { result = std::move(r); });
 
     // A BOUNDED clean fail: the completion fires (pump_until caps at 5s) and it is a failure, never a
     // success and never a hang — the deadline resolves the dead route.
@@ -74,16 +71,14 @@ TEST_CASE("forward_reqres_robustness: a caller through a destroyed relay session
     REQUIRE_FALSE(connected(cluster.consumer, cluster.origin_id));
 }
 
-TEST_CASE("forward_reqres_robustness: a single caller call runs the origin's served handler exactly once",
-          "[integration][serial][relay][reqres][forward_reqres_robustness]")
+TEST_CASE("forward_reqres_robustness: a single caller call runs the origin's served handler exactly once", "[integration][serial][relay][reqres][forward_reqres_robustness]")
 {
     cold_cluster cluster;
     cluster.bring_up_serial();
     REQUIRE(connected(*cluster.relay, cluster.origin_id));
 
     int invocations = 0;
-    plexus::procedure<> echo{*cluster.origin, k_procedure,
-                             [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
+    plexus::procedure<> echo{*cluster.origin, k_procedure, [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
                              {
                                  ++invocations;
                                  reply(plexus::wire::rpc_status::success, param);

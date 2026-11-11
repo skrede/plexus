@@ -25,7 +25,7 @@ TEST_CASE("participants reject-and-counts at the span boundary without eviction 
     constexpr std::size_t k_capacity = 4;
     constexpr std::size_t k_peers    = k_capacity + 1;
 
-    host       h;
+    host h;
     inproc_node node{h.ex, h.disc, make_id(0x01), h.transport, make_opts()};
     for(std::uint8_t i = 0; i < k_peers; ++i)
         node.router().note_peer(make_id(0x10 + i), make_ep("p:" + std::to_string(i)));
@@ -33,7 +33,7 @@ TEST_CASE("participants reject-and-counts at the span boundary without eviction 
     std::array<plexus::graph::participant_record, k_capacity> buffer{};
 
     const std::size_t before = plexus::testing::alloc_count();
-    const auto        result = node.participants(buffer);
+    const auto result        = node.participants(buffer);
     const std::size_t after  = plexus::testing::alloc_count();
 
     REQUIRE(result.count == k_capacity);

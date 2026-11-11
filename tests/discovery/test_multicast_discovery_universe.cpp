@@ -42,8 +42,7 @@ std::vector<plexus::discovery::listening_transport> sample_listens()
 
 std::vector<std::byte> inbound_bytes(std::uint8_t seed, std::uint32_t universe, std::uint8_t flags = 0)
 {
-    return plexus::wire::encode_announcement(
-            plexus::discovery::detail::announcement_from_card(make_id(seed), sample_listens(), 30, flags, universe));
+    return plexus::wire::encode_announcement(plexus::discovery::detail::announcement_from_card(make_id(seed), sample_listens(), 30, flags, universe));
 }
 
 // A peer announcement carrying a universe pattern: announcement_from_card sets the presence flag itself

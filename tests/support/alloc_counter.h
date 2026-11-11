@@ -14,11 +14,11 @@
 // including ones that never pass through operator new, so a zero delta on the sanitized tree is the stricter claim.
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
-#define PLEXUS_ALLOC_COUNTER_SANITIZED 1
+    #define PLEXUS_ALLOC_COUNTER_SANITIZED 1
 #elif defined(__has_feature)
-#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
-#define PLEXUS_ALLOC_COUNTER_SANITIZED 1
-#endif
+    #if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+        #define PLEXUS_ALLOC_COUNTER_SANITIZED 1
+    #endif
 #endif
 
 namespace plexus::testing {
@@ -45,9 +45,7 @@ inline void reset_alloc_count() noexcept
 
 // compiler-rt sanitizer_common allocator interface; the hook fires on the
 // program's own malloc/free, never on the sanitizer's internal allocations.
-extern "C" int __sanitizer_install_malloc_and_free_hooks(
-    void (*malloc_hook)(const volatile void *, std::size_t),
-    void (*free_hook)(const volatile void *));
+extern "C" int __sanitizer_install_malloc_and_free_hooks(void (*malloc_hook)(const volatile void *, std::size_t), void (*free_hook)(const volatile void *));
 
 namespace plexus::testing::detail {
 
@@ -60,8 +58,7 @@ inline void counting_free_hook(const volatile void *) noexcept
 {
 }
 
-inline const int alloc_hooks_installed =
-    __sanitizer_install_malloc_and_free_hooks(&counting_malloc_hook, &counting_free_hook);
+inline const int alloc_hooks_installed = __sanitizer_install_malloc_and_free_hooks(&counting_malloc_hook, &counting_free_hook);
 
 }
 

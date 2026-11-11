@@ -91,8 +91,8 @@ TEST_CASE("peer_report codec: the fixed-prefix report round-trips byte-exactly",
 
 TEST_CASE("peer_report codec: the consent and withdrawal bits round-trip independently", "[wire][peer_report]")
 {
-    auto pr    = make_sample();
-    pr.flags   = k_peer_report_consent_flag | k_peer_report_withdrawal_flag;
+    auto pr  = make_sample();
+    pr.flags = k_peer_report_consent_flag | k_peer_report_withdrawal_flag;
 
     const auto decoded = decode_peer_report(encode_peer_report(pr));
     REQUIRE(decoded.has_value());
@@ -103,9 +103,9 @@ TEST_CASE("peer_report codec: the consent and withdrawal bits round-trip indepen
 
 TEST_CASE("peer_report codec: an origin universe pattern round-trips when its flag is set", "[wire][peer_report]")
 {
-    auto pr                     = make_sample();
-    pr.origin_universe_pattern  = "factory/line/*";
-    pr.flags                   |= k_peer_report_universe_pattern_flag;
+    auto pr                    = make_sample();
+    pr.origin_universe_pattern = "factory/line/*";
+    pr.flags |= k_peer_report_universe_pattern_flag;
 
     const auto decoded = decode_peer_report(encode_peer_report(pr));
     REQUIRE(decoded.has_value());
@@ -115,7 +115,7 @@ TEST_CASE("peer_report codec: an origin universe pattern round-trips when its fl
 
 TEST_CASE("peer_report codec: a topics-with-types list round-trips every type state", "[wire][peer_report]")
 {
-    auto pr   = make_sample();
+    auto pr = make_sample();
     pr.flags |= k_peer_report_topics_flag;
     pr.topics = {make_topic(type_state::undeclared, ""), make_topic(type_state::declared_empty, ""), make_topic(type_state::declared, "geometry/Pose")};
 
@@ -127,10 +127,10 @@ TEST_CASE("peer_report codec: a topics-with-types list round-trips every type st
 
 TEST_CASE("peer_report codec: consent, pattern, and topics all round-trip together", "[wire][peer_report]")
 {
-    auto pr                     = make_sample();
-    pr.origin_universe_pattern  = "site/*/gateway";
-    pr.flags                    = k_peer_report_consent_flag | k_peer_report_universe_pattern_flag | k_peer_report_topics_flag;
-    pr.topics                   = {make_topic(type_state::declared, std::string(300, 'T'))};
+    auto pr                    = make_sample();
+    pr.origin_universe_pattern = "site/*/gateway";
+    pr.flags                   = k_peer_report_consent_flag | k_peer_report_universe_pattern_flag | k_peer_report_topics_flag;
+    pr.topics                  = {make_topic(type_state::declared, std::string(300, 'T'))};
 
     const auto decoded = decode_peer_report(encode_peer_report(pr));
     REQUIRE(decoded.has_value());
@@ -139,11 +139,11 @@ TEST_CASE("peer_report codec: consent, pattern, and topics all round-trip togeth
 
 TEST_CASE("peer_report codec: every truncation of a full frame decodes to nullopt", "[wire][peer_report]")
 {
-    auto pr                     = make_sample();
-    pr.origin_universe_pattern  = "site/*/gateway";
-    pr.flags                    = k_peer_report_universe_pattern_flag | k_peer_report_topics_flag;
-    pr.topics                   = {make_topic(type_state::declared, "geometry/Pose")};
-    const auto bytes            = encode_peer_report(pr);
+    auto pr                    = make_sample();
+    pr.origin_universe_pattern = "site/*/gateway";
+    pr.flags                   = k_peer_report_universe_pattern_flag | k_peer_report_topics_flag;
+    pr.topics                  = {make_topic(type_state::declared, "geometry/Pose")};
+    const auto bytes           = encode_peer_report(pr);
 
     for(std::size_t n = 0; n < bytes.size(); ++n)
         REQUIRE(!decode_peer_report(std::span<const std::byte>{bytes}.first(n)).has_value());
@@ -156,16 +156,16 @@ TEST_CASE("peer_report codec: an empty span decodes to nullopt", "[wire][peer_re
 
 TEST_CASE("peer_report codec: an over-cap universe pattern decodes to nullopt before any copy", "[wire][peer_report]")
 {
-    auto pr                     = make_sample();
-    pr.origin_universe_pattern  = std::string(k_peer_report_universe_pattern_max + 1, 'x');
-    pr.flags                   |= k_peer_report_universe_pattern_flag;
+    auto pr                    = make_sample();
+    pr.origin_universe_pattern = std::string(k_peer_report_universe_pattern_max + 1, 'x');
+    pr.flags |= k_peer_report_universe_pattern_flag;
 
     REQUIRE(!decode_peer_report(encode_peer_report(pr)).has_value());
 }
 
 TEST_CASE("peer_report codec: an over-cap topic fqn decodes to nullopt", "[wire][peer_report]")
 {
-    auto pr   = make_sample();
+    auto pr = make_sample();
     pr.flags |= k_peer_report_topics_flag;
     pr.topics = {topic_declaration{.topic_hash = 1, .type_id = 2, .fqn = std::string(k_max_fqn + 1, 'f'), .type_name = "sensor/Imu", .state = type_state::declared}};
 
@@ -174,7 +174,7 @@ TEST_CASE("peer_report codec: an over-cap topic fqn decodes to nullopt", "[wire]
 
 TEST_CASE("peer_report codec: an over-cap topic type_name decodes to nullopt", "[wire][peer_report]")
 {
-    auto pr   = make_sample();
+    auto pr = make_sample();
     pr.flags |= k_peer_report_topics_flag;
     pr.topics = {make_topic(type_state::declared, std::string(k_max_type_name + 1, 'T'))};
 
@@ -183,9 +183,9 @@ TEST_CASE("peer_report codec: an over-cap topic type_name decodes to nullopt", "
 
 TEST_CASE("peer_report codec: an unknown topic type_state byte decodes to nullopt", "[wire][peer_report]")
 {
-    auto pr   = make_sample();
+    auto pr = make_sample();
     pr.flags |= k_peer_report_topics_flag;
-    pr.topics = {make_topic(type_state::declared, "sensor/Imu")};
+    pr.topics  = {make_topic(type_state::declared, "sensor/Imu")};
     auto bytes = encode_peer_report(pr);
 
     // Fixed prefix(24) + n_topics(2) + topic_hash(8) + type_id(8), then the state byte.

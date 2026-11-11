@@ -63,7 +63,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts()
 {
     plexus::node_options opts;
-    opts.redial_seed  = 0xC0FFEEu;
+    opts.redial_seed = 0xC0FFEEu;
     // Dial a discovered same-universe peer eagerly so a session forms and topic edges propagate without
     // a matching local subscription. A foreign-universe peer is dropped at discovery, so never dialed.
     opts.dial_eagerly = true;
@@ -106,10 +106,10 @@ TEST_CASE("two_universe: a foreign-universe peer and its topic stay out of enume
           "same-universe peer's real topic edge propagates in",
           "[graph]")
 {
-    const auto k_bound            = std::chrono::seconds(20);
-    const auto k_settle           = std::chrono::milliseconds(2500);
-    const std::string base        = "239.255.0.7";
-    const std::uint16_t base_port = static_cast<std::uint16_t>(24000 + (plexus::testing::process_id() % 500) * 9);
+    const auto k_bound              = std::chrono::seconds(20);
+    const auto k_settle             = std::chrono::milliseconds(2500);
+    const std::string base          = "239.255.0.7";
+    const std::uint16_t base_port   = static_cast<std::uint16_t>(24000 + (plexus::testing::process_id() % 500) * 9);
     const std::string control_topic = "control_topic";
     const std::string foreign_topic = "foreign_topic";
 
@@ -146,7 +146,14 @@ TEST_CASE("two_universe: a foreign-universe peer and its topic stay out of enume
     // over the dialed session into a1's by-node view. This proves cross-node topic propagation is live,
     // so the foreign topic's absence below is the universe compare, not an inert propagation path.
     const std::byte payload[1]{std::byte{0x7}};
-    const bool topic_control = plexus::testing::pump_until(io, [&] { pub_control.publish(std::span<const std::byte>{payload, 1}); return published_count(a1, id_a2) >= 1; }, k_bound);
+    const bool topic_control = plexus::testing::pump_until(
+            io,
+            [&]
+            {
+                pub_control.publish(std::span<const std::byte>{payload, 1});
+                return published_count(a1, id_a2) >= 1;
+            },
+            k_bound);
     if(!topic_control)
         SKIP("cross-node topic propagation unavailable on this host: a2's publisher edge reached no snapshot within the bound");
 

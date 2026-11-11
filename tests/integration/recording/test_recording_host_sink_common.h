@@ -95,7 +95,7 @@ inline void capture_session(byte_sink &sink)
     {
         message_info info{};
         info.publication_sequence = static_cast<std::uint64_t>(i);
-        const std::string body = "sample-payload-" + std::to_string(i);
+        const std::string body    = "sample-payload-" + std::to_string(i);
         tap.on_message_delivered("sensor/imu", info, message_view{bytes_of(body), {}});
     }
     while(rec.pump())

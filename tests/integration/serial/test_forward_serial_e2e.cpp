@@ -53,7 +53,12 @@ std::string to_string(std::span<const std::byte> b)
 std::uint64_t session_epoch(relay_node &n, const node_id &proven)
 {
     std::uint64_t epoch = 0;
-    n.router().registry().for_each_connected([&](const node_id &, auto &s) { if(s.peer_identity() == proven) epoch = s.session_id(); });
+    n.router().registry().for_each_connected(
+            [&](const node_id &, auto &s)
+            {
+                if(s.peer_identity() == proven)
+                    epoch = s.session_id();
+            });
     return epoch;
 }
 
@@ -71,22 +76,32 @@ struct probe_observer final : plexus::io::observer
     std::vector<graph::graph_change> deltas;
     std::vector<plexus::io::peer_liveliness_event> verdicts;
 
-    void on_graph_delta(const graph::graph_change &c) override { deltas.push_back(c); }
-    void on_peer_liveliness(const plexus::io::peer_liveliness_event &e) override { verdicts.push_back(e); }
-    bool observes_graph() const override { return true; }
-    bool observes_liveliness() const override { return true; }
+    void on_graph_delta(const graph::graph_change &c) override
+    {
+        deltas.push_back(c);
+    }
+    void on_peer_liveliness(const plexus::io::peer_liveliness_event &e) override
+    {
+        verdicts.push_back(e);
+    }
+    bool observes_graph() const override
+    {
+        return true;
+    }
+    bool observes_liveliness() const override
+    {
+        return true;
+    }
 };
 
 int kind_count(const probe_observer &o, const node_id &who, graph::change_kind kind)
 {
-    return static_cast<int>(std::count_if(o.deltas.begin(), o.deltas.end(),
-                                          [&](const graph::graph_change &c) { return c.who == who && c.kind == kind; }));
+    return static_cast<int>(std::count_if(o.deltas.begin(), o.deltas.end(), [&](const graph::graph_change &c) { return c.who == who && c.kind == kind; }));
 }
 
 bool arbiter_saw(const probe_observer &o, const node_id &who)
 {
-    return std::any_of(o.verdicts.begin(), o.verdicts.end(),
-                       [&](const plexus::io::peer_liveliness_event &e) { return e.id == who; });
+    return std::any_of(o.verdicts.begin(), o.verdicts.end(), [&](const plexus::io::peer_liveliness_event &e) { return e.id == who; });
 }
 
 void run_pubsub_once(std::vector<std::uint64_t> &epochs)
@@ -115,8 +130,7 @@ void run_pubsub_once(std::vector<std::uint64_t> &epochs)
     REQUIRE(reported->reach.via == cluster.relay_id);
 
     delivery got;
-    plexus::subscriber<> sub{cluster.consumer, k_topic,
-                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+    plexus::subscriber<> sub{cluster.consumer, k_topic, [&](std::span<const std::byte> b, const plexus::io::message_info &info)
                              {
                                  got.body = to_string(b);
                                  if(info.source_identity)
@@ -154,8 +168,7 @@ void run_reqres_once()
     REQUIRE(connected(*cluster.relay, cluster.origin_id));
 
     std::string served;
-    plexus::procedure<> echo{*cluster.origin, k_procedure,
-                             [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
+    plexus::procedure<> echo{*cluster.origin, k_procedure, [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
                              {
                                  served = to_string(param);
                                  reply(plexus::wire::rpc_status::success, param);
@@ -211,8 +224,7 @@ void run_never_denies_relayed_pubsub()
     REQUIRE(reported->reach.via == cluster.relay_id);
 
     delivery got;
-    plexus::subscriber<> sub{cluster.consumer, k_topic,
-                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+    plexus::subscriber<> sub{cluster.consumer, k_topic, [&](std::span<const std::byte> b, const plexus::io::message_info &info)
                              {
                                  got.body = to_string(b);
                                  if(info.source_identity)
@@ -240,8 +252,7 @@ void run_never_call_finds_no_relayed_provider()
     REQUIRE(connected(*cluster.relay, cluster.origin_id));
 
     std::string served;
-    plexus::procedure<> echo{*cluster.origin, k_procedure,
-                             [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
+    plexus::procedure<> echo{*cluster.origin, k_procedure, [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
                              {
                                  served = to_string(param);
                                  reply(plexus::wire::rpc_status::success, param);
@@ -281,8 +292,7 @@ void run_allow_relayed_reaches_relayed_origin()
     cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
 
     delivery got;
-    plexus::subscriber<> sub{cluster.consumer, k_topic,
-                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+    plexus::subscriber<> sub{cluster.consumer, k_topic, [&](std::span<const std::byte> b, const plexus::io::message_info &info)
                              {
                                  got.body = to_string(b);
                                  if(info.source_identity)
@@ -438,8 +448,7 @@ void run_switchover_relay_first()
     c.pump([&] { return find_participant(c.consumer, c.origin_id) != nullptr; });
 
     seq_ledger log;
-    plexus::subscriber<> sub{c.consumer, k_topic,
-                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+    plexus::subscriber<> sub{c.consumer, k_topic, [&](std::span<const std::byte> b, const plexus::io::message_info &info)
                              {
                                  (void)b;
                                  log.seqs.push_back(info.publication_sequence);
@@ -485,8 +494,7 @@ void run_switchover_direct_first()
     c.bring_up_consumer_to_origin_direct(); // direct live FIRST, origin not yet reported
 
     seq_ledger log;
-    plexus::subscriber<> sub{c.consumer, k_topic,
-                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+    plexus::subscriber<> sub{c.consumer, k_topic, [&](std::span<const std::byte> b, const plexus::io::message_info &info)
                              {
                                  (void)b;
                                  log.seqs.push_back(info.publication_sequence);
@@ -498,7 +506,7 @@ void run_switchover_direct_first()
     publish_and_drain(c, *pub, log, "d0"); // direct-only delivery
     REQUIRE(log.seqs.size() == 1);
 
-    c.bring_up_relay_to_origin();  // the relay now reports the origin AND forwards its publishes
+    c.bring_up_relay_to_origin(); // the relay now reports the origin AND forwards its publishes
     c.bring_up_consumer_to_relay();
     c.pump([&] { return find_participant(c.consumer, c.origin_id) != nullptr; });
     c.pump([&] { return c.origin->count_subscribers(std::string{k_topic}) >= 2; });
@@ -576,8 +584,7 @@ void run_kill_relay_unreachable()
     cluster.consumer.router().add_observer(obs);
 
     std::string served;
-    plexus::procedure<> echo{*cluster.origin, k_procedure,
-                             [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
+    plexus::procedure<> echo{*cluster.origin, k_procedure, [&](std::span<const std::byte> param, plexus::io::reply_fn &reply)
                              {
                                  served = to_string(param);
                                  reply(plexus::wire::rpc_status::success, param);
@@ -621,8 +628,8 @@ void run_kill_relay_unreachable()
     cluster.pump([&] { return ok.has_value(); });
 
     REQUIRE(ok.has_value());
-    REQUIRE_FALSE(*ok);          // no live via-session — the request cannot complete
-    REQUIRE(served.empty());     // the origin's handler never ran through the dead relay
+    REQUIRE_FALSE(*ok);      // no live via-session — the request cannot complete
+    REQUIRE(served.empty()); // the origin's handler never ran through the dead relay
     // The consumer originates; it never re-forwards, so its forward-rpc drop counter cannot move. The
     // failure is the no-provider verdict: with the origin degraded to unreachable, the via-relay fallback
     // does not even reissue toward the dead path, so no forwarded request is emitted to drop.
@@ -678,8 +685,7 @@ void run_revive_relay_smoke()
     cluster.bring_up_tcp();
     cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
 
-    plexus::subscriber<> sub{cluster.consumer, k_topic,
-                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+    plexus::subscriber<> sub{cluster.consumer, k_topic, [&](std::span<const std::byte> b, const plexus::io::message_info &info)
                              {
                                  got.body = to_string(b);
                                  if(info.source_identity)
@@ -692,10 +698,12 @@ void run_revive_relay_smoke()
     REQUIRE(got.source == cluster.origin_id);
 
     cluster.kill_relay();
-    cluster.pump([&] {
-        const auto *p = find_participant(cluster.consumer, cluster.origin_id);
-        return p != nullptr && p->origin.reach_status == graph::reachability::unreachable;
-    });
+    cluster.pump(
+            [&]
+            {
+                const auto *p = find_participant(cluster.consumer, cluster.origin_id);
+                return p != nullptr && p->origin.reach_status == graph::reachability::unreachable;
+            });
     // The origin degrades to UNREACHABLE-NOT-DEAD, not retired: the row survives the relay's death so the
     // path recovers under the same identity (restoring it to reachable is the recovery half's job).
     const auto *down = find_participant(cluster.consumer, cluster.origin_id);
@@ -742,8 +750,7 @@ void run_revive_relay_recovers()
     cluster.bring_up_tcp();
     cluster.pump([&] { return find_participant(cluster.consumer, cluster.origin_id) != nullptr; });
 
-    plexus::subscriber<> sub{cluster.consumer, k_topic,
-                             [&](std::span<const std::byte> b, const plexus::io::message_info &info)
+    plexus::subscriber<> sub{cluster.consumer, k_topic, [&](std::span<const std::byte> b, const plexus::io::message_info &info)
                              {
                                  got.body = to_string(b);
                                  if(info.source_identity)
@@ -759,10 +766,12 @@ void run_revive_relay_recovers()
     REQUIRE(find_participant(cluster.consumer, cluster.origin_id)->id == cluster.origin_id);
 
     cluster.kill_relay();
-    cluster.pump([&] {
-        const auto *p = find_participant(cluster.consumer, cluster.origin_id);
-        return p != nullptr && p->origin.reach_status == graph::reachability::unreachable;
-    });
+    cluster.pump(
+            [&]
+            {
+                const auto *p = find_participant(cluster.consumer, cluster.origin_id);
+                return p != nullptr && p->origin.reach_status == graph::reachability::unreachable;
+            });
 
     cluster.revive_relay();
     cluster.pump([&] { return kind_count(obs, cluster.origin_id, graph::change_kind::reachable) >= 1; });
@@ -770,7 +779,7 @@ void run_revive_relay_recovers()
     const auto *back = find_participant(cluster.consumer, cluster.origin_id);
     REQUIRE(back != nullptr);
     REQUIRE(back->id == cluster.origin_id);       // same identity across the kill->revive cycle
-    REQUIRE(back->reach.via == cluster.relay_id);  // reachable again via the revived relay
+    REQUIRE(back->reach.via == cluster.relay_id); // reachable again via the revived relay
     REQUIRE(back->origin.reach_status == graph::reachability::reachable);
 
     // Demand re-propagates onto the origin over the revived legs before the recovery publish.
@@ -797,14 +806,12 @@ void run_revive_relay_recovers()
 
 }
 
-TEST_CASE("a composed relay discloses it offers a relayed path and its reported-origin count moves with a real lift",
-          "[integration][serial][relay][e2e][self_check]")
+TEST_CASE("a composed relay discloses it offers a relayed path and its reported-origin count moves with a real lift", "[integration][serial][relay][e2e][self_check]")
 {
     run_relay_self_check_discloses_offering();
 }
 
-TEST_CASE("a non-relay leaf discloses routes transiting a relay after a real peer_report ingest",
-          "[integration][serial][relay][e2e][self_check]")
+TEST_CASE("a non-relay leaf discloses routes transiting a relay after a real peer_report ingest", "[integration][serial][relay][e2e][self_check]")
 {
     run_leaf_self_check_discloses_routes_via_relay();
 }
@@ -819,8 +826,7 @@ TEST_CASE("kill-relay degrades the origin to unreachable while kill-origin retir
     }
 }
 
-TEST_CASE("a revived relay under the same identity re-establishes both legs and the relayed path recovers, over cold runs",
-          "[integration][serial][relay][e2e][revive]")
+TEST_CASE("a revived relay under the same identity re-establishes both legs and the relayed path recovers, over cold runs", "[integration][serial][relay][e2e][revive]")
 {
     for(int run = 0; run < 2; ++run)
         run_revive_relay_smoke();
@@ -833,8 +839,7 @@ TEST_CASE("a revived relay recovers the origin's reachability without identity c
         run_revive_relay_recovers();
 }
 
-TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the origin as source, over cold runs",
-          "[integration][serial][relay][e2e]")
+TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the origin as source, over cold runs", "[integration][serial][relay][e2e]")
 {
     std::vector<std::uint64_t> epochs;
     for(int run = 0; run < k_runs; ++run)
@@ -842,71 +847,61 @@ TEST_CASE("pub/sub and control transit a serial+TCP relay end-to-end with the or
     REQUIRE(epochs.size() == static_cast<std::size_t>(k_runs));
 }
 
-TEST_CASE("request/response transits a serial+TCP relay end-to-end returning success, over cold runs",
-          "[integration][serial][relay][e2e][reqres]")
+TEST_CASE("request/response transits a serial+TCP relay end-to-end returning success, over cold runs", "[integration][serial][relay][e2e][reqres]")
 {
     for(int run = 0; run < k_runs; ++run)
         run_reqres_once();
 }
 
-TEST_CASE("a never consumer enumerates a relayed origin but never consumes its relayed publish, over cold runs",
-          "[integration][serial][relay][e2e][route_usage]")
+TEST_CASE("a never consumer enumerates a relayed origin but never consumes its relayed publish, over cold runs", "[integration][serial][relay][e2e][route_usage]")
 {
     for(int run = 0; run < 2; ++run)
         run_never_denies_relayed_pubsub();
 }
 
-TEST_CASE("a never consumer's via-relay call finds no relayed provider, over cold runs",
-          "[integration][serial][relay][e2e][route_usage]")
+TEST_CASE("a never consumer's via-relay call finds no relayed provider, over cold runs", "[integration][serial][relay][e2e][route_usage]")
 {
     for(int run = 0; run < 2; ++run)
         run_never_call_finds_no_relayed_provider();
 }
 
-TEST_CASE("an allow_relayed consumer reaches the relayed origin a never consumer refuses, over cold runs",
-          "[integration][serial][relay][e2e][route_usage]")
+TEST_CASE("an allow_relayed consumer reaches the relayed origin a never consumer refuses, over cold runs", "[integration][serial][relay][e2e][route_usage]")
 {
     for(int run = 0; run < 2; ++run)
         run_allow_relayed_reaches_relayed_origin();
 }
 
-TEST_CASE("a declining origin is never announced over the relay while a non-declining second origin is, over cold runs",
-          "[integration][serial][relay][e2e][decline]")
+TEST_CASE("a declining origin is never announced over the relay while a non-declining second origin is, over cold runs", "[integration][serial][relay][e2e][decline]")
 {
     for(int run = 0; run < 2; ++run)
         run_origin_decline_suppresses_announcement();
 }
 
-TEST_CASE("an origin flipping its decline mid-session is withdrawn from the consumer downstream, over cold runs",
-          "[integration][serial][relay][e2e][decline]")
+TEST_CASE("an origin flipping its decline mid-session is withdrawn from the consumer downstream, over cold runs", "[integration][serial][relay][e2e][decline]")
 {
     for(int run = 0; run < 2; ++run)
         run_origin_decline_flip_withdraws_downstream();
 }
 
-TEST_CASE("a declining consumer is offered no relayed origin the relay otherwise reports, over cold runs",
-          "[integration][serial][relay][e2e][decline]")
+TEST_CASE("a declining consumer is offered no relayed origin the relay otherwise reports, over cold runs", "[integration][serial][relay][e2e][decline]")
 {
     for(int run = 0; run < 2; ++run)
         run_consumer_decline_receives_no_offer();
 }
 
-TEST_CASE("a declining origin's decline entry is pruned on disconnect, bounding the relay's honor set, over cold runs",
-          "[integration][serial][relay][e2e][decline]")
+TEST_CASE("a declining origin's decline entry is pruned on disconnect, bounding the relay's honor set, over cold runs", "[integration][serial][relay][e2e][decline]")
 {
     for(int run = 0; run < 2; ++run)
         run_origin_decline_pruned_on_disconnect();
 }
 
-TEST_CASE("a dual-homed consumer's relayed delivery is superseded by a live direct session and re-arms on its loss, exactly-once per seq",
-          "[integration][relay][e2e][switchover]")
+TEST_CASE("a dual-homed consumer's relayed delivery is superseded by a live direct session and re-arms on its loss, exactly-once per seq", "[integration][relay][e2e][switchover]")
 {
     for(int run = 0; run < 2; ++run)
         run_switchover_relay_first();
 }
 
-TEST_CASE("a direct session live before the origin is reported suppresses the later relayed twin at ingest, no double-delivery",
-          "[integration][relay][e2e][switchover]")
+TEST_CASE("a direct session live before the origin is reported suppresses the later relayed twin at ingest, no double-delivery", "[integration][relay][e2e][switchover]")
 {
     for(int run = 0; run < 2; ++run)
         run_switchover_direct_first();

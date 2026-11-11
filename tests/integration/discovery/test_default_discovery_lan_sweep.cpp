@@ -78,7 +78,8 @@ TEST_CASE("default_discovery_sweep announce period/jitter empirical grid", "[.sw
         std::vector<std::int64_t> arrivals_us;
         arrivals_us.reserve(4096);
         const auto probe0 = std::chrono::steady_clock::now();
-        observer.discovery().browse([&](const plexus::discovery::service_info &) { arrivals_us.push_back(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - probe0).count()); });
+        observer.discovery().browse([&](const plexus::discovery::service_info &)
+                                    { arrivals_us.push_back(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - probe0).count()); });
 
         pasio::default_discovery disc_x{io, snd};
         pasio::default_discovery disc_y{io, snd};
@@ -98,7 +99,7 @@ TEST_CASE("default_discovery_sweep announce period/jitter empirical grid", "[.sw
             if(arrivals_us[i] - arrivals_us[i - 1] <= k_collision_us)
                 ++collisions;
 
-        WARN("[sweep] period=" << g.period_ms << "ms jitter=" << g.jitter << " -> worst-case awareness median " << median_ms(worst_ms) << " ms (runs "
-             << k_runs << "); observed announces=" << arrivals_us.size() << ", near-simultaneous(<=" << k_collision_us << "us) cross-source pairs=" << collisions);
+        WARN("[sweep] period=" << g.period_ms << "ms jitter=" << g.jitter << " -> worst-case awareness median " << median_ms(worst_ms) << " ms (runs " << k_runs
+                               << "); observed announces=" << arrivals_us.size() << ", near-simultaneous(<=" << k_collision_us << "us) cross-source pairs=" << collisions);
     }
 }

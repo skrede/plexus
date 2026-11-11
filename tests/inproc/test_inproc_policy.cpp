@@ -112,7 +112,7 @@ TEST_CASE("null_logger is usable through a logger& and is a no-op", "[inproc]")
 TEST_CASE("alloc_counter snapshots a global new/delete delta", "[inproc]")
 {
     plexus::testing::reset_alloc_count();
-    const auto before      = plexus::testing::alloc_count();
+    const auto before = plexus::testing::alloc_count();
     // A new-expression's allocation is elidable under optimization ([expr.new]/10); the positive
     // control calls the allocation function directly so it is always counted.
     void *raw              = ::operator new(sizeof(int));

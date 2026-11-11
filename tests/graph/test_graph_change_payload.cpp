@@ -33,7 +33,7 @@ TEST_CASE("graph change payload: an observes_graph observer drains the exact {wh
     const auto id_c = make_id(0xC3);
     net.eng.note_peer(id_b, ep_for("node-b")); // appeared
     net.eng.note_peer(id_c, ep_for("node-c")); // appeared
-    net.eng.forget(id_b);                       // disappeared
+    net.eng.forget(id_b);                      // disappeared
     net.drain();
 
     REQUIRE(rec.deltas.size() == 3);
@@ -125,7 +125,12 @@ struct relay_downstream
 
     void drop_relay_session()
     {
-        d.registry().for_each_connected([&](const plexus::node_id &, auto &s) { if(s.peer_identity() == id_b) s.tear_down(); });
+        d.registry().for_each_connected(
+                [&](const plexus::node_id &, auto &s)
+                {
+                    if(s.peer_identity() == id_b)
+                        s.tear_down();
+                });
         ex.drain();
     }
 
@@ -170,5 +175,5 @@ TEST_CASE("graph change payload: a returning relay flips an unreachable origin b
     REQUIRE(deltas_for(net.obs, net.origin, change_kind::reachable) == 1);
     REQUIRE(deltas_for(net.obs, net.origin, change_kind::appeared) == appeared_before); // no re-appear
     REQUIRE(deltas_for(net.obs, net.origin, change_kind::disappeared) == 0);            // never disappeared
-    REQUIRE(net.d.known().candidates(net.origin)[0].reach.via == net.id_b);            // same via, same node_id throughout
+    REQUIRE(net.d.known().candidates(net.origin)[0].reach.via == net.id_b);             // same via, same node_id throughout
 }

@@ -42,8 +42,7 @@ struct verdict_net
     plexus::node_id slot_b{endpoint_id(ep_b)};
 
     explicit verdict_net(bool observe = true)
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes,
-                opts(combine::any_signal_alive))
+            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, opts(combine::any_signal_alive))
             , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed + 1, sink, false)
     {
         obs.observes = observe;

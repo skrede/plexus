@@ -21,8 +21,8 @@ namespace graph_topics_fixture {
 using plexus::graph::snapshot_result;
 using plexus::match::key_pattern;
 
-constexpr const char *k_rival_type_name  = "sensor/Pose";
-constexpr std::uint64_t k_rival_type_id  = 0x5150u;
+constexpr const char *k_rival_type_name = "sensor/Pose";
+constexpr std::uint64_t k_rival_type_id = 0x5150u;
 
 // The rival declaration: the same value type under a different type identity, so one topic carries
 // two publishers that disagree about it. It declares through the real publisher handle — a poked
@@ -87,9 +87,9 @@ struct trio : net
         drive();
         REQUIRE(c.router().is_connected(id_b));
 
-        m_imu   = std::make_unique<imu_publisher>(a, k_imu_topic, plexus::typed_publisher_options{}, imu_codec{});
-        m_rival = std::make_unique<pose_publisher>(c, k_imu_topic, plexus::typed_publisher_options{}, pose_codec{});
-        m_plain = std::make_unique<plexus::publisher<void>>(c, k_plain_topic);
+        m_imu    = std::make_unique<imu_publisher>(a, k_imu_topic, plexus::typed_publisher_options{}, imu_codec{});
+        m_rival  = std::make_unique<pose_publisher>(c, k_imu_topic, plexus::typed_publisher_options{}, pose_codec{});
+        m_plain  = std::make_unique<plexus::publisher<void>>(c, k_plain_topic);
         m_demand = std::make_unique<imu_subscriber>(b, k_imu_topic, [](const std::uint32_t &) {});
         drive();
     }

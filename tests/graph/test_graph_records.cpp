@@ -39,10 +39,7 @@ TEST_CASE("records reserve no via for a direct-only route", "[graph][records]")
 TEST_CASE("records separate identity, reachability, and provenance", "[graph][records]")
 {
     const plexus::node_id id{};
-    const participant_record rec{
-        id,
-        route{plexus::io::endpoint{"udp", "203.0.113.7:9000"}, std::nullopt},
-        provenance{observation::directly_observed, std::nullopt}};
+    const participant_record rec{id, route{plexus::io::endpoint{"udp", "203.0.113.7:9000"}, std::nullopt}, provenance{observation::directly_observed, std::nullopt}};
 
     REQUIRE(rec.id == id);
     REQUIRE(rec.reach.via == std::nullopt);

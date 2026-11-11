@@ -119,11 +119,11 @@ TEST_CASE("peer_report oracle: a 0x0E frame fires no consumer and produces no pe
     REQUIRE(fired.types == std::set<wire::msg_type>{wire::msg_type::declare});
     fired.types.clear();
 
-    const auto payload = make_peer_report_payload();
+    const auto payload      = make_peer_report_payload();
     const auto drops_before = sink.drops;
     router.route(frame_of(wire::msg_type::peer_report, payload));
 
-    REQUIRE(fired.types.empty());          // no consumer ran: no peer produced
+    REQUIRE(fired.types.empty());            // no consumer ran: no peer produced
     REQUIRE(sink.drops == drops_before + 1); // the frame was warn-dropped whole
 }
 
@@ -152,7 +152,7 @@ TEST_CASE("peer_report oracle: a decline-flagged heartbeat decodes-and-ignores a
     router.route(frame_of(wire::msg_type::heartbeat, payload));
 
     REQUIRE(fired.types == std::set<wire::msg_type>{wire::msg_type::heartbeat}); // heartbeat consumer ran
-    REQUIRE(sink.drops == drops_before);                                        // no warn/drop: session healthy
+    REQUIRE(sink.drops == drops_before);                                         // no warn/drop: session healthy
 
     // A decoder that accepts unknown flag bits reads the reserved byte and ignores the decline bit —
     // the struct round-trips.
@@ -171,7 +171,7 @@ TEST_CASE("peer_report oracle: a genuinely-unknown type warn-drops at the defaul
     // 0x7F has no assigned verb, so it reaches the default: arm — a permanent pin on the
     // unknown-verb warn-drop, held far from the assignment frontier and durable independent of the
     // now-handled status of any lower value.
-    const auto unknown = static_cast<wire::msg_type>(0x7F);
+    const auto unknown      = static_cast<wire::msg_type>(0x7F);
     const auto drops_before = sink.drops;
     router.route(frame_of(unknown, std::vector<std::byte>{}));
 

@@ -126,7 +126,12 @@ TEST_CASE("routing_engine_dial: reaching a peer whose endpoint another slot alre
     // guard, driver_for's map::at threw std::out_of_range and crashed the node here.
     plexus::node_id other{};
     other[0] = std::byte{0xCC};
-    REQUIRE_NOTHROW([&] { p.a.note_peer(other, ep); p.a.reach(other); }());
+    REQUIRE_NOTHROW(
+            [&]
+            {
+                p.a.note_peer(other, ep);
+                p.a.reach(other);
+            }());
     p.ex.drain();
 
     // The claim holds: the colliding endpoint mints no second connected slot.
