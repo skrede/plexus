@@ -33,8 +33,7 @@ inline void schedule_report(::asio::steady_timer &timer, stream_meter &meter)
                          // std::endl (not '\n') FLUSHES each line: the runner captures stdout to a file
                          // (fully buffered, not line-buffered) and kills the peer, so an unflushed line is lost.
                          std::cout << "HOST throughput msgs=" << dmsgs << " bytes=" << dbytes << " elapsed_us=1000000 rate_msg_s=" << dmsgs << std::endl;
-                         schedule_report(timer, meter);
-                     });
+                         schedule_report(timer, meter); });
 }
 
 }

@@ -50,9 +50,9 @@ inline constexpr std::size_t k_uart_rx_ring = 8 * 1024;
 // The plexus serial link rides UART1 so the console stays on UART0: the bench emits its
 // machine-parseable sample lines on the console while the framed plexus bytes flow over a separate
 // pair of pads to a second USB-serial adapter on the host. UART0 is never shared with the link.
-inline constexpr uart_port_t k_link_uart   = UART_NUM_1;
-inline constexpr int         k_link_tx_gpio = 17;
-inline constexpr int         k_link_rx_gpio = 16;
+inline constexpr uart_port_t k_link_uart = UART_NUM_1;
+inline constexpr int k_link_tx_gpio      = 17;
+inline constexpr int k_link_rx_gpio      = 16;
 
 // The on-device serial connector for the bench cell: a point-to-point UART implements
 // transport_backend directly, both verbs collapsing to install-driver-and-deliver-ONE-channel. The
@@ -62,7 +62,7 @@ class bench_uart_transport
 {
 public:
     explicit bench_uart_transport(plexus::freertos::freertos_executor &ex)
-            : m_ex(ex)
+        : m_ex(ex)
     {
     }
 
@@ -154,7 +154,7 @@ private:
     }
 
     plexus::freertos::freertos_executor &m_ex;
-    bool                            m_installed{false};
+    bool m_installed{false};
     plexus::freertos::uart_channel *m_channel{nullptr};
     plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> m_on_accepted;
     plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;

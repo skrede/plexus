@@ -37,11 +37,11 @@ inline constexpr std::uint32_t k_sampled_requests = 128;
 struct echo_probe
 {
     plexus::publisher<void> &request;
-    std::size_t              tier;
+    std::size_t tier;
     std::array<std::byte, k_max_tier_bytes> buffer{};
-    std::int64_t             sent_us{0};
-    std::uint8_t             seq{0};
-    bool                     awaiting{false};
+    std::int64_t sent_us{0};
+    std::uint8_t seq{0};
+    bool awaiting{false};
 
     void issue()
     {

@@ -20,9 +20,9 @@ namespace example {
 // reply callback drives the advance — one request in flight at a time, the next issued on receipt.
 struct bench_runner
 {
-    const char  *policy;
-    echo_probe  &probe;
-    std::size_t  tier_index{0};
+    const char *policy;
+    echo_probe &probe;
+    std::size_t tier_index{0};
     std::uint32_t count{0};
 
     void start()
@@ -60,7 +60,7 @@ struct bench_runner
 
     void report_resource()
     {
-        const TaskHandle_t  rx      = xTaskGetHandle("plexus-rx");
+        const TaskHandle_t rx       = xTaskGetHandle("plexus-rx");
         const std::uint32_t rx_high = rx ? uxTaskGetStackHighWaterMark(rx) : 0;
         emit_resource(policy, rx_high, esp_get_free_heap_size());
     }
@@ -75,13 +75,14 @@ struct bench_runner
 struct resend_pump
 {
     plexus::freertos::freertos_timer &timer;
-    echo_probe                       &probe;
-    static constexpr std::int64_t     k_stall_us = 2000000;
+    echo_probe &probe;
+    static constexpr std::int64_t k_stall_us = 2000000;
 
     void arm()
     {
         timer.expires_after(std::chrono::milliseconds{250});
-        timer.async_wait([this](std::error_code ec) { on_tick(ec); });
+        timer.async_wait([this](std::error_code ec)
+                         { on_tick(ec); });
     }
 
     void on_tick(std::error_code ec)

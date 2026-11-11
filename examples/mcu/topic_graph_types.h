@@ -40,13 +40,13 @@ struct counter
 
 struct reading_type
 {
-    static constexpr std::uint64_t id   = 0x0B0A0D70ull;
+    static constexpr std::uint64_t id      = 0x0B0A0D70ull;
     static constexpr std::string_view name = "reading";
 };
 
 struct command_type
 {
-    static constexpr std::uint64_t id   = 0x0B0AC0FFull;
+    static constexpr std::uint64_t id      = 0x0B0AC0FFull;
     static constexpr std::string_view name = "command";
 };
 

@@ -34,8 +34,8 @@ inline constexpr std::uint32_t k_sampled_requests = 128;
 struct message
 {
     std::array<std::byte, k_max_tier_bytes> buffer{};
-    std::uint32_t                           length{0};
-    std::uint8_t                            seq{0};
+    std::uint32_t length{0};
+    std::uint8_t seq{0};
 };
 
 // A length-prefixed codec for `message`. On the onboard typed lane encode() is NEVER invoked — the
@@ -51,8 +51,8 @@ struct message_codec
     plexus::wire_bytes<> encode(const message &v) const
     {
         ++*encodes;
-        const std::size_t n     = v.length <= k_max_tier_bytes ? v.length : k_max_tier_bytes;
-        auto              owner  = std::make_shared<std::array<std::byte, k_max_tier_bytes>>();
+        const std::size_t n = v.length <= k_max_tier_bytes ? v.length : k_max_tier_bytes;
+        auto owner          = std::make_shared<std::array<std::byte, k_max_tier_bytes>>();
         for(std::size_t i = 0; i < n; ++i)
             (*owner)[i] = v.buffer[i];
         std::span<const std::byte> view{owner->data(), n};

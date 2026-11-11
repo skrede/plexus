@@ -57,9 +57,9 @@ using node_t       = plexus::node<inproc_policy, transport_t>;
 
 struct pose_sample
 {
-    double        x{};
-    double        y{};
-    double        z{};
+    double x{};
+    double y{};
+    double z{};
     std::uint32_t sec{};
 };
 
@@ -73,7 +73,8 @@ struct pose_codec
     {
         auto owner = std::make_shared<std::string>(
             "{\"timestamp\":{\"sec\":" + std::to_string(p.sec) + ",\"nsec\":0},\"frame_id\":\"world\","
-            "\"pose\":{\"position\":{\"x\":" + std::to_string(p.x) + ",\"y\":" + std::to_string(p.y) +
+                                                                 "\"pose\":{\"position\":{\"x\":" +
+            std::to_string(p.x) + ",\"y\":" + std::to_string(p.y) +
             ",\"z\":" + std::to_string(p.z) + "},\"orientation\":{\"x\":0,\"y\":0,\"z\":0,\"w\":1}}}");
         std::span<const std::byte> view = std::as_bytes(std::span{owner->data(), owner->size()});
         return {view, std::move(owner)};

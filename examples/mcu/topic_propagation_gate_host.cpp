@@ -93,14 +93,14 @@ struct verdict
 
 bool both_directions_propagated(const verdict &v)
 {
-    return v.reported && v.host_saw_device_type == example::reading_type::name
-           && v.device_saw_host_type == example::command_type::name;
+    return v.reported && v.host_saw_device_type == example::reading_type::name && v.device_saw_host_type == example::command_type::name;
 }
 
 void report(const verdict &v)
 {
     std::cout << "GATE host_saw=" << (v.host_saw_device_type.empty() ? "<none>" : v.host_saw_device_type)
-              << " device_saw=" << (!v.reported ? "<no report>" : v.device_saw_host_type.empty() ? "<none>" : v.device_saw_host_type)
+              << " device_saw=" << (!v.reported ? "<no report>" : v.device_saw_host_type.empty() ? "<none>"
+                                                                                                 : v.device_saw_host_type)
               << '\n';
     std::cout << (both_directions_propagated(v) ? "GATE_PASS both ends enumerate the other's topic-with-type\n"
                                                 : "GATE_FAIL topic-with-type did not propagate both ways\n");
@@ -150,7 +150,8 @@ int main(int argc, char **argv)
     node.dial({"serial", endpoint});
 
     ::asio::steady_timer deadline{io, k_timeout};
-    deadline.async_wait([&](std::error_code) { io.stop(); });
+    deadline.async_wait([&](std::error_code)
+                        { io.stop(); });
 
     io.run();
 

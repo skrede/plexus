@@ -32,15 +32,15 @@ namespace {
 constexpr const char *k_tag = "plexus-liveliness";
 
 constexpr uart_port_t k_tlm_uart = UART_NUM_2;
-constexpr int         k_tlm_tx    = 17;
-constexpr int         k_tlm_rx    = 16;
-constexpr int         k_tlm_baud  = 115200;
+constexpr int k_tlm_tx           = 17;
+constexpr int k_tlm_rx           = 16;
+constexpr int k_tlm_baud         = 115200;
 
 constexpr std::array<std::uint32_t, 3> k_intervals_ms{50, 100, 200};
 constexpr std::array<std::uint32_t, 3> k_miss_limits{3, 5, 8};
-constexpr int          k_runs_per_cell = 3;
-constexpr int          k_warmup_beats  = 3;
-constexpr std::uint32_t k_eval_tick_ms  = 10;
+constexpr int k_runs_per_cell          = 3;
+constexpr int k_warmup_beats           = 3;
+constexpr std::uint32_t k_eval_tick_ms = 10;
 
 void tlm_open()
 {
@@ -81,7 +81,7 @@ plexus::node_id peer_id(std::uint8_t tag)
 struct run_result
 {
     std::int64_t latency_ms;
-    int          flaps;
+    int flaps;
 };
 
 // One sweep cell run: heartbeat to alive, then silence until the lost verdict. eval_ns feeds the
@@ -95,9 +95,9 @@ run_result run_cell(std::uint32_t interval_ms, std::uint32_t miss_limit)
 
     plexus::io::peer_liveliness<plexus::io::fixed_liveliness_peer_storage<8>> arbiter{opts};
 
-    int           alive_count   = 0;
-    int           lost_count    = 0;
-    bool          got_lost      = false;
+    int alive_count             = 0;
+    int lost_count              = 0;
+    bool got_lost               = false;
     std::uint64_t eval_ns       = 0;
     std::uint64_t first_lost_ns = 0;
     arbiter.on_verdict(
@@ -132,7 +132,7 @@ run_result run_cell(std::uint32_t interval_ms, std::uint32_t miss_limit)
     }
 
     const std::uint64_t deadline_ns =
-            last_hb_ns + static_cast<std::uint64_t>(miss_limit) * interval_ms * 4ull * 1'000'000ull;
+        last_hb_ns + static_cast<std::uint64_t>(miss_limit) * interval_ms * 4ull * 1'000'000ull;
     while(!got_lost)
     {
         vTaskDelay(pdMS_TO_TICKS(k_eval_tick_ms));
@@ -143,7 +143,7 @@ run_result run_cell(std::uint32_t interval_ms, std::uint32_t miss_limit)
     }
 
     const std::int64_t latency_ms =
-            got_lost ? static_cast<std::int64_t>((first_lost_ns - last_hb_ns) / 1'000'000ull) : -1;
+        got_lost ? static_cast<std::int64_t>((first_lost_ns - last_hb_ns) / 1'000'000ull) : -1;
     const int flaps = (alive_count > 0 ? alive_count - 1 : 0) + (lost_count > 0 ? lost_count - 1 : 0);
     return run_result{latency_ms, flaps};
 }

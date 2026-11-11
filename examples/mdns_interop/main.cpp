@@ -70,18 +70,19 @@ int main()
     int resolved_count = 0;
     std::vector<std::pair<std::string, std::string>> resolved_metadata;
     discovery.browse(
-            [&](const plexus::discovery::service_info &svc)
-            {
-                ++resolved_count;
-                if(!svc.metadata.empty())
-                    resolved_metadata = svc.metadata;
-            });
+        [&](const plexus::discovery::service_info &svc)
+        {
+            ++resolved_count;
+            if(!svc.metadata.empty())
+                resolved_metadata = svc.metadata;
+        });
 
     // A transport round-trip on the SAME context: an asio TCP listener + client
     // exchange a framed payload while the mDNS browse converges.
     pasio::asio_listener listener(io);
     std::unique_ptr<pasio::asio_channel> server_channel;
-    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
+    listener.on_accepted([&](std::unique_ptr<pasio::asio_channel> ch)
+                         { server_channel = std::move(ch); });
     listener.start({"tcp", "127.0.0.1:0"});
     const auto port = listener.port();
 
@@ -90,13 +91,14 @@ int main()
     plexus::log::null_logger router_sink;
     pio::frame_router router{router_sink};
     router.on_unidirectional(
-            [&](const wire::frame_header &, std::span<const std::byte> inner)
-            {
-                auto decoded = wire::decode_unidirectional(inner);
-                if(decoded)
-                    received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
-            });
-    client.on_data([&](std::span<const std::byte> frame) { router.route(frame); });
+        [&](const wire::frame_header &, std::span<const std::byte> inner)
+        {
+            auto decoded = wire::decode_unidirectional(inner);
+            if(decoded)
+                received = std::vector<std::byte>(decoded->data.begin(), decoded->data.end());
+        });
+    client.on_data([&](std::span<const std::byte> frame)
+                   { router.route(frame); });
 
     ::asio::ip::tcp::endpoint server_ep(::asio::ip::make_address("127.0.0.1"), port);
     client.socket().connect(server_ep);

@@ -159,7 +159,7 @@ void plexus_task(void *)
     opts.reconnect   = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed = 0x0B0AC0DEu;
 
-    auto host = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard"), opts);
+    auto host  = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard"), opts);
     auto &node = host->node();
 
     // The same public enumeration surface on-target: the peerless onboard node yields an

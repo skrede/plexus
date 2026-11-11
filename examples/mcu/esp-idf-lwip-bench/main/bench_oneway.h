@@ -29,10 +29,10 @@ namespace example {
 // the batch's (a bigger batch starves the drain). At this fixed offer a deep cap simply buffers more
 // in-flight before it sheds; the delivered rate is drain-limited either way. The count is bounded so the
 // smallest payload cannot explode into a pathological per-tick publish burst.
-inline constexpr std::size_t   k_oneway_cap_bytes = 8192;
+inline constexpr std::size_t k_oneway_cap_bytes   = 8192;
 inline constexpr std::uint32_t k_oneway_max_batch = 1024;
-inline constexpr std::int64_t  k_oneway_window_us = 3000000;
-inline constexpr std::int64_t  k_oneway_settle_us = 500000;
+inline constexpr std::int64_t k_oneway_window_us  = 3000000;
+inline constexpr std::int64_t k_oneway_settle_us  = 500000;
 
 // Emit the machine-parseable throughput line the runner parses (accepted count/bytes over the window,
 // plus the shed witness). Stable space-separated key=value pairs under a BENCH tag, no localized format.
@@ -48,9 +48,9 @@ inline void emit_throughput(const char *policy, std::size_t tier, std::uint32_t 
 struct oneway_driver
 {
     plexus::publisher<void> &stream;
-    std::size_t              tier;
+    std::size_t tier;
     std::array<std::byte, k_max_tier_bytes> buffer{};
-    std::uint32_t            offered{0};
+    std::uint32_t offered{0};
 
     std::uint32_t batch() const
     {
@@ -62,7 +62,7 @@ struct oneway_driver
 
     void offer_batch()
     {
-        const std::uint32_t             n = batch();
+        const std::uint32_t n = batch();
         const std::span<const std::byte> msg{buffer.data(), tier};
         for(std::uint32_t i = 0; i < n; ++i)
             stream.publish(msg);
@@ -74,15 +74,15 @@ struct oneway_driver
 // drains before the counts are read; the accepted rate is accepted = offered - dropped over the window.
 struct oneway_runner
 {
-    const char    *policy;
+    const char *policy;
     oneway_driver &driver;
-    std::size_t    tier_index{0};
-    std::uint32_t  offered_base{0};
-    std::uint32_t  dropped_base{0};
-    std::int64_t   window_start{0};
-    std::int64_t   settle_start{0};
-    bool           offering{true};
-    bool           running{true};
+    std::size_t tier_index{0};
+    std::uint32_t offered_base{0};
+    std::uint32_t dropped_base{0};
+    std::int64_t window_start{0};
+    std::int64_t settle_start{0};
+    bool offering{true};
+    bool running{true};
 
     void start()
     {
@@ -133,7 +133,7 @@ template<typename Transport>
 struct oneway_source
 {
     oneway_runner &runner;
-    Transport     &transport;
+    Transport &transport;
 
     void poll()
     {

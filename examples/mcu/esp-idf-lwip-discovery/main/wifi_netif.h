@@ -16,8 +16,8 @@
 namespace example {
 
 inline EventGroupHandle_t g_wifi_events = nullptr;
-inline esp_netif_t *g_sta_netif = nullptr;
-inline constexpr int k_wifi_got_ip_bit = BIT0;
+inline esp_netif_t *g_sta_netif         = nullptr;
+inline constexpr int k_wifi_got_ip_bit  = BIT0;
 
 inline void on_wifi_event(void *, esp_event_base_t base, ::int32_t id, void *)
 {
@@ -67,7 +67,7 @@ inline bool wifi_connect_sta()
     init_nvs();
     esp_netif_init();
     esp_event_loop_create_default();
-    g_sta_netif = esp_netif_create_default_wifi_sta();
+    g_sta_netif             = esp_netif_create_default_wifi_sta();
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&init);
     register_wifi_handlers();

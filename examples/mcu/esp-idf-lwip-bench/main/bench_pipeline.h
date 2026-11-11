@@ -32,7 +32,7 @@ inline constexpr std::int64_t k_tier_deadline_us = 20000000;
 
 struct slot
 {
-    bool         in_use;
+    bool in_use;
     std::uint8_t tag;
     std::int64_t issued_us;
 };
@@ -47,23 +47,23 @@ inline void emit_pipeline(const char *policy, std::size_t tier, std::size_t wind
 
 struct windowed_probe
 {
-    const char              *policy;
+    const char *policy;
     plexus::publisher<void> &request;
-    std::size_t              window;
-    std::size_t              tier;
+    std::size_t window;
+    std::size_t tier;
     std::array<std::byte, k_max_tier_bytes> buffer{};
-    std::array<slot, k_max_window>          slots{};
-    std::uint8_t             next_tag{0};
-    std::size_t              tier_index{0};
-    std::uint32_t            count{0};
-    std::int64_t             sample_start{0};
-    std::int64_t             tier_start_us{0};
-    bool                     draining{false};
-    bool                     running{true};
+    std::array<slot, k_max_window> slots{};
+    std::uint8_t next_tag{0};
+    std::size_t tier_index{0};
+    std::uint32_t count{0};
+    std::int64_t sample_start{0};
+    std::int64_t tier_start_us{0};
+    bool draining{false};
+    bool running{true};
 
     void issue_slot(std::size_t i)
     {
-        slots[i] = slot{true, next_tag, esp_timer_get_time()};
+        slots[i]  = slot{true, next_tag, esp_timer_get_time()};
         buffer[0] = static_cast<std::byte>(next_tag);
         ++next_tag;
         request.publish(std::span<const std::byte>{buffer.data(), tier});
@@ -102,7 +102,7 @@ struct windowed_probe
             if(!slots[i].in_use || slots[i].tag != tag)
                 continue;
             const std::int64_t rtt = esp_timer_get_time() - slots[i].issued_us;
-            slots[i].in_use = false;
+            slots[i].in_use        = false;
             complete(rtt);
             return;
         }
@@ -177,12 +177,13 @@ struct windowed_probe
 struct pipeline_pump
 {
     plexus::freertos::freertos_timer &timer;
-    windowed_probe                   &probe;
+    windowed_probe &probe;
 
     void arm()
     {
         timer.expires_after(std::chrono::milliseconds{250});
-        timer.async_wait([this](std::error_code ec) { on_tick(ec); });
+        timer.async_wait([this](std::error_code ec)
+                         { on_tick(ec); });
     }
 
     void on_tick(std::error_code ec)

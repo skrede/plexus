@@ -12,7 +12,7 @@
 namespace example {
 
 inline EventGroupHandle_t g_eth_events = nullptr;
-inline constexpr int k_eth_got_ip_bit = BIT0;
+inline constexpr int k_eth_got_ip_bit  = BIT0;
 
 inline void on_eth_got_ip(void *, esp_event_base_t, ::int32_t, void *)
 {
@@ -35,8 +35,8 @@ inline esp_eth_handle_t install_eth_driver()
 
 inline void attach_eth_netif(esp_eth_handle_t handle)
 {
-    esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
-    esp_netif_t *netif           = esp_netif_new(&netif_cfg);
+    esp_netif_config_t netif_cfg     = ESP_NETIF_DEFAULT_ETH();
+    esp_netif_t *netif               = esp_netif_new(&netif_cfg);
     esp_eth_netif_glue_handle_t glue = esp_eth_new_netif_glue(handle);
     esp_netif_attach(netif, glue);
 }

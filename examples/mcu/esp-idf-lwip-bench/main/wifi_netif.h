@@ -15,7 +15,7 @@
 namespace example {
 
 inline EventGroupHandle_t g_wifi_events = nullptr;
-inline constexpr int k_wifi_got_ip_bit = BIT0;
+inline constexpr int k_wifi_got_ip_bit  = BIT0;
 
 inline void on_wifi_event(void *, esp_event_base_t base, ::int32_t id, void *)
 {

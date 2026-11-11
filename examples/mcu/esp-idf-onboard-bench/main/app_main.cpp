@@ -44,7 +44,7 @@ constexpr const char *k_policy = "intra-onboard";
 // the largest tier buffer. ESP32 services peripheral ISRs on the active task's stack, so the budget
 // absorbs worst-case interrupt nesting on top of the deepest plexus path.
 constexpr std::uint32_t k_plexus_task_stack = 16384; // bytes (xTaskCreate takes bytes)
-constexpr UBaseType_t   k_plexus_task_prio  = 5;
+constexpr UBaseType_t k_plexus_task_prio    = 5;
 
 using codec_t = example::message_codec;
 
@@ -59,8 +59,8 @@ struct echo_leg
         auto loan = reply.borrow();
         if(!loan)
             return;
-        loan->length = req.length;
-        loan->seq    = req.seq;
+        loan->length        = req.length;
+        loan->seq           = req.seq;
         const std::size_t n = req.length <= example::k_max_tier_bytes ? req.length : example::k_max_tier_bytes;
         for(std::size_t i = 0; i < n; ++i)
             loan->buffer[i] = req.buffer[i];
@@ -74,26 +74,26 @@ struct echo_leg
 // stops issuing.
 struct bench_runner
 {
-    plexus::publisher<codec_t>        &request;
-    std::shared_ptr<std::atomic<int>>  encodes;
-    std::size_t                        tier_index{0};
-    std::uint32_t                      count{0};
-    std::uint8_t                       seq{0};
-    std::int64_t                       sent_us{0};
-    bool                               awaiting{false};
-    bool                               done{false};
+    plexus::publisher<codec_t> &request;
+    std::shared_ptr<std::atomic<int>> encodes;
+    std::size_t tier_index{0};
+    std::uint32_t count{0};
+    std::uint8_t seq{0};
+    std::int64_t sent_us{0};
+    bool awaiting{false};
+    bool done{false};
 
     void issue()
     {
         const std::size_t tier = example::k_payload_tiers[tier_index];
-        auto loan = request.borrow();
+        auto loan              = request.borrow();
         if(!loan)
             return;
-        loan->length = static_cast<std::uint32_t>(tier);
-        loan->seq    = ++seq;
+        loan->length    = static_cast<std::uint32_t>(tier);
+        loan->seq       = ++seq;
         loan->buffer[0] = static_cast<std::byte>(seq);
-        sent_us  = esp_timer_get_time();
-        awaiting = true;
+        sent_us         = esp_timer_get_time();
+        awaiting        = true;
         request.publish(std::move(loan));
     }
 
@@ -102,7 +102,7 @@ struct bench_runner
         if(done || !awaiting || echo.seq != seq)
             return;
         const std::int64_t rtt = esp_timer_get_time() - sent_us;
-        awaiting = false;
+        awaiting               = false;
         record(rtt);
         advance();
     }
@@ -157,24 +157,26 @@ void plexus_task(void *)
     opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x0B0AB0DEu;
 
-    auto  host = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard-bench"), opts);
+    auto host  = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard-bench"), opts);
     auto &node = host->node();
 
     codec_t codec;
-    auto    encodes = codec.encodes;
+    auto encodes = codec.encodes;
 
     plexus::publisher<codec_t> reply_pub{node, "reply", plexus::typed_publisher_options{}, codec};
     echo_leg echo{reply_pub};
     plexus::subscriber<codec_t> request_sub{
         node, "request", plexus::typed_subscriber_options{},
-        [&](const example::message &req, const plexus::io::message_info &) { echo.on_request(req); },
+        [&](const example::message &req, const plexus::io::message_info &)
+        { echo.on_request(req); },
         codec};
 
     plexus::publisher<codec_t> request_pub{node, "request", plexus::typed_publisher_options{}, codec};
     bench_runner runner{request_pub, encodes};
     plexus::subscriber<codec_t> reply_sub{
         node, "reply", plexus::typed_subscriber_options{},
-        [&](const example::message &echo_msg, const plexus::io::message_info &) { runner.on_reply(echo_msg); },
+        [&](const example::message &echo_msg, const plexus::io::message_info &)
+        { runner.on_reply(echo_msg); },
         codec};
 
     runner.issue();
