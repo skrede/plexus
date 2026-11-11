@@ -52,7 +52,7 @@ public:
     // (a large best-effort DTLS message fragments per record under the always-on aggregate bound).
     // max_payload is the per-record logical budget, distinct from the message ceiling.
     // retransmit_ceiling caps the handshake retransmit interval of every channel the transport
-    // mints; a non-positive ceiling is refused at construction.
+    // mints; a ceiling under dtls_channel::min_retransmit_ceiling is refused at construction.
     explicit dtls_transport(::asio::io_context &io, const tls_credential &cred, std::size_t max_payload = dtls_channel::default_max_payload,
                             std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget,
                             std::chrono::microseconds retransmit_ceiling = dtls_channel::default_retransmit_ceiling)
