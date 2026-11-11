@@ -65,10 +65,11 @@ void dtls_channel::on_retransmit()
     if(!m_ssl || !m_open)
         return;
     const int r = ::DTLSv1_handle_timeout(m_ssl);
+    if(r < 0)
+        return fail(io::io_error::timed_out);
     if(r > 0)
         drain_outbound();
-    if(r >= 0)
-        arm_retransmit();
+    arm_retransmit();
 }
 
 }
