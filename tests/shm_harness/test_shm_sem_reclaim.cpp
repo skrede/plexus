@@ -120,6 +120,27 @@ TEST_CASE("sem_reclaim a crashed waiter's named semaphore is unlinked when its c
     CHECK(open_error(doorbell) == ENOENT);
 }
 
+// Nothing is sent, so the producer never reclaims and the joining reader's claim is the only reclaim. The joiner
+// republishes the slot's waiter tag, so the region guard cannot reach a name the red leaves behind; the case unlinks it.
+TEST_CASE("sem_reclaim a crashed waiter's named semaphore is unlinked when a joining reader reclaims its cursor", "[shm][sem_reclaim]")
+{
+    reclaim_fixture fixture{"joined"};
+    REQUIRE(fixture.start());
+    const std::string doorbell = fixture.doorbell();
+    REQUIRE(open_error(doorbell) == 0);
+    fixture.waiter->kill();
+
+    plexus::native::posix_shm_region_broker broker;
+    sem_registry joiner{broker, plexus::io::reliability::reliable, plexus::io::congestion::block, posix_sem_leg::binder(fixture.io)};
+    REQUIRE(joiner.acquire(fixture.fqn, k_request, plexus::testing::test_publisher(), plexus::shm::ring_role::consumer, 0) != plexus::shm::acquire_result::failed);
+    const auto *channel = joiner.channel_for(fixture.fqn, k_request, plexus::testing::test_publisher());
+    REQUIRE(channel != nullptr);
+    CHECK(channel->waiter_slot() == std::optional<std::uint32_t>(fixture.block->get().slot.load()));
+    CHECK(open_error(doorbell) == ENOENT);
+    ::sem_unlink(doorbell.c_str());
+    joiner.release(fixture.fqn, k_request, plexus::testing::test_publisher(), plexus::shm::ring_role::consumer);
+}
+
 TEST_CASE("sem_reclaim a live waiter's semaphore survives a reclaim pass", "[shm][sem_reclaim]")
 {
     reclaim_fixture fixture{"live"};

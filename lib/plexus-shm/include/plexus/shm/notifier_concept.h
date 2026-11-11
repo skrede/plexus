@@ -40,6 +40,13 @@ concept demotion_reporting_notifier = demotable_notifier<T> &&
             { n.arm(slot, std::move(drain), std::move(lost), std::move(demoted)) } -> std::same_as<arm_status>;
         };
 
+// A notifier whose doorbells outlive a waiter that dies without its disarm; whoever reclaims that waiter's cursor hands
+// it the tag the waiter published, so it can drop the name.
+template<typename T>
+concept waiter_forgetting_notifier = requires(T &n, std::uint32_t slot, std::uint32_t tag) {
+    { n.forget_waiter(slot, tag) } -> std::same_as<void>;
+};
+
 }
 
 #endif

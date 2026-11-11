@@ -98,7 +98,11 @@ std::optional<std::uint32_t> topic_claim_or_reclaim(Entry &e, std::uint32_t i)
     auto owner_alive = [&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); };
     if(const std::optional<std::uint32_t> generation = e.ring.claim_cursor(i))
         return generation;
-    return e.ring.reclaim_cursor(i, owner_alive) ? e.ring.claim_cursor(i) : std::nullopt;
+    const std::optional<std::uint32_t> tag = e.ring.reclaim_cursor(i, owner_alive);
+    if constexpr(waiter_forgetting_notifier<typename Entry::notifier_type>)
+        if(tag.value_or(0) != 0)
+            e.notify->forget_waiter(i, *tag);
+    return tag ? e.ring.claim_cursor(i) : std::nullopt;
 }
 
 // A slot held elsewhere over an inactive cursor is a holder passing through, such as a last holder taking every slot for
@@ -171,8 +175,7 @@ shm::acquire_failure topic_bind(Registry &r, Entry &e, shm::ring_role role, shm:
     r.m_bind_notifier(e.notify, e.ring.header(), e.ctrl_name);
     e.channel.emplace(e.ring, *e.notify, r.m_reliability, r.m_congestion);
     auto alive = [&control = e.control](std::uint32_t cursor) { return control.slot_held_elsewhere(shm::cursor_slot(cursor)); };
-    // Only a notifier whose doorbells outlive their waiter has names to reclaim.
-    if constexpr(requires(typename Entry::notifier_type &n, std::uint32_t v) { n.forget_waiter(v, v); })
+    if constexpr(waiter_forgetting_notifier<typename Entry::notifier_type>)
         e.channel->bind_cursor_liveness(alive, [&notify = *e.notify](std::uint32_t slot, std::uint32_t tag) { notify.forget_waiter(slot, tag); });
     else
         e.channel->bind_cursor_liveness(alive);
