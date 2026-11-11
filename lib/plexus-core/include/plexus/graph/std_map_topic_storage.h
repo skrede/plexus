@@ -13,8 +13,7 @@
 #include <functional>
 #include <string_view>
 
-namespace plexus::graph
-{
+namespace plexus::graph {
 
 // The default (PC) topic backend: an unbounded heap-backed std::map keyed by an OWNED topic name.
 // A bounded node profile substitutes fixed_topic_storage<N> through the Storage template param
@@ -45,9 +44,9 @@ class std_map_topic_storage
 public:
     upsert_result upsert(const topic_edge &edge, bool clipped)
     {
-        entry &e             = at(edge.topic);
-        e.truncated          = e.truncated || clipped;
-        const bool new_edge  = note_edge(e, edge);
+        entry &e              = at(edge.topic);
+        e.truncated           = e.truncated || clipped;
+        const bool new_edge   = note_edge(e, edge);
         const upsert_result t = note_type(e, edge);
         return upsert_result{t.outcome, new_edge || t.changed};
     }

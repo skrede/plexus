@@ -12,8 +12,7 @@
 #include <utility>
 #include <string_view>
 
-namespace plexus::graph
-{
+namespace plexus::graph {
 
 // The owning graph table: what every participant declared about every topic, folded into one
 // enumerable set of (participant, topic, role) edges. It COPIES every name handed to it — the fold
@@ -27,9 +26,9 @@ class basic_topic_type_table
 {
 public:
     basic_topic_type_table()
-        : m_storage{}
-        , m_dropped{0}
-        , m_truncations{0}
+            : m_storage{}
+            , m_dropped{0}
+            , m_truncations{0}
     {
     }
 

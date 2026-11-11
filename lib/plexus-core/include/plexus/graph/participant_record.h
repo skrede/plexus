@@ -9,8 +9,7 @@
 #include <cstdint>
 #include <optional>
 
-namespace plexus::graph
-{
+namespace plexus::graph {
 
 struct route
 {

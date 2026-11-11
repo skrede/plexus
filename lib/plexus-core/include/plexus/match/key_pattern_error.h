@@ -3,8 +3,7 @@
 
 #include <cstdint>
 
-namespace plexus::match
-{
+namespace plexus::match {
 
 enum class key_pattern_error : std::uint8_t
 {

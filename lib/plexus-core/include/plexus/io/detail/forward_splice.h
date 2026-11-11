@@ -62,13 +62,13 @@ inline std::size_t forwarded_wire_size(std::size_t inner_n) noexcept
 // Returns 0 without writing when the region cannot hold the whole envelope: the writer is an unchecked
 // memcpy, so this fail-closed guard is the hard floor that keeps a too-large frame from overrunning a
 // pre-sized slot (the splice gates on slot capacity first; this refuses even a mis-sized direct call).
-inline std::size_t encode_forwarded_wire_into(std::span<std::byte> region, const node_id &origin, const node_id &destination, std::uint8_t hop, std::uint16_t seq,
-                                              std::uint8_t flags, std::span<const std::byte> inner)
+inline std::size_t encode_forwarded_wire_into(std::span<std::byte> region, const node_id &origin, const node_id &destination, std::uint8_t hop, std::uint16_t seq, std::uint8_t flags,
+                                              std::span<const std::byte> inner)
 {
     const std::size_t inner_n = inner.size() < wire::detail::k_forwarded_inner_max ? inner.size() : wire::detail::k_forwarded_inner_max;
     if(region.size() < forwarded_wire_size(inner_n))
         return 0;
-    const std::size_t payload  = wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n;
+    const std::size_t payload = wire::detail::forwarded_frame_preamble_size + sizeof(std::uint32_t) + inner_n;
     const wire::frame_header fhdr{.type = wire::msg_type::forwarded, .flags = 0, .session_id = 0, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = payload};
 
     wire::writer w{region};
@@ -137,7 +137,7 @@ public:
     {
         const std::uint8_t out_hop = static_cast<std::uint8_t>(hop < 0xFF ? hop + 1 : hop);
         const std::uint16_t seq    = m_seq++;
-        bool built = false;
+        bool built                 = false;
         splice_buffer buf;
         auto build_once = [&]() -> const splice_buffer &
         {

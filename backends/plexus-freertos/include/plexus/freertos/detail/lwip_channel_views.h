@@ -70,7 +70,7 @@ public:
 
 private:
     std::array<Channel *, N> m_views;
-    std::size_t              m_count;
+    std::size_t m_count;
 };
 
 }

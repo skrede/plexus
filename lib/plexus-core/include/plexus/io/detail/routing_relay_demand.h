@@ -23,11 +23,12 @@ template<typename Engine>
 bool publishes_topic(const Engine &e, const node_id &node, std::string_view fqn)
 {
     bool found = false;
-    e.m_topics.for_each([&](const graph::topic_record &r)
-                        {
-                            if(!found && r.node == node && r.role == graph::topic_role::publisher && r.name == fqn)
-                                found = true;
-                        });
+    e.m_topics.for_each(
+            [&](const graph::topic_record &r)
+            {
+                if(!found && r.node == node && r.role == graph::topic_role::publisher && r.name == fqn)
+                    found = true;
+            });
     return found;
 }
 
@@ -43,11 +44,12 @@ void relay_propagate_demand(Engine &e, std::string_view fqn, demand_transition d
     {
         if(dir != demand_transition::up || role != demand_role::publisher || !e.m_splice.forward_scope_admits(fqn))
             return;
-        e.m_registry.for_each_connected([&](const node_id &, typename Engine::session_type &s)
-                                        {
-                                            if(s.is_complete() && publishes_topic(e, s.peer_identity(), fqn))
-                                                s.subscribe(fqn);
-                                        });
+        e.m_registry.for_each_connected(
+                [&](const node_id &, typename Engine::session_type &s)
+                {
+                    if(s.is_complete() && publishes_topic(e, s.peer_identity(), fqn))
+                        s.subscribe(fqn);
+                });
     }
 }
 
@@ -61,21 +63,23 @@ void install_splice_refan(Engine &e)
     {
         e.m_messages.on_forward_refan([&e](std::uint64_t hash, const node_id &origin, std::uint8_t hop, std::span<const std::byte> inner, const typename Engine::channel_type *arrival,
                                            const wire::shared_bytes *owner) { e.m_splice.refan(e.m_messages, hash, origin, hop, inner, arrival, owner); });
-        e.m_messages.on_demand_transition([&e](std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
-                                          {
-                                              e.m_coordinator.on_edge(node_name, fqn, dir, role);
-                                              relay_propagate_demand(e, fqn, dir, role);
-                                          });
+        e.m_messages.on_demand_transition(
+                [&e](std::string_view node_name, std::string_view fqn, demand_transition dir, demand_role role)
+                {
+                    e.m_coordinator.on_edge(node_name, fqn, dir, role);
+                    relay_propagate_demand(e, fqn, dir, role);
+                });
         // The re-origination gate: forward_scope_admits (the engine matcher, reachable only here) AND
         // self-route-aware non-local demand, then reuse refan -> fan_forwarded_buffer (hop 0 -> out_hop
         // 1, per-relay seq, arrival-excluded) and the receive-edge (origin, arrival-relay) dedup.
-        e.m_messages.on_originate([&e](std::uint64_t hash, const node_id &origin, std::span<const std::byte> inner, const typename Engine::channel_type *arrival)
-                                  {
-                                      const std::string_view fqn = e.m_messages.fqn_for(hash);
-                                      if(fqn.empty() || !e.m_splice.forward_scope_admits(fqn) || !e.m_messages.has_remote_demand(hash, static_cast<const void *>(arrival)))
-                                          return;
-                                      e.m_splice.refan(e.m_messages, hash, origin, 0, inner, arrival, nullptr);
-                                  });
+        e.m_messages.on_originate(
+                [&e](std::uint64_t hash, const node_id &origin, std::span<const std::byte> inner, const typename Engine::channel_type *arrival)
+                {
+                    const std::string_view fqn = e.m_messages.fqn_for(hash);
+                    if(fqn.empty() || !e.m_splice.forward_scope_admits(fqn) || !e.m_messages.has_remote_demand(hash, static_cast<const void *>(arrival)))
+                        return;
+                    e.m_splice.refan(e.m_messages, hash, origin, 0, inner, arrival, nullptr);
+                });
     }
 }
 

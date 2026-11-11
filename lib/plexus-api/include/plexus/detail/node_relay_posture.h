@@ -23,10 +23,12 @@ template<typename Node>
 std::size_t count_routes_via_relays(const Node &n)
 {
     std::size_t via = 0;
-    n.m_engine.known().for_each_candidate([&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &) {
-        if(reach.via.has_value() && id != n.m_id)
-            ++via;
-    });
+    n.m_engine.known().for_each_candidate(
+            [&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &)
+            {
+                if(reach.via.has_value() && id != n.m_id)
+                    ++via;
+            });
     return via;
 }
 

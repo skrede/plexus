@@ -14,8 +14,7 @@
 #include <cstddef>
 #include <string_view>
 
-namespace plexus::match
-{
+namespace plexus::match {
 
 // Validate-once value type ("parse, don't validate"): make() is the single
 // validation path, returning expected<basic_key_pattern, key_pattern_error>. A
@@ -25,8 +24,7 @@ template<typename Bounds = default_bounds>
 class basic_key_pattern
 {
 public:
-    static constexpr plexus::detail::expected<basic_key_pattern, key_pattern_error>
-    make(std::string_view pattern) noexcept
+    static constexpr plexus::detail::expected<basic_key_pattern, key_pattern_error> make(std::string_view pattern) noexcept
     {
         std::array<detail::segment_desc, Bounds::k_pattern_depth> descriptors{};
         const auto count = detail::scan_canonical<Bounds>(pattern, descriptors);
@@ -48,9 +46,7 @@ public:
     constexpr detail::segment_view segment(std::size_t index) const noexcept
     {
         const detail::segment_desc descriptor = m_segments[index];
-        return detail::segment_view{
-                std::string_view(m_bytes.data() + descriptor.offset, descriptor.length),
-                descriptor.kind};
+        return detail::segment_view{std::string_view(m_bytes.data() + descriptor.offset, descriptor.length), descriptor.kind};
     }
 
     // Point-in-time set relation: do these two keysets share any concrete key?
@@ -75,15 +71,16 @@ public:
     }
 
 private:
-    std::size_t                                                m_count;
-    std::size_t                                                m_length;
-    std::array<char, Bounds::k_pattern_length>                 m_bytes;
-    std::array<detail::segment_desc, Bounds::k_pattern_depth>  m_segments;
+    std::size_t m_count;
+    std::size_t m_length;
+    std::array<char, Bounds::k_pattern_length> m_bytes;
+    std::array<detail::segment_desc, Bounds::k_pattern_depth> m_segments;
 
-    constexpr basic_key_pattern(std::string_view canonical,
-                                const std::array<detail::segment_desc, Bounds::k_pattern_depth> &descriptors,
-                                std::size_t count) noexcept
-            : m_count(count), m_length(canonical.size()), m_bytes{}, m_segments(descriptors)
+    constexpr basic_key_pattern(std::string_view canonical, const std::array<detail::segment_desc, Bounds::k_pattern_depth> &descriptors, std::size_t count) noexcept
+            : m_count(count)
+            , m_length(canonical.size())
+            , m_bytes{}
+            , m_segments(descriptors)
     {
         for(std::size_t i = 0; i < canonical.size(); ++i)
             m_bytes[i] = canonical[i];

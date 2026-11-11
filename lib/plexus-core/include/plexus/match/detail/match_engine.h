@@ -7,8 +7,7 @@
 #include <array>
 #include <cstddef>
 
-namespace plexus::match::detail
-{
+namespace plexus::match::detail {
 
 constexpr std::size_t k_no_star = static_cast<std::size_t>(-1);
 
@@ -95,11 +94,11 @@ constexpr bool include_cell(segment_view a, segment_view b, bool right, bool bel
 template<typename Cell, typename Pattern, typename Row>
 constexpr void roll_column(Cell cell, const Pattern &a, const Pattern &b, std::size_t i, Row &row) noexcept
 {
-    const std::size_t  db    = b.segment_count();
-    const segment_view aseg  = a.segment(i);
-    const bool         astar = aseg.kind == segment_kind::double_star;
-    bool               diag  = row[db];
-    row[db]                  = astar && row[db];
+    const std::size_t db    = b.segment_count();
+    const segment_view aseg = a.segment(i);
+    const bool astar        = aseg.kind == segment_kind::double_star;
+    bool diag               = row[db];
+    row[db]                 = astar && row[db];
     for(std::size_t j = db; j-- > 0;)
     {
         const bool below = row[j];

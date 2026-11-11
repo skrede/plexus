@@ -23,7 +23,7 @@ graph::snapshot_result participants_blocking(Node &node, std::span<graph::partic
     if(Node::policy_type::inside_executor(node.executor()))
         plexus::detail::fail_closed("plexus: participants_blocking called inside a handler of the node's own executor");
     std::promise<graph::snapshot_result> done;
-    std::future<graph::snapshot_result>  ready = done.get_future();
+    std::future<graph::snapshot_result> ready = done.get_future();
     if(!Node::policy_type::post_from_thread(node.executor(), [&node, out, &done]() { done.set_value(node.participants(out)); }))
         plexus::detail::fail_closed("plexus: participants_blocking could not reach the node's executor");
     return ready.get();

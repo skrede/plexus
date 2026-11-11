@@ -39,7 +39,7 @@ class same_host_transports
 {
 public:
 #if PLEXUS_SAME_HOST_SHM
-    using set_type       = transport_set<shm::shm_member, unix_transport, asio_transport>;
+    using set_type        = transport_set<shm::shm_member, unix_transport, asio_transport>;
     using region_broker_t = typename shm::shm_member::registry_type::broker_type;
 
     explicit same_host_transports(::asio::io_context &io, std::string_view region = "")

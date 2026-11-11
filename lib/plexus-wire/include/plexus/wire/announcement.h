@@ -28,8 +28,8 @@ namespace plexus::wire {
 // nullopt on any malformation, never a partial struct).
 struct announcement
 {
-    std::uint8_t version  = static_cast<std::uint8_t>(discovery::k_contact_card_schema_version);
-    std::uint8_t flags    = 0;
+    std::uint8_t version   = static_cast<std::uint8_t>(discovery::k_contact_card_schema_version);
+    std::uint8_t flags     = 0;
     std::uint32_t universe = 0;
     plexus::node_id node_id{};
     std::uint64_t ttl_secs = 0;

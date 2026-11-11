@@ -16,7 +16,8 @@
 
 namespace plexus::discovery::detail {
 
-inline wire::announcement announcement_from_card(const node_id &id, const std::vector<::plexus::discovery::listening_transport> &listens, std::uint64_t ttl_secs, std::uint8_t flags, std::uint32_t universe = k_default_universe, std::string_view universe_pattern = k_default_universe_label)
+inline wire::announcement announcement_from_card(const node_id &id, const std::vector<::plexus::discovery::listening_transport> &listens, std::uint64_t ttl_secs, std::uint8_t flags,
+                                                 std::uint32_t universe = k_default_universe, std::string_view universe_pattern = k_default_universe_label)
 {
     wire::announcement ann;
     ann.flags    = flags;
@@ -47,7 +48,8 @@ inline ::plexus::discovery::service_info service_info_from_announcement(const wi
     listens.reserve(ann.listens.size());
     for(const auto &[transport, port] : ann.listens)
         listens.push_back({transport, port});
-    return ::plexus::discovery::service_info{::plexus::discovery::detail::hex_encode(ann.node_id), io::endpoint{"", source_host}, ::plexus::discovery::assemble_contact_card(ann.node_id, listens)};
+    return ::plexus::discovery::service_info{::plexus::discovery::detail::hex_encode(ann.node_id), io::endpoint{"", source_host},
+                                             ::plexus::discovery::assemble_contact_card(ann.node_id, listens)};
 }
 
 }

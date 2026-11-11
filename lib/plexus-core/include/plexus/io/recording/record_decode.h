@@ -102,7 +102,7 @@ inline void decode_endpoint(wire::reader &r, decoded_record &rec)
     const std::uint64_t tlen = r.varint().value_or(0);
     const auto type_bytes    = r.bytes(static_cast<std::size_t>(tlen));
     rec.type_name.assign(reinterpret_cast<const char *>(type_bytes.data()), type_bytes.size());
-    rec.schema_hint          = r.varint().value_or(0);
+    rec.schema_hint = r.varint().value_or(0);
 }
 
 inline void decode_security(wire::reader &r, decoded_record &rec)

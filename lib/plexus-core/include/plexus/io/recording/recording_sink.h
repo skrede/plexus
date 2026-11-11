@@ -104,7 +104,7 @@ public:
 private:
     void record_message(std::string_view fqn, const message_info &info, const message_view &v)
     {
-        const std::uint64_t hash               = wire::fqn_topic_hash(fqn);
+        const std::uint64_t hash = wire::fqn_topic_hash(fqn);
         if(!m_rate_gate.admit(hash, m_rate_gate.needs_clock() && m_clock ? m_clock() : 0u))
             return;
         const std::span<const std::byte> bytes = v;

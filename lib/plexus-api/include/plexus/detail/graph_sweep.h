@@ -31,34 +31,38 @@ inline bool topic_in(std::string_view topic, const std::optional<match::key_patt
 template<typename Table, typename Pred>
 graph::snapshot_result sweep_topics(const Table &table, std::span<graph::topic_record> out, Pred keep)
 {
-    std::size_t filled    = 0;
-    bool        truncated = false;
-    table.for_each([&](const graph::topic_record &rec) {
-        if(!keep(rec))
-            return;
-        if(filled == out.size())
-        {
-            truncated = true;
-            return;
-        }
-        out[filled++] = rec;
-    });
+    std::size_t filled = 0;
+    bool truncated     = false;
+    table.for_each(
+            [&](const graph::topic_record &rec)
+            {
+                if(!keep(rec))
+                    return;
+                if(filled == out.size())
+                {
+                    truncated = true;
+                    return;
+                }
+                out[filled++] = rec;
+            });
     return graph::snapshot_result{filled, truncated};
 }
 
 template<typename Known>
 graph::snapshot_result sweep_participants(const Known &known, std::span<graph::participant_record> out)
 {
-    std::size_t filled    = 0;
-    bool        truncated = false;
-    known.for_each_candidate([&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &origin) {
-        if(filled == out.size())
-        {
-            truncated = true;
-            return;
-        }
-        out[filled++] = graph::participant_record{id, reach, origin};
-    });
+    std::size_t filled = 0;
+    bool truncated     = false;
+    known.for_each_candidate(
+            [&](const plexus::node_id &id, const graph::route &reach, const graph::provenance &origin)
+            {
+                if(filled == out.size())
+                {
+                    truncated = true;
+                    return;
+                }
+                out[filled++] = graph::participant_record{id, reach, origin};
+            });
     return graph::snapshot_result{filled, truncated};
 }
 
@@ -69,10 +73,12 @@ template<typename Table>
 std::size_t count_topic_role(const Table &table, std::string_view topic, graph::topic_role role)
 {
     std::size_t found = 0;
-    table.for_each([&](const graph::topic_record &rec) {
-        if(rec.name == topic && rec.role == role)
-            ++found;
-    });
+    table.for_each(
+            [&](const graph::topic_record &rec)
+            {
+                if(rec.name == topic && rec.role == role)
+                    ++found;
+            });
     return found;
 }
 

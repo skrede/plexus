@@ -28,9 +28,9 @@ enum class splice_ownership : std::uint8_t
 // scopes which topics the relay forwards. ownership is the forwarded-copy knob (default pooled_owned_copy).
 struct forward_options
 {
-    std::uint8_t hop_budget      = 8;
-    std::size_t dedup_depth      = wire::udp_dedup_window::depth_max;
-    std::size_t queue_depth      = 256;
+    std::uint8_t hop_budget       = 8;
+    std::size_t dedup_depth       = wire::udp_dedup_window::depth_max;
+    std::size_t queue_depth       = 256;
     std::size_t splice_pool_slots = 64;
     std::size_t splice_slot_bytes = 2048;
     std::string scope_pattern;
@@ -42,25 +42,25 @@ struct forward_options
 // fails closed to scope_none so a bad label forwards nothing rather than everything.
 struct forward_ctx
 {
-    std::uint8_t hop_budget      = 8;
-    std::size_t dedup_depth      = wire::udp_dedup_window::depth_max;
-    std::size_t queue_depth      = 256;
+    std::uint8_t hop_budget       = 8;
+    std::size_t dedup_depth       = wire::udp_dedup_window::depth_max;
+    std::size_t queue_depth       = 256;
     std::size_t splice_pool_slots = 64;
     std::size_t splice_slot_bytes = 2048;
-    splice_ownership ownership   = splice_ownership::pooled_owned_copy;
-    bool scope_all               = true;
+    splice_ownership ownership    = splice_ownership::pooled_owned_copy;
+    bool scope_all                = true;
     std::optional<match::key_pattern> scope;
 };
 
 inline forward_ctx make_forward_ctx(const forward_options &opts)
 {
     forward_ctx ctx;
-    ctx.hop_budget       = opts.hop_budget;
-    ctx.dedup_depth      = opts.dedup_depth;
-    ctx.queue_depth      = opts.queue_depth;
+    ctx.hop_budget        = opts.hop_budget;
+    ctx.dedup_depth       = opts.dedup_depth;
+    ctx.queue_depth       = opts.queue_depth;
     ctx.splice_pool_slots = opts.splice_pool_slots;
     ctx.splice_slot_bytes = opts.splice_slot_bytes;
-    ctx.ownership        = opts.ownership;
+    ctx.ownership         = opts.ownership;
     if(!opts.scope_pattern.empty())
     {
         ctx.scope_all = false;

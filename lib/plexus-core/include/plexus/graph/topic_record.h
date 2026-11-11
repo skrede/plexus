@@ -9,8 +9,7 @@
 #include <optional>
 #include <string_view>
 
-namespace plexus::graph
-{
+namespace plexus::graph {
 
 // The per-topic distinct-type bound. An owning backend stores each name at its wire lid
 // (wire::detail::k_max_type_name, 512 bytes), so four names cost 2048 bytes of name storage per

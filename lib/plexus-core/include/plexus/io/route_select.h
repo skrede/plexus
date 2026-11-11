@@ -7,8 +7,7 @@
 #include <span>
 #include <cstddef>
 
-namespace plexus::io
-{
+namespace plexus::io {
 
 // The empty-span result of route_select: no candidate to address.
 inline constexpr std::size_t route_select_npos = static_cast<std::size_t>(-1);

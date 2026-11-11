@@ -103,10 +103,12 @@ public:
     template<typename Pred>
     void erase_if(Pred pred)
     {
-        m_table.for_each([&](const node_id &id, peer_state &state) {
-            if(pred(state))
-                m_table.erase(id);
-        });
+        m_table.for_each(
+                [&](const node_id &id, peer_state &state)
+                {
+                    if(pred(state))
+                        m_table.erase(id);
+                });
     }
 
 private:

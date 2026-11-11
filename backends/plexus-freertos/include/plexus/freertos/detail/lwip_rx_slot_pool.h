@@ -17,9 +17,9 @@ template<typename Owner, std::size_t Capacity>
 struct rx_slot
 {
     std::array<std::byte, Capacity> buffer;
-    std::size_t                     len;
-    Owner                          *owner;
-    std::uint32_t                   index;
+    std::size_t len;
+    Owner *owner;
+    std::uint32_t index;
 };
 
 // A fixed pre-allocated pool of RX hand-off slots whose free-list is a FreeRTOS queue of slot
@@ -70,7 +70,7 @@ public:
 
 private:
     std::array<rx_slot<Owner, Capacity>, Slots> m_slots;
-    QueueHandle_t                               m_free;
+    QueueHandle_t m_free;
 };
 
 }

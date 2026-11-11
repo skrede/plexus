@@ -7,8 +7,7 @@
 
 #include <cstdint>
 
-namespace plexus::io
-{
+namespace plexus::io {
 
 struct route_candidate
 {

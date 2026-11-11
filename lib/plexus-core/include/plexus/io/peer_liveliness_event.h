@@ -15,22 +15,20 @@ enum class liveliness_verdict : std::uint8_t
 
 enum class liveliness_signal : std::uint8_t
 {
-    none = 0,
+    none      = 0,
     awareness = 1,
     heartbeat = 2,
-    session = 4
+    session   = 4
 };
 
 inline liveliness_signal operator|(liveliness_signal lhs, liveliness_signal rhs)
 {
-    return static_cast<liveliness_signal>(
-            static_cast<std::uint8_t>(lhs) | static_cast<std::uint8_t>(rhs));
+    return static_cast<liveliness_signal>(static_cast<std::uint8_t>(lhs) | static_cast<std::uint8_t>(rhs));
 }
 
 inline liveliness_signal operator&(liveliness_signal lhs, liveliness_signal rhs)
 {
-    return static_cast<liveliness_signal>(
-            static_cast<std::uint8_t>(lhs) & static_cast<std::uint8_t>(rhs));
+    return static_cast<liveliness_signal>(static_cast<std::uint8_t>(lhs) & static_cast<std::uint8_t>(rhs));
 }
 
 // contributing carries the signal provenance of the verdict: for an alive verdict it is the

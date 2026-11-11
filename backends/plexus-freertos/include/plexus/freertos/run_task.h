@@ -19,7 +19,7 @@ struct task_options
     }
 
     std::uint32_t stack;
-    UBaseType_t   priority;
+    UBaseType_t priority;
 };
 
 namespace detail {
@@ -33,7 +33,7 @@ struct run_task_ctx
 {
     freertos_executor &ex;
     std::array<P *, N> ps;
-    run_options        opts;
+    run_options opts;
 };
 
 template<pollable P, std::size_t N>

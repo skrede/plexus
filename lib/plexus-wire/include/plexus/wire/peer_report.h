@@ -42,7 +42,7 @@ inline constexpr std::uint8_t k_peer_report_withdrawal_flag = 0x02;
 // only when its bit is set and decode reads it only when set, so a sender that never sets one emits
 // a byte layout identical to the pre-field one. These are the record's own extension points.
 inline constexpr std::uint8_t k_peer_report_universe_pattern_flag = 0x04;
-inline constexpr std::uint8_t k_peer_report_topics_flag          = 0x08;
+inline constexpr std::uint8_t k_peer_report_topics_flag           = 0x08;
 
 // Decode-time ceiling on the u16-length-prefixed origin universe pattern, held at the same value the
 // announcement pattern caps to, so decode never retains bytes the matcher would refuse.

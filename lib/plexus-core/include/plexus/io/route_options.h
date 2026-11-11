@@ -4,8 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace plexus::io
-{
+namespace plexus::io {
 
 // How an arriving direct candidate is kept from being displaced by a transitive flood. Under
 // reserved_slots a fixed portion of each identity's candidate array is off-limits to transitive

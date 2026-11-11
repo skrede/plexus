@@ -30,7 +30,10 @@ std::optional<node_id> first_via_relay_origin(const Engine &engine, const node_i
     std::optional<node_id> chosen;
     engine.known().for_each_candidate(
             [&](const node_id &id, const auto &reach, const auto &origin)
-            { if(!chosen && reach.via.has_value() && origin.reach_status == graph::reachability::reachable && id != self) chosen = id; });
+            {
+                if(!chosen && reach.via.has_value() && origin.reach_status == graph::reachability::reachable && id != self)
+                    chosen = id;
+            });
     return chosen;
 }
 
@@ -38,14 +41,12 @@ std::optional<node_id> first_via_relay_origin(const Engine &engine, const node_i
 // adapting the (status, bytes) answer to OnReply with the origin as provider. Single-shot: the
 // forwarded answer — success, unserved, or timeout — is delivered straight to the user, never re-tried.
 template<typename Engine, typename OnReply>
-void reissue_via_relay(Engine &engine, const node_id &origin, std::string_view fqn, std::span<const std::byte> param, OnReply on_reply,
-                       std::optional<std::chrono::nanoseconds> deadline)
+void reissue_via_relay(Engine &engine, const node_id &origin, std::string_view fqn, std::span<const std::byte> param, OnReply on_reply, std::optional<std::chrono::nanoseconds> deadline)
 {
     const std::optional<publisher_gid> provider{publisher_gid{origin, 0}};
-    engine.call(origin, fqn, param,
-                [on_reply = std::move(on_reply), provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable
-                { on_reply(status, bytes, provider); },
-                deadline);
+    engine.call(
+            origin, fqn, param, [on_reply = std::move(on_reply), provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable { on_reply(status, bytes, provider); },
+            deadline);
 }
 
 // The direct call's response wrapper: on any answer BUT rpc_status::no_handler it delivers the direct
@@ -53,8 +54,8 @@ void reissue_via_relay(Engine &engine, const node_id &origin, std::string_view f
 // re-issues once as a forwarded request (otherwise the original no_handler surfaces unchanged). It owns
 // the fqn AND param — both view the caller's storage, which need not outlive the direct answer.
 template<typename Engine, typename OnReply>
-auto direct_response_with_fallback(Engine &engine, const node_id &self, std::string_view fqn, std::span<const std::byte> param, OnReply on_reply,
-                                   std::optional<publisher_gid> provider, std::optional<std::chrono::nanoseconds> deadline)
+auto direct_response_with_fallback(Engine &engine, const node_id &self, std::string_view fqn, std::span<const std::byte> param, OnReply on_reply, std::optional<publisher_gid> provider,
+                                   std::optional<std::chrono::nanoseconds> deadline)
 {
     return [&engine, self, fqn = std::string{fqn}, param = std::vector<std::byte>{param.begin(), param.end()}, on_reply = std::move(on_reply), provider,
             deadline](wire::rpc_status status, std::span<const std::byte> bytes) mutable
@@ -76,13 +77,11 @@ void issue_direct_call(Engine &engine, const node_id &self, Session &session, st
                        std::optional<publisher_gid> provider, std::optional<std::chrono::nanoseconds> deadline, bool with_fallback)
 {
     if(with_fallback)
-        return engine.procedures().call(session.rpc_peer(), fqn, param,
-                                        direct_response_with_fallback(engine, self, fqn, param, std::move(on_reply), provider, deadline), deadline,
+        return engine.procedures().call(session.rpc_peer(), fqn, param, direct_response_with_fallback(engine, self, fqn, param, std::move(on_reply), provider, deadline), deadline,
                                         session.session_id());
-    engine.procedures().call(session.rpc_peer(), fqn, param,
-                             [on_reply = std::move(on_reply), provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable
-                             { on_reply(status, bytes, provider); },
-                             deadline, session.session_id());
+    engine.procedures().call(
+            session.rpc_peer(), fqn, param, [on_reply = std::move(on_reply), provider](wire::rpc_status status, std::span<const std::byte> bytes) mutable
+            { on_reply(status, bytes, provider); }, deadline, session.session_id());
 }
 
 }

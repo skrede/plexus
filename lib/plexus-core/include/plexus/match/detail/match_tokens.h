@@ -3,8 +3,7 @@
 
 #include "plexus/match/detail/segment_cursor.h"
 
-namespace plexus::match::detail
-{
+namespace plexus::match::detail {
 
 // One pattern segment absorbs exactly one concrete segment: '*' takes any single
 // segment, a literal takes only its own bytes. '**' returns false here — the

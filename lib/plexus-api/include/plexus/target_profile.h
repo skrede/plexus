@@ -21,8 +21,7 @@ namespace plexus {
 
 // A capacity-carrying tag: it is never instantiated, only pattern-matched by profile_traits, so the
 // capacity integers live here, on the decorator, and never touch the mechanism policy.
-template<typename Policy, std::size_t Peers, std::size_t Topics,
-         typename Liveliness = io::default_liveliness_storage>
+template<typename Policy, std::size_t Peers, std::size_t Topics, typename Liveliness = io::default_liveliness_storage>
 struct bounded
 {
 };

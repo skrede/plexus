@@ -25,8 +25,8 @@ struct report_options
 {
     std::uint32_t universe = discovery::k_default_universe;
     std::string universe_pattern;
-    std::uint8_t hop_budget    = 1;
-    std::size_t dedup_depth    = wire::udp_dedup_window::depth_max;
+    std::uint8_t hop_budget = 1;
+    std::size_t dedup_depth = wire::udp_dedup_window::depth_max;
     // Flood bounds against a hostile authenticated relay: the distinct reported origins one reporter
     // may install, and the topic edges one reported origin may fold. Reject-and-count past either
     // ceiling; a direct peer is never affected. Numerics stay parametric, never pinned.

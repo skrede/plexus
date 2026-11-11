@@ -60,7 +60,7 @@ public:
     }
 
 private:
-    std::string   m_host;
+    std::string m_host;
     std::uint16_t m_port;
 };
 

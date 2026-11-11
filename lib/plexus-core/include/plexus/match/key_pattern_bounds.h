@@ -3,8 +3,7 @@
 
 #include <cstddef>
 
-namespace plexus::match
-{
+namespace plexus::match {
 
 // The default ceilings a power user overrides with an alternative traits type carrying the same two
 // members. The 256-byte length sits deliberately below the 1024-byte wire fqn lid: real topic names

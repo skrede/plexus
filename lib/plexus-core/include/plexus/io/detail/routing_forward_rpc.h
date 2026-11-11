@@ -24,7 +24,7 @@ typename Engine::session_type *best_live_forward_session(Engine &e, std::span<co
 {
     using session_type = typename Engine::session_type;
 
-    session_type *best_session   = nullptr;
+    session_type *best_session    = nullptr;
     const route_candidate *chosen = nullptr;
     for(const route_candidate &c : cands)
     {

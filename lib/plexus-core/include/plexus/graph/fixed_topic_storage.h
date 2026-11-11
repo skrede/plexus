@@ -14,8 +14,7 @@
 #include <algorithm>
 #include <string_view>
 
-namespace plexus::graph
-{
+namespace plexus::graph {
 
 // The constrained-target topic backend: a dep-free flat array of Topics entries, a linear scan
 // over the topic names. Each entry owns its topic name and its distinct type names inline, at
@@ -56,7 +55,7 @@ class fixed_topic_storage
 
 public:
     fixed_topic_storage()
-        : m_slots{}
+            : m_slots{}
     {
     }
 
@@ -68,7 +67,7 @@ public:
         if(slot == nullptr)
             return upsert_result{upsert_outcome::dropped, false};
         slot->truncated = slot->truncated || clipped;
-        bool new_edge = false;
+        bool new_edge   = false;
         if(!note_edge(*slot, edge, new_edge))
             return upsert_result{upsert_outcome::dropped, false};
         const upsert_result t = note_type(*slot, edge);

@@ -22,13 +22,12 @@ namespace plexus {
 // Host-only convenience — the primitive accessor never posts, so the promise/future never enters the
 // executor-affine (MCU) read path.
 template<typename Node>
-graph::snapshot_result topics_blocking(Node &node, std::span<graph::topic_record> out,
-                                       const std::optional<match::key_pattern> &filter = std::nullopt)
+graph::snapshot_result topics_blocking(Node &node, std::span<graph::topic_record> out, const std::optional<match::key_pattern> &filter = std::nullopt)
 {
     if(Node::policy_type::inside_executor(node.executor()))
         plexus::detail::fail_closed("plexus: topics_blocking called inside a handler of the node's own executor");
     std::promise<graph::snapshot_result> done;
-    std::future<graph::snapshot_result>  ready = done.get_future();
+    std::future<graph::snapshot_result> ready = done.get_future();
     if(!Node::policy_type::post_from_thread(node.executor(), [&node, out, &filter, &done]() { done.set_value(node.topics(out, filter)); }))
         plexus::detail::fail_closed("plexus: topics_blocking could not reach the node's executor");
     return ready.get();

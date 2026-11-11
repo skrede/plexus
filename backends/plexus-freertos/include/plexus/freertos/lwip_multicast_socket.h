@@ -91,8 +91,8 @@ public:
         if(!m_open || !m_on_datagram_cb)
             return;
         sockaddr_in from{};
-        socklen_t   from_len = sizeof(from);
-        const int   n = lwip_recvfrom(m_fd, m_recv_buf.data(), m_recv_buf.size(), MSG_DONTWAIT, reinterpret_cast<sockaddr *>(&from), &from_len);
+        socklen_t from_len = sizeof(from);
+        const int n        = lwip_recvfrom(m_fd, m_recv_buf.data(), m_recv_buf.size(), MSG_DONTWAIT, reinterpret_cast<sockaddr *>(&from), &from_len);
         if(n <= 0)
             return;
         m_on_datagram_cb(source_endpoint(from), {m_recv_buf.data(), static_cast<std::size_t>(n)});
@@ -130,15 +130,15 @@ private:
     }
 #endif
 
-    freertos_executor                                                                                       &m_executor;
-    std::string                                                                                              m_group;
-    std::string                                                                                              m_egress;
-    std::array<std::byte, 1500>                                                                              m_recv_buf;
+    freertos_executor &m_executor;
+    std::string m_group;
+    std::string m_egress;
+    std::array<std::byte, 1500> m_recv_buf;
     ::plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram_cb;
-    std::uint16_t                                                                                            m_port;
-    std::uint8_t                                                                                             m_ttl;
-    int                                                                                                      m_fd;
-    bool                                                                                                     m_open;
+    std::uint16_t m_port;
+    std::uint8_t m_ttl;
+    int m_fd;
+    bool m_open;
 };
 
 #if defined(ESP_PLATFORM)

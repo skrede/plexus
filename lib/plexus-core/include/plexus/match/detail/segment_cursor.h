@@ -4,8 +4,7 @@
 #include <cstdint>
 #include <string_view>
 
-namespace plexus::match::detail
-{
+namespace plexus::match::detail {
 
 enum class segment_kind : std::uint8_t
 {
@@ -18,13 +17,13 @@ struct segment_desc
 {
     std::uint16_t offset;
     std::uint16_t length;
-    segment_kind  kind;
+    segment_kind kind;
 };
 
 struct segment_view
 {
     std::string_view text;
-    segment_kind     kind;
+    segment_kind kind;
 };
 
 constexpr segment_kind classify_segment(std::string_view segment) noexcept
@@ -43,7 +42,8 @@ class segment_cursor
 {
 public:
     constexpr explicit segment_cursor(std::string_view pattern) noexcept
-            : m_rest(pattern), m_exhausted(false)
+            : m_rest(pattern)
+            , m_exhausted(false)
     {
     }
 
@@ -67,7 +67,7 @@ public:
 
 private:
     std::string_view m_rest;
-    bool             m_exhausted;
+    bool m_exhausted;
 };
 
 }

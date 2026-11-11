@@ -14,8 +14,7 @@
 #include <cstdint>
 #include <algorithm>
 
-namespace plexus::io::detail
-{
+namespace plexus::io::detail {
 
 struct admit_result
 {
@@ -44,7 +43,7 @@ inline bool same_candidate(const route_candidate &a, const route_candidate &b) n
 
 inline void place(route_candidate &row, const route_candidate &cand, std::uint64_t now) noexcept
 {
-    row               = cand;
+    row                = cand;
     row.last_refreshed = now;
 }
 
@@ -151,8 +150,8 @@ inline std::size_t reset_windows_via(route_candidate *slots, std::size_t count, 
 
 // Admits a reported candidate into a record and stamps its freshness tick on a noted/refreshed row,
 // so both storage twins share the whole per-record note path (only the drop tally stays per-storage).
-inline report_admit note_reported_row(route_candidate *slots, std::size_t &count, std::size_t cap, std::uint64_t &last_refreshed, const route_candidate &cand,
-                                      std::uint16_t seq, std::uint64_t now, const route_options &opts)
+inline report_admit note_reported_row(route_candidate *slots, std::size_t &count, std::size_t cap, std::uint64_t &last_refreshed, const route_candidate &cand, std::uint16_t seq,
+                                      std::uint64_t now, const route_options &opts)
 {
     const auto r = admit_reported(slots, count, cap, cand, seq, now, opts);
     if(r == report_admit::noted_new || r == report_admit::refreshed)

@@ -28,8 +28,7 @@ class graph_change_handle
     // not the object.
     struct sink : io::observer
     {
-        sink(plexus::detail::move_only_function<void(std::uint64_t)> on_changed,
-             plexus::detail::move_only_function<void(const graph::graph_change &)> on_delta)
+        sink(plexus::detail::move_only_function<void(std::uint64_t)> on_changed, plexus::detail::move_only_function<void(const graph::graph_change &)> on_delta)
                 : m_on_changed(std::move(on_changed))
                 , m_on_delta(std::move(on_delta))
         {

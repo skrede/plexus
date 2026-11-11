@@ -5,8 +5,7 @@
 
 #include <cstdint>
 
-namespace plexus::graph
-{
+namespace plexus::graph {
 
 enum class change_kind : std::uint8_t
 {

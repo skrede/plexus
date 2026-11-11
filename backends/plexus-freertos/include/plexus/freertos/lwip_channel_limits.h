@@ -12,7 +12,7 @@ namespace plexus::freertos {
 // rx_slots * read_buffer_bytes (~22.5 KiB here), so both knobs are kept small.
 struct lwip_channel_limits
 {
-    static constexpr std::size_t read_buffer_bytes = 5760;        // the lwIP TCP_WND default
+    static constexpr std::size_t read_buffer_bytes = 5760; // the lwIP TCP_WND default
     static constexpr std::size_t max_message_bytes = 8 * 1024;
     static constexpr std::size_t reassembly_bytes  = 16 * 1024;
     static constexpr std::size_t egress_cap_bytes  = 8 * 1024;
