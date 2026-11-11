@@ -123,7 +123,7 @@ TEST_CASE("node_native_discovery: two nodes discover each other over real multic
     ::asio::io_context io;
     const auto group                = ::asio::ip::make_address_v4("239.255.0.73");
     constexpr std::uint16_t mc_port = 17453;
-    constexpr unsigned mc_ttl       = 1;
+    constexpr std::uint8_t mc_ttl   = 1;
 
     pasio::udp_multicast_socket sock_a{io, group, mc_port, mc_ttl};
     pasio::udp_multicast_socket sock_b{io, group, mc_port, mc_ttl};

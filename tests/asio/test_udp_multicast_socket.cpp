@@ -26,7 +26,7 @@ static_assert(plexus::stream::datagram_socket<pasio::udp_multicast_socket>);
 // plexus node never collides with the fixture's traffic.
 const ::asio::ip::address_v4 k_test_group = ::asio::ip::make_address_v4("239.255.0.71");
 constexpr std::uint16_t k_test_port       = 17447;
-constexpr unsigned k_test_ttl             = 1;
+constexpr std::uint8_t k_test_ttl         = 1;
 
 std::vector<std::byte> bytes_of(const std::string &s)
 {

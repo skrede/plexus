@@ -16,7 +16,7 @@ namespace plexus::asio::detail {
 // port. When set_egress is true the egress interface is pinned via IP_MULTICAST_IF (asio's
 // outbound_interface); any()/unset leaves the OS to choose. Fail-closed: the first error
 // short-circuits via ec and the caller never arms the recv loop.
-inline void join_multicast_group(::asio::ip::udp::socket &socket, const ::asio::ip::address_v4 &group, std::uint16_t port, unsigned ttl, const ::asio::ip::address_v4 &egress,
+inline void join_multicast_group(::asio::ip::udp::socket &socket, const ::asio::ip::address_v4 &group, std::uint16_t port, std::uint8_t ttl, const ::asio::ip::address_v4 &egress,
                                  bool set_egress, std::error_code &ec)
 {
     socket.set_option(::asio::socket_base::reuse_address(true), ec);

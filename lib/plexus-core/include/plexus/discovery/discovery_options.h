@@ -81,7 +81,7 @@ struct discovery_options
     std::uint32_t universe;
     universe_scoping scoping;
     std::uint16_t port;
-    unsigned ttl;
+    std::uint8_t ttl;
 };
 
 // Hard derivation wins unconditionally — a custom group and the default universe both derive under

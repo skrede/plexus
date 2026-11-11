@@ -43,7 +43,7 @@ class udp_multicast_socket
 public:
     using endpoint_type = ::asio::ip::udp::endpoint;
 
-    explicit udp_multicast_socket(::asio::io_context &io, ::asio::ip::address_v4 group, std::uint16_t port, unsigned ttl, io::congestion congestion = io::congestion::block,
+    explicit udp_multicast_socket(::asio::io_context &io, ::asio::ip::address_v4 group, std::uint16_t port, std::uint8_t ttl, io::congestion congestion = io::congestion::block,
                                   std::size_t send_queue_bytes = 65536, io::network_interface egress = io::network_interface::any())
             : m_socket(io)
             , m_sender{}
@@ -164,7 +164,7 @@ private:
     io::network_interface m_egress;
     std::string m_effective_interface;
     std::uint16_t m_port;
-    unsigned m_ttl;
+    std::uint8_t m_ttl;
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram_cb;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
     bool m_open;
