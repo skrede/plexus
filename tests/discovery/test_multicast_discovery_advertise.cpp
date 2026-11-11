@@ -26,7 +26,7 @@ plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0]  = std::byte{seed};
-    id[15] = std::byte{static_cast<unsigned char>(seed ^ 0xff)};
+    id[15] = std::byte{static_cast<std::uint8_t>(seed ^ 0xff)};
     return id;
 }
 

@@ -23,7 +23,7 @@ plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0]  = std::byte{seed};
-    id[15] = std::byte{static_cast<unsigned char>(seed ^ 0xff)};
+    id[15] = std::byte{static_cast<std::uint8_t>(seed ^ 0xff)};
     return id;
 }
 
@@ -60,7 +60,7 @@ TEST_CASE("multicast_discovery: a flood of distinct sources admits at most the c
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(3, 0, false)};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     for(std::uint8_t i = 0; i < 10; ++i)
@@ -79,7 +79,7 @@ TEST_CASE("multicast_discovery: an established peer still resolves after the cap
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(2, 0, false)};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     fake_clock::advance(std::chrono::milliseconds(1));
@@ -103,7 +103,7 @@ TEST_CASE("multicast_discovery: with evict_lru the newest source replaces the ol
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(2, 0, true)};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     fake_clock::advance(std::chrono::milliseconds(1));
@@ -123,7 +123,7 @@ TEST_CASE("multicast_discovery: a single source past the per-source rate is drop
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(0, 2, false)}; // unlimited cap, 2 per 1s window
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     socket.inject("10.0.0.1", announce_bytes(1)); // 1st, admit
@@ -146,7 +146,7 @@ TEST_CASE("multicast_discovery: with the cap disabled every distinct source reso
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(0, 0, false)}; // unlimited + no rate limit
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     for(std::uint8_t i = 0; i < 50; ++i)
@@ -165,8 +165,8 @@ TEST_CASE("multicast_discovery: the cap does not gate the goodbye path", "[multi
     fake_datagram_socket socket;
     discovery_capped disc{ex, socket, capped_options(1, 1, false)}; // cap of 1, fills then never admits a new source
 
-    int resolved  = 0;
-    int withdrawn = 0;
+    std::int32_t resolved  = 0;
+    std::int32_t withdrawn = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     disc.on_withdrawn([&](const plexus::discovery::service_info &) { ++withdrawn; });
 

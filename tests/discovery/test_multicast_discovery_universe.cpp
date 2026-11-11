@@ -31,7 +31,7 @@ plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0]  = std::byte{seed};
-    id[15] = std::byte{static_cast<unsigned char>(seed ^ 0xff)};
+    id[15] = std::byte{static_cast<std::uint8_t>(seed ^ 0xff)};
     return id;
 }
 
@@ -82,7 +82,7 @@ TEST_CASE("multicast_discovery: a foreign-universe announcement fires no on_reso
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     socket.inject("10.0.0.9", inbound_bytes(0x21, universe_b));
 
@@ -95,7 +95,7 @@ TEST_CASE("multicast_discovery: a browse-only node filters a foreign universe", 
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     // No advertise: m_announcement stays nullopt, so the compare keys off m_options.universe.
     socket.inject("10.0.0.9", inbound_bytes(0x22, universe_b));
@@ -109,7 +109,7 @@ TEST_CASE("multicast_discovery: a foreign-universe goodbye fires no on_withdrawn
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
-    int withdrawn = 0;
+    std::int32_t withdrawn = 0;
     disc.browse([&](const plexus::discovery::service_info &) {});
     disc.on_withdrawn([&](const plexus::discovery::service_info &) { ++withdrawn; });
     socket.inject("10.0.0.9", inbound_bytes(0x23, universe_b, plexus::wire::k_announcement_goodbye_flag));
@@ -123,7 +123,7 @@ TEST_CASE("multicast_discovery: a same-universe announcement resolves", "[multic
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     socket.inject("172.16.0.4", inbound_bytes(0x24, universe_a));
 
@@ -142,7 +142,7 @@ TEST_CASE("multicast_discovery: two configless leaves rendezvous on the default 
     fake_datagram_socket socket_a;
     discovery_under_test node_a{ex_a, socket_a};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     node_a.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     socket_a.inject("192.168.1.31", socket_b.sent.front());
 
@@ -155,7 +155,7 @@ TEST_CASE("multicast_discovery: a self-echo latches the self-probe under a custo
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for(universe_a)};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     disc.advertise({"node", plexus::io::endpoint{"", "host"}, plexus::discovery::assemble_contact_card(make_id(0x41), sample_listens())});
     REQUIRE(socket.sent.size() == 1);
@@ -172,7 +172,7 @@ TEST_CASE("multicast_discovery: a wildcard universe resolves a concrete peer it 
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("factory/line/*")};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     socket.inject("10.0.0.1", inbound_pattern_bytes(0x51, "factory/line/1"));
 
@@ -185,7 +185,7 @@ TEST_CASE("multicast_discovery: a wildcard universe drops a concrete peer it doe
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("factory/line/*")};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     socket.inject("10.0.0.2", inbound_pattern_bytes(0x52, "warehouse/line/1"));
 
@@ -198,7 +198,7 @@ TEST_CASE("multicast_discovery: concrete rendezvous is unchanged via the uint32 
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("depot")};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     // A flagless (concrete-only uint32) peer of the same derived universe rides the fast-path.
     socket.inject("10.0.0.3", inbound_bytes(0x53, plexus::discovery::universe_from_label("depot")));
@@ -214,7 +214,7 @@ TEST_CASE("multicast_discovery: the default universe never matches a foreign con
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket}; // configless: the concrete default label, never match-all
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     // A pattern-flagged peer on a foreign concrete universe: the default is a literal that intersects
     // only itself, so it must NOT wildcard-match the peer.
@@ -231,7 +231,7 @@ TEST_CASE("multicast_discovery: a malformed peer universe pattern fails closed",
     fake_datagram_socket socket;
     discovery_under_test disc{ex, socket, options_for_pattern("factory/line/*")};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     // A stray '*' inside a segment is not a whole-segment wildcard: make() rejects it, so the reject
     // site drops the datagram before any admission.
@@ -277,7 +277,7 @@ TEST_CASE("multicast_discovery: two same-label concrete nodes admit through the 
     fake_datagram_socket socket_c;
     discovery_under_test node_c{ex_c, socket_c, options_for_pattern("alpha")};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     node_c.browse([&](const plexus::discovery::service_info &) { ++resolved; });
     // A flagged same-label peer takes the non-fast-path: intersects("alpha", "alpha") admits.
     socket_c.inject("10.0.0.71", socket_a.sent.front());
@@ -305,8 +305,8 @@ TEST_CASE("multicast_discovery: two different concrete universes do not mutually
     REQUIRE((alpha_ann->flags & plexus::wire::k_announcement_universe_pattern_flag) != 0);
     REQUIRE(alpha_ann->universe_pattern == "alpha");
 
-    int resolved_alpha = 0;
-    int resolved_beta  = 0;
+    std::int32_t resolved_alpha = 0;
+    std::int32_t resolved_beta  = 0;
     node_alpha.browse([&](const plexus::discovery::service_info &) { ++resolved_alpha; });
     node_beta.browse([&](const plexus::discovery::service_info &) { ++resolved_beta; });
 

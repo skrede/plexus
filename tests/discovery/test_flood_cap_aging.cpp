@@ -108,7 +108,7 @@ TEST_CASE("multicast_discovery: a node is still discovered after max_peers sourc
     options.cap.max_peers = 3;
     discovery_capped disc{ex, socket, options};
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     for(std::uint8_t i = 0; i < 3; ++i)

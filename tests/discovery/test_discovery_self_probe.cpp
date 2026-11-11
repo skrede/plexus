@@ -45,7 +45,7 @@ plexus::node_id make_id(std::uint8_t seed)
 {
     plexus::node_id id{};
     id[0]  = std::byte{seed};
-    id[15] = std::byte{static_cast<unsigned char>(seed ^ 0xff)};
+    id[15] = std::byte{static_cast<std::uint8_t>(seed ^ 0xff)};
     return id;
 }
 
@@ -71,7 +71,7 @@ TEST_CASE("discovery_self_probe: a node never notes its own echo and reads healt
     disc.advertise(card_for(self_id));
     REQUIRE(socket.sent.size() == 1);
 
-    int resolved = 0;
+    std::int32_t resolved = 0;
     disc.browse([&](const plexus::discovery::service_info &) { ++resolved; });
 
     const auto window = std::chrono::milliseconds{100};
@@ -155,8 +155,8 @@ TEST_CASE("discovery_self_probe: a live node over default_discovery excludes its
 
     plexus::asio::default_discovery disc{io, options};
 
-    const auto self_id = make_id(0x7e);
-    int self_resolved  = 0;
+    const auto self_id         = make_id(0x7e);
+    std::int32_t self_resolved = 0;
     disc.discovery().browse(
             [&](const plexus::discovery::service_info &peer)
             {
