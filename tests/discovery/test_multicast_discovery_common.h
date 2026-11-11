@@ -12,9 +12,9 @@
 #include "plexus/testing/inline_verbs.h"
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
