@@ -71,18 +71,19 @@ TEST_CASE("dtls.retransmit_ceiling: the schedule starts at one second, doubles a
     CHECK(next_retransmit_us(3'000'000'000u, 2h) == 4'294'967'295u);
 }
 
-TEST_CASE("dtls.retransmit_ceiling: a non-positive ceiling is refused when a transport or channel is built", "[dtls][retransmit]")
+TEST_CASE("dtls.retransmit_ceiling: a ceiling under OpenSSL's expiry floor is refused when a transport or channel is built", "[dtls][retransmit]")
 {
     pdt::identity_fixture id("rc_refuse");
     channel_parts parts(id);
-    const std::array<std::chrono::microseconds, 2> refused{0us, -1ms};
+    const std::array<std::chrono::microseconds, 4> refused{0us, -1ms, 1us, ptls::dtls_channel::min_retransmit_ceiling - 1us};
     for(const std::chrono::microseconds ceiling : refused)
     {
         CHECK_THROWS_AS(pdt::transport_with_ceiling(parts.io, parts.cred, ceiling), std::runtime_error);
         CHECK_THROWS_AS(parts.build(ceiling), std::runtime_error);
     }
-    CHECK_NOTHROW(pdt::transport_with_ceiling(parts.io, parts.cred, 1us));
-    CHECK_NOTHROW(parts.build(1us));
+    CHECK(ptls::dtls_channel::min_retransmit_ceiling == 15ms);
+    CHECK_NOTHROW(pdt::transport_with_ceiling(parts.io, parts.cred, ptls::dtls_channel::min_retransmit_ceiling));
+    CHECK_NOTHROW(parts.build(ptls::dtls_channel::min_retransmit_ceiling));
 }
 
 TEST_CASE("dtls.retransmit_ceiling: a dial to a silent peer retransmits its ClientHello at the transport's ceiling", "[dtls][retransmit]")

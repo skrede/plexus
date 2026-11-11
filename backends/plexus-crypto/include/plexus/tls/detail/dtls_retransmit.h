@@ -15,10 +15,14 @@ namespace plexus::tls::detail {
 // RFC 6347 section 4.2.4.1: the handshake retransmit timer starts at 1 s and doubles at each retransmission.
 inline constexpr std::uint32_t k_first_retransmit_us = 1'000'000;
 
+// OpenSSL's dtls1_get_timeout treats under 15 ms left as already expired, so a shorter interval fires every
+// retransmit back to back inside one SSL call.
+inline constexpr std::chrono::microseconds k_min_retransmit_ceiling{15'000};
+
 inline std::chrono::microseconds checked_retransmit_ceiling(std::chrono::microseconds ceiling)
 {
-    if(ceiling <= std::chrono::microseconds::zero())
-        plexus::detail::fail_closed("dtls: the retransmit ceiling must be positive");
+    if(ceiling < k_min_retransmit_ceiling)
+        plexus::detail::fail_closed("dtls: the retransmit ceiling must be at least 15 ms");
     return ceiling;
 }
 

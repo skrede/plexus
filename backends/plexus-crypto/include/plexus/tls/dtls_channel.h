@@ -5,6 +5,7 @@
 #include "plexus/tls/tls_credential.h"
 
 #include "plexus/tls/detail/dtls_context.h"
+#include "plexus/tls/detail/dtls_retransmit.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
@@ -78,6 +79,8 @@ public:
 
     // 60 s is RFC 6347's and OpenSSL's own cap, so the default schedule is OpenSSL's.
     static constexpr std::chrono::microseconds default_retransmit_ceiling{std::chrono::seconds{60}};
+
+    static constexpr std::chrono::microseconds min_retransmit_ceiling = detail::k_min_retransmit_ceiling;
 
     // Build over the shared udp_server: own NO socket, share the credential's SSL_CTX (up_ref'd),
     // publish the per-instance peer-addr + the transport's borrowed cookie state into the SSL
