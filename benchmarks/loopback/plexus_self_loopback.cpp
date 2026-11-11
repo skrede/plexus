@@ -20,7 +20,7 @@ namespace {
 using namespace self_loopback;
 
 constexpr std::uint64_t g_messages = 2000;
-constexpr std::size_t   g_runs     = 5;
+constexpr std::size_t g_runs       = 5;
 
 template<typename Point>
 lane_runs sweep(const char *name, Point point)
@@ -29,7 +29,7 @@ lane_runs sweep(const char *name, Point point)
     for(std::size_t pi = 0; pi < g_payloads.size(); ++pi)
         for(std::size_t r = 0; r < g_runs; ++r)
         {
-            auto c = point(g_payloads[pi], g_messages);
+            auto c   = point(g_payloads[pi], g_messages);
             lane.ran = lane.ran || c.ran;
             lane.by_payload[pi].push_back(c);
         }
@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     emit_report(std::cout, lanes);
 
     const std::string path = argc > 1 ? argv[1] : "plexus_self_loopback_report.md";
-    std::ofstream     file{path};
+    std::ofstream file{path};
     if(file)
     {
         emit_report(file, lanes);

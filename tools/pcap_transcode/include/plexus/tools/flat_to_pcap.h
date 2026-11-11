@@ -13,12 +13,12 @@ namespace plexus::tools {
 // flat-stream reader's recovery scan so a caller can report capture honesty.
 struct pcap_result
 {
-    bool          ok{false};
-    std::size_t   packets{0};
-    std::size_t   recovered{0};
-    bool          trailing_partial_dropped{false};
-    bool          corruption_skipped{false};
-    std::string   error;
+    bool ok{false};
+    std::size_t packets{0};
+    std::size_t recovered{0};
+    bool trailing_partial_dropped{false};
+    bool corruption_skipped{false};
+    std::string error;
 };
 
 // Read a flat plexus capture stream and write a pcapng container to out_pcapng.
@@ -29,8 +29,7 @@ struct pcap_result
 // nanosecond timestamp comes from the record's capture_ts, and the per-capture crypto tap
 // position is carried both section-scoped (in the SHB) and per packet (in each EPB comment).
 // flat_stream must stay alive for the duration of the call (the reader borrows it).
-pcap_result flat_to_pcap(std::span<const std::byte>   flat_stream,
-                         const std::filesystem::path &out_pcapng);
+pcap_result flat_to_pcap(std::span<const std::byte> flat_stream, const std::filesystem::path &out_pcapng);
 
 }
 

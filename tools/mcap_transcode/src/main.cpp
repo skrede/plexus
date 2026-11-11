@@ -32,29 +32,26 @@ int main(int argc, char **argv)
 {
     if(argc != 3)
     {
-        std::cerr << "usage: " << (argc > 0 ? argv[0] : "mcap_transcode")
-                  << " <capture.plxr> <out.mcap>\n";
+        std::cerr << "usage: " << (argc > 0 ? argv[0] : "mcap_transcode") << " <capture.plxr> <out.mcap>\n";
         return 2;
     }
 
-    bool       read_ok = false;
-    const auto flat    = slurp(argv[1], read_ok);
+    bool read_ok    = false;
+    const auto flat = slurp(argv[1], read_ok);
     if(!read_ok)
     {
         std::cerr << "error: cannot read flat capture: " << argv[1] << '\n';
         return 1;
     }
 
-    const auto result = plexus::tools::flat_to_mcap(flat, argv[2], plexus::tools::schema_provider{},
-                                                    plexus::tools::well_known_schema_translator());
+    const auto result = plexus::tools::flat_to_mcap(flat, argv[2], plexus::tools::schema_provider{}, plexus::tools::well_known_schema_translator());
     if(!result.ok)
     {
         std::cerr << "error: " << result.error << '\n';
         return 1;
     }
 
-    std::cout << "wrote " << argv[2] << ": " << result.messages << " messages across "
-              << result.channels << " channels (" << result.schemas << " schemas); recovered "
+    std::cout << "wrote " << argv[2] << ": " << result.messages << " messages across " << result.channels << " channels (" << result.schemas << " schemas); recovered "
               << result.recovered << " records";
     if(result.trailing_partial_dropped)
         std::cout << ", trailing partial dropped";

@@ -17,9 +17,9 @@ namespace self_loopback {
 // that did not run on this host (e.g. SHM off-gate) leaves its rows empty.
 struct lane_runs
 {
-    std::string                     name;
+    std::string name;
     std::array<std::vector<cell>, 4> by_payload{};
-    bool                            ran{};
+    bool ran{};
 };
 
 inline double median_of(std::vector<double> v)
@@ -72,8 +72,8 @@ inline std::array<int, 4> fastest_per_payload(const std::vector<lane_runs> &lane
     std::array<int, 4> winner;
     for(std::size_t pi = 0; pi < g_payloads.size(); ++pi)
     {
-        int    best = -1;
-        double low  = 1.0e300;
+        int best   = -1;
+        double low = 1.0e300;
         for(std::size_t li = 0; li < lanes.size(); ++li)
         {
             const auto vs = p50s(lanes[li].by_payload[pi]);

@@ -15,14 +15,14 @@ namespace plexus::tools {
 // flat-stream reader's recovery scan so a caller can report capture honesty.
 struct transcode_result
 {
-    bool          ok{false};
-    std::size_t   schemas{0};
-    std::size_t   channels{0};
-    std::size_t   messages{0};
-    std::size_t   recovered{0};
-    bool          trailing_partial_dropped{false};
-    bool          corruption_skipped{false};
-    std::string   error;
+    bool ok{false};
+    std::size_t schemas{0};
+    std::size_t channels{0};
+    std::size_t messages{0};
+    std::size_t recovered{0};
+    bool trailing_partial_dropped{false};
+    bool corruption_skipped{false};
+    std::string error;
 };
 
 // Read a flat plexus capture stream and write an MCAP container to out_mcap.
@@ -33,8 +33,7 @@ struct transcode_result
 // own channel. Sample payload bytes are laid into each Message verbatim — no plexus codec
 // runs (serializer-agnostic). flat_stream must stay alive for the duration of the call
 // (the reader borrows it).
-transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
-                              const std::filesystem::path &out_mcap);
+transcode_result flat_to_mcap(std::span<const std::byte> flat_stream, const std::filesystem::path &out_mcap);
 
 // The schema-decorating overload. A sample topic's channel takes its schema from, in order:
 // the consumer provider keyed on type_id (the escape hatch, wins on conflict); else the
@@ -42,10 +41,7 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
 // preamble-declared schema; else the opaque schemaId-0 path. Either callable may be empty,
 // and two empty callables reproduce the 2-arg behavior exactly. The translator is the only
 // seam that reads a hint vocabulary — this transcode names none.
-transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
-                              const std::filesystem::path &out_mcap,
-                              schema_provider              provider,
-                              hint_translator              translate_hint = {});
+transcode_result flat_to_mcap(std::span<const std::byte> flat_stream, const std::filesystem::path &out_mcap, schema_provider provider, hint_translator translate_hint = {});
 
 }
 

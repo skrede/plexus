@@ -5,29 +5,29 @@
 
 #ifdef PLEXUS_ENABLE_SHM_BACKEND
 
-#include "plexus/node.h"
-#include "plexus/publisher.h"
-#include "plexus/subscriber.h"
-#include "plexus/node_options.h"
+    #include "plexus/node.h"
+    #include "plexus/publisher.h"
+    #include "plexus/subscriber.h"
+    #include "plexus/node_options.h"
 
-#include "plexus/asio/asio_transport.h"
-#include "plexus/asio/unix_transport.h"
-#include "plexus/asio/detail/same_host_shm_config.h"
+    #include "plexus/asio/asio_transport.h"
+    #include "plexus/asio/unix_transport.h"
+    #include "plexus/asio/detail/same_host_shm_config.h"
 
-#include "plexus/native/posix_shm_region_broker.h"
+    #include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/discovery/static_discovery.h"
+    #include "plexus/discovery/static_discovery.h"
 
-#include <asio/io_context.hpp>
+    #include <asio/io_context.hpp>
 
-#include <span>
-#include <string>
-#include <vector>
-#include <cstddef>
-#include <cstdint>
-#include <algorithm>
+    #include <span>
+    #include <string>
+    #include <vector>
+    #include <cstddef>
+    #include <cstdint>
+    #include <algorithm>
 
-#include <unistd.h>
+    #include <unistd.h>
 
 namespace self_loopback {
 
@@ -64,22 +64,21 @@ void pump_until(::asio::io_context &io, Pred done, std::chrono::milliseconds bud
 
 inline cell shm_bytes_point(std::size_t payload, std::uint64_t messages)
 {
-    ::asio::io_context                      io;
+    ::asio::io_context io;
     plexus::native::posix_shm_region_broker broker;
-    plexus::discovery::static_discovery     disc{{}};
+    plexus::discovery::static_discovery disc{{}};
     pasio::shm::shm_member shm{pasio::shm::make_shm_member(io, broker, plexus::io::reliability::reliable, plexus::io::congestion::block, shm_region_ns(payload))};
     pasio::unix_transport local{io};
     pasio::asio_transport remote{io};
-    shm_node              node{io, disc, shm_id(), shm, local, remote, plexus::node_options{}};
+    shm_node node{io, disc, shm_id(), shm, local, remote, plexus::node_options{}};
 
-    std::vector<double>  samples;
-    plexus::subscriber<> sub{node, "bench/shm", [&](std::span<const std::byte> b)
-                             { samples.push_back(static_cast<double>(now_count() - read_stamp(b)) / 1000.0); }};
-    plexus::publisher<>  pub{node, "bench/shm"};
+    std::vector<double> samples;
+    plexus::subscriber<> sub{node, "bench/shm", [&](std::span<const std::byte> b) { samples.push_back(static_cast<double>(now_count() - read_stamp(b)) / 1000.0); }};
+    plexus::publisher<> pub{node, "bench/shm"};
     pump_until(io, [] { return false; }, std::chrono::milliseconds{50});
 
     std::vector<std::byte> frame(std::max<std::size_t>(payload, sizeof(std::uint64_t)));
-    const auto             t0 = clock_type::now();
+    const auto t0 = clock_type::now();
     for(std::uint64_t i = 0; i < messages; ++i)
     {
         const auto target = samples.size() + 1;

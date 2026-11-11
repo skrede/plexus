@@ -16,7 +16,7 @@ namespace {
 using namespace relay_bench;
 
 constexpr std::uint64_t g_messages = 2000;
-constexpr std::size_t   g_runs     = 5;
+constexpr std::size_t g_runs       = 5;
 
 template<typename Line>
 cell sweep_point(std::size_t payload)

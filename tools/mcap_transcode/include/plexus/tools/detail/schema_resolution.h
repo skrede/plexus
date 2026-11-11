@@ -41,9 +41,7 @@ struct declared_label
 // the endpoint/qos_change records that carry both topic_hash and an optional type_id.
 // At HEAD the preamble schema is empty and samples carry no type_id, so the endpoint
 // fqn is the load-bearing name source; the schema table is consulted when populated.
-inline std::unordered_map<std::uint64_t, std::string>
-build_topic_names(const rec::stream_definitions          &defs,
-                  const std::vector<rec::decoded_record> &records)
+inline std::unordered_map<std::uint64_t, std::string> build_topic_names(const rec::stream_definitions &defs, const std::vector<rec::decoded_record> &records)
 {
     std::unordered_map<std::uint64_t, std::string> by_type_id;
     for(const auto &entry : defs.schema)
@@ -52,8 +50,7 @@ build_topic_names(const rec::stream_definitions          &defs,
     std::unordered_map<std::uint64_t, std::string> by_topic;
     for(const auto &r : records)
     {
-        const bool is_decl = r.category == rec::record_category::endpoint ||
-                             r.category == rec::record_category::qos_change;
+        const bool is_decl = r.category == rec::record_category::endpoint || r.category == rec::record_category::qos_change;
         if(!is_decl)
             continue;
         std::string name;
@@ -71,8 +68,7 @@ build_topic_names(const rec::stream_definitions          &defs,
     return by_topic;
 }
 
-inline std::unordered_map<std::uint64_t, declared_label>
-build_declared_labels(const rec::stream_definitions &defs)
+inline std::unordered_map<std::uint64_t, declared_label> build_declared_labels(const rec::stream_definitions &defs)
 {
     std::unordered_map<std::uint64_t, declared_label> by_type_id;
     for(const auto &e : defs.schema)
@@ -80,18 +76,15 @@ build_declared_labels(const rec::stream_definitions &defs)
         if(e.message_encoding.empty())
             continue;
         by_type_id.emplace(
-            e.type_id,
-            declared_label{e.message_encoding, e.schema_name, e.schema_encoding,
-                           std::string{reinterpret_cast<const char *>(e.schema_data.data()),
-                                       e.schema_data.size()}});
+                e.type_id,
+                declared_label{e.message_encoding, e.schema_name, e.schema_encoding, std::string{reinterpret_cast<const char *>(e.schema_data.data()), e.schema_data.size()}});
     }
     return by_type_id;
 }
 
 // The type_id -> schema_hint join the endpoint records carry (schema_hint rides the
 // per-publisher endpoint record). A zero hint is the no-hint sentinel and never recorded.
-inline std::unordered_map<std::uint64_t, std::uint64_t>
-build_schema_hints(const std::vector<rec::decoded_record> &records)
+inline std::unordered_map<std::uint64_t, std::uint64_t> build_schema_hints(const std::vector<rec::decoded_record> &records)
 {
     std::unordered_map<std::uint64_t, std::uint64_t> by_type_id;
     for(const auto &r : records)

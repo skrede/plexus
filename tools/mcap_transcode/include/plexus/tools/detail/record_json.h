@@ -27,23 +27,21 @@ constexpr const char *k_wire_encoding    = "plexus/wire-frame";
 constexpr const char *k_jsonschema_encoding = "jsonschema";
 
 constexpr const char *k_event_schema_name = "plexus.event";
-constexpr const char *k_event_schema =
-    R"({"type":"object","title":"plexus.event","properties":{)"
-    R"("category":{"type":"integer"},"capture_ts":{"type":"integer"},)"
-    R"("topic_hash":{"type":"integer"},"edge":{"type":"integer"},)"
-    R"("verdict":{"type":"integer"},"count":{"type":"integer"},)"
-    R"("peer":{"type":"string"},"fqn":{"type":"string"},"type_id":{"type":"integer"}}})";
+constexpr const char *k_event_schema      = R"({"type":"object","title":"plexus.event","properties":{)"
+                                            R"("category":{"type":"integer"},"capture_ts":{"type":"integer"},)"
+                                            R"("topic_hash":{"type":"integer"},"edge":{"type":"integer"},)"
+                                            R"("verdict":{"type":"integer"},"count":{"type":"integer"},)"
+                                            R"("peer":{"type":"string"},"fqn":{"type":"string"},"type_id":{"type":"integer"}}})";
 
 constexpr const char *k_wire_meta_schema_name = "plexus.wire.meta";
-constexpr const char *k_wire_meta_schema =
-    R"({"type":"object","title":"plexus.wire.meta","properties":{)"
-    R"("capture_ts":{"type":"integer"},"direction":{"type":"integer"},)"
-    R"("wire_seq":{"type":"integer"},"peer":{"type":"string"}}})";
+constexpr const char *k_wire_meta_schema      = R"({"type":"object","title":"plexus.wire.meta","properties":{)"
+                                                R"("capture_ts":{"type":"integer"},"direction":{"type":"integer"},)"
+                                                R"("wire_seq":{"type":"integer"},"peer":{"type":"string"}}})";
 
 inline std::string hex16(std::uint64_t v)
 {
     static constexpr char digits[] = "0123456789abcdef";
-    std::string           s(16, '0');
+    std::string s(16, '0');
     for(int i = 0; i < 16; ++i)
         s[15 - i] = digits[(v >> (4 * i)) & 0xf];
     return s;
@@ -58,20 +56,27 @@ inline const char *events_topic_for(rec::record_category cat)
 {
     switch(cat)
     {
-        case rec::record_category::drop:        return "plexus/events/drop";
-        case rec::record_category::qos_change:  return "plexus/events/qos";
-        case rec::record_category::participant: return "plexus/events/participant";
-        case rec::record_category::endpoint:    return "plexus/events/endpoint";
-        case rec::record_category::security:    return "plexus/events/security";
-        case rec::record_category::dropout:     return "plexus/events/dropout";
-        default:                                return "plexus/events/other";
+        case rec::record_category::drop:
+            return "plexus/events/drop";
+        case rec::record_category::qos_change:
+            return "plexus/events/qos";
+        case rec::record_category::participant:
+            return "plexus/events/participant";
+        case rec::record_category::endpoint:
+            return "plexus/events/endpoint";
+        case rec::record_category::security:
+            return "plexus/events/security";
+        case rec::record_category::dropout:
+            return "plexus/events/dropout";
+        default:
+            return "plexus/events/other";
     }
 }
 
 inline std::string peer_hex(const plexus::node_id &peer)
 {
     static constexpr char digits[] = "0123456789abcdef";
-    std::string           s;
+    std::string s;
     s.reserve(peer.size() * 2);
     for(std::byte b : peer)
     {

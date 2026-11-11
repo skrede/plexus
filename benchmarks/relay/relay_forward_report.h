@@ -18,9 +18,9 @@ inline const std::array<std::size_t, 5> g_payloads = {8, 64, 1024, 4096, 16384};
 
 struct cell
 {
-    double        per_msg_ns_med{};
-    double        per_msg_ns_min{};
-    double        throughput_mps{};
+    double per_msg_ns_med{};
+    double per_msg_ns_min{};
+    double throughput_mps{};
     std::uint64_t delivered{};
     std::uint64_t expected{};
 };
@@ -65,12 +65,12 @@ inline void emit(std::ostream &out, const std::vector<cell> &direct, const std::
     char line[256];
     for(std::size_t i = 0; i < g_payloads.size(); ++i)
     {
-        const double d       = direct[i].per_msg_ns_med;
-        const double r       = relayed[i].per_msg_ns_med;
-        const double hop     = r - d;
-        const double pct     = d > 0.0 ? 100.0 * hop / d : 0.0;
-        std::snprintf(line, sizeof line, "  %7zu   %10.0f   %11.0f   %12.0f   %7.1f%%   %11.0f   %12.0f\n",
-                      g_payloads[i], d, r, hop, pct, direct[i].throughput_mps, relayed[i].throughput_mps);
+        const double d   = direct[i].per_msg_ns_med;
+        const double r   = relayed[i].per_msg_ns_med;
+        const double hop = r - d;
+        const double pct = d > 0.0 ? 100.0 * hop / d : 0.0;
+        std::snprintf(line, sizeof line, "  %7zu   %10.0f   %11.0f   %12.0f   %7.1f%%   %11.0f   %12.0f\n", g_payloads[i], d, r, hop, pct, direct[i].throughput_mps,
+                      relayed[i].throughput_mps);
         out << line;
     }
     out << "\n";

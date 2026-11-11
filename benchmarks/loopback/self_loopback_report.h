@@ -22,11 +22,11 @@ inline const std::array<std::size_t, 4> g_payloads = {8, 64, 1024, 4096};
 // (carrier, payload) point, aggregated over the repeated runs of that point.
 struct cell
 {
-    double        p50_us{};
-    double        p99_us{};
-    double        throughput_mps{};
+    double p50_us{};
+    double p99_us{};
+    double throughput_mps{};
     std::uint64_t delivered{};
-    bool          ran{};
+    bool ran{};
 };
 
 inline std::uint64_t now_count()

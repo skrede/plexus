@@ -20,16 +20,12 @@ namespace plexus::tools {
 
 namespace rec = plexus::io::recording;
 
-transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
-                              const std::filesystem::path &out_mcap)
+transcode_result flat_to_mcap(std::span<const std::byte> flat_stream, const std::filesystem::path &out_mcap)
 {
     return flat_to_mcap(flat_stream, out_mcap, schema_provider{}, hint_translator{});
 }
 
-transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
-                              const std::filesystem::path &out_mcap,
-                              schema_provider              provider,
-                              hint_translator              translate_hint)
+transcode_result flat_to_mcap(std::span<const std::byte> flat_stream, const std::filesystem::path &out_mcap, schema_provider provider, hint_translator translate_hint)
 {
     transcode_result out;
 
@@ -59,8 +55,7 @@ transcode_result flat_to_mcap(std::span<const std::byte>   flat_stream,
     const auto topic_names     = detail::build_topic_names(input->defs, input->records);
     const auto declared_labels = detail::build_declared_labels(input->defs);
     const auto schema_hints    = detail::build_schema_hints(input->records);
-    detail::mcap_emitter emitter{writer, out, topic_names, declared_labels, schema_hints,
-                                 provider, translate_hint};
+    detail::mcap_emitter emitter{writer, out, topic_names, declared_labels, schema_hints, provider, translate_hint};
     for(const auto &r : input->records)
         detail::emit_record(emitter, r);
 

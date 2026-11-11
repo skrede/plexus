@@ -26,27 +26,31 @@ namespace plexus::tools::detail {
 class mcap_emitter
 {
 public:
-    mcap_emitter(mcap::McapWriter &writer, transcode_result &result,
-                 const std::unordered_map<std::uint64_t, std::string>        &names,
-                 const std::unordered_map<std::uint64_t, declared_label>     &labels,
-                 const std::unordered_map<std::uint64_t, std::uint64_t>      &hints,
-                 schema_provider &provider, hint_translator &translate)
-        : m_writer(writer), m_result(result), m_names(names), m_labels(labels),
-          m_hints(hints), m_provider(provider), m_translate(translate) {}
+    mcap_emitter(mcap::McapWriter &writer, transcode_result &result, const std::unordered_map<std::uint64_t, std::string> &names,
+                 const std::unordered_map<std::uint64_t, declared_label> &labels, const std::unordered_map<std::uint64_t, std::uint64_t> &hints, schema_provider &provider,
+                 hint_translator &translate)
+            : m_writer(writer)
+            , m_result(result)
+            , m_names(names)
+            , m_labels(labels)
+            , m_hints(hints)
+            , m_provider(provider)
+            , m_translate(translate)
+    {
+    }
 
     void emit_sample(const rec::decoded_record &r)
     {
         auto it = m_sample_channels.find(r.topic_hash);
         if(it == m_sample_channels.end())
         {
-            const auto        n  = m_names.find(r.topic_hash);
-            const std::string nm = n == m_names.end() ? std::string{} : n->second;
+            const auto n            = m_names.find(r.topic_hash);
+            const std::string nm    = n == m_names.end() ? std::string{} : n->second;
             const std::string topic = topic_for_hash(r.topic_hash, nm);
-            const auto        cid   = open_sample_channel(topic, r);
-            it = m_sample_channels.emplace(r.topic_hash, cid).first;
+            const auto cid          = open_sample_channel(topic, r);
+            it                      = m_sample_channels.emplace(r.topic_hash, cid).first;
         }
-        write(it->second, static_cast<std::uint32_t>(r.publication_sequence),
-              r.capture_ts, r.source_timestamp, r.payload);
+        write(it->second, static_cast<std::uint32_t>(r.publication_sequence), r.capture_ts, r.source_timestamp, r.payload);
     }
 
     void emit_wire(const rec::decoded_record &r)
@@ -54,18 +58,14 @@ public:
         if(!m_wire_open)
         {
             m_wire_channel      = open_channel("plexus/wire", k_wire_encoding, {});
-            m_wire_meta_channel = open_channel("plexus/wire/meta", k_events_encoding,
-                                               {k_wire_meta_schema_name, k_jsonschema_encoding,
-                                                k_wire_meta_schema});
+            m_wire_meta_channel = open_channel("plexus/wire/meta", k_events_encoding, {k_wire_meta_schema_name, k_jsonschema_encoding, k_wire_meta_schema});
             m_wire_open         = true;
         }
         // The framed bytes are the message data (the fidelity capture); the join keys
         // (dir/seq/peer) ride a companion message on the meta channel so the cross-node
         // loss join survives the round-trip without decoding the bytes.
-        write(m_wire_channel, static_cast<std::uint32_t>(r.wire_seq),
-              r.capture_ts, r.capture_ts, r.payload);
-        write(m_wire_meta_channel, static_cast<std::uint32_t>(r.wire_seq),
-              r.capture_ts, r.capture_ts, as_bytes(wire_json(r)));
+        write(m_wire_channel, static_cast<std::uint32_t>(r.wire_seq), r.capture_ts, r.capture_ts, r.payload);
+        write(m_wire_meta_channel, static_cast<std::uint32_t>(r.wire_seq), r.capture_ts, r.capture_ts, as_bytes(wire_json(r)));
     }
 
     void emit_event(const rec::decoded_record &r)
@@ -73,10 +73,8 @@ public:
         auto it = m_event_channels.find(r.category);
         if(it == m_event_channels.end())
         {
-            const auto cid = open_channel(events_topic_for(r.category), k_events_encoding,
-                                          {k_event_schema_name, k_jsonschema_encoding,
-                                           k_event_schema});
-            it = m_event_channels.emplace(r.category, cid).first;
+            const auto cid = open_channel(events_topic_for(r.category), k_events_encoding, {k_event_schema_name, k_jsonschema_encoding, k_event_schema});
+            it             = m_event_channels.emplace(r.category, cid).first;
         }
         write(it->second, 0, r.capture_ts, r.capture_ts, as_bytes(events_json(r)));
     }
@@ -89,8 +87,7 @@ private:
     {
         if(r.type_id)
             if(const auto s = resolve_schema(*r.type_id))
-                return open_channel(topic, s->message_encoding,
-                                    {s->schema_name, s->schema_encoding, s->schema_data});
+                return open_channel(topic, s->message_encoding, {s->schema_name, s->schema_encoding, s->schema_data});
         return open_channel(topic, k_payload_encoding, {});
     }
 
@@ -118,8 +115,7 @@ private:
         return std::nullopt;
     }
 
-    mcap::ChannelId open_channel(std::string_view topic, std::string_view encoding,
-                                 const channel_schema &schema)
+    mcap::ChannelId open_channel(std::string_view topic, std::string_view encoding, const channel_schema &schema)
     {
         mcap::SchemaId schema_id = 0;
         if(!schema.encoding.empty())
@@ -135,8 +131,7 @@ private:
         return channel.id;
     }
 
-    void write(mcap::ChannelId channel, std::uint32_t seq, std::uint64_t log_time,
-               std::uint64_t publish_time, std::span<const std::byte> bytes)
+    void write(mcap::ChannelId channel, std::uint32_t seq, std::uint64_t log_time, std::uint64_t publish_time, std::span<const std::byte> bytes)
     {
         m_scratch.assign(bytes.begin(), bytes.end());
         mcap::Message msg;
@@ -152,33 +147,40 @@ private:
 
     mcap::McapWriter &m_writer;
     transcode_result &m_result;
-    const std::unordered_map<std::uint64_t, std::string>    &m_names;
+    const std::unordered_map<std::uint64_t, std::string> &m_names;
     const std::unordered_map<std::uint64_t, declared_label> &m_labels;
-    const std::unordered_map<std::uint64_t, std::uint64_t>  &m_hints;
+    const std::unordered_map<std::uint64_t, std::uint64_t> &m_hints;
     schema_provider &m_provider;
     hint_translator &m_translate;
 
     std::unordered_map<std::uint64_t, mcap::ChannelId> m_sample_channels;
-    std::map<rec::record_category, mcap::ChannelId>    m_event_channels;
-    std::vector<std::byte>                             m_scratch;
-    mcap::ChannelId                                    m_wire_channel{0};
-    mcap::ChannelId                                    m_wire_meta_channel{0};
-    bool                                               m_wire_open{false};
+    std::map<rec::record_category, mcap::ChannelId> m_event_channels;
+    std::vector<std::byte> m_scratch;
+    mcap::ChannelId m_wire_channel{0};
+    mcap::ChannelId m_wire_meta_channel{0};
+    bool m_wire_open{false};
 };
 
 inline void emit_record(mcap_emitter &emitter, const rec::decoded_record &r)
 {
     switch(r.category)
     {
-        case rec::record_category::sample:     emitter.emit_sample(r); break;
-        case rec::record_category::wire_frame: emitter.emit_wire(r); break;
+        case rec::record_category::sample:
+            emitter.emit_sample(r);
+            break;
+        case rec::record_category::wire_frame:
+            emitter.emit_wire(r);
+            break;
         case rec::record_category::drop:
         case rec::record_category::qos_change:
         case rec::record_category::participant:
         case rec::record_category::endpoint:
         case rec::record_category::security:
-        case rec::record_category::dropout:    emitter.emit_event(r); break;
-        default:                               break;
+        case rec::record_category::dropout:
+            emitter.emit_event(r);
+            break;
+        default:
+            break;
     }
 }
 

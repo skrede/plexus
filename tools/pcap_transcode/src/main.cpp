@@ -32,13 +32,12 @@ int main(int argc, char **argv)
 {
     if(argc != 3)
     {
-        std::cerr << "usage: " << (argc > 0 ? argv[0] : "pcap_transcode")
-                  << " <capture.plxr> <out.pcapng>\n";
+        std::cerr << "usage: " << (argc > 0 ? argv[0] : "pcap_transcode") << " <capture.plxr> <out.pcapng>\n";
         return 2;
     }
 
-    bool       read_ok = false;
-    const auto flat    = slurp(argv[1], read_ok);
+    bool read_ok    = false;
+    const auto flat = slurp(argv[1], read_ok);
     if(!read_ok)
     {
         std::cerr << "error: cannot read flat capture: " << argv[1] << '\n';
@@ -52,8 +51,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    std::cout << "wrote " << argv[2] << ": " << result.packets << " packets; recovered "
-              << result.recovered << " records";
+    std::cout << "wrote " << argv[2] << ": " << result.packets << " packets; recovered " << result.recovered << " records";
     if(result.trailing_partial_dropped)
         std::cout << ", trailing partial dropped";
     if(result.corruption_skipped)

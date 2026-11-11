@@ -72,7 +72,12 @@ public:
             , m_drained(0)
             , m_drain_time()
     {
-        m_notifier.arm(0, [this] { m_drain_time = clock_type::now(); ++m_drained; });
+        m_notifier.arm(0,
+                       [this]
+                       {
+                           m_drain_time = clock_type::now();
+                           ++m_drained;
+                       });
     }
 
     bool measure(std::size_t warmup, std::size_t iters, std::vector<double> &out)
@@ -103,11 +108,11 @@ private:
         return true;
     }
 
-    ::asio::io_context              m_io;
+    ::asio::io_context m_io;
     ::plexus::shm::control_header_t m_header;
-    Notifier                        m_notifier;
-    std::uint64_t                   m_drained;
-    clock_type::time_point          m_drain_time;
+    Notifier m_notifier;
+    std::uint64_t m_drained;
+    clock_type::time_point m_drain_time;
 };
 
 struct run_stats
@@ -115,7 +120,7 @@ struct run_stats
     std::vector<double> per_run_p50;
     std::vector<double> per_run_p99;
     std::vector<double> all_samples;
-    bool                ran{false};
+    bool ran{false};
 };
 
 template<typename Notifier>
@@ -143,8 +148,7 @@ run_stats run_variant()
 void emit(std::ostream &out, const run_stats &r)
 {
     out << "# macOS shm notifier wake-latency (per-waiter semaphore, single process)\n\n";
-    out << "Host: Apple Silicon arm64, AppleClang all-options build. " << k_runs << " runs x "
-        << k_iters << " timed iterations (" << k_warmup << " warmup discarded).\n";
+    out << "Host: Apple Silicon arm64, AppleClang all-options build. " << k_runs << " runs x " << k_iters << " timed iterations (" << k_warmup << " warmup discarded).\n";
     out << "Latency is end-to-end signal() -> drain (steady_clock): the parked waiter's own semaphore ->\n"
         << "waiter wakeup -> self-pipe doorbell -> reactor drain -> posted drain.\n\n";
     if(!r.ran)
@@ -162,8 +166,7 @@ void emit(std::ostream &out, const run_stats &r)
     std::vector<double> all = r.all_samples;
     std::sort(all.begin(), all.end());
     char agg[128];
-    std::snprintf(agg, sizeof agg, "\naggregate p50 = %.3f us, p99 = %.3f us (n=%zu)\n",
-                  percentile(all, 0.50), percentile(all, 0.99), all.size());
+    std::snprintf(agg, sizeof agg, "\naggregate p50 = %.3f us, p99 = %.3f us (n=%zu)\n", percentile(all, 0.50), percentile(all, 0.99), all.size());
     out << agg;
 }
 

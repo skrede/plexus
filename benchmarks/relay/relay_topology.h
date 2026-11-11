@@ -27,13 +27,12 @@ using bench_clock = std::chrono::steady_clock;
 using policy_type    = plexus::inproc::inproc_policy;
 using transport_type = plexus::inproc::inproc_transport<>;
 using engine         = plexus::io::routing_engine<policy_type, transport_type>;
-using relay_engine   = plexus::io::routing_engine<policy_type, transport_type, bench_clock, plexus::io::std_map_peer_storage,
-                                                  plexus::graph::std_map_topic_storage, plexus::io::default_liveliness_storage,
-                                                  plexus::graph::vector_graph_change_log, plexus::io::null_peer_report_emitter,
+using relay_engine   = plexus::io::routing_engine<policy_type, transport_type, bench_clock, plexus::io::std_map_peer_storage, plexus::graph::std_map_topic_storage,
+                                                  plexus::io::default_liveliness_storage, plexus::graph::vector_graph_change_log, plexus::io::null_peer_report_emitter,
                                                   plexus::io::forward_splice<policy_type>>;
 
-constexpr auto          k_timeout = std::chrono::hours(1);
-constexpr std::uint64_t k_seed    = 0xC0FFEEu;
+constexpr auto k_timeout       = std::chrono::hours(1);
+constexpr std::uint64_t k_seed = 0xC0FFEEu;
 
 struct sample
 {
@@ -50,8 +49,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 
 inline plexus::io::handshake_fsm_config make_cfg(std::uint8_t seed)
 {
-    return plexus::io::handshake_fsm_config{
-        .self_id = make_id(seed), .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
+    return plexus::io::handshake_fsm_config{.self_id = make_id(seed), .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
 inline plexus::io::reconnect_config forever_cfg()
@@ -80,7 +78,7 @@ template<typename Line>
 sample time_publishes(Line &line, const std::string &fqn, std::size_t payload, std::uint64_t messages)
 {
     const std::string body(payload, 'x');
-    line.got  = 0;
+    line.got      = 0;
     const auto t0 = bench_clock::now();
     for(std::uint64_t i = 0; i < messages; ++i)
     {
@@ -93,17 +91,17 @@ sample time_publishes(Line &line, const std::string &fqn, std::size_t payload, s
 
 struct direct_line
 {
-    plexus::inproc::inproc_bus<>      bus;
+    plexus::inproc::inproc_bus<> bus;
     plexus::inproc::inproc_executor<> ex{bus};
-    transport_type                    t_pub{ex, bus};
-    transport_type                    t_sub{ex, bus};
-    plexus::log::null_logger          sink;
-    engine                            pub;
-    engine                            sub;
-    plexus::node_id                   id_pub{make_id(0xB0)};
-    plexus::io::endpoint              ep_pub{"inproc", "relay-bench-direct-pub"};
-    plexus::io::endpoint              ep_sub{"inproc", "relay-bench-direct-sub"};
-    std::uint64_t                     got{};
+    transport_type t_pub{ex, bus};
+    transport_type t_sub{ex, bus};
+    plexus::log::null_logger sink;
+    engine pub;
+    engine sub;
+    plexus::node_id id_pub{make_id(0xB0)};
+    plexus::io::endpoint ep_pub{"inproc", "relay-bench-direct-pub"};
+    plexus::io::endpoint ep_sub{"inproc", "relay-bench-direct-sub"};
+    std::uint64_t got{};
 
     direct_line()
             : pub(t_pub, ex, make_cfg(0xB0), k_timeout, forever_cfg(), k_seed, sink)
@@ -127,26 +125,25 @@ struct direct_line
 
 struct relay_line
 {
-    plexus::inproc::inproc_bus<>      bus;
+    plexus::inproc::inproc_bus<> bus;
     plexus::inproc::inproc_executor<> ex{bus};
-    transport_type                    t_pub{ex, bus};
-    transport_type                    t_relay{ex, bus};
-    transport_type                    t_sub{ex, bus};
-    plexus::log::null_logger          sink;
-    engine                            pub;
-    relay_engine                      relay;
-    engine                            sub;
-    plexus::node_id                   id_pub{make_id(0xB0)};
-    plexus::node_id                   id_relay{make_id(0x2A)};
-    plexus::io::endpoint              ep_pub{"inproc", "relay-bench-pub"};
-    plexus::io::endpoint              ep_relay{"inproc", "relay-bench-relay"};
-    plexus::io::endpoint              ep_sub{"inproc", "relay-bench-sub"};
-    std::uint64_t                     got{};
+    transport_type t_pub{ex, bus};
+    transport_type t_relay{ex, bus};
+    transport_type t_sub{ex, bus};
+    plexus::log::null_logger sink;
+    engine pub;
+    relay_engine relay;
+    engine sub;
+    plexus::node_id id_pub{make_id(0xB0)};
+    plexus::node_id id_relay{make_id(0x2A)};
+    plexus::io::endpoint ep_pub{"inproc", "relay-bench-pub"};
+    plexus::io::endpoint ep_relay{"inproc", "relay-bench-relay"};
+    plexus::io::endpoint ep_sub{"inproc", "relay-bench-sub"};
+    std::uint64_t got{};
 
     relay_line()
             : pub(t_pub, ex, make_cfg(0xB0), k_timeout, forever_cfg(), k_seed, sink)
-            , relay(t_relay, ex, make_cfg(0x2A), k_timeout, forever_cfg(), k_seed, sink, false,
-                    plexus::io::global_default_max_message_bytes, {}, {}, {}, bench_forward_opts())
+            , relay(t_relay, ex, make_cfg(0x2A), k_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, {}, {}, {}, bench_forward_opts())
             , sub(t_sub, ex, make_cfg(0x5B), k_timeout, forever_cfg(), k_seed, sink)
     {
         sub.on_message_route([this](std::string_view, std::span<const std::byte>, const plexus::io::message_info &) { ++got; });

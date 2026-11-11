@@ -71,7 +71,10 @@ struct stamped_codec
         return {};
     }
 
-    plexus::type_identity type_info() const { return {0x70105A11u, "stamped"}; }
+    plexus::type_identity type_info() const
+    {
+        return {0x70105A11u, "stamped"};
+    }
 };
 
 inline plexus::node_id intra_id()
@@ -85,17 +88,17 @@ inline plexus::node_id intra_id()
 // one-way delta. The codec's encode MUST stay at zero (the witnessed zero-copy proof).
 inline cell intra_typed_point(std::size_t payload, std::uint64_t messages)
 {
-    plexus::inproc::inproc_bus<>            bus;
-    plexus::inproc::inproc_executor<>       ex{bus};
-    plexus::discovery::static_discovery     disc{{}};
-    plexus::loopback_host<intra_policy>     host{ex, disc, intra_id()};
+    plexus::inproc::inproc_bus<> bus;
+    plexus::inproc::inproc_executor<> ex{bus};
+    plexus::discovery::static_discovery disc{{}};
+    plexus::loopback_host<intra_policy> host{ex, disc, intra_id()};
 
-    stamped_codec       codec;
-    auto                encodes = codec.encodes;
+    stamped_codec codec;
+    auto encodes = codec.encodes;
     std::vector<double> samples;
-    plexus::subscriber<stamped_codec> sub{host.node(), "bench/typed", [&](const stamped &v, const plexus::io::message_info &)
-                                          { samples.push_back(static_cast<double>(now_count() - v.at) / 1000.0); }};
-    plexus::publisher<stamped_codec>  pub{host.node(), "bench/typed", plexus::typed_publisher_options{}, codec};
+    plexus::subscriber<stamped_codec> sub{host.node(), "bench/typed",
+                                          [&](const stamped &v, const plexus::io::message_info &) { samples.push_back(static_cast<double>(now_count() - v.at) / 1000.0); }};
+    plexus::publisher<stamped_codec> pub{host.node(), "bench/typed", plexus::typed_publisher_options{}, codec};
     ex.drain();
 
     const auto t0 = clock_type::now();
@@ -121,19 +124,18 @@ inline cell intra_typed_point(std::size_t payload, std::uint64_t messages)
 // self-route. Sweeps the payload (a stamp is written into the leading bytes of each frame).
 inline cell intra_bytes_point(std::size_t payload, std::uint64_t messages)
 {
-    plexus::inproc::inproc_bus<>        bus;
-    plexus::inproc::inproc_executor<>   ex{bus};
+    plexus::inproc::inproc_bus<> bus;
+    plexus::inproc::inproc_executor<> ex{bus};
     plexus::discovery::static_discovery disc{{}};
     plexus::loopback_host<intra_policy> host{ex, disc, intra_id()};
 
-    std::vector<double>  samples;
-    plexus::subscriber<> sub{host.node(), "bench/bytes", [&](std::span<const std::byte> b)
-                             { samples.push_back(static_cast<double>(now_count() - read_stamp(b)) / 1000.0); }};
-    plexus::publisher<>  pub{host.node(), "bench/bytes"};
+    std::vector<double> samples;
+    plexus::subscriber<> sub{host.node(), "bench/bytes", [&](std::span<const std::byte> b) { samples.push_back(static_cast<double>(now_count() - read_stamp(b)) / 1000.0); }};
+    plexus::publisher<> pub{host.node(), "bench/bytes"};
     ex.drain();
 
     std::vector<std::byte> frame(std::max<std::size_t>(payload, sizeof(std::uint64_t)));
-    const auto             t0 = clock_type::now();
+    const auto t0 = clock_type::now();
     for(std::uint64_t i = 0; i < messages; ++i)
     {
         write_stamp(frame, now_count());
