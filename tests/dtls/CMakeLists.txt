@@ -41,3 +41,7 @@ plexus_add_catch_test(test_dtls_transport_ceiling
 plexus_add_catch_test(test_dtls_retire_drain
     SOURCES test_dtls_retire_drain.cpp $<TARGET_OBJECTS:plexus-crypto>
     LINKS plexus::crypto)
+
+plexus_add_catch_test(test_dtls_retransmit_ceiling
+    SOURCES test_dtls_retransmit_ceiling.cpp $<TARGET_OBJECTS:plexus-crypto>
+    LINKS plexus::crypto)

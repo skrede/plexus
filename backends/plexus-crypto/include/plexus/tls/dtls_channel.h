@@ -76,6 +76,9 @@ public:
     // fragment while each fragment still rides one DTLS record bounded by this MTU.
     static constexpr std::size_t default_record_mtu = datagram::mtu_budget{}.max_payload;
 
+    // 60 s is RFC 6347's and OpenSSL's own cap, so the default schedule is OpenSSL's.
+    static constexpr std::chrono::microseconds default_retransmit_ceiling{std::chrono::seconds{60}};
+
     // Build over the shared udp_server: own NO socket, share the credential's SSL_CTX (up_ref'd),
     // publish the per-instance peer-addr + the transport's borrowed cookie state into the SSL
     // ex_data, and set accept/connect state per role. max_message_bytes is the per-MESSAGE ceiling
@@ -83,7 +86,8 @@ public:
     // memory cap; reassembly_timeout the per-message reclaim window. All required-WITH-default.
     dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server, ::asio::ip::udp::endpoint dest, const tls_credential &cred, io::security::cookie_secret &cookie_state, role r,
                  std::size_t max_payload = default_max_payload, std::size_t record_mtu = default_record_mtu, std::size_t max_message_bytes = io::global_default_max_message_bytes,
-                 std::size_t reassembly_budget = io::reassembly_memory_budget, std::chrono::milliseconds reassembly_timeout = reassembler_type::config{}.per_message_timeout);
+                 std::size_t reassembly_budget = io::reassembly_memory_budget, std::chrono::milliseconds reassembly_timeout = reassembler_type::config{}.per_message_timeout,
+                 std::chrono::microseconds retransmit_ceiling = default_retransmit_ceiling);
 
     dtls_channel(const dtls_channel &)            = delete;
     dtls_channel &operator=(const dtls_channel &) = delete;
@@ -215,6 +219,7 @@ private:
     std::size_t m_max_message_bytes;
     std::size_t m_reassembly_budget;
     std::chrono::milliseconds m_reassembly_timeout;
+    std::chrono::microseconds m_retransmit_ceiling;
     std::uint64_t m_scheduler_key; // stable per-construction egress key
 
     detail::shared_ssl_ctx m_ssl_ctx; // up_ref'd shared SSL_CTX

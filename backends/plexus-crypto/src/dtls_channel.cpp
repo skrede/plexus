@@ -1,6 +1,7 @@
 #include "plexus/tls/dtls_channel.h"
 
 #include "plexus/tls/detail/dtls_identity.h"
+#include "plexus/tls/detail/dtls_retransmit.h"
 
 #include "plexus/asio/detail/udp_channel_lifecycle.h"
 
@@ -34,7 +35,7 @@ int to_int(std::size_t v) noexcept
 // NOLINTNEXTLINE(readability-function-size)
 dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server, ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                            io::security::cookie_secret &cookie_state, role r, std::size_t max_payload, std::size_t record_mtu, std::size_t max_message_bytes,
-                           std::size_t reassembly_budget, std::chrono::milliseconds reassembly_timeout)
+                           std::size_t reassembly_budget, std::chrono::milliseconds reassembly_timeout, std::chrono::microseconds retransmit_ceiling)
         : m_io(io)
         , m_server(server)
         , m_dest(std::move(dest))
@@ -45,6 +46,7 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
         , m_max_message_bytes(max_message_bytes)
         , m_reassembly_budget(reassembly_budget)
         , m_reassembly_timeout(reassembly_timeout)
+        , m_retransmit_ceiling(detail::checked_retransmit_ceiling(retransmit_ceiling))
         , m_scheduler_key(io::detail::next_scheduler_key())
         , m_ssl_ctx(detail::share_dtls_context(cred))
         , m_ssl(nullptr)
@@ -83,6 +85,7 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
     ::SSL_set_mtu(m_ssl, dtls_mtu());         // construction edge: the configured record budget
 
     publish_cookie_ex_data();
+    detail::install_retransmit_ceiling(m_ssl, m_retransmit_ceiling);
 
     if(m_role == role::server)
         ::SSL_set_accept_state(m_ssl);

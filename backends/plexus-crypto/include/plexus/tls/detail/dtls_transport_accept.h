@@ -76,7 +76,7 @@ template<typename T>
 void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<const std::byte> bytes)
 {
     auto ch   = std::make_unique<dtls_channel>(t.m_io, t.m_server, from, t.m_cred, t.m_cookie, dtls_channel::role::server, t.m_max_payload, dtls_channel::default_record_mtu,
-                                               t.m_max_message_bytes, t.m_reassembly_budget);
+                                               t.m_max_message_bytes, t.m_reassembly_budget, dtls_channel::reassembler_type::config{}.per_message_timeout, t.m_retransmit_ceiling);
     auto *raw = ch.get();
     if(!t.m_demux.insert(from, raw))
     {

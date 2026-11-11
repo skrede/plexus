@@ -5,6 +5,7 @@
 #include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/dtls_cookie.h"
 #include "plexus/tls/tls_credential.h"
+#include "plexus/tls/detail/dtls_retransmit.h"
 #include "plexus/tls/detail/dtls_transport_accept.h"
 
 #include "plexus/asio/udp_server.h"
@@ -26,6 +27,7 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <utility>
@@ -49,8 +51,11 @@ public:
     // already thread, brought to the encrypted best-effort lane so DTLS is tunable in lockstep
     // (a large best-effort DTLS message fragments per record under the always-on aggregate bound).
     // max_payload is the per-record logical budget, distinct from the message ceiling.
+    // retransmit_ceiling caps the handshake retransmit interval of every channel the transport
+    // mints; a non-positive ceiling is refused at construction.
     explicit dtls_transport(::asio::io_context &io, const tls_credential &cred, std::size_t max_payload = dtls_channel::default_max_payload,
-                            std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget)
+                            std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget,
+                            std::chrono::microseconds retransmit_ceiling = dtls_channel::default_retransmit_ceiling)
             : m_io(io)
             , m_server(io)
             , m_cred(cred)
@@ -58,6 +63,7 @@ public:
             , m_max_payload(max_payload)
             , m_max_message_bytes(global_default)
             , m_reassembly_budget(reassembly_budget)
+            , m_retransmit_ceiling(detail::checked_retransmit_ceiling(retransmit_ceiling))
             , m_registry()
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { detail::on_datagram(*this, from, bytes); });
@@ -128,7 +134,7 @@ public:
         detail::ensure_bound(*this, dest.protocol());
 
         auto ch   = std::make_unique<dtls_channel>(m_io, m_server, dest, m_cred, m_cookie, dtls_channel::role::client, m_max_payload, dtls_channel::default_record_mtu,
-                                                   m_max_message_bytes, m_reassembly_budget);
+                                                   m_max_message_bytes, m_reassembly_budget, dtls_channel::reassembler_type::config{}.per_message_timeout, m_retransmit_ceiling);
         auto *raw = ch.get();
         if(!m_demux.insert(dest, raw))
             return detail::report_dial_fail(*this, ep, io::io_error::address_in_use);
@@ -184,6 +190,7 @@ private:
     std::size_t m_max_payload;
     std::size_t m_max_message_bytes; // per-message ceiling threaded to each channel
     std::size_t m_reassembly_budget; // always-on aggregate reassembly-memory DoS cap
+    std::chrono::microseconds m_retransmit_ceiling;
     plexus::asio::detail::basic_inbound_demux<dtls_channel> m_demux;
     dial_registry m_registry; // the half-open dial table + the accepted table
     plexus::detail::move_only_function<void(std::unique_ptr<dtls_channel>)> m_on_accepted_cb;
