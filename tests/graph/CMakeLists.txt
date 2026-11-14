@@ -86,6 +86,10 @@ plexus_add_catch_test(test_graph_change_coalescing
     SOURCES test_graph_change_coalescing.cpp
     LINKS plexus::plexus plexus::inproc plexus::discovery)
 
+plexus_add_catch_test(test_graph_change_nested_delivery
+    SOURCES test_graph_change_nested_delivery.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
+
 plexus_add_catch_test(test_graph_change_teardown
     SOURCES test_graph_change_teardown.cpp
     LINKS plexus::plexus plexus::inproc plexus::discovery)
