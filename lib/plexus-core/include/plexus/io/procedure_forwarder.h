@@ -42,8 +42,8 @@
 namespace plexus::io {
 
 // The req/res sibling of message_forwarder: a Policy-templated forwarder that correlates opaque-byte
-// requests to responses by a monotonic correlation_id, tracking pending calls in bounded per-peer
-// outstanding-request tables, direct and forwarded calls apart (an over-capacity call fails fast). An
+// requests to responses by a monotonic correlation_id, tracking pending calls in per-peer outstanding-request
+// tables, direct and forwarded calls apart under one per-peer bound (an over-capacity call fails fast). An
 // unmatched response is dropped as an orphan. It arms a Policy timer per call (a forwarder default
 // deadline, optionally overridden): on expiry the entry fires rpc_status::timeout; a matched response or
 // detach_all cancels it first. It exposes deliver_request/deliver_response and owns no frame_header.type
@@ -122,9 +122,9 @@ public:
     {
         if(m_ops.closing())
             return on_response(wire::rpc_status::canceled, {});
-        auto &per_peer = m_outstanding[p.node_name];
-        if(per_peer.size() >= m_max_outstanding)
+        if(at_capacity(p.node_name))
             return on_response(wire::rpc_status::error, {});
+        auto &per_peer = m_outstanding[p.node_name];
 
         std::uint64_t corr_id = m_next_correlation_id++;
         wire::encode_rpc_request_into(m_req_scratch, request_header(fqn, corr_id), param);
@@ -148,9 +148,9 @@ public:
         if(m_ops.closing())
             return on_response(wire::rpc_status::canceled, {});
         const std::string key = node_name_of(destination);
-        auto &per_peer        = m_forwarded_outstanding[key];
-        if(per_peer.size() >= m_max_outstanding)
+        if(at_capacity(key))
             return on_response(wire::rpc_status::error, {});
+        auto &per_peer = m_forwarded_outstanding[key];
 
         std::uint64_t corr_id = m_next_correlation_id++;
         wire::encode_rpc_request_into(m_req_scratch, request_header(fqn, corr_id), param);
@@ -307,6 +307,11 @@ private:
     friend bool detail::deliver_request(F &, const P &, std::span<const std::byte>, std::uint64_t, const node_id *);
     template<typename F, typename T>
     friend bool detail::deliver_response(F &, T &, const std::string &, std::span<const std::byte>);
+
+    bool at_capacity(const std::string &node_name) const noexcept
+    {
+        return detail::count_peer_calls(m_outstanding, node_name) + detail::count_peer_calls(m_forwarded_outstanding, node_name) >= m_max_outstanding;
+    }
 
     wire::bidirectional_header request_header(std::string_view fqn, std::uint64_t corr_id)
     {

@@ -83,6 +83,13 @@ std::size_t count_calls(const Table &table) noexcept
     return n;
 }
 
+template<typename Table>
+std::size_t count_peer_calls(const Table &table, const std::string &node_name) noexcept
+{
+    auto peer_it = table.find(node_name);
+    return peer_it == table.end() ? 0 : peer_it->second.size();
+}
+
 // The count closes after every timer was canceled and before any call completes, so a call a completion issues
 // completes at once with canceled instead of arming a wait.
 template<typename Forwarder>

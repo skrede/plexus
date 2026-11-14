@@ -23,6 +23,7 @@ plexus_add_catch_test(test_frame_router
 
 plexus_add_catch_test(test_procedure_forwarder
     SOURCES test_procedure_forwarder.cpp test_procedure_forwarder_alloc.cpp test_procedure_forwarder_timeout.cpp
+        test_procedure_forwarder_capacity.cpp
     LINKS plexus::core plexus::wire plexus::inproc)
 
 plexus_add_catch_test(test_procedure_forwarder_detach_reentry
