@@ -49,6 +49,10 @@ if(NOT WIN32)
         SOURCES test_unix_permissions.cpp
         LINKS plexus::core plexus::wire plexus::asio)
 
+    plexus_add_catch_test(test_unix_bind_path_limit
+        SOURCES test_unix_bind_path_limit.cpp
+        LINKS plexus::core plexus::wire plexus::asio)
+
     # It interposes umask through dlsym(RTLD_NEXT), hence the dl link.
     plexus_add_catch_test(test_unix_bind_umask
         SOURCES test_unix_bind_umask.cpp

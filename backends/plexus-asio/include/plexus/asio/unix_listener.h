@@ -33,7 +33,8 @@ namespace plexus::asio {
 // AF_UNIX acceptor over ::asio::local::stream_protocol::acceptor. start(endpoint) binds inside a private
 // 0700 directory beside the path, applies the configured mode there and renames the socket into place
 // (replacing a STALE socket file left by a crashed prior run), then listens. stop() unlinks only a path
-// THIS listener bound.
+// THIS listener bound. A target whose private bind path `<parent>/.XXXXXX/s` exceeds sun_path is refused
+// with filename_too_long.
 //
 // SECURITY CONTRACT (caller-owned): the socket path MUST live in a directory the owner controls
 // (not a world-writable shared tmp), so the replacement of the path cannot be raced. The socket mode

@@ -24,7 +24,7 @@ namespace plexus::asio::detail {
 inline std::string private_dir_template(const std::string &path)
 {
     const std::filesystem::path parent = std::filesystem::path(path).parent_path();
-    return (parent.empty() ? std::string(".") : parent.string()) + "/.pxb-XXXXXX";
+    return (parent.empty() ? std::string(".") : parent.string()) + "/.XXXXXX";
 }
 
 inline void set_errno_error(std::error_code &ec)
