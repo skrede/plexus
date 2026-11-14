@@ -117,3 +117,27 @@ TEST_CASE("reach guard: a forgotten slot whose handshake is in flight dials agai
     REQUIRE(net.a.is_connected(net.id_b));
     REQUIRE(net.b.is_connected(net.id_a));
 }
+
+TEST_CASE("reach guard: a slot forgotten while its dropped session waits out a backoff dials again on a fresh card", "[integration][reach_guard]")
+{
+    manual_clock::reset();
+    guarded_pair net;
+    net.a.note_peer(net.id_b, net.ep_b);
+    net.a.reach(net.id_b);
+    net.ex.drain();
+    REQUIRE(net.a.is_connected(net.id_b));
+    const auto epoch = net.a.session_for(net.id_b)->session_id();
+    auto *served     = net.b.session_for(net.id_a);
+    REQUIRE(served != nullptr);
+    served->tear_down();
+    net.ex.drain();
+    REQUIRE(net.a.attempt_count(net.id_b) == 1);
+    net.a.forget(net.id_b);
+
+    net.a.note_peer(net.id_b, net.ep_b);
+    net.a.reach(net.id_b);
+    net.advance_until([&] { return net.b.is_connected(net.id_a); });
+    REQUIRE(net.b.is_connected(net.id_a));
+    REQUIRE(net.a.is_connected(net.id_b));
+    REQUIRE(net.a.session_for(net.id_b)->session_id() != epoch);
+}

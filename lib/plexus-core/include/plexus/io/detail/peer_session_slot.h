@@ -42,6 +42,7 @@ struct session_slot
             , parked()
             , session()
             , dead(false)
+            , dropped(false)
             , on_emptied_cb()
     {
         record.peer_id       = id;
@@ -56,6 +57,7 @@ struct session_slot
     std::unique_ptr<channel_type> parked;
     std::optional<peer_session<Policy>> session;
     bool dead;
+    bool dropped;
     plexus::detail::move_only_function<void()> on_emptied_cb;
 };
 

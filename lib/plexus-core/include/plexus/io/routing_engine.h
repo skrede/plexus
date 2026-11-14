@@ -261,7 +261,7 @@ public:
     // Drops a peer's awareness and denies any redial its teardown armed: a goodbye withdraws the
     // suggestion reach() gates on, so an in-flight or armed reconnect for the peer is canceled
     // rather than left to resurrect it. An established session is untouched — it ends on its own
-    // teardown, not this call.
+    // teardown, not this call; one that dropped and awaits its canceled redial is torn down here.
     void forget(const node_id &id)
     {
         detail::release_all_reporter_load(*this, id);

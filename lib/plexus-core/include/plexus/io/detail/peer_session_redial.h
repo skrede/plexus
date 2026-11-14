@@ -10,6 +10,23 @@
 
 namespace plexus::io::detail {
 
+// A denied driver never redials, and only a redial tears a dropped session down.
+template<typename Slot>
+void tear_down_denied(Slot &slot)
+{
+    if(slot.driver.redial_denied() && slot.session && !slot.session->pending().closing())
+        slot.session->tear_down();
+}
+
+// Denying the redial a drop armed cancels the teardown that redial owned, so the dropped session ends here.
+template<typename Slot>
+void deny_slot_redial(Slot &slot)
+{
+    slot.driver.deny_redial();
+    if(slot.dropped)
+        detail::tear_down_denied(slot);
+}
+
 // Set only on dialed slots — an accepted slot owns no redial. The slot outlives the session that holds
 // this closure, and keeps its address when it is re-filed under another key.
 template<typename Registry, typename Slot>
@@ -20,10 +37,9 @@ void wire_drop(Registry &reg, Slot &slot)
             {
                 if(detail::close_if_superseded(reg, slot, peer_kind::dialed))
                     return;
+                slot.dropped = true;
                 slot.driver.on_channel_dropped();
-                // A denied driver never redials, and only a redial tears a dropped session down.
-                if(slot.driver.redial_denied() && slot.session && !slot.session->pending().closing())
-                    slot.session->tear_down();
+                detail::tear_down_denied(slot);
             });
 }
 

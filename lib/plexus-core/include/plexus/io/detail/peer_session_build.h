@@ -119,6 +119,7 @@ void emplace_session(Registry &reg, Build &build, Slot &slot, bool inbound)
     handshake_fsm_config fsm_cfg = build.fsm_cfg;
     fsm_cfg.expected_peer_id     = detail::expected_identity(slot.record, inbound);
     slot.session.emplace(slot.record, build.executor, fsm_cfg, build.handshake_timeout, build.messages, build.procedures, inbound, build.logger);
+    slot.dropped = false;
     if(inbound)
         detail::wire_inbound_drop(reg, slot);
     else

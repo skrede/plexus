@@ -87,7 +87,7 @@ public:
     {
         auto it = m_slots.find(id);
         if(it != m_slots.end())
-            it->second->driver.deny_redial();
+            detail::deny_slot_redial(*it->second);
     }
 
     template<typename PreBuild = std::nullptr_t>
