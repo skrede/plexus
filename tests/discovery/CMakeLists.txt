@@ -21,6 +21,10 @@ plexus_add_catch_test(test_multicast_discovery_advertise
     SOURCES test_multicast_discovery_advertise.cpp
     LINKS plexus::core plexus::wire plexus::stream plexus::discovery)
 
+plexus_add_catch_test(test_multicast_discovery_announce_ttl
+    SOURCES test_multicast_discovery_announce_ttl.cpp
+    LINKS plexus::core plexus::wire plexus::stream plexus::discovery)
+
 plexus_add_catch_test(test_multicast_discovery_universe
     SOURCES test_multicast_discovery_universe.cpp
     LINKS plexus::core plexus::wire plexus::stream plexus::discovery)

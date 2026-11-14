@@ -52,6 +52,7 @@ struct discovery_options
 {
     discovery_options()
             : group("239.255.0.7")
+            , announce_ttl(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::nanoseconds(io::default_discovery_ttl_ns)))
             , announce_period(1000)
             , cap()
             , egress_interface(io::network_interface::any())
@@ -65,6 +66,8 @@ struct discovery_options
     }
 
     std::string group;
+    // The liveness lifetime every announcement advertises to its receivers; it must exceed announce_period.
+    std::chrono::seconds announce_ttl;
     std::chrono::milliseconds announce_period; // a conservative starting value, tuned empirically later
     flood_cap_options cap;
     io::network_interface egress_interface;

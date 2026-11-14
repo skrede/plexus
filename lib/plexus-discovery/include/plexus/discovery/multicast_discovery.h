@@ -16,6 +16,7 @@
 #include "plexus/wire/announcement.h"
 #include "plexus/discovery/discovery.h"
 #include "plexus/detail/compat.h"
+#include "plexus/detail/fail_closed.h"
 
 #include <span>
 #include <chrono>
@@ -46,7 +47,7 @@ public:
             : m_executor(executor)
             , m_socket(socket)
             , m_timer(executor)
-            , m_options(std::move(options))
+            , m_options(checked(std::move(options)))
             , m_flood_cap(m_options.cap)
             , m_jitter(m_options.jitter_fraction)
             , m_bind_time(Clock::now())
@@ -129,9 +130,16 @@ private:
         return ep;
     }
 
+    static discovery_options checked(discovery_options options)
+    {
+        if(options.announce_ttl <= options.announce_period)
+            plexus::detail::fail_closed("multicast_discovery: announce_ttl must exceed announce_period");
+        return options;
+    }
+
     std::uint64_t ttl_secs() const
     {
-        return static_cast<std::uint64_t>(m_options.hop_limit);
+        return static_cast<std::uint64_t>(m_options.announce_ttl.count());
     }
 
     executor_type m_executor;
