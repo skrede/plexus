@@ -71,15 +71,25 @@ public:
     wire_capturing_transport(const wire_capturing_transport &)            = delete;
     wire_capturing_transport &operator=(const wire_capturing_transport &) = delete;
 
+    ~wire_capturing_transport()
+    {
+        m_inner.on_accepted(nullptr);
+        m_inner.on_dialed(nullptr);
+    }
+
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> cb)
     {
         m_on_accepted = std::move(cb);
+        if(!m_on_accepted)
+            return m_inner.on_accepted(nullptr);
         m_inner.on_accepted([this](std::unique_ptr<inner_channel_type> ch) { m_retiring.deliver_or_retire(m_on_accepted, std::make_unique<channel_type>(std::move(ch))); });
     }
 
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const endpoint &)> cb)
     {
         m_on_dialed = std::move(cb);
+        if(!m_on_dialed)
+            return m_inner.on_dialed(nullptr);
         m_inner.on_dialed([this](std::unique_ptr<inner_channel_type> ch, const endpoint &ep)
                           { m_retiring.deliver_or_retire(m_on_dialed, std::make_unique<channel_type>(std::move(ch)), ep); });
     }

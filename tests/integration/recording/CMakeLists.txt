@@ -28,6 +28,10 @@ plexus_add_catch_test(test_capture_gate
     SOURCES test_capture_gate.cpp
     LINKS plexus::core plexus::wire plexus::inproc)
 
+plexus_add_catch_test(test_wire_capturing_unwire
+    SOURCES test_wire_capturing_unwire.cpp
+    LINKS plexus::core plexus::wire plexus::inproc)
+
 # An alloc gate over the single-TU operator-new counter; concurrent test processes perturb it, so it runs alone.
 plexus_add_catch_test(test_byte_ring
     SOURCES test_byte_ring.cpp
