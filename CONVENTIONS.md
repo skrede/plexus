@@ -217,6 +217,11 @@ initialization-order constraint in **Construction**.
 - No per-callback liveness guards that paper over a posted task outliving its target. If a
   posted closure can run after its target dies, fix the ownership and teardown sequencing —
   do not add a flag to guard every access.
+- A destructor synchronously withdraws every entry point it installed in an object that outlives
+  it — a registry or bus entry, a sink on a borrowed transport — so nothing reaches it through a
+  freed `this`. It fires no callback and posts nothing, and it never runs the retiring half of
+  `close()`. Posted work stays the owner's teardown sequencing: close, drain, then destroy, or
+  destroy with the executor never run again.
 
 ## Formatting and tooling
 
