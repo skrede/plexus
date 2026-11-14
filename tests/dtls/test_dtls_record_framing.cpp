@@ -5,7 +5,6 @@
 #include "plexus/testing/pump.h"
 
 #include <span>
-#include <chrono>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
