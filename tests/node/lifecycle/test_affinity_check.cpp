@@ -73,6 +73,16 @@ TEST_CASE("affinity_check moved_from_publish aborts with a message naming the me
     require_abort("moved_from_publish", "plexus: publish called on a moved-from handle");
 }
 
+TEST_CASE("affinity_check moved_from_bytes_call aborts with a message naming the member", "[node]")
+{
+    require_abort("moved_from_bytes_call", "plexus: call called on a moved-from handle");
+}
+
+TEST_CASE("affinity_check moved_from_typed_call aborts with a message naming the member", "[node]")
+{
+    require_abort("moved_from_typed_call", "plexus: call called on a moved-from handle");
+}
+
 TEST_CASE("affinity_check foreign_member aborts with a message naming the member", "[node]")
 {
     require_trip("foreign_member", "participants");

@@ -3,6 +3,7 @@
 
 #include "in_memory_byte_sink.h"
 
+#include "plexus/caller.h"
 #include "plexus/expected.h"
 #include "plexus/recorder.h"
 #include "plexus/subscriber.h"
@@ -16,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <sstream>
+#include <utility>
 #include <optional>
 #include <string_view>
 #include <system_error>
@@ -45,6 +47,34 @@ struct tagged_codec
         return {0xA5u, "affinity_value"};
     }
 };
+
+template<typename>
+using tagged_family = tagged_codec;
+
+// Every call runs on the driver, so only the moved-from check can fire.
+template<typename Caller, typename Request>
+void moved_from_call(const Request &request)
+{
+    asio_rig rig;
+    on_driver(rig.node,
+              [&]
+              {
+                  Caller source{rig.node, "affinity/rpc"};
+                  Caller target{std::move(source)};
+                  source.call(request, [](const auto &) {});
+              });
+}
+
+bool run_moved_from_call_role(std::string_view role)
+{
+    if(role == "moved_from_bytes_call")
+        moved_from_call<plexus::caller<>>(std::span<const std::byte>{k_payload});
+    else if(role == "moved_from_typed_call")
+        moved_from_call<plexus::caller<std::uint32_t(std::uint32_t), tagged_family>>(std::uint32_t{7});
+    else
+        return false;
+    return true;
+}
 
 // The recorder is made on the driver, so only the member called from main can trip.
 template<typename Use>
@@ -103,7 +133,7 @@ bool run_recorder_role(std::string_view role)
 
 role_outcome run_endpoint_role(std::string_view role)
 {
-    if(run_recorder_role(role) || run_decode_failed_role(role))
+    if(run_recorder_role(role) || run_decode_failed_role(role) || run_moved_from_call_role(role))
         return role_outcome::not_tripped;
     return role_outcome::unknown;
 }
