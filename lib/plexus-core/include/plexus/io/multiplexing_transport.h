@@ -57,7 +57,8 @@ public:
     static constexpr bool member_prefers_local_fast_v = member_prefers_local_fast<M>::value;
 
     explicit multiplexing_transport(Members &...members, transport_selector selector = {}, selection_hook hook = first_candidate{})
-            : m_selector(selector)
+            : m_closed(false)
+            , m_selector(selector)
             , m_members(members...)
             , m_hook(std::move(hook))
             , m_retiring()
@@ -67,6 +68,13 @@ public:
 
     multiplexing_transport(const multiplexing_transport &)            = delete;
     multiplexing_transport &operator=(const multiplexing_transport &) = delete;
+
+    // close() unwired first, and the members it closed may since carry another owner's sinks.
+    ~multiplexing_transport()
+    {
+        if(!m_closed)
+            std::apply([](auto &...m) { (detail::unwire_member(m), ...); }, m_members);
+    }
 
     void on_accepted(plexus::detail::move_only_function<void(std::unique_ptr<polymorphic_byte_channel>)> cb)
     {
@@ -101,6 +109,7 @@ public:
     // A member detached first retires whatever it still completes into its own table.
     void close()
     {
+        m_closed = true;
         std::apply([](auto &...m) { ((detail::unwire_member(m), m.close()), ...); }, m_members);
     }
 
@@ -113,6 +122,7 @@ public:
     }
 
 private:
+    bool m_closed;
     transport_selector m_selector;
     std::tuple<Members &...> m_members;
     selection_hook m_hook;

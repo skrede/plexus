@@ -18,6 +18,10 @@ plexus_add_catch_test(test_node_close_relay
     SOURCES test_node_close_relay.cpp
     LINKS plexus::plexus plexus::inproc plexus::discovery)
 
+plexus_add_catch_test(test_node_mux_unwire
+    SOURCES test_node_mux_unwire.cpp
+    LINKS plexus::plexus plexus::inproc plexus::discovery)
+
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     plexus_add_catch_test(test_node_close_asio
         SOURCES test_node_close_asio.cpp
