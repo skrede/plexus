@@ -60,10 +60,10 @@ public:
     static constexpr std::size_t default_max_payload = datagram::mtu_budget{}.max_payload;
     // The not-yet-windowed fragments of a paced reliable message park here while the ARQ send
     // window is full. This bounds ADDITIONAL backlog ONLY: the per-message ceiling is the sole
-    // size authority, so the live cap is floored at that ceiling (see m_backpressure construction)
-    // and a within-ceiling message's whole fragment backlog is always admissible. The default
-    // sizes the EXTRA backlog a producer outrunning the drain may pile up past one in-flight
-    // message.
+    // size authority, so the live cap is floored at the bytes a ceiling-sized message parks, its
+    // encoded fragments once it fragments (see m_backpressure construction), and a within-ceiling
+    // message's whole fragment backlog is always admissible. The default sizes the EXTRA backlog a
+    // producer outrunning the drain may pile up past one in-flight message.
     static constexpr std::size_t default_backpressure_bytes = 1u * io::fragmentation_limits::max_message_size;
 
     using arq_type         = datagram::detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
@@ -86,7 +86,7 @@ public:
             , m_reassembly_timeout(reassembly_timeout)
             , m_arq_cfg(arq_cfg)
             , m_congestion(congestion)
-            , m_backpressure(std::max(backpressure_bytes, max_message_bytes))
+            , m_backpressure(std::max(backpressure_bytes, detail::backpressure_floor(max_message_bytes, max_payload)))
             , m_dropped(0)
             , m_mode(mode)
             , m_initial_seq(initial_seq)
@@ -196,7 +196,7 @@ public:
     {
         if(!m_open)
             return submit_result::window_full;
-        if(payload.size() + wire::udp_envelope_overhead + 1 > m_max_payload)
+        if(detail::sends_fragmented(payload.size(), m_max_payload))
             return detail::send_reliable_large(*this, payload);
         detail::ensure_arq(*this);
         const auto r = m_arq->submit(payload);

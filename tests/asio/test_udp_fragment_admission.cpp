@@ -22,8 +22,8 @@ constexpr std::size_t k_slice   = pio::effective_fragment_budget(k_budget);
 constexpr std::size_t k_frame   = k_slice + wire::udp_fragment_subheader;
 constexpr std::size_t k_payload = 6 * k_slice;
 
-// The per-message ceiling is the payload itself, so the queue's cap (floored at that ceiling) is
-// one message; the configured backpressure bytes sit below it.
+// The per-message ceiling is the payload itself, so the queue's cap (floored at that ceiling's
+// encoded fragments) is one message; the configured backpressure bytes sit below it.
 pasio::udp_transport make_transport(::asio::io_context &io, pio::congestion cong, std::size_t window, pasio::udp_transport::arq_type::schedule hs)
 {
     const plexus::datagram::detail::udp_arq_config arq{.window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 20};
@@ -119,6 +119,22 @@ TEST_CASE("udp reliable large send: a message whose overflow fits the backpressu
     REQUIRE(equal_bytes(f.got.front(), payload));
     REQUIRE(f.dialed->backpressured() == 0);
     REQUIRE(f.would_block == 0);
+}
+
+TEST_CASE("udp reliable large send: a ceiling-sized message sent into a full window is admitted whole under block", "[udp][fragment][congestion]")
+{
+    admission_pair f{pio::congestion::block, 4};
+    REQUIRE(f.dialed != nullptr);
+    for(std::size_t i = 0; i < 4; ++i)
+        REQUIRE(f.dialed->send_reliable(small(8)) == submit_result::admitted);
+    const auto payload = make_payload(k_payload, 5);
+    REQUIRE(f.dialed->send_reliable(payload) == submit_result::admitted);
+    REQUIRE(f.would_block == 0);
+    REQUIRE(f.dialed->backpressured() == 6 * k_frame);
+    plexus::testing::pump_until(f.io, [&] { return f.got.size() == 5 && f.dialed->backpressured() == 0; }, k_pump_bound);
+    REQUIRE(f.got.size() == 5);
+    REQUIRE(equal_bytes(f.got.back(), payload));
+    REQUIRE(f.dialed->write_queue_capacity() == k_payload + 6 * wire::udp_fragment_subheader);
 }
 
 TEST_CASE("udp reliable large send: a message whose overflow misses the backpressure cap queues nothing under block", "[udp][fragment][congestion]")

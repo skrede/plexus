@@ -17,12 +17,27 @@
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 
 #include <span>
+#include <limits>
 #include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
 
 namespace plexus::asio::detail {
+
+inline bool sends_fragmented(std::size_t size, std::size_t max_payload) noexcept
+{
+    return size + wire::udp_envelope_overhead + 1 > max_payload;
+}
+
+// The bytes a ceiling-sized message parks behind a full window; an unlimited ceiling saturates.
+inline std::size_t backpressure_floor(std::size_t max_message_bytes, std::size_t max_payload) noexcept
+{
+    if(!sends_fragmented(max_message_bytes, max_payload))
+        return max_message_bytes;
+    const std::size_t subheaders = std::size_t{io::fragment_count(max_message_bytes, max_payload)} * wire::udp_fragment_subheader;
+    return max_message_bytes > std::numeric_limits<std::size_t>::max() - subheaders ? std::numeric_limits<std::size_t>::max() : max_message_bytes + subheaders;
+}
 
 template<typename Ch>
 void reject_oversize(Ch &c)
