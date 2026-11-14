@@ -131,7 +131,7 @@ TEST_CASE("node_native_discovery: two nodes discover each other over real multic
     plexus::discovery::discovery_options opts;
     opts.group           = "239.255.0.73";
     opts.port            = mc_port;
-    opts.ttl             = mc_ttl;
+    opts.hop_limit       = mc_ttl;
     opts.announce_period = std::chrono::milliseconds(100);
 
     plexus::discovery::multicast_discovery<pasio::udp_multicast_socket, pasio::asio_policy> disc_a{io, sock_a, opts};

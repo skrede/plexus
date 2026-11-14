@@ -39,11 +39,11 @@ struct flood_cap_options
     std::chrono::milliseconds idle_expiry;
 };
 
-// The multicast discovery group/port/ttl and re-announce cadence. The group is held as a string so
+// The multicast discovery group/port/hop limit and re-announce cadence. The group is held as a string so
 // this header stays OS-free and asio-free (the caller-supplied socket parses it); 239.255.0.7 is
 // admin-scoped, distinct from the DDS SPDP 239.255.0.1 so a co-resident DDS deployment never
-// collides, and 7447 is clear of mDNS 5353, SSDP 1900, and the DDS 7400 range. TTL>1 is routable
-// across a few LAN segments. Every field is overridable down to link-local (224.0.0.x / TTL 1).
+// collides, and 7447 is clear of mDNS 5353, SSDP 1900, and the DDS 7400 range. A hop limit above 1 is
+// routable across a few LAN segments. Every field is overridable down to link-local (224.0.0.x / hop limit 1).
 // universe partitions the discovery plane: under soft scoping all universes share the group and the
 // inbound compare filters; under hard scoping each universe derives its own group. scoping is a
 // fleet-wide setting — a hard node and a soft node in the same universe sit on different groups and
@@ -60,7 +60,7 @@ struct discovery_options
             , universe(k_default_universe)
             , scoping(universe_scoping::soft)
             , port(7447)
-            , ttl(4)
+            , hop_limit(4)
     {
     }
 
@@ -81,7 +81,7 @@ struct discovery_options
     std::uint32_t universe;
     universe_scoping scoping;
     std::uint16_t port;
-    std::uint8_t ttl;
+    std::uint8_t hop_limit;
 };
 
 // Hard derivation wins unconditionally — a custom group and the default universe both derive under

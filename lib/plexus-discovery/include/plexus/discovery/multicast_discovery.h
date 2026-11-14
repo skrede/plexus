@@ -131,7 +131,7 @@ private:
 
     std::uint64_t ttl_secs() const
     {
-        return static_cast<std::uint64_t>(m_options.ttl);
+        return static_cast<std::uint64_t>(m_options.hop_limit);
     }
 
     executor_type m_executor;
