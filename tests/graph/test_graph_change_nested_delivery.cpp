@@ -110,6 +110,7 @@ struct feeding_graph_observer final : public plexus::io::observer
 std::vector<change_kind> alternating_kinds(std::size_t count)
 {
     std::vector<change_kind> kinds;
+    kinds.reserve(count);
     for(std::size_t i = 0; i < count; ++i)
         kinds.push_back(i % 2 == 0 ? change_kind::appeared : change_kind::disappeared);
     return kinds;
