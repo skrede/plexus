@@ -118,3 +118,18 @@ TEST_CASE("inproc listen: closing one transport leaves another's listener dialab
     ex.drain();
     REQUIRE(b.refused == error_list{io_error::connection_refused});
 }
+
+TEST_CASE("inproc listen: a listening transport destroyed without close leaves no listener behind", "[inproc]")
+{
+    inproc_bus<> bus;
+    inproc_executor<> ex(bus);
+    probe b(ex, bus);
+    auto a = std::make_unique<probe>(ex, bus);
+    a->transport.listen(k_one);
+    a.reset();
+
+    b.transport.dial(k_one);
+    ex.drain();
+    REQUIRE(b.refused == error_list{io_error::connection_refused});
+    REQUIRE(b.dialed.empty());
+}

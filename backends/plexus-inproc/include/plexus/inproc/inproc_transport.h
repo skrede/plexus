@@ -41,6 +41,11 @@ public:
     inproc_transport(const inproc_transport &)            = delete;
     inproc_transport &operator=(const inproc_transport &) = delete;
 
+    ~inproc_transport()
+    {
+        close();
+    }
+
     void on_accepted(detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> cb)
     {
         m_on_accepted_cb = std::move(cb);
