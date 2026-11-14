@@ -44,6 +44,16 @@ namespace detail {
 
 // An absent wire status is the no_provider verdict that never rode the wire; success carries the
 // return bytes plus provider attribution; any other status maps through from_rpc_status.
+inline expected<reply, std::error_code> resolve_bytes_reply(std::optional<wire::rpc_status> status, std::span<const std::byte> bytes, const std::optional<publisher_gid> &provider)
+{
+    using result = expected<reply, std::error_code>;
+    if(!status)
+        return result{unexpect, make_error_code(call_errc::no_provider)};
+    if(*status == wire::rpc_status::success)
+        return result{reply{bytes, reply_info{provider, 0, wire::now_timestamp_ns(), false}}};
+    return result{unexpect, make_error_code(from_rpc_status(*status))};
+}
+
 template<typename Completion>
 void dispatch_bytes_call(const io::endpoint_seam &seam, std::string_view fqn, std::span<const std::byte> param, Completion &&completion,
                          std::optional<std::chrono::nanoseconds> deadline)
@@ -51,21 +61,7 @@ void dispatch_bytes_call(const io::endpoint_seam &seam, std::string_view fqn, st
     seam.call(
             seam.ctx, fqn, param,
             [completion = std::forward<Completion>(completion)](std::optional<wire::rpc_status> status, std::span<const std::byte> bytes,
-                                                                const std::optional<publisher_gid> &provider) mutable
-            {
-                if(!status)
-                {
-                    completion(expected<reply, std::error_code>{unexpect, make_error_code(call_errc::no_provider)});
-                    return;
-                }
-                if(*status == wire::rpc_status::success)
-                {
-                    reply r{bytes, reply_info{provider, 0, wire::now_timestamp_ns(), false}};
-                    completion(expected<reply, std::error_code>{std::move(r)});
-                    return;
-                }
-                completion(expected<reply, std::error_code>{unexpect, make_error_code(from_rpc_status(*status))});
-            },
+                                                                const std::optional<publisher_gid> &provider) mutable { completion(resolve_bytes_reply(status, bytes, provider)); },
             deadline);
 }
 

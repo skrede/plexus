@@ -3,6 +3,7 @@
 
 #include "plexus/caller.h"
 #include "plexus/procedure.h"
+#include "plexus/call_error.h"
 
 #include "plexus/wire/rpc_status.h"
 
@@ -46,16 +47,29 @@ plexus::expected<sample, std::error_code> echo(std::int32_t &served, const sampl
     return request;
 }
 
+struct completion_tally
+{
+    std::int32_t runs{};
+    std::int32_t canceled{};
+};
+
 template<typename Caller, typename Request>
-void require_dropped(net &n, Caller &source, Caller &target, const Request &request, const std::int32_t &served)
+void require_canceled(net &n, Caller &source, Caller &target, const Request &request, const std::int32_t &served)
 {
     n.drive();
-    std::int32_t completed = 0;
-    source.call(request, [&](const auto &) { ++completed; });
-    source.call(request, plexus::call_options{}, [&](const auto &) { ++completed; });
+    completion_tally tally;
+    const auto count = [&](const auto &r)
+    {
+        ++tally.runs;
+        tally.canceled += !r && r.error() == plexus::call_errc::canceled ? 1 : 0;
+    };
+    source.call(request, count);
+    source.call(request, plexus::call_options{}, count);
+    CHECK(tally.canceled == 2);
     n.drive();
     CHECK(served == 0);
-    CHECK(completed == 0);
+    CHECK(tally.runs == 2);
+    std::int32_t completed = 0;
     target.call(request, [&](const auto &r) { completed += static_cast<bool>(r) ? 1 : 0; });
     n.drive();
     CHECK(served == 1);
@@ -72,7 +86,7 @@ TEST_CASE("handles: a moved-from bytes caller's call dispatches nothing", "[node
     bytes_procedure proc{n.b, "rpc", [&](std::span<const std::byte>, bytes_procedure::reply_fn &reply) { serve(served, reply); }};
     bytes_caller source{n.a, "rpc"};
     bytes_caller target{std::move(source)};
-    require_dropped(n, source, target, std::span<const std::byte>{k_param}, served);
+    require_canceled(n, source, target, std::span<const std::byte>{k_param}, served);
 }
 
 TEST_CASE("handles: a bytes caller moved from by assignment dispatches nothing", "[node][handles]")
@@ -84,7 +98,7 @@ TEST_CASE("handles: a bytes caller moved from by assignment dispatches nothing",
     bytes_caller source{n.a, "rpc"};
     bytes_caller target{n.a, "elsewhere"};
     target = std::move(source);
-    require_dropped(n, source, target, std::span<const std::byte>{k_param}, served);
+    require_canceled(n, source, target, std::span<const std::byte>{k_param}, served);
 }
 
 TEST_CASE("handles: a moved-from typed caller's call dispatches nothing", "[node][handles]")
@@ -95,7 +109,7 @@ TEST_CASE("handles: a moved-from typed caller's call dispatches nothing", "[node
     typed_procedure proc{n.b, "rpc", [&](const sample &request) { return echo(served, request); }};
     typed_caller source{n.a, "rpc"};
     typed_caller target{std::move(source)};
-    require_dropped(n, source, target, sample{3}, served);
+    require_canceled(n, source, target, sample{3}, served);
 }
 
 TEST_CASE("handles: a typed caller moved from by assignment dispatches nothing", "[node][handles]")
@@ -107,5 +121,5 @@ TEST_CASE("handles: a typed caller moved from by assignment dispatches nothing",
     typed_caller source{n.a, "rpc"};
     typed_caller target{n.a, "elsewhere"};
     target = std::move(source);
-    require_dropped(n, source, target, sample{3}, served);
+    require_canceled(n, source, target, sample{3}, served);
 }

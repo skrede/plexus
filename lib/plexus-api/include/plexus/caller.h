@@ -48,8 +48,8 @@ class caller;
 //
 // LIFETIME: a caller must NOT outlive its node. Dropping the handle does NOT cancel an in-flight
 // call — a completion already handed to the forwarder runs to resolution (the asio convention:
-// the operation owns its completion). A call on a moved-from caller starts no operation, so it is dropped and its
-// completion never runs; under PLEXUS_AFFINITY_CHECKS it aborts.
+// the operation owns its completion). A call on a moved-from caller starts no operation; its completion runs inline
+// with call_errc::canceled, and under PLEXUS_AFFINITY_CHECKS the call aborts instead.
 template<>
 class caller<void, no_codec, no_codec>
 {
@@ -98,7 +98,10 @@ private:
     void dispatch(std::span<const std::byte> param, Completion &&completion, std::optional<std::chrono::nanoseconds> deadline)
     {
         if(!detail::live_or_trip(m_seam, "call"))
+        {
+            completion(detail::resolve_bytes_reply(wire::rpc_status::canceled, {}, std::nullopt));
             return;
+        }
         detail::dispatch_bytes_call(m_seam, m_fqn, param, std::forward<Completion>(completion), deadline);
     }
 
@@ -167,7 +170,10 @@ private:
     void dispatch(const Req &request, Completion &&completion, std::optional<std::chrono::nanoseconds> deadline)
     {
         if(!detail::live_or_trip(m_seam, "call"))
+        {
+            completion(detail::resolve_typed_reply<Res>(wire::rpc_status::canceled, {}, m_res_codec));
             return;
+        }
         const wire_bytes<> encoded = m_req_codec.encode(request);
         detail::dispatch_typed_call<Res>(m_seam, m_fqn, static_cast<std::span<const std::byte>>(encoded), m_res_codec, std::forward<Completion>(completion), deadline);
     }
