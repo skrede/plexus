@@ -76,6 +76,7 @@ public:
             , m_next_correlation_id{1}
             , m_default_deadline(default_deadline)
             , m_ops()
+            , m_outstanding()
             , m_forwarded_outstanding()
     {
     }
