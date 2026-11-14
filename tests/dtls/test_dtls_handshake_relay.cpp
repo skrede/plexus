@@ -1,40 +1,7 @@
+#include "dtls_relay_link.h"
 #include "test_dtls_handshake_common.h"
 
-namespace {
-
-// A dialed link where the client dials a programmable lossy relay that forwards to
-// the real server, so the handshake flights can be dropped/reordered/duplicated.
-// The cred pair is injected so the verify cases can mis-pin either side.
-struct relay_link
-{
-    ::asio::io_context io;
-    ptls::tls_credential server_cred;
-    ptls::tls_credential client_cred;
-    ptls::dtls_transport server;
-    ptls::dtls_transport client;
-    std::unique_ptr<pdt::relay> link;
-
-    std::unique_ptr<ptls::dtls_channel> accepted;
-    std::unique_ptr<ptls::dtls_channel> dialed;
-    bool dial_failed{false};
-
-    relay_link(ptls::tls_credential srv, ptls::tls_credential cli)
-            : server_cred(std::move(srv))
-            , client_cred(std::move(cli))
-            , server(io, server_cred)
-            , client(io, client_cred)
-    {
-        server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
-        client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &) { dialed = std::move(ch); });
-        client.on_dial_failed([this](const pdt::pio::endpoint &, pdt::pio::io_error) { dial_failed = true; });
-
-        server.listen({"dtls", "127.0.0.1:0"});
-        link = std::make_unique<pdt::relay>(io, server.port());
-        client.dial({"dtls", "127.0.0.1:" + std::to_string(link->port())});
-    }
-};
-
-}
+using pdt::relay_link;
 
 TEST_CASE("dtls.verify: a cross-pinned pair accepts; mis-pin / unpinned / empty fail closed, looped", "[dtls][verify]")
 {

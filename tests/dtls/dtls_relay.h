@@ -46,8 +46,9 @@ struct relay
     std::array<std::byte, 2048> front_buf{};
     std::array<std::byte, 2048> back_buf{};
 
-    std::deque<action> script;                // consumed per client->server datagram
-    std::vector<std::vector<std::byte>> held; // held datagrams to release out of order
+    std::deque<action> script;                     // consumed per client->server datagram
+    std::vector<std::vector<std::byte>> held;      // held datagrams to release out of order
+    std::vector<std::vector<std::byte>> datagrams; // every datagram either way, as it arrived
     int seen{0};
 
     relay(::asio::io_context &ctx, std::uint16_t server_port)
@@ -87,6 +88,7 @@ struct relay
     void handle_client(std::span<const std::byte> dg)
     {
         ++seen;
+        datagrams.emplace_back(dg.begin(), dg.end());
         action a = action::pass;
         if(!script.empty())
         {
@@ -126,6 +128,7 @@ struct relay
                                 {
                                     if(ec)
                                         return;
+                                    datagrams.emplace_back(back_buf.data(), back_buf.data() + n);
                                     if(client_ep.port() != 0) // server->client always passes
                                     {
                                         auto copy = std::make_shared<std::vector<std::byte>>(back_buf.data(), back_buf.data() + n);

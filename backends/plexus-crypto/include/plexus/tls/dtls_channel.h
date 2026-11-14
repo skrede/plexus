@@ -201,6 +201,8 @@ private:
     void feed_fragment(std::span<const std::byte> frame);
     void ensure_reassembler();
     void drain_outbound();
+    std::size_t pack_record(std::size_t packed);
+    std::size_t send_datagram(std::size_t length);
     void drain_inbound();
     void try_complete();
     void arm_retransmit();
@@ -234,9 +236,8 @@ private:
     io::detail::handshake_gate m_gate;
 
     std::vector<unsigned char> m_peer_addr_block; // [len][addr bytes] for the cookie cb
-    // Sized at construction from m_record_mtu (+ record framing/cipher headroom), NOT a fixed
-    // constant: SSL_read is message-oriented (an over-buffer record is DISCARDED) and BIO_read
-    // chunks one record across reads — sizing from the knob keeps one record == one buffer.
+    // Sized at construction from m_record_mtu (+ record framing/cipher headroom), NOT a fixed constant: SSL_read
+    // discards an over-buffer record, and drain_outbound packs whole records into datagrams of at most this size.
     std::vector<unsigned char> m_drain_buf;
 
     std::vector<std::byte> m_frag_scratch;

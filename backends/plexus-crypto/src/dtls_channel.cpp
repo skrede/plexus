@@ -30,6 +30,14 @@ int to_int(std::size_t v) noexcept
     return static_cast<int>(v);
 }
 
+constexpr std::size_t k_record_header = 13;
+
+// RFC 6347 section 4.1: the record header's big-endian length at bytes 11..12 counts the fragment after the header.
+std::size_t record_size(const unsigned char *header) noexcept
+{
+    return k_record_header + (static_cast<std::size_t>(header[11]) << 8 | static_cast<std::size_t>(header[12]));
+}
+
 }
 
 // NOLINTNEXTLINE(readability-function-size)
@@ -63,7 +71,7 @@ dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &ser
 {
     m_ops.on_settled([this] { notify_closed(); });
     // One record either direction fits one buffer: the record budget plus headroom for the 13-byte header and worst-case
-    // cipher expansion, so SSL_read never discards and BIO_read never splits a record once record_mtu rises.
+    // cipher expansion, so SSL_read never discards a record and drain_outbound never has to split one.
     constexpr std::size_t k_record_overhead = 256;
     m_drain_buf.resize(m_record_mtu + k_record_overhead);
 
@@ -190,19 +198,48 @@ void dtls_channel::deliver_inbound(std::span<const std::byte> datagram)
     drain_inbound();
 }
 
+// The BIO pair is a byte stream, so whole records are packed into each datagram (RFC 6347 section 4.1.1) and none is
+// ever cut across two: a receiver discards a split record, so a flight larger than one datagram would never complete.
 void dtls_channel::drain_outbound()
 {
     auto *bio = static_cast<BIO *>(m_external_bio);
     if(!bio)
         return;
-    while(true)
+    std::size_t packed = 0;
+    while(m_open && ::BIO_ctrl_pending(bio) >= k_record_header)
+        packed = pack_record(packed);
+    if(m_open && packed > 0)
+        send_datagram(packed);
+}
+
+std::size_t dtls_channel::pack_record(std::size_t packed)
+{
+    auto *bio = static_cast<BIO *>(m_external_bio);
+    if(packed + k_record_header > m_drain_buf.size())
+        packed = send_datagram(packed);
+    unsigned char *header = m_drain_buf.data() + packed;
+    (void)::BIO_read(bio, header, to_int(k_record_header));
+    const std::size_t record = record_size(header);
+    // A record over the buffer, or one SSL left half-written in a full BIO pair, cannot ride one datagram whole.
+    if(record > m_drain_buf.size() || ::BIO_ctrl_pending(bio) < record - k_record_header)
     {
-        const int n = ::BIO_read(bio, m_drain_buf.data(), to_int(m_drain_buf.size()));
-        if(n <= 0)
-            break;
-        // udp_server's send queue copies the datagram, so the next BIO_read may overwrite the drain buffer at once.
-        m_server.send_to(std::span<const std::byte>{reinterpret_cast<const std::byte *>(m_drain_buf.data()), static_cast<std::size_t>(n)}, m_dest);
+        fail(io::io_error::broken_pipe);
+        return 0;
     }
+    if(packed + record > m_drain_buf.size())
+    {
+        packed = send_datagram(packed);
+        std::memmove(m_drain_buf.data(), header, k_record_header);
+    }
+    (void)::BIO_read(bio, m_drain_buf.data() + packed + k_record_header, to_int(record - k_record_header));
+    return packed + record;
+}
+
+std::size_t dtls_channel::send_datagram(std::size_t length)
+{
+    // udp_server's send queue copies the datagram, so the next BIO_read may overwrite the drain buffer at once.
+    m_server.send_to(std::span<const std::byte>{reinterpret_cast<const std::byte *>(m_drain_buf.data()), length}, m_dest);
+    return 0;
 }
 
 // NOLINTNEXTLINE(readability-function-size)
