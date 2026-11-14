@@ -95,3 +95,26 @@ TEST_CASE("inproc routing: EAGER (opt-in knob) dials and completes off note_peer
     }
     REQUIRE(proven == k_iterations);
 }
+
+TEST_CASE("inproc routing: an engine destroyed without close leaves its still-listening transport accepting into no "
+          "slot",
+          "[integration][routing][inproc]")
+{
+    manual_clock::reset();
+    inproc_bus<manual_clock> bus;
+    inproc_executor<manual_clock> ex{bus};
+    transport_t transport_a{ex, bus};
+    transport_t transport_b{ex, bus};
+    plexus::log::null_logger sink;
+    const endpoint ep_b{"inproc", "node-b"};
+    engine a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink);
+    auto b = std::make_unique<engine>(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink);
+    b->listen(ep_b);
+    ex.drain();
+    b.reset();
+
+    a.dial(ep_b);
+    REQUIRE(transport_b.retiring_size() == 1);
+    ex.drain();
+    REQUIRE(transport_b.retiring_size() == 0);
+}

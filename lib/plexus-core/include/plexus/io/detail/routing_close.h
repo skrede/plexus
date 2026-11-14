@@ -8,6 +8,14 @@
 
 namespace plexus::io::detail {
 
+template<typename Engine>
+void detach_transport(Engine &e)
+{
+    e.m_transport.on_accepted(nullptr);
+    e.m_transport.on_dialed(nullptr);
+    e.m_transport.on_dial_failed(nullptr);
+}
+
 // The sequence is itself one operation, so nothing it completes synchronously settles the engine before it ends, and a
 // completion that closes again finds the engine closing. With its callbacks detached first, whatever the closing
 // transport still completes or fails reaches no slot: the transport retires it. The liveliness tick, the pending calls
@@ -19,9 +27,7 @@ void close_engine(Engine &e)
         return;
     e.m_ops.begin();
     e.m_ops.close();
-    e.m_transport.on_accepted(nullptr);
-    e.m_transport.on_dialed(nullptr);
-    e.m_transport.on_dial_failed(nullptr);
+    detach_transport(e);
     hold_until_settled(e.m_ops, e.m_monitor.pending());
     e.m_monitor.shutdown();
     hold_until_settled(e.m_ops, e.m_procedures.pending());

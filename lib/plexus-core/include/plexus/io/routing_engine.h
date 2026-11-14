@@ -160,6 +160,13 @@ public:
         detail::install_splice_refan(*this);
     }
 
+    ~routing_engine()
+    {
+        // close() detached first, and the transport it closed may since carry another owner's sinks.
+        if(!m_ops.closing())
+            detail::detach_transport(*this);
+    }
+
     void add_observer(observer &o)
     {
         m_observers.emplace_back(o);
@@ -697,6 +704,9 @@ private:
 
     template<typename E>
     friend void detail::install_splice_refan(E &);
+
+    template<typename E>
+    friend void detail::detach_transport(E &);
 
     template<typename E>
     friend void detail::close_engine(E &);
