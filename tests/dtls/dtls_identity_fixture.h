@@ -37,7 +37,7 @@ using spki_digest = std::array<std::byte, 32>;
 
 // A self-signed cert+key (EC P-256, or RSA of a given size) written to a fresh temp dir (key at 0600),
 // with the cert's full-32-byte SPKI digest recorded for cross-pinning, and the
-// subject CN recorded (R-OQ3: node_name == cert subject). The dir is removed on
+// subject CN recorded (node_name == cert subject). The dir is removed on
 // teardown. Distinct fixtures yield distinct SPKI digests.
 struct identity_fixture
 {

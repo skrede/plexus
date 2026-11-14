@@ -95,7 +95,7 @@ TEST_CASE("dtls.external_complete: the FSM resolves with cert identity and no pl
         REQUIRE(l.dialed != nullptr);
         REQUIRE(l.accepted != nullptr);
 
-        // Identity is cert-derived (R-OQ3): node_name == cert subject, node_id == SPKI.
+        // Identity is cert-derived: node_name == cert subject, node_id == SPKI.
         REQUIRE(l.dialed->peer_node_name() == server_id.subject);
         REQUIRE(l.accepted->peer_node_name() == client_id.subject);
         REQUIRE(std::memcmp(l.dialed->peer_node_id().data(), server_id.digest.data(), 16) == 0);
