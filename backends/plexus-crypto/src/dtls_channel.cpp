@@ -6,6 +6,7 @@
 #include "plexus/asio/detail/udp_channel_lifecycle.h"
 
 #include <openssl/bio.h>
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
 
@@ -176,6 +177,9 @@ void dtls_channel::secure_send(std::span<const std::byte> bytes)
 {
     if(!m_open || !m_ssl)
         return;
+    // SSL_get_error(3) classifies by the thread's whole error queue, which every channel on this thread shares, so the
+    // queue must be empty before each call whose result it reads.
+    ::ERR_clear_error();
     const int n = ::SSL_write(m_ssl, bytes.data(), to_int(bytes.size()));
     if(n <= 0)
     {
@@ -249,6 +253,7 @@ void dtls_channel::drain_inbound()
         return;
     while(true)
     {
+        ::ERR_clear_error();
         const int n = ::SSL_read(m_ssl, m_drain_buf.data(), to_int(m_drain_buf.size()));
         if(n <= 0)
         {

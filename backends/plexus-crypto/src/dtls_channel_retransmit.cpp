@@ -2,6 +2,7 @@
 
 #include "plexus/tls/detail/dtls_retransmit.h"
 
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 
 #include <mutex>
@@ -66,7 +67,11 @@ void dtls_channel::on_retransmit()
         return;
     const int r = ::DTLSv1_handle_timeout(m_ssl);
     if(r < 0)
+    {
+        // The expiry is pushed onto the io thread's error queue, where it would outlive this channel.
+        ::ERR_clear_error();
         return fail(io::io_error::timed_out);
+    }
     if(r > 0)
         drain_outbound();
     arm_retransmit();
