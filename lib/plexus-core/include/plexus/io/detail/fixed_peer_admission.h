@@ -29,8 +29,9 @@ typename Slots::value_type *claim_identity_slot(Slots &slots, const node_id &id)
 }
 
 // A direct candidate is never displaced from or rejected by an identity's candidate rows, while a
-// transitive one takes only a non-reserved row. A new identity on a full table is rejected and
-// counted whatever its kind, so an announced card can neither abort the node nor evict a peer.
+// transitive one takes only a non-reserved row. Identity slots are first-come-first-served with no
+// direct-peer reservation: a full table refuses and counts every new identity, direct ones included,
+// so a reporter or announcer that fills it denies reachability to later peers until its rows age out.
 template<typename S>
 bool admit_identity_candidate(S &s, const node_id &id, const route_candidate &cand, std::uint64_t now, const route_options &opts)
 {

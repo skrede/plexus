@@ -20,7 +20,9 @@
 namespace plexus {
 
 // A capacity-carrying tag: it is never instantiated, only pattern-matched by profile_traits, so the
-// capacity integers live here, on the decorator, and never touch the mechanism policy.
+// capacity integers live here, on the decorator, and never touch the mechanism policy. Size Peers for
+// the expected number of distinct identities, direct and reported: no slot is reserved for direct
+// peers, so once Peers identities are held every further one is refused until a row ages out.
 template<typename Policy, std::size_t Peers, std::size_t Topics, typename Liveliness = io::default_liveliness_storage>
 struct bounded
 {
