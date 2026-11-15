@@ -64,7 +64,8 @@ struct identity_fixture
 
     explicit identity_fixture(const std::string &tag)
     {
-        dir = std::filesystem::temp_directory_path() / ("plexus_tlsbp_" + tag + "_" + std::to_string(plexus::testing::process_id()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
+        dir = std::filesystem::temp_directory_path() /
+                ("plexus_tlsbp_" + tag + "_" + std::to_string(plexus::testing::process_id()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);
         cert_path = dir / "cert.pem";
         key_path  = dir / "key.pem";

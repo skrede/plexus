@@ -437,7 +437,12 @@ TEST_CASE("steady-state fused liveliness tick and verdict path is zero-alloc", "
     std::size_t verdicts = 0;
     io::liveliness_verdict latched{io::liveliness_verdict::lost};
     arbiter.add_subscriber();
-    arbiter.on_verdict([&](const io::peer_liveliness_event &ev) { latched = ev.verdict; ++verdicts; });
+    arbiter.on_verdict(
+            [&](const io::peer_liveliness_event &ev)
+            {
+                latched = ev.verdict;
+                ++verdicts;
+            });
 
     node_id peer{};
     peer[15] = std::byte{0x5A};

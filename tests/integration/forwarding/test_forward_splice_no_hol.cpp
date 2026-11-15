@@ -97,16 +97,41 @@ inline std::uint64_t next_stall_key() noexcept
 
 struct stall_channel
 {
-    explicit stall_channel(stall_state &st) : m_st(&st) {}
-    void send(std::span<const std::byte> d) { m_st->sends.emplace_back(d.begin(), d.end()); }
-    void close() {}
-    io::endpoint remote_endpoint() const { return {"tcp", "127.0.0.1:0"}; }
-    void on_data(detail::move_only_function<void(std::span<const std::byte>)>) {}
-    void on_closed(detail::move_only_function<void()>) {}
-    void on_error(detail::move_only_function<void(io::io_error)>) {}
-    void on_protocol_close(detail::move_only_function<void(wire::close_cause)>) {}
-    std::size_t backpressured() const noexcept { return m_st->reported; }
-    std::uint64_t scheduler_key() const noexcept { return m_key; }
+    explicit stall_channel(stall_state &st)
+            : m_st(&st)
+    {
+    }
+    void send(std::span<const std::byte> d)
+    {
+        m_st->sends.emplace_back(d.begin(), d.end());
+    }
+    void close()
+    {
+    }
+    io::endpoint remote_endpoint() const
+    {
+        return {"tcp", "127.0.0.1:0"};
+    }
+    void on_data(detail::move_only_function<void(std::span<const std::byte>)>)
+    {
+    }
+    void on_closed(detail::move_only_function<void()>)
+    {
+    }
+    void on_error(detail::move_only_function<void(io::io_error)>)
+    {
+    }
+    void on_protocol_close(detail::move_only_function<void(wire::close_cause)>)
+    {
+    }
+    std::size_t backpressured() const noexcept
+    {
+        return m_st->reported;
+    }
+    std::uint64_t scheduler_key() const noexcept
+    {
+        return m_key;
+    }
 
     stall_state *m_st{nullptr};
     std::uint64_t m_key{next_stall_key()};
@@ -118,11 +143,21 @@ struct stall_executor
 
 struct stall_timer
 {
-    explicit stall_timer(stall_executor &) {}
-    stall_timer(stall_executor &, std::error_code &) {}
-    void expires_after(std::chrono::milliseconds) {}
-    void async_wait(detail::move_only_function<void(std::error_code)>) {}
-    void cancel() {}
+    explicit stall_timer(stall_executor &)
+    {
+    }
+    stall_timer(stall_executor &, std::error_code &)
+    {
+    }
+    void expires_after(std::chrono::milliseconds)
+    {
+    }
+    void async_wait(detail::move_only_function<void(std::error_code)>)
+    {
+    }
+    void cancel()
+    {
+    }
 };
 
 struct stall_policy : plexus::testing::inline_verbs<stall_executor &>
@@ -134,7 +169,7 @@ struct stall_policy : plexus::testing::inline_verbs<stall_executor &>
 
 static_assert(plexus::Policy<stall_policy>);
 
-using forwarder = io::message_forwarder<stall_policy>;
+using forwarder  = io::message_forwarder<stall_policy>;
 using fwd_splice = io::forward_splice<stall_policy>;
 
 // A pool sized ABOVE the band depth so the saturated band (not the pool) is the drop site under test.

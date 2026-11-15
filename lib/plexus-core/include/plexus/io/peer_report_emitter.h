@@ -56,7 +56,9 @@ struct null_peer_report_emitter
         return false;
     }
 
-    void clear_decline(const node_id &) noexcept {}
+    void clear_decline(const node_id &) noexcept
+    {
+    }
 
     bool declines(const node_id &) const noexcept
     {
