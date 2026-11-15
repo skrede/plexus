@@ -73,14 +73,9 @@ public:
 
     void dial(const io::endpoint &ep)
     {
-        auto *acc = m_bus.find_listener(ep);
-        if(!acc)
+        std::unique_ptr<inproc_channel<Clock>> dialer;
+        if(!m_bus.accept(ep, [this, &dialer](auto &on_accepted) { dialer = connect_pair(on_accepted); }))
             return report_dial_fail(ep, io::io_error::connection_refused);
-        auto dialer   = std::make_unique<inproc_channel<Clock>>(m_exec);
-        auto accepted = std::make_unique<inproc_channel<Clock>>(m_exec);
-        dialer->connect_to(accepted->local_endpoint());
-        accepted->connect_to(dialer->local_endpoint());
-        m_retiring.deliver_or_retire(acc->on_accepted_cb, std::move(accepted));
         m_retiring.deliver_or_retire(m_on_dialed_cb, std::move(dialer), ep);
     }
 
@@ -97,6 +92,17 @@ public:
     }
 
 private:
+    template<typename Sink>
+    std::unique_ptr<inproc_channel<Clock>> connect_pair(Sink &on_accepted)
+    {
+        auto dialer   = std::make_unique<inproc_channel<Clock>>(m_exec);
+        auto accepted = std::make_unique<inproc_channel<Clock>>(m_exec);
+        dialer->connect_to(accepted->local_endpoint());
+        accepted->connect_to(dialer->local_endpoint());
+        m_retiring.deliver_or_retire(on_accepted, std::move(accepted));
+        return dialer;
+    }
+
     void report_dial_fail(const io::endpoint &ep, io::io_error e)
     {
         if(m_on_dial_failed_cb)

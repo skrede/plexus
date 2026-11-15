@@ -66,9 +66,10 @@ public:
         return m_listeners.add(ep, std::move(on_accepted));
     }
 
-    typename detail::inproc_listener_set<Clock>::entry *find_listener(const io::endpoint &ep) noexcept
+    template<typename Deliver>
+    bool accept(const io::endpoint &ep, Deliver deliver)
     {
-        return m_listeners.find(ep);
+        return m_listeners.dispatch(ep, std::move(deliver));
     }
 
     void deregister_listener(std::uint64_t id) noexcept
