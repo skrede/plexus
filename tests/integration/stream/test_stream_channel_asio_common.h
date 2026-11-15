@@ -26,6 +26,8 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/io/detail/retiring_table.h"
+
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
 
@@ -51,6 +53,7 @@
 #include <cstring>
 #include <optional>
 #include <algorithm>
+#include <system_error>
 
 namespace pasio  = plexus::asio;
 namespace pio    = plexus::io;
@@ -74,6 +77,7 @@ struct loopback
 {
     ::asio::io_context io;
     pasio::asio_listener listener{io, short_cfg()};
+    pio::detail::retiring_table<pasio::asio_channel> strays;
     std::unique_ptr<pasio::asio_channel> server;
     ::asio::ip::tcp::socket client{io};
 
@@ -82,22 +86,28 @@ struct loopback
 
     loopback()
     {
-        listener.on_accepted(
-                [this](std::unique_ptr<pasio::asio_channel> ch)
-                {
-                    server = std::move(ch);
-                    server->on_protocol_close(
-                            [this](wire::close_cause c)
-                            {
-                                caused = c;
-                                ++closes;
-                            });
-                });
+        listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) { adopt(std::move(ch)); });
         listener.start({"tcp", "127.0.0.1:0"});
 
         ::asio::ip::tcp::endpoint ep(::asio::ip::make_address("127.0.0.1"), listener.port());
         client.connect(ep);
         pump_until([this] { return server != nullptr; });
+    }
+
+    // A parallel test's dial can land on this reused ephemeral port. Replacing the client's channel with that stray
+    // would destroy it with operations outstanding, so a stray is retired instead.
+    void adopt(std::unique_ptr<pasio::asio_channel> ch)
+    {
+        std::error_code ec;
+        if(ch->socket().remote_endpoint(ec) != client.local_endpoint(ec))
+            return strays.retire(std::move(ch));
+        server = std::move(ch);
+        server->on_protocol_close(
+                [this](wire::close_cause c)
+                {
+                    caused = c;
+                    ++closes;
+                });
     }
 
     template<typename Pred>
