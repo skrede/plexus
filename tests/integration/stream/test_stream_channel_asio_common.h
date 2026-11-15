@@ -16,18 +16,19 @@
 // re-run >=3 process runs for cross-process reproducibility (a live-networking
 // claim is never made from one run).
 
+#include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_channel.h"
 #include "plexus/asio/asio_listener.h"
-#include "plexus/asio/asio_policy.h"
 
-#include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
+
 #include "plexus/stream/stream_inbound.h"
 
 #include "plexus/testing/pump.h"
@@ -36,18 +37,20 @@
 
 #include <asio/write.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/tcp.hpp>
 
 #include <span>
 #include <array>
 #include <chrono>
-#include <algorithm>
 #include <memory>
+#include <string>
 #include <vector>
-#include <cstring>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <optional>
+#include <algorithm>
 
 namespace pasio  = plexus::asio;
 namespace pio    = plexus::io;
