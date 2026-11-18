@@ -13,6 +13,7 @@
 using plexus::asio::detail::accept_backoff;
 using plexus::asio::detail::accept_verdict;
 using plexus::asio::detail::classify_accept_error;
+using plexus::asio::detail::handle_accept_error;
 using namespace std::chrono_literals;
 
 namespace {
@@ -29,7 +30,7 @@ accept_verdict of(::asio::error::basic_errors e)
 
 }
 
-TEST_CASE("accept_retry: the fatal set stops, resource exhaustion backs off, and every other error re-arms", "[asio][accept]")
+TEST_CASE("accept_retry: the fatal set stops, resource exhaustion backs off, and a pending connection's error re-arms", "[asio][accept]")
 {
     CHECK(of(::asio::error::operation_aborted) == accept_verdict::stop);
     CHECK(of(std::errc::operation_canceled) == accept_verdict::stop);
@@ -51,8 +52,13 @@ TEST_CASE("accept_retry: the fatal set stops, resource exhaustion backs off, and
     CHECK(of(::asio::error::connection_aborted) == accept_verdict::rearm);
     CHECK(of(std::errc::connection_aborted) == accept_verdict::rearm);
     CHECK(of(std::errc::protocol_error) == accept_verdict::rearm);
+#if !defined(_WIN32)
     CHECK(of(::asio::error::network_down) == accept_verdict::rearm);
     CHECK(of(std::errc::network_down) == accept_verdict::rearm);
+#else
+    CHECK(of(::asio::error::network_down) == accept_verdict::backoff);
+    CHECK(of(std::errc::network_down) == accept_verdict::backoff);
+#endif
     CHECK(of(::asio::error::host_unreachable) == accept_verdict::rearm);
     CHECK(of(std::errc::host_unreachable) == accept_verdict::rearm);
     CHECK(of(::asio::error::connection_reset) == accept_verdict::rearm);
@@ -86,4 +92,29 @@ TEST_CASE("accept_retry: the backoff doubles from 5 ms to a 1 s cap and resets a
     CHECK(fired);
     CHECK(backoff.pending() == 0);
     CHECK(backoff.delay() == 10ms);
+}
+
+TEST_CASE("accept_retry: an error accept(2) does not name as pending on a connection backs off instead of re-arming at once", "[asio][accept]")
+{
+    CHECK(of(std::errc::operation_not_permitted) == accept_verdict::rearm);
+    CHECK(of(::asio::error::network_unreachable) == accept_verdict::rearm);
+    CHECK(of(std::errc::network_unreachable) == accept_verdict::rearm);
+    CHECK(of(std::errc::operation_not_supported) == accept_verdict::backoff);
+    CHECK(of(std::errc::address_not_available) == accept_verdict::backoff);
+
+    ::asio::io_context io;
+    accept_backoff backoff{io};
+    std::int32_t reports = 0;
+    std::int32_t rearms  = 0;
+    for(std::int32_t i = 0; i < 3; ++i)
+    {
+        handle_accept_error(backoff, std::make_error_code(std::errc::operation_not_supported), true, [&](const std::error_code &) { ++reports; }, [&] { ++rearms; });
+        CHECK(reports == i + 1);
+        CHECK(rearms == i);
+        REQUIRE(backoff.pending() == 1);
+        io.restart();
+        io.run();
+        CHECK(rearms == i + 1);
+    }
+    CHECK(backoff.delay() == 40ms);
 }

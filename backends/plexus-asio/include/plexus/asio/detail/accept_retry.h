@@ -23,17 +23,34 @@ enum class accept_verdict : std::uint8_t
     backoff
 };
 
-// accept(2) asks a server to treat the network errors already pending on a new connection like EAGAIN and retry, so
-// only a dead or cancelled acceptor stops the loop. Each code is matched as asio raises it and as its portable errc.
+inline bool is_dead_acceptor(const std::error_code &ec)
+{
+    return ec == ::asio::error::operation_aborted || ec == ::asio::error::bad_descriptor || ec == ::asio::error::invalid_argument || ec == ::asio::error::not_socket ||
+            ec == std::errc::operation_canceled || ec == std::errc::bad_file_descriptor || ec == std::errc::invalid_argument || ec == std::errc::not_a_socket;
+}
+
+// accept(2) names these as network errors already pending on the new connection, which one call consumes. Windows
+// AcceptEx keeps failing with WSAENETDOWN while an interface is down, so there network_down is not one of them.
+inline bool is_pending_connection_error(const std::error_code &ec)
+{
+#if !defined(_WIN32)
+    if(ec == ::asio::error::network_down || ec == std::errc::network_down)
+        return true;
+#endif
+    return ec == ::asio::error::connection_aborted || ec == std::errc::connection_aborted || ec == ::asio::error::connection_reset || ec == std::errc::connection_reset ||
+            ec == ::asio::error::network_unreachable || ec == std::errc::network_unreachable || ec == ::asio::error::host_unreachable || ec == std::errc::host_unreachable ||
+            ec == std::errc::protocol_error || ec == std::errc::operation_not_permitted;
+}
+
+// Any error but a pending connection's may persist on the listening socket, so it re-arms through the backoff rather
+// than spinning the io_context. Each code is matched as asio raises it and as its portable errc.
 inline accept_verdict classify_accept_error(const std::error_code &ec)
 {
-    if(ec == ::asio::error::operation_aborted || ec == ::asio::error::bad_descriptor || ec == ::asio::error::invalid_argument || ec == ::asio::error::not_socket ||
-       ec == std::errc::operation_canceled || ec == std::errc::bad_file_descriptor || ec == std::errc::invalid_argument || ec == std::errc::not_a_socket)
+    if(is_dead_acceptor(ec))
         return accept_verdict::stop;
-    if(ec == ::asio::error::no_descriptors || ec == ::asio::error::no_buffer_space || ec == ::asio::error::no_memory || ec == std::errc::too_many_files_open ||
-       ec == std::errc::too_many_files_open_in_system || ec == std::errc::no_buffer_space || ec == std::errc::not_enough_memory)
-        return accept_verdict::backoff;
-    return accept_verdict::rearm;
+    if(is_pending_connection_error(ec))
+        return accept_verdict::rearm;
+    return accept_verdict::backoff;
 }
 
 // The delay doubles when a wait is armed, so delay() is the one the next wait will use.
