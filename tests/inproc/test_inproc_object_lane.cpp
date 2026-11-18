@@ -48,11 +48,14 @@ object_carrier make_carrier(counted_payload &p, std::uint64_t topic, std::uint64
 struct pair_fixture
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_channel<> a{ex};
-    inproc_channel<> b{ex};
+    inproc_executor<> ex;
+    inproc_channel<> a;
+    inproc_channel<> b;
 
     pair_fixture()
+            : ex{bus}
+            , a{ex}
+            , b{ex}
     {
         a.connect_to(b.local_endpoint());
         b.connect_to(a.local_endpoint());
