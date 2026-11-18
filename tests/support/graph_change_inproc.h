@@ -100,14 +100,17 @@ template<typename Engine>
 struct basic_one_node
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t transport{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t transport;
     plexus::log::null_logger sink;
     Engine eng;
-    plexus::node_id self{make_id(0xA1)};
+    plexus::node_id self;
 
     basic_one_node()
-            : eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            : ex{bus}
+            , transport{ex, bus}
+            , eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            , self{make_id(0xA1)}
     {
         eng.listen(ep_for("node-a"));
     }
@@ -125,22 +128,29 @@ using bounded_one_node = basic_one_node<bounded_engine>;
 struct two_node
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t transport_a;
+    transport_t transport_b;
     plexus::log::null_logger sink;
 
     engine a;
     engine b;
 
-    plexus::node_id id_a{make_id(0xA1)};
-    plexus::node_id id_b{make_id(0xB2)};
-    plexus::io::endpoint ep_a{ep_for("node-a")};
-    plexus::io::endpoint ep_b{ep_for("node-b")};
+    plexus::node_id id_a;
+    plexus::node_id id_b;
+    plexus::io::endpoint ep_a;
+    plexus::io::endpoint ep_b;
 
     two_node()
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            : ex{bus}
+            , transport_a{ex, bus}
+            , transport_b{ex, bus}
+            , a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false)
             , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            , id_a{make_id(0xA1)}
+            , id_b{make_id(0xB2)}
+            , ep_a{ep_for("node-a")}
+            , ep_b{ep_for("node-b")}
     {
         a.listen(ep_a);
         b.listen(ep_b);

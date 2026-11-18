@@ -62,6 +62,7 @@ public:
     explicit loss_reorder_scheduler(loss_reorder_config cfg)
             : m_cfg(cfg)
             , m_rng(cfg.seed)
+            , m_dropped(0)
     {
     }
 
@@ -112,7 +113,7 @@ private:
     loss_reorder_config m_cfg;
     shim_lcg m_rng;
     std::deque<std::vector<std::byte>> m_hold;
-    std::size_t m_dropped = 0;
+    std::size_t m_dropped;
 };
 
 }

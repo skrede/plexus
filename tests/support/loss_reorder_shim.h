@@ -30,8 +30,11 @@ public:
             , m_front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , m_back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , m_server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            , m_front_buf()
+            , m_back_buf()
             , m_sched(cfg)
             , m_back_sched()
+            , m_forwarded(0)
     {
         if(back_cfg)
             m_back_sched.emplace(*back_cfg);
@@ -102,11 +105,11 @@ private:
     ::asio::ip::udp::endpoint m_server_ep;
     ::asio::ip::udp::endpoint m_client_ep;
     ::asio::ip::udp::endpoint m_from;
-    std::array<std::byte, 65536> m_front_buf{};
-    std::array<std::byte, 65536> m_back_buf{};
+    std::array<std::byte, 65536> m_front_buf;
+    std::array<std::byte, 65536> m_back_buf;
     loss_reorder_scheduler m_sched;
     std::optional<loss_reorder_scheduler> m_back_sched;
-    std::size_t m_forwarded = 0;
+    std::size_t m_forwarded;
 };
 
 }
