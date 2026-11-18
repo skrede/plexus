@@ -73,10 +73,17 @@ inline plexus::io::reconnect_config forever_cfg()
 // Counts each graph edge the engine posts, so mutations coalesced into one wakeup count once.
 struct recording_graph_observer final : public plexus::io::observer
 {
-    int changed_fires{0};
-    std::uint64_t last_generation{0};
+    int changed_fires;
+    bool graph_opt_in;
+    std::uint64_t last_generation;
     std::vector<plexus::graph::graph_change> deltas;
-    bool graph_opt_in{false};
+
+    recording_graph_observer()
+            : changed_fires(0)
+            , graph_opt_in(false)
+            , last_generation(0)
+    {
+    }
 
     void on_graph_changed(std::uint64_t generation) override
     {
