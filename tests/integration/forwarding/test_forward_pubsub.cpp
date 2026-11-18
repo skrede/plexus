@@ -6,7 +6,7 @@
 // the publisher's proven gid; an out-of-scope topic and a purely-local-demand topic originate nothing;
 // loop-safety and dedup hold.
 
-#include "test_forward_pubsub_common.h"
+#include "test_forward_pubsub_line.h"
 
 #include <catch2/catch_test_macros.hpp>
 
