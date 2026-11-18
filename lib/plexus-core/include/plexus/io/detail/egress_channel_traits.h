@@ -24,10 +24,12 @@ constexpr bool can_poll()
 }
 
 // The per-construction scheduler key, so a reconnect at a reused heap address cannot collide with a freed channel's band
-// entry. A channel without the verb never reaches the bands; the 0 branch only lets it instantiate.
+// entry. Banding is gated on backpressured() alone, so a channel with it must carry a key, or every such destination
+// would share band entry 0; a channel without backpressured() never bands and keys as 0.
 template<typename Channel>
 std::uint64_t key_of(Channel &ch)
 {
+    static_assert(!can_poll<Channel>() || requires(Channel &c) { c.scheduler_key(); }, "a channel that reports backpressured() must provide scheduler_key()");
     if constexpr(requires(Channel &c) { c.scheduler_key(); })
         return ch.scheduler_key();
     else

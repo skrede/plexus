@@ -107,7 +107,8 @@ class reported_stall_channel : public stall_hooks
 {
 public:
     explicit reported_stall_channel(std::size_t &reported, io::endpoint remote = {"tcp", "127.0.0.1:0"})
-            : m_remote(std::move(remote))
+            : m_key(next_stall_key())
+            , m_remote(std::move(remote))
             , m_reported(reported)
     {
     }
@@ -126,7 +127,13 @@ public:
         return m_reported;
     }
 
+    std::uint64_t scheduler_key() const noexcept
+    {
+        return m_key;
+    }
+
 private:
+    std::uint64_t m_key;
     io::endpoint m_remote;
     std::size_t &m_reported;
 };

@@ -109,14 +109,17 @@ struct capped_channel
 {
     explicit capped_channel(capped_state &st)
             : m_st(&st)
+            , m_key(plexus::testing::next_stall_key())
     {
     }
     capped_channel(stall_executor &)
             : m_st(nullptr)
+            , m_key(plexus::testing::next_stall_key())
     {
     }
     capped_channel(stall_executor &, std::error_code &)
             : m_st(nullptr)
+            , m_key(plexus::testing::next_stall_key())
     {
     }
 
@@ -162,8 +165,13 @@ struct capped_channel
     {
         return m_st->cap;
     }
+    std::uint64_t scheduler_key() const noexcept
+    {
+        return m_key;
+    }
 
     capped_state *m_st;
+    std::uint64_t m_key;
 };
 
 using capped_policy = plexus::testing::basic_stall_policy<capped_channel>;

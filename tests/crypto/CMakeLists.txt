@@ -16,7 +16,8 @@ plexus_add_catch_test(test_rekey_threshold_sweep
     LINKS plexus::crypto)
 
 plexus_add_catch_test(test_authenticated_channel
-    SOURCES test_authenticated_channel.cpp test_authenticated_channel_epoch.cpp $<TARGET_OBJECTS:plexus-crypto>
+    SOURCES test_authenticated_channel.cpp test_authenticated_channel_epoch.cpp test_authenticated_scheduler_key.cpp
+        $<TARGET_OBJECTS:plexus-crypto>
     LINKS plexus::crypto)
 
 plexus_add_catch_test(test_nonce_uniqueness

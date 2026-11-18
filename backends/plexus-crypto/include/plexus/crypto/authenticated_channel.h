@@ -113,6 +113,11 @@ public:
     {
         return m_lower.backpressured();
     }
+    std::uint64_t scheduler_key() const
+        requires requires(const Lower &l) { l.scheduler_key(); }
+    {
+        return m_lower.scheduler_key();
+    }
 
 private:
     template<typename C>
