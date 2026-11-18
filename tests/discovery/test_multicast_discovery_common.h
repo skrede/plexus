@@ -53,6 +53,11 @@ class fake_datagram_socket
 public:
     using endpoint_type = fake_endpoint;
 
+    fake_datagram_socket()
+            : closed(false)
+    {
+    }
+
     std::error_code bind(const endpoint_type &)
     {
         return {};
@@ -79,8 +84,8 @@ public:
             m_on_datagram(fake_endpoint{fake_address{from_host}, 7447}, bytes);
     }
 
+    bool closed;
     std::vector<std::vector<std::byte>> sent;
-    bool closed = false;
 
 private:
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;
