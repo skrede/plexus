@@ -132,6 +132,10 @@ public:
     }
 
 private:
+    std::vector<bool> m_bits = std::vector<bool>(Width, false);
+    std::uint64_t m_highest{0};
+    bool m_seen_any{false};
+
     void slide(std::uint64_t by)
     {
         if(by >= Width)
@@ -142,10 +146,6 @@ private:
         for(std::size_t b = Width; b-- > 0;)
             m_bits[b] = (b >= by) && m_bits[b - by];
     }
-
-    std::vector<bool> m_bits = std::vector<bool>(Width, false);
-    std::uint64_t m_highest{0};
-    bool m_seen_any{false};
 };
 
 // Drive the production window and the bit-by-bit reference through the SAME schedule;
