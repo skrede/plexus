@@ -50,14 +50,20 @@ struct recording_logger final : plexus::log::logger
 
 struct counting_logger final : plexus::log::logger
 {
+    counting_logger()
+            : lines(0)
+            , longest(0)
+    {
+    }
+
     void warn(std::string_view message) override
     {
         ++lines;
         longest = std::max(longest, message.size());
     }
 
-    std::uint32_t lines{0};
-    std::size_t longest{0};
+    std::uint32_t lines;
+    std::size_t longest;
 };
 
 }
