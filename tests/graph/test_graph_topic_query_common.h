@@ -73,9 +73,16 @@ inline const topic_record *find_record(std::span<const topic_record> buffer, std
 // polytype cases need both rival publishers remote to one enumerating node AND local to another.
 struct trio : net
 {
-    plexus::node_id id_c{make_id(0x0C)};
-    plexus::inproc::inproc_transport<> tc{h.ex, h.bus};
-    inproc_node c{h.ex, h.disc, id_c, tc, opts_for(true)};
+    plexus::node_id id_c;
+    plexus::inproc::inproc_transport<> tc;
+    inproc_node c;
+
+    trio()
+            : id_c{make_id(0x0C)}
+            , tc{h.ex, h.bus}
+            , c{h.ex, h.disc, id_c, tc, opts_for(true)}
+    {
+    }
 
     // A publishes the topic as one type, C as another, C also publishes an untyped topic, and B
     // demands the contested one. Every endpoint is a real handle driving the node's own seams, so
