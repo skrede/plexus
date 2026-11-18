@@ -66,7 +66,7 @@ struct discovery_options
     }
 
     std::string group;
-    // The liveness lifetime every announcement advertises to its receivers; it must exceed announce_period.
+    // The liveness lifetime every announcement advertises to its receivers; it must exceed a positive announce_period.
     std::chrono::seconds announce_ttl;
     std::chrono::milliseconds announce_period; // a conservative starting value, tuned empirically later
     flood_cap_options cap;

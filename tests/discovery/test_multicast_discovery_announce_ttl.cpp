@@ -75,3 +75,13 @@ TEST_CASE("multicast_discovery: construction refuses an announce ttl that does n
 
     CHECK_NOTHROW(construct(with_ttl(1999ms, 2s)));
 }
+
+TEST_CASE("multicast_discovery: construction refuses a non-positive announce period or announce ttl", "[multicast_discovery][announce_ttl]")
+{
+    CHECK_THROWS_AS(construct(with_ttl(0ms, 15s)), std::runtime_error);
+    CHECK_THROWS_AS(construct(with_ttl(-1000ms, 15s)), std::runtime_error);
+    CHECK_THROWS_AS(construct(with_ttl(-2000ms, 0s)), std::runtime_error);
+    CHECK_THROWS_AS(construct(with_ttl(-2000ms, -1s)), std::runtime_error);
+
+    CHECK_NOTHROW(construct(with_ttl(1ms, 1s)));
+}

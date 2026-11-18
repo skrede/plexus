@@ -132,8 +132,8 @@ private:
 
     static discovery_options checked(discovery_options options)
     {
-        if(options.announce_ttl <= options.announce_period)
-            plexus::detail::fail_closed("multicast_discovery: announce_ttl must exceed announce_period");
+        if(options.announce_period <= std::chrono::milliseconds::zero() || options.announce_ttl <= options.announce_period)
+            plexus::detail::fail_closed("multicast_discovery: announce_ttl must exceed a positive announce_period");
         return options;
     }
 
