@@ -166,18 +166,21 @@ struct dial_tls_link
     ::asio::io_context io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
-    ptls::tls_transport server{io, server_cred};
-    ptls::tls_transport client{io, client_cred};
+    ptls::tls_transport server;
+    ptls::tls_transport client;
 
     std::unique_ptr<ptls::tls_channel> accepted; // server end
     std::unique_ptr<ptls::tls_channel> dialed;   // client end
-    bool dial_failed{false};
+    bool dial_failed;
 
     std::vector<std::vector<std::byte>> server_received;
 
     dial_tls_link(const identity &server_id, const identity &client_id)
             : server_cred(make_cred(server_id, client_id.digest))
             , client_cred(make_cred(client_id, server_id.digest))
+            , server(io, server_cred)
+            , client(io, client_cred)
+            , dial_failed(false)
     {
         server.on_accepted(
                 [this](std::unique_ptr<ptls::tls_channel> ch)

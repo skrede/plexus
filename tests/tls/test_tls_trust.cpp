@@ -52,9 +52,10 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest digest;
 
     explicit identity_fixture(const std::string &tag)
+            : digest()
     {
         dir = std::filesystem::temp_directory_path() /
                 ("plexus_tls_trust_" + tag + "_" + std::to_string(plexus::testing::process_id()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
@@ -142,8 +143,8 @@ struct trust_link
 
     std::unique_ptr<ptls::tls_channel> accepted;
     std::unique_ptr<ptls::tls_channel> dialed;
-    bool dial_failed{false};
-    bool dialed_errored{false};
+    bool dial_failed;
+    bool dialed_errored;
 
     std::vector<std::vector<std::byte>> accepter_received;
 
@@ -152,6 +153,8 @@ struct trust_link
             , dialer_cred(std::move(d))
             , accepter(io, accepter_cred)
             , dialer(io, dialer_cred)
+            , dial_failed(false)
+            , dialed_errored(false)
     {
         accepter.on_accepted(
                 [this](std::unique_ptr<ptls::tls_channel> ch)

@@ -59,9 +59,10 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest digest;
 
     explicit identity_fixture(const std::string &tag)
+            : digest()
     {
         dir = std::filesystem::temp_directory_path() /
                 ("plexus_tls_mux_" + tag + "_" + std::to_string(plexus::testing::process_id()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
@@ -133,22 +134,26 @@ struct mux_face
 {
     ::asio::io_context &io;
     ptls::tls_credential cred;
-    pasio::unix_transport local{io};
-    pasio::asio_transport remote{io};
+    pasio::unix_transport local;
+    pasio::asio_transport remote;
     ptls::tls_transport secure;
     // The datagram member stays inert on these tls/tcp routes — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which these faces never do.
-    pasio::udp_transport datagram{io};
+    pasio::udp_transport datagram;
     // The secure-datagram (DTLS) member reuses this face's credential but stays inert on
     // the tls/tcp routes these faces exercise — its socket binds only on a "dtls" dial.
     ptls::dtls_transport secure_datagram;
-    pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
+    pasio::all_backends_mux mux;
 
     mux_face(::asio::io_context &ctx, ptls::tls_credential c)
             : io(ctx)
             , cred(std::move(c))
+            , local(io)
+            , remote(io)
             , secure(io, cred)
+            , datagram(io)
             , secure_datagram(io, cred)
+            , mux{local, remote, secure, datagram, secure_datagram}
     {
     }
 };
