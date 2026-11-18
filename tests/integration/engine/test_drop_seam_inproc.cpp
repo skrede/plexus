@@ -154,7 +154,13 @@ reconnect_config bounded_cfg(std::uint32_t max_attempts)
 // per-byte / per-frame amplification). A plain instance, no static singleton.
 struct counting_logger final : plexus::log::logger
 {
-    int warns{0};
+    int warns;
+
+    counting_logger()
+            : warns(0)
+    {
+    }
+
     void warn(std::string_view) override
     {
         ++warns;

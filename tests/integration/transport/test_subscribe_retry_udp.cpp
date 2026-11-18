@@ -48,7 +48,12 @@ constexpr loss_reorder_config k_overtake{.reorder_depth = 2, .seed = 5};
 
 struct unestablished_counter final : plexus::io::observer
 {
-    std::uint32_t drops{0};
+    std::uint32_t drops;
+
+    unestablished_counter()
+            : drops(0)
+    {
+    }
 
     void on_drop(const plexus::io::detail::drop_event &ev) override
     {

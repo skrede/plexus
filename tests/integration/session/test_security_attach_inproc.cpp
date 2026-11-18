@@ -84,7 +84,13 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, const attach_policy *policy 
 // is exercised without any crypto. The reject leg drives reject_unauthorized.
 struct verdict_policy final : public attach_policy
 {
-    bool admit{true};
+    bool admit;
+
+    verdict_policy()
+            : admit(true)
+    {
+    }
+
     bool decide(const attach_facts &) const noexcept override
     {
         return admit;

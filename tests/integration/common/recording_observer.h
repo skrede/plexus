@@ -67,6 +67,13 @@ public:
         int destroyed{0};
     };
 
+    recording_observer()
+            : m_empty()
+            , m_empty_topic()
+            , m_empty_participant()
+    {
+    }
+
     void on_peer_connected(const plexus::node_id &id, std::string_view, plexus::io::peer_kind k) override
     {
         auto &c = m_peers[id];
@@ -225,13 +232,13 @@ public:
     }
 
 private:
+    counts m_empty;
+    topic_counts m_empty_topic;
+    participant_counts m_empty_participant;
     std::map<plexus::node_id, counts> m_peers;
-    std::map<plexus::node_id, participant_counts> m_participants;
     std::map<std::string, topic_counts> m_topics;
     std::map<std::uint64_t, int> m_unsubscribed_by_hash;
-    counts m_empty{};
-    participant_counts m_empty_participant{};
-    topic_counts m_empty_topic{};
+    std::map<plexus::node_id, participant_counts> m_participants;
 };
 
 #endif

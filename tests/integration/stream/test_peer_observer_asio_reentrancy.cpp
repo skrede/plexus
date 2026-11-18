@@ -51,14 +51,21 @@ TEST_CASE("observer over asio: calling engine.subscribe from inside an observer 
 {
     struct reentrant_observer final : public plexus::io::observer
     {
-        engine *eng{nullptr};
-        plexus::node_id target{};
-        int connected{0};
+        engine &eng;
+        int connected;
+        plexus::node_id target;
+
+        reentrant_observer(engine &owner, const plexus::node_id &peer)
+                : eng(owner)
+                , connected(0)
+                , target(peer)
+        {
+        }
+
         void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
-            if(eng)
-                eng->subscribe(target, "late-topic");
+            eng.subscribe(target, "late-topic");
         }
     };
 
@@ -70,9 +77,7 @@ TEST_CASE("observer over asio: calling engine.subscribe from inside an observer 
         asio_node a{io, 0xA1, /*eager=*/false};
         asio_node b{io, 0xB2, /*eager=*/false};
         const auto id_b = make_id(0xB2);
-        reentrant_observer obs;
-        obs.eng    = &a.eng;
-        obs.target = id_b;
+        reentrant_observer obs{a.eng, id_b};
         a.eng.add_observer(obs);
 
         a.eng.note_peer(id_b, b.listen_ep());

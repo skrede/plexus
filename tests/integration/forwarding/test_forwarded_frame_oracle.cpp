@@ -37,11 +37,17 @@ namespace {
 // warn() bumps a counter — proves the warn-and-drop seam fired without coupling to the message text.
 struct counting_logger final : plexus::log::logger
 {
+    counting_logger()
+            : drops(0)
+    {
+    }
+
     void warn(std::string_view) override
     {
         ++drops;
     }
-    std::size_t drops{0};
+
+    std::size_t drops;
 };
 
 // Records which msg_type each fired consumer carried, so the oracle asserts on the EXACT set of

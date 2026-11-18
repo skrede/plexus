@@ -131,8 +131,13 @@ inline liveliness_options opts(combine policy)
 // alive/lost transitions and read the contributing-signal mask of the last one.
 struct recording_liveliness_observer final : plexus::io::observer
 {
+    bool observes;
     std::vector<peer_liveliness_event> events;
-    bool observes = true;
+
+    recording_liveliness_observer()
+            : observes(true)
+    {
+    }
 
     void on_peer_liveliness(const peer_liveliness_event &ev) override
     {

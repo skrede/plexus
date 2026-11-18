@@ -64,14 +64,21 @@ inline node_id id_of(std::uint8_t seed)
 // "(self_check)" by node.h) — so a test proves relay-posture disclosure is never silent without coupling to the wording.
 struct capturing_logger final : plexus::log::logger
 {
+    capturing_logger()
+            : count(0)
+            , self_checks(0)
+    {
+    }
+
     void warn(std::string_view message) override
     {
         ++count;
         if(message.find("self_check") != std::string_view::npos)
             ++self_checks;
     }
-    std::size_t count{0};
-    std::size_t self_checks{0};
+
+    std::size_t count;
+    std::size_t self_checks;
 };
 
 // The complete session whose HANDSHAKE-PROVEN identity is `proven`, if any (slots key by endpoint hash, not the proven

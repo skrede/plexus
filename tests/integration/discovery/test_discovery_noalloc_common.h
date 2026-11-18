@@ -103,6 +103,11 @@ public:
         }
     };
 
+    sink_datagram_socket()
+            : sends(0)
+    {
+    }
+
     std::error_code bind(const endpoint_type &)
     {
         return {};
@@ -135,8 +140,8 @@ public:
             m_on_datagram(endpoint_type{source_host}, bytes);
     }
 
+    int sends;
     std::vector<std::byte> last;
-    int sends{0};
 
 private:
     plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram;

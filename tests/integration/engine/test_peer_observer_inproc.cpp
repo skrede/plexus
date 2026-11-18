@@ -517,14 +517,21 @@ TEST_CASE("inproc observer: calling engine.subscribe from inside an observer cal
     // also the ASan-critical posted-edge path (the suite runs under asan/ubsan).
     struct reentrant_observer final : public plexus::io::observer
     {
-        engine *eng{nullptr};
-        plexus::node_id target{};
-        int connected{0};
+        engine &eng;
+        int connected;
+        plexus::node_id target;
+
+        reentrant_observer(engine &owner, const plexus::node_id &peer)
+                : eng(owner)
+                , connected(0)
+                , target(peer)
+        {
+        }
+
         void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
-            if(eng)
-                eng->subscribe(target, "late-topic"); // nested engine call from a callback
+            eng.subscribe(target, "late-topic"); // nested engine call from a callback
         }
     };
 
@@ -534,9 +541,7 @@ TEST_CASE("inproc observer: calling engine.subscribe from inside an observer cal
     {
         manual_clock::reset();
         two_node net;
-        reentrant_observer obs;
-        obs.eng    = &net.a;
-        obs.target = net.id_b;
+        reentrant_observer obs{net.a, net.id_b};
         net.a.add_observer(obs);
 
         net.a.note_peer(net.id_b, net.ep_b);
@@ -561,13 +566,19 @@ TEST_CASE("inproc observer: (un)registering an observer from inside a lifecycle 
     // case is the structural proof that add_observer/remove_observer are callback-safe.
     struct self_removing_observer final : public plexus::io::observer
     {
-        engine *eng{nullptr};
-        int connected{0};
+        engine &eng;
+        int connected;
+
+        explicit self_removing_observer(engine &owner)
+                : eng(owner)
+                , connected(0)
+        {
+        }
+
         void on_peer_connected(const plexus::node_id &, std::string_view, peer_kind) override
         {
             ++connected;
-            if(eng)
-                eng->remove_observer(*this); // mutate m_observers mid-turn
+            eng.remove_observer(*this); // mutate m_observers mid-turn
         }
     };
 
@@ -577,9 +588,8 @@ TEST_CASE("inproc observer: (un)registering an observer from inside a lifecycle 
     {
         manual_clock::reset();
         two_node net;
-        self_removing_observer first;
+        self_removing_observer first{net.a};
         recording_observer second;
-        first.eng = &net.a;
         net.a.add_observer(first);  // unregisters itself on connected
         net.a.add_observer(second); // the co-observer must still receive its edge
 

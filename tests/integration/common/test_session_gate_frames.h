@@ -35,12 +35,17 @@ constexpr std::string_view k_procedure = "gate/procedure";
 
 struct counting_logger final : plexus::log::logger
 {
+    counting_logger()
+            : lines(0)
+    {
+    }
+
     void warn(std::string_view) override
     {
         ++lines;
     }
 
-    std::uint32_t lines{0};
+    std::uint32_t lines;
 };
 
 inline std::vector<std::byte> frame_of(wire::msg_type type, std::span<const std::byte> payload, std::uint64_t session_id = 0)
