@@ -112,9 +112,11 @@ struct capped_channel
     {
     }
     capped_channel(stall_executor &)
+            : m_st(nullptr)
     {
     }
     capped_channel(stall_executor &, std::error_code &)
+            : m_st(nullptr)
     {
     }
 
@@ -161,7 +163,7 @@ struct capped_channel
         return m_st->cap;
     }
 
-    capped_state *m_st{nullptr};
+    capped_state *m_st;
 };
 
 using capped_policy = plexus::testing::basic_stall_policy<capped_channel>;

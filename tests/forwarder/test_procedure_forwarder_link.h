@@ -20,31 +20,52 @@ namespace procedure_forwarder_fixture {
 struct rpc_link
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
+    inproc_executor<> ex;
 
-    inproc_channel<> caller_tx{ex};
-    inproc_channel<> caller_rx{ex};
-    inproc_channel<> provider_tx{ex};
-    inproc_channel<> provider_rx{ex};
+    inproc_channel<> caller_tx;
+    inproc_channel<> caller_rx;
+    inproc_channel<> provider_tx;
+    inproc_channel<> provider_rx;
 
     plexus::log::null_logger sink;
 
-    procedure_forwarder caller{ex, k_long_deadline, sink};
-    procedure_forwarder provider{ex, k_long_deadline, sink};
+    procedure_forwarder caller;
+    procedure_forwarder provider;
 
-    plexus::io::frame_router caller_router{sink};
-    plexus::io::frame_router provider_router{sink};
+    plexus::io::frame_router caller_router;
+    plexus::io::frame_router provider_router;
 
-    procedure_forwarder::peer caller_peer{caller_tx, "provider-node"};
-    procedure_forwarder::peer provider_peer{provider_tx, "caller-node"};
+    procedure_forwarder::peer caller_peer;
+    procedure_forwarder::peer provider_peer;
 
     explicit rpc_link(plexus::log::logger &caller_log)
-            : caller(ex, k_long_deadline, caller_log)
+            : ex{bus}
+            , caller_tx{ex}
+            , caller_rx{ex}
+            , provider_tx{ex}
+            , provider_rx{ex}
+            , caller(ex, k_long_deadline, caller_log)
+            , provider{ex, k_long_deadline, sink}
+            , caller_router(sink)
+            , provider_router(sink)
+            , caller_peer{caller_tx, "provider-node"}
+            , provider_peer{provider_tx, "caller-node"}
     {
         wire();
     }
 
     rpc_link()
+            : ex{bus}
+            , caller_tx{ex}
+            , caller_rx{ex}
+            , provider_tx{ex}
+            , provider_rx{ex}
+            , caller{ex, k_long_deadline, sink}
+            , provider{ex, k_long_deadline, sink}
+            , caller_router(sink)
+            , provider_router(sink)
+            , caller_peer{caller_tx, "provider-node"}
+            , provider_peer{provider_tx, "caller-node"}
     {
         wire();
     }

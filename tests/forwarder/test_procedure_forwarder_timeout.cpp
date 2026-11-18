@@ -56,26 +56,36 @@ using manual_forwarder = plexus::io::procedure_forwarder<manual_policy>;
 struct manual_link
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
 
-    plexus::inproc::inproc_channel<manual_clock> caller_tx{ex};
-    plexus::inproc::inproc_channel<manual_clock> caller_rx{ex};
-    plexus::inproc::inproc_channel<manual_clock> provider_tx{ex};
-    plexus::inproc::inproc_channel<manual_clock> provider_rx{ex};
+    plexus::inproc::inproc_channel<manual_clock> caller_tx;
+    plexus::inproc::inproc_channel<manual_clock> caller_rx;
+    plexus::inproc::inproc_channel<manual_clock> provider_tx;
+    plexus::inproc::inproc_channel<manual_clock> provider_rx;
 
     plexus::log::null_logger sink;
 
     manual_forwarder caller;
-    manual_forwarder provider{ex, std::chrono::hours(1), sink};
+    manual_forwarder provider;
 
-    plexus::io::frame_router caller_router{sink};
-    plexus::io::frame_router provider_router{sink};
+    plexus::io::frame_router caller_router;
+    plexus::io::frame_router provider_router;
 
-    manual_forwarder::peer caller_peer{caller_tx, "provider-node"};
-    manual_forwarder::peer provider_peer{provider_tx, "caller-node"};
+    manual_forwarder::peer caller_peer;
+    manual_forwarder::peer provider_peer;
 
     explicit manual_link(std::chrono::nanoseconds caller_deadline)
-            : caller(ex, caller_deadline, sink)
+            : ex{bus}
+            , caller_tx{ex}
+            , caller_rx{ex}
+            , provider_tx{ex}
+            , provider_rx{ex}
+            , caller(ex, caller_deadline, sink)
+            , provider{ex, std::chrono::hours(1), sink}
+            , caller_router(sink)
+            , provider_router(sink)
+            , caller_peer{caller_tx, "provider-node"}
+            , provider_peer{provider_tx, "caller-node"}
     {
         caller_tx.connect_to(provider_rx.local_endpoint());
         provider_tx.connect_to(caller_rx.local_endpoint());
