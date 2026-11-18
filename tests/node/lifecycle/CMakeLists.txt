@@ -42,7 +42,8 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
     # and build type; the test reads the child's exit status and the message it wrote.
     # The FreeRTOS roles sit in their own translation unit so the host shim's global names never meet asio's.
     add_executable(affinity_trip_child
-        affinity_trip_child.cpp affinity_handover_roles.cpp affinity_freertos_roles.cpp affinity_endpoint_roles.cpp)
+        affinity_trip_child.cpp affinity_handover_roles.cpp affinity_freertos_roles.cpp affinity_endpoint_roles.cpp
+        affinity_lifetime_roles.cpp)
     target_include_directories(affinity_trip_child PRIVATE
         ${PROJECT_SOURCE_DIR}/tests ${PROJECT_SOURCE_DIR}/tests/integration/common)
     target_link_libraries(affinity_trip_child PRIVATE

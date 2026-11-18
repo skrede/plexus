@@ -151,7 +151,8 @@ class procedure;
 // engine and (for >1 transport) the multiplexing glue. Its posts and waits capture `this`, so it is non-copyable and
 // non-movable. A closed node may be destroyed inside or after its on_closed while the executor keeps running; a node
 // never closed is destroyed only with its executor not run again. Destroying it inside any other of its own callbacks,
-// a completion one of its member transports is delivering included, is undefined.
+// a completion one of its member transports is delivering included, is undefined; PLEXUS_AFFINITY_CHECKS aborts it
+// inside one of the node's own subscription deliveries only.
 // THREADING: one thread drives the executor and makes every member and handle call; other threads hand work in through
 // plexus::post, and executor() and id() are safe from any thread. The first call binds its caller; the driver claims the
 // executor on its first step or handler (the node's creation post is one) and holds it until plexus::release_driver, its
@@ -264,6 +265,7 @@ public:
     // A dtor must not throw — the post is wrapped. A closed node posted its destroyed edge when it closed.
     ~basic_node()
     {
+        detail::check_not_delivering(m_subscriptions.dispatching());
 #if defined(__cpp_exceptions)
         try
         {

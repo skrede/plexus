@@ -25,6 +25,12 @@ inline bool live_or_trip(bool live, const char *member) noexcept
         moved_from_trip(member);
     return live;
 }
+
+inline void check_not_delivering(bool delivering) noexcept
+{
+    if(delivering)
+        on_fatal("node destroyed inside one of its own subscription deliveries");
+}
 #else
 template<typename Policy>
 void check_affinity(typename Policy::executor_type, const char *) noexcept
@@ -34,6 +40,10 @@ void check_affinity(typename Policy::executor_type, const char *) noexcept
 inline bool live_or_trip(bool live, const char *) noexcept
 {
     return live;
+}
+
+inline void check_not_delivering(bool) noexcept
+{
 }
 #endif
 

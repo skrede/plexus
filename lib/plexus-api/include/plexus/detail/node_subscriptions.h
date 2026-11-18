@@ -124,6 +124,11 @@ public:
         return std::nullopt;
     }
 
+    bool dispatching() const noexcept
+    {
+        return m_dispatch_depth > 0;
+    }
+
     // Includes logically-removed entries; a dispatch fan skips those through pending_removed.
     std::span<entry> entries() noexcept
     {

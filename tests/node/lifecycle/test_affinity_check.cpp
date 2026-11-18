@@ -140,3 +140,13 @@ TEST_CASE("affinity_check foreign_value_logger_decode_failed aborts with a messa
 {
     require_trip("foreign_value_logger_decode_failed", "decode_failed");
 }
+
+TEST_CASE("affinity_check destroy_in_delivery aborts when a subscription delivery destroys its own node", "[node]")
+{
+    require_abort("destroy_in_delivery", "plexus: node destroyed inside one of its own subscription deliveries");
+}
+
+TEST_CASE("affinity_check close_in_delivery_destroy_on_closed lets a node closed in a delivery be destroyed in its on_closed", "[node]")
+{
+    require_ok("close_in_delivery_destroy_on_closed");
+}

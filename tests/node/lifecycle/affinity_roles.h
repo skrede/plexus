@@ -87,6 +87,8 @@ role_outcome run_handover_role(std::string_view role);
 
 role_outcome run_freertos_role(std::string_view role);
 
+role_outcome run_lifetime_role(std::string_view role);
+
 }
 
 #endif
