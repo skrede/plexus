@@ -106,6 +106,13 @@ template<std::size_t Width>
 class reference_window
 {
 public:
+    reference_window()
+            : m_seen_any(false)
+            , m_bits(Width, false)
+            , m_highest(0)
+    {
+    }
+
     replay_verdict check_and_set(std::uint64_t seq)
     {
         if(!m_seen_any)
@@ -132,9 +139,9 @@ public:
     }
 
 private:
-    std::vector<bool> m_bits = std::vector<bool>(Width, false);
-    std::uint64_t m_highest{0};
-    bool m_seen_any{false};
+    bool m_seen_any;
+    std::vector<bool> m_bits;
+    std::uint64_t m_highest;
 
     void slide(std::uint64_t by)
     {
