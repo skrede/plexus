@@ -252,7 +252,9 @@ public:
     void note_peer(const node_id &id, const endpoint &ep, std::uint64_t now)
     {
         const bool changed = m_known_peers.note_peer(id, ep, now);
-        m_peer_liveliness.note_awareness(id, now);
+        // A refused card leaves no arbiter row: the table's expiry never sees it, so nothing would clear it.
+        if(m_known_peers.contains(id))
+            m_peer_liveliness.note_awareness(id, now);
         bump_graph_generation(changed, id, graph::change_kind::appeared);
         if(m_dial_eagerly)
             reach(id);
