@@ -6,7 +6,7 @@ set(PLEXUS_TEST_PREFIX "dtls.")
 
 plexus_add_catch_test(test_dtls_handshake
     SOURCES test_dtls_handshake.cpp test_dtls_handshake_dial.cpp test_dtls_handshake_relay.cpp test_dtls_record_framing.cpp test_dtls_error_queue.cpp
-        $<TARGET_OBJECTS:plexus-crypto>
+        test_dtls_chain_trust.cpp $<TARGET_OBJECTS:plexus-crypto>
     LINKS plexus::crypto)
 
 plexus_add_catch_test(test_dtls_cookie

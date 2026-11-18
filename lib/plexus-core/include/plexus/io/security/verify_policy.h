@@ -6,8 +6,18 @@
 #include <array>
 #include <vector>
 #include <cstddef>
+#include <cstdint>
 
 namespace plexus::io::security {
+
+// leaf: the policy authenticates the peer's leaf key itself (DANE-EE, RFC 7671 section 5.1), so the engine's chain
+// errors above the leaf are ignored and the leaf's decide() is final. chain: the engine's chain validation stays
+// authoritative above the leaf.
+enum class trust_anchor : std::uint8_t
+{
+    chain,
+    leaf
+};
 
 // The injectable peer-verification contract — mechanism, not policy. The backend
 // verify callback consults a verify_policy to make the accept/reject decision over
@@ -25,6 +35,11 @@ public:
 
     // True iff this peer is authorized given the extracted facts. Non-throwing.
     virtual bool decide(const cert_facts &facts) const noexcept = 0;
+
+    virtual trust_anchor anchor() const noexcept
+    {
+        return trust_anchor::chain;
+    }
 };
 
 // The default verify_policy: an SPKI-fingerprint allowlist. Accepts iff the peer's
@@ -45,6 +60,11 @@ public:
             if(pin == facts.spki_sha256)
                 return true;
         return false;
+    }
+
+    trust_anchor anchor() const noexcept override
+    {
+        return trust_anchor::leaf;
     }
 
 private:

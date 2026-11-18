@@ -75,9 +75,14 @@ struct chain_authority
         id.adopt(leaf.get(), key.get());
     }
 
-    void install(const ptls::tls_credential &cred) const
+    void present(const ptls::tls_credential &cred) const
     {
         REQUIRE(SSL_CTX_add1_chain_cert(&cred.ssl_ctx(), intermediate.get()) == 1);
+    }
+
+    void install(const ptls::tls_credential &cred) const
+    {
+        present(cred);
         REQUIRE(X509_STORE_add_cert(SSL_CTX_get_cert_store(&cred.ssl_ctx()), root.get()) == 1);
     }
 };

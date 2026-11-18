@@ -187,13 +187,6 @@ int allocate_ex_data_index() noexcept
 // NOLINTNEXTLINE(readability-function-size)
 extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 {
-    // SPKI pinning anchors trust at the leaf (depth 0). At depth > 0 we are not
-    // the trust anchor, so preserve preverify_ok and let OpenSSL's own chain
-    // logic own the intermediates — otherwise a legitimately-pinned peer that
-    // presents a leaf+intermediate chain is rejected at depth 1.
-    if(X509_STORE_CTX_get_error_depth(ctx) != 0)
-        return preverify_ok;
-
     const int ssl_idx = SSL_get_ex_data_X509_STORE_CTX_idx();
     auto *ssl         = static_cast<SSL *>(X509_STORE_CTX_get_ex_data(ctx, ssl_idx));
     auto reject       = [ctx]
@@ -211,6 +204,16 @@ extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     auto *cred = static_cast<const tls_credential *>(SSL_CTX_get_ex_data(sslctx, tls_credential::ex_data_index()));
     if(!cred || !cred->policy())
         return reject();
+
+    // RFC 7671 section 5.1 (DANE-EE): a leaf-anchored policy, such as an SPKI pin, authenticates the leaf key alone,
+    // so chain errors above the leaf are ignored and depth 0 decides; under a chain-anchored policy they stand.
+    if(X509_STORE_CTX_get_error_depth(ctx) != 0)
+    {
+        if(cred->policy()->anchor() == io::security::trust_anchor::chain)
+            return preverify_ok;
+        X509_STORE_CTX_set_error(ctx, X509_V_OK);
+        return 1;
+    }
 
     X509 *peer = X509_STORE_CTX_get_current_cert(ctx);
     if(!peer)
@@ -232,12 +235,9 @@ extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     // is simply skipped.
     if(auto *slot = static_cast<io::security::cert_facts *>(SSL_get_ex_data(ssl, dtls_peer_facts_ex_index())))
         *slot = facts;
-    // The SPKI pin IS the trust anchor: a pinned leaf is fully trusted, so clear
-    // any chain-building error OpenSSL set ahead of this callback (a self-signed
-    // pinned leaf otherwise leaves X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT on the
-    // store ctx, which SSL_get_verify_result would surface). Resetting to X509_V_OK
-    // makes SSL_get_verify_result reflect the pin decision — the DTLS completion
-    // edge gates on it as a belt-and-suspenders mutual-auth check.
+    // The policy's accept is the verdict: clear any error OpenSSL set ahead of this callback (a self-signed pinned leaf
+    // leaves X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT) so SSL_get_verify_result, which the DTLS completion edge gates on as
+    // a belt-and-suspenders mutual-auth check, reflects it.
     X509_STORE_CTX_set_error(ctx, X509_V_OK);
     return 1;
 }

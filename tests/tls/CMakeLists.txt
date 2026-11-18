@@ -21,7 +21,7 @@ if(NOT WIN32)
 endif()
 
 plexus_add_catch_test(test_tls_trust
-    SOURCES test_tls_trust.cpp $<TARGET_OBJECTS:plexus-crypto>
+    SOURCES test_tls_trust.cpp test_tls_chain_trust.cpp $<TARGET_OBJECTS:plexus-crypto>
     LINKS plexus::crypto)
 
 plexus_add_catch_test(test_tls_mux
