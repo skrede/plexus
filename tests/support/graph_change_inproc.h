@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SUPPORT_GRAPH_CHANGE_INPROC_H
 #define HPP_GUARD_PLEXUS_TESTS_SUPPORT_GRAPH_CHANGE_INPROC_H
 
+#include "graph_change_clock.h"
+
 #include "plexus/io/known_peers.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
@@ -33,38 +35,6 @@
 #include <optional>
 
 namespace plexus::testing::graph_change_fixture {
-
-struct manual_clock
-{
-    using duration                                   = std::chrono::nanoseconds;
-    using rep                                        = duration::rep;
-    using period                                     = duration::period;
-    using time_point                                 = std::chrono::time_point<manual_clock>;
-    [[maybe_unused]] static constexpr bool is_steady = false;
-
-    static inline time_point current{};
-    static time_point now() noexcept
-    {
-        return current;
-    }
-    static void reset() noexcept
-    {
-        current = time_point{};
-    }
-    static void advance(duration d) noexcept
-    {
-        current += d;
-    }
-};
-
-struct manual_policy : plexus::executor_verbs<plexus::inproc::inproc_executor<manual_clock>>
-{
-    using byte_channel_type = plexus::inproc::inproc_channel<manual_clock>;
-    using timer_type        = plexus::inproc::inproc_timer<manual_clock>;
-    using byte_owner        = std::shared_ptr<const void>;
-};
-
-static_assert(plexus::Policy<manual_policy>);
 
 using transport_t = plexus::inproc::inproc_transport<manual_clock>;
 using engine      = plexus::io::routing_engine<manual_policy, transport_t, manual_clock>;
