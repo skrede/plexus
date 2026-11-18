@@ -62,19 +62,23 @@ struct mux_face
     ::asio::io_context &io;
     ptls::tls_credential tls_cred;
     ptls::tls_credential dtls_cred;
-    pasio::unix_transport local{io};
-    pasio::asio_transport remote{io};
+    pasio::unix_transport local;
+    pasio::asio_transport remote;
     ptls::tls_transport secure;
-    pasio::udp_transport datagram{io};
+    pasio::udp_transport datagram;
     ptls::dtls_transport secure_datagram;
-    pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
+    pasio::all_backends_mux mux;
 
     mux_face(::asio::io_context &ctx, ptls::tls_credential tls_c, ptls::tls_credential dtls_c)
             : io(ctx)
             , tls_cred(std::move(tls_c))
             , dtls_cred(std::move(dtls_c))
+            , local(io)
+            , remote(io)
             , secure(io, tls_cred)
+            , datagram(io)
             , secure_datagram(io, dtls_cred)
+            , mux{local, remote, secure, datagram, secure_datagram}
     {
     }
 };

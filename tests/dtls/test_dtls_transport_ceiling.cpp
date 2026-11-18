@@ -38,7 +38,7 @@ struct ceiling_link
 
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
-    bool dial_failed{false};
+    bool dial_failed;
     std::vector<std::vector<std::byte>> server_received;
     std::optional<pio::io_error> dialed_error;
 
@@ -47,6 +47,7 @@ struct ceiling_link
             , client_cred(pdt::pin_one(client_id, server_id.digest))
             , server(io, server_cred, max_payload, global_default, reassembly_budget)
             , client(io, client_cred, max_payload, global_default, reassembly_budget)
+            , dial_failed(false)
     {
         server.on_accepted(
                 [this](std::unique_ptr<ptls::dtls_channel> ch)

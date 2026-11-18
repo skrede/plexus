@@ -29,13 +29,14 @@ struct relay_link
 
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
-    bool dial_failed{false};
+    bool dial_failed;
 
     relay_link(ptls::tls_credential srv, ptls::tls_credential cli)
             : server_cred(std::move(srv))
             , client_cred(std::move(cli))
             , server(io, server_cred)
             , client(io, client_cred)
+            , dial_failed(false)
     {
         server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
         client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });

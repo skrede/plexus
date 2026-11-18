@@ -18,16 +18,16 @@ struct large_link
     ::asio::io_context io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
-    pio::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
-    pio::security::cookie_secret client_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server server_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
-    pasio::udp_server client_sock{io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf};
+    pio::security::cookie_secret server_cookie;
+    pio::security::cookie_secret client_cookie;
+    pasio::udp_server server_sock;
+    pasio::udp_server client_sock;
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
     std::unique_ptr<ptls::dtls_channel> client_ch;
 
-    bool server_complete{false};
-    bool client_complete{false};
+    bool server_complete;
+    bool client_complete;
     std::vector<std::vector<std::byte>> server_received;
     std::optional<pio::io_error> client_error;
 
@@ -37,6 +37,12 @@ struct large_link
     large_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id, std::size_t max_message_bytes)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
+            , server_cookie(ptls::make_cookie_secret())
+            , client_cookie(ptls::make_cookie_secret())
+            , server_sock(io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf)
+            , client_sock(io, pio::congestion::block, k_socket_buf, k_socket_buf, k_socket_buf)
+            , server_complete(false)
+            , client_complete(false)
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));

@@ -44,7 +44,7 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest digest;
     std::string subject;
 
     explicit identity_fixture(const std::string &tag)
@@ -94,6 +94,7 @@ private:
     using key_ptr = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
 
     identity_fixture(const std::string &tag, key_ptr pkey)
+            : digest()
     {
         dir = std::filesystem::temp_directory_path() /
                 ("plexus_dtls_" + tag + "_" + std::to_string(plexus::testing::process_id()) + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));

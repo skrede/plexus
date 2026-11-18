@@ -20,7 +20,7 @@ struct dial_link
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
     pdt::pio::endpoint dialed_ep;
-    bool dial_failed{false};
+    bool dial_failed;
     std::vector<std::vector<std::byte>> server_received;
 
     dial_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
@@ -28,6 +28,7 @@ struct dial_link
             , client_cred(pdt::pin_one(client_id, server_id.digest))
             , server(io, server_cred)
             , client(io, client_cred)
+            , dial_failed(false)
     {
         server.on_accepted(
                 [this](std::unique_ptr<ptls::dtls_channel> ch)

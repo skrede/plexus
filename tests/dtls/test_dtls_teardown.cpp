@@ -45,21 +45,27 @@ struct close_notify_harness
     ::asio::io_context io;
     ptls::tls_credential server_cred;
     ptls::tls_credential client_cred;
-    plexus::io::security::cookie_secret server_cookie{ptls::make_cookie_secret()};
-    pasio::udp_server server_sock{io};
-    pasio::udp_server client_sock{io}; // a REAL client socket: the server sends here
+    plexus::io::security::cookie_secret server_cookie;
+    pasio::udp_server server_sock;
+    pasio::udp_server client_sock; // a REAL client socket: the server sends here
 
     std::unique_ptr<ptls::dtls_channel> server_ch;
 
-    SSL *client_ssl{nullptr};
-    BIO *client_ext{nullptr}; // the client's external BIO (wire side)
+    SSL *client_ssl;
+    BIO *client_ext; // the client's external BIO (wire side)
 
     std::vector<std::vector<std::byte>> server_to_client; // datagrams the server emitted
-    bool server_complete{false};
+    bool server_complete;
 
     close_notify_harness(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
+            , server_cookie(ptls::make_cookie_secret())
+            , server_sock(io)
+            , client_sock(io)
+            , client_ssl(nullptr)
+            , client_ext(nullptr)
+            , server_complete(false)
     {
         server_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
         client_sock.start(::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0));
@@ -167,13 +173,14 @@ struct dial_link
 
     std::unique_ptr<ptls::dtls_channel> accepted;
     std::unique_ptr<ptls::dtls_channel> dialed;
-    bool dial_failed{false};
+    bool dial_failed;
 
     dial_link(const pdt::identity_fixture &server_id, const pdt::identity_fixture &client_id)
             : server_cred(pdt::pin_one(server_id, client_id.digest))
             , client_cred(pdt::pin_one(client_id, server_id.digest))
             , server(io, server_cred)
             , client(io, client_cred)
+            , dial_failed(false)
     {
         server.on_accepted([this](std::unique_ptr<ptls::dtls_channel> ch) { accepted = std::move(ch); });
         client.on_dialed([this](std::unique_ptr<ptls::dtls_channel> ch, const pdt::pio::endpoint &) { dialed = std::move(ch); });
