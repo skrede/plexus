@@ -1,11 +1,14 @@
 #include "lane_probe.h"
+#include "topic_regions.h"
 #include "topology_block.h"
 #include "topology_launch.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <cstdint>
 #include <iostream>
+#include <optional>
 
 using namespace shm_harness;
 
@@ -38,6 +41,36 @@ TEST_CASE("lane_probe a subscriber restarted after a crash receives every messag
 
     require_exactly(outcome.subscriber, 100);
     REQUIRE(outcome.regions_after == 0);
+}
+
+// Nothing but a congested reliable send reclaims a cursor before the subscriber is respawned, and twice the ring's depth
+// congests it behind the dead cursor wherever that cursor stopped.
+TEST_CASE("lane_probe a crashed subscriber's cursor that blocks the publisher is reclaimed and its restart receives every message", "[shm][lane_probe]")
+{
+    topology topo{probe_fqn("dead_cursor"), 2};
+    REQUIRE(topo.created());
+    REQUIRE(topo.spawn_registry(0, node_role::pub));
+    REQUIRE(topo.spawn_registry(1, node_role::sub));
+    const bool first_round = topo.publish_round({0}, 10, {1}, 10s);
+    report(topo, "dead_cursor before", {1});
+    REQUIRE(first_round);
+
+    topo.kill(1);
+    const std::optional<ring_census> dead = topo.regions().census(0);
+    REQUIRE(dead);
+    REQUIRE(dead->active_cursors == 1);
+    REQUIRE(topo.command(0, node_command::publish, static_cast<std::uint32_t>(2 * dead->cells), 60s));
+    const std::optional<ring_census> blocked = topo.regions().census(0);
+
+    REQUIRE(topo.spawn_registry(1, node_role::sub));
+    topo.publish_round({0}, 20, {1}, 10s);
+    const node_counts sub = report(topo, "dead_cursor after", {1})[0];
+    leave_all(topo, {1, 0});
+
+    REQUIRE(blocked);
+    CHECK(blocked->active_cursors == 0);
+    require_exactly(sub, 20);
+    REQUIRE(topo.regions().entries() == 0);
 }
 
 TEST_CASE("lane_probe a node subscriber keeps receiving across a clean restart of the publishing node", "[shm][lane_probe]")

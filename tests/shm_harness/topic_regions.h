@@ -5,15 +5,28 @@
 
 #include "plexus/native/shm_region_broker.h"
 
+#include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_header.h"
+#include "plexus/shm/broadcast_ring.h"
+
 #include "plexus/node_id.h"
 
 #include <string>
 #include <vector>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <algorithm>
 #include <filesystem>
 #include <system_error>
 
 namespace shm_harness {
+
+struct ring_census
+{
+    std::uint64_t cells;
+    std::uint32_t active_cursors;
+};
 
 // On destruction it unlinks each publisher's request ring for the topic, the control region and its ".s" slab, which a
 // killed process leaves behind.
@@ -22,6 +35,7 @@ class topic_regions
 public:
     topic_regions(const std::string &fqn, const std::vector<plexus::node_id> &publishers)
             : m_regions()
+            , m_publishers(publishers)
     {
         for(const plexus::node_id &publisher : publishers)
             m_regions.push_back(plexus::testing::region_name(fqn, publisher));
@@ -64,8 +78,26 @@ public:
         return count;
     }
 
+    // Publisher index's ring as a reader process maps it; nullopt when it is not mapped.
+    std::optional<ring_census> census(std::size_t index) const
+    {
+        plexus::native::shm_region_broker broker;
+        plexus::native::shm_region_handle control;
+        plexus::native::shm_region_handle slab;
+        plexus::shm::broadcast_ring ring;
+        if(broker.attach(m_regions[index], control) != plexus::shm::region_status::ok || broker.attach(m_regions[index] + ".s", slab) != plexus::shm::region_status::ok ||
+           plexus::shm::broadcast_ring::attach(control.bytes(), slab.bytes(), m_publishers[index], ring) != plexus::shm::loan_status::ok)
+            return std::nullopt;
+        const std::uint64_t cursors = std::min<std::uint64_t>(ring.header().consumer_capacity, plexus::shm::k_max_consumers);
+        std::uint32_t active        = 0;
+        for(std::uint64_t i = 0; i < cursors; ++i)
+            active += ring.header().cursors[i].active.load(std::memory_order_acquire) != 0 ? 1u : 0u;
+        return ring_census{ring.cell_count(), active};
+    }
+
 private:
     std::vector<std::string> m_regions;
+    std::vector<plexus::node_id> m_publishers;
 };
 
 }
