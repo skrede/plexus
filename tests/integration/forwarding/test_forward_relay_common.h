@@ -58,27 +58,37 @@ inline wire::peer_report reach_report(const node_id &origin, std::uint16_t seq =
 struct relay_line
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t t_caller{ex, bus};
-    transport_t t_relay{ex, bus};
-    transport_t t_server{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t t_caller;
+    transport_t t_relay;
+    transport_t t_server;
     plexus::log::null_logger sink;
 
     engine caller;
     engine relay;
     engine server;
 
-    node_id id_caller{make_id(0xC1)};
-    node_id id_relay{make_id(0x2A)};
-    node_id id_server{make_id(0x53)};
-    endpoint ep_caller{"inproc", "reqres-caller"};
-    endpoint ep_relay{"inproc", "reqres-relay"};
-    endpoint ep_server{"inproc", "reqres-server"};
+    node_id id_caller;
+    node_id id_relay;
+    node_id id_server;
+    endpoint ep_caller;
+    endpoint ep_relay;
+    endpoint ep_server;
 
     relay_line()
-            : caller(t_caller, ex, make_cfg(0xC1), k_long_timeout, forever_cfg(), k_seed, sink)
+            : ex{bus}
+            , t_caller{ex, bus}
+            , t_relay{ex, bus}
+            , t_server{ex, bus}
+            , caller(t_caller, ex, make_cfg(0xC1), k_long_timeout, forever_cfg(), k_seed, sink)
             , relay(t_relay, ex, make_cfg(0x2A), k_long_timeout, forever_cfg(), k_seed, sink)
             , server(t_server, ex, make_cfg(0x53), k_long_timeout, forever_cfg(), k_seed, sink)
+            , id_caller{make_id(0xC1)}
+            , id_relay{make_id(0x2A)}
+            , id_server{make_id(0x53)}
+            , ep_caller{"inproc", "reqres-caller"}
+            , ep_relay{"inproc", "reqres-relay"}
+            , ep_server{"inproc", "reqres-server"}
     {
         caller.listen(ep_caller);
         relay.listen(ep_relay);

@@ -71,9 +71,13 @@ struct sink_executor
 struct sink_channel
 {
     explicit sink_channel(sink_executor &)
+            : total_bytes(0)
+            , sends(0)
     {
     }
     sink_channel(sink_executor &, std::error_code &)
+            : total_bytes(0)
+            , sends(0)
     {
     }
 
@@ -102,8 +106,8 @@ struct sink_channel
     {
     }
 
-    std::size_t total_bytes{0};
-    std::size_t sends{0};
+    std::size_t total_bytes;
+    std::size_t sends;
 };
 
 struct sink_timer
@@ -144,9 +148,13 @@ static_assert(plexus::Policy<sink_policy>);
 struct banding_sink_channel
 {
     explicit banding_sink_channel(sink_executor &)
+            : total_bytes(0)
+            , sends(0)
     {
     }
     banding_sink_channel(sink_executor &, std::error_code &)
+            : total_bytes(0)
+            , sends(0)
     {
     }
 
@@ -183,8 +191,8 @@ struct banding_sink_channel
         return 1;
     }
 
-    std::size_t total_bytes{0};
-    std::size_t sends{0};
+    std::size_t total_bytes;
+    std::size_t sends;
 };
 
 struct banding_sink_policy : plexus::testing::inline_verbs<sink_executor &>

@@ -101,13 +101,13 @@ struct unix_reconnect
 {
     temp_sock sock;
     ::asio::io_context io;
-    pasio::unix_transport transport{io};
+    pasio::unix_transport transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     plexus::io::peer_context<pasio::unix_policy> req_ctx;
     plexus::io::peer_context<pasio::unix_policy> resp_ctx;
@@ -115,12 +115,18 @@ struct unix_reconnect
     std::optional<session> requester;
     std::optional<session> responder;
 
-    int drops_seen{0};
+    int drops_seen;
 
     // listen_first: bind the listener BEFORE the driver so the driver dials the live
     // path. When false the socket file is absent, so the initial dial is refused
     // (ENOENT) and the listener is brought up later — the same-host cold-start race.
     unix_reconnect(const reconnect_config &cfg, bool listen_first)
+            : transport(io)
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{io, k_long_timeout, sink}
+            , resp_procedures{io, k_long_timeout, sink}
+            , drops_seen(0)
     {
         transport.on_accepted(
                 [this](std::unique_ptr<pasio::unix_channel> ch)

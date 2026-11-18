@@ -105,19 +105,27 @@ reconnect_config forever_cfg()
 struct two_node
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t transport_a;
+    transport_t transport_b;
 
     plexus::log::null_logger sink;
-    engine a{transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false};
-    engine b{transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false};
+    engine a;
+    engine b;
 
-    plexus::node_id id_b{make_id(0xB2)};
-    endpoint ep_a{"inproc", "node-a"};
-    endpoint ep_b{"inproc", "node-b"};
+    plexus::node_id id_b;
+    endpoint ep_a;
+    endpoint ep_b;
 
     two_node()
+            : ex{bus}
+            , transport_a{ex, bus}
+            , transport_b{ex, bus}
+            , a{transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false}
+            , b{transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false}
+            , id_b{make_id(0xB2)}
+            , ep_a{"inproc", "node-a"}
+            , ep_b{"inproc", "node-b"}
     {
         a.listen(ep_a);
         b.listen(ep_b);

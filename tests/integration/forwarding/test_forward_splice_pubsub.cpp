@@ -86,17 +86,23 @@ std::vector<std::byte> capture_inner(std::string_view fqn, std::string_view body
 struct relay_fixture
 {
     inproc::inproc_bus<> bus;
-    inproc::inproc_executor<> ex{bus};
-    inproc::inproc_channel<> dest{ex};
-    inproc::inproc_channel<> dest_sink{ex};
-    inproc::inproc_channel<> arrival{ex};
-    inproc::inproc_channel<> arrival_sink{ex};
+    inproc::inproc_executor<> ex;
+    inproc::inproc_channel<> dest;
+    inproc::inproc_channel<> dest_sink;
+    inproc::inproc_channel<> arrival;
+    inproc::inproc_channel<> arrival_sink;
     std::vector<std::vector<std::byte>> dest_got;
     std::vector<std::vector<std::byte>> arrival_got;
     log::null_logger log_sink;
-    forwarder fwd{log_sink};
+    forwarder fwd;
 
     relay_fixture()
+            : ex{bus}
+            , dest{ex}
+            , dest_sink{ex}
+            , arrival{ex}
+            , arrival_sink{ex}
+            , fwd{log_sink}
     {
         dest.connect_to(dest_sink.local_endpoint());
         arrival.connect_to(arrival_sink.local_endpoint());

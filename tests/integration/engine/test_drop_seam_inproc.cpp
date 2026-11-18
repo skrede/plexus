@@ -214,9 +214,9 @@ struct discovery_stub
 struct two_node
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t transport_a;
+    transport_t transport_b;
 
     // A owns a counting logger so the semantic-close leg can assert the single warn
     // the protocol-error funnel emits; it is injected into A's engine by reference.
@@ -227,14 +227,21 @@ struct two_node
     engine b;
 
     discovery_stub discovery;
-    plexus::node_id id_a{make_id(0xA1)};
-    plexus::node_id id_b{make_id(0xB2)};
-    endpoint ep_a{"inproc", "node-a"};
-    endpoint ep_b{"inproc", "node-b"};
+    plexus::node_id id_a;
+    plexus::node_id id_b;
+    endpoint ep_a;
+    endpoint ep_b;
 
     explicit two_node(const reconnect_config &a_redial = forever_cfg())
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, a_logger, false)
+            : ex{bus}
+            , transport_a{ex, bus}
+            , transport_b{ex, bus}
+            , a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, a_logger, false)
             , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            , id_a{make_id(0xA1)}
+            , id_b{make_id(0xB2)}
+            , ep_a{"inproc", "node-a"}
+            , ep_b{"inproc", "node-b"}
     {
         a.listen(ep_a);
         b.listen(ep_b);
@@ -278,6 +285,8 @@ struct backing_region
 {
     explicit backing_region(std::size_t bytes)
             : m_storage(bytes + plexus::shm::k_cache_line)
+            , m_data(nullptr)
+            , m_size(0)
     {
         auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
         auto aligned = (base + plexus::shm::k_cache_line - 1) & ~static_cast<std::uintptr_t>(plexus::shm::k_cache_line - 1);
@@ -291,8 +300,8 @@ struct backing_region
 
 private:
     std::vector<std::byte> m_storage;
-    std::byte *m_data{nullptr};
-    std::size_t m_size{0};
+    std::byte *m_data;
+    std::size_t m_size;
 };
 
 // A move-only handle over a heap region (the single-process stand-in for a mapped

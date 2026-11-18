@@ -64,18 +64,24 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed, std::uint64_t fingerprint)
 struct session_link
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink}, resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages, resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     plexus::io::peer_context<inproc_policy> req_ctx, resp_ctx;
     std::optional<session> requester, responder;
 
     session_link(std::uint64_t req_fp, std::uint64_t resp_fp)
+            : ex{bus}
+            , transport{ex, bus}
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{ex, k_long_timeout, sink}
+            , resp_procedures{ex, k_long_timeout, sink}
     {
         transport.on_accepted(
                 [this, resp_fp](std::unique_ptr<inproc_channel<>> ch)

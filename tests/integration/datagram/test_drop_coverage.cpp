@@ -145,20 +145,23 @@ plexus::io::handshake_fsm_config make_cfg(std::uint8_t seed)
 struct drop_fixture
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t transport{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t transport;
     plexus::log::null_logger log_sink;
-    engine_t engine{transport,
-                    ex,
-                    make_cfg(0xA1),
-                    std::chrono::hours(1),
-                    plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt},
-                    0xC0FFEEu,
-                    log_sink,
-                    false};
+    engine_t engine;
     recording_drop_observer observer;
 
     drop_fixture()
+            : ex{bus}
+            , transport{ex, bus}
+            , engine{transport,
+                     ex,
+                     make_cfg(0xA1),
+                     std::chrono::hours(1),
+                     plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt},
+                     0xC0FFEEu,
+                     log_sink,
+                     false}
     {
         manual_clock::reset();
         engine.add_observer(observer);

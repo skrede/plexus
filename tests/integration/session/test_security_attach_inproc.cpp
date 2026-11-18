@@ -169,14 +169,14 @@ std::vector<std::byte> psk_material(std::uint8_t seed, std::size_t len = 16)
 struct session_link
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
@@ -190,12 +190,20 @@ struct session_link
     std::vector<security_event> resp_security;
     std::vector<lifecycle_event> req_lifecycle;
     std::vector<lifecycle_event> resp_lifecycle;
-    int req_installs{0};
-    int resp_installs{0};
+    int req_installs;
+    int resp_installs;
 
     // wire_install gates whether the AEAD install hook is set: a secured posture with NO
     // install hook is the auth-only configuration (admission without AEAD).
     session_link(const attach_policy *req_policy, const attach_policy *resp_policy, bool secured, bool wire_install = true, std::chrono::nanoseconds timeout = k_long_timeout)
+            : ex{bus}
+            , transport{ex, bus}
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{ex, k_long_timeout, sink}
+            , resp_procedures{ex, k_long_timeout, sink}
+            , req_installs(0)
+            , resp_installs(0)
     {
         if(secured)
         {
@@ -250,14 +258,14 @@ struct session_link
 struct psk_link
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
@@ -271,13 +279,21 @@ struct psk_link
     std::vector<security_event> resp_security;
     std::vector<lifecycle_event> req_lifecycle;
     std::vector<lifecycle_event> resp_lifecycle;
-    int req_installs{0};
-    int resp_installs{0};
+    int req_installs;
+    int resp_installs;
 
     // dialer_keystore: the keyed_psk set the DIALER's policy verifies the responder's proof
     // against (an empty/wrong set drives the refuse legs). responder_key: the keyed_psk the
     // responder PROVES under (its own material + the key_id it stamps).
     psk_link(std::vector<keyed_psk> dialer_keystore, keyed_psk responder_key)
+            : ex{bus}
+            , transport{ex, bus}
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{ex, k_long_timeout, sink}
+            , resp_procedures{ex, k_long_timeout, sink}
+            , req_installs(0)
+            , resp_installs(0)
     {
         req_seam  = fake_seam();
         resp_seam = fake_seam();

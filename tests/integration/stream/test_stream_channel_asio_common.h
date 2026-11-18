@@ -76,15 +76,18 @@ inline stream::stream_inbound_config short_cfg()
 struct loopback
 {
     ::asio::io_context io;
-    pasio::asio_listener listener{io, short_cfg()};
+    pasio::asio_listener listener;
     pio::detail::retiring_table<pasio::asio_channel> strays;
     std::unique_ptr<pasio::asio_channel> server;
-    ::asio::ip::tcp::socket client{io};
+    ::asio::ip::tcp::socket client;
 
     std::optional<wire::close_cause> caused;
-    int closes{0};
+    int closes;
 
     loopback()
+            : listener(io, short_cfg())
+            , client{io}
+            , closes(0)
     {
         listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) { adopt(std::move(ch)); });
         listener.start({"tcp", "127.0.0.1:0"});

@@ -119,10 +119,12 @@ inline std::vector<std::byte> make_data_frame(const std::string &payload, std::u
 // never released — no double close.
 struct pty_pair
 {
-    int master{-1};
-    int slave{-1};
+    int master;
+    int slave;
 
     pty_pair()
+            : master(-1)
+            , slave(-1)
     {
         REQUIRE(::openpty(&master, &slave, nullptr, nullptr, nullptr) == 0);
         // A default pty is in CANONICAL mode: it line-buffers, echoes, and translates control

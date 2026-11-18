@@ -37,23 +37,29 @@ using relay_forwarder  = plexus::io::message_forwarder<manual_policy>;
 struct relay_link
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t transport_relay{ex, bus};
-    transport_t transport_origin{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t transport_relay;
+    transport_t transport_origin;
     plexus::log::null_logger sink;
 
     relay_engine relay;
     engine origin;
 
-    plexus::node_id relay_id{make_id(0x0A)};
-    plexus::node_id origin_id{make_id(0x0B)};
-    endpoint ep_origin{"inproc", "origin-node"};
+    plexus::node_id relay_id;
+    plexus::node_id origin_id;
+    endpoint ep_origin;
 
     std::vector<std::pair<std::string, std::string>> relay_received;
 
     explicit relay_link(plexus::io::forward_options fwd = {})
-            : relay(transport_relay, ex, make_cfg(0x0A), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, {}, {}, {}, fwd)
+            : ex{bus}
+            , transport_relay{ex, bus}
+            , transport_origin{ex, bus}
+            , relay(transport_relay, ex, make_cfg(0x0A), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, {}, {}, {}, fwd)
             , origin(transport_origin, ex, make_cfg(0x0B), k_long_timeout, forever_cfg(), k_seed, sink)
+            , relay_id{make_id(0x0A)}
+            , origin_id{make_id(0x0B)}
+            , ep_origin{"inproc", "origin-node"}
     {
         relay.on_message_route([this](std::string_view fqn, std::span<const std::byte> bytes, const plexus::io::message_info &)
                                { relay_received.emplace_back(std::string{fqn}, to_string(bytes)); });

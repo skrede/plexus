@@ -20,17 +20,20 @@ struct fragment_observer
     ::asio::ip::udp::endpoint server_ep;
     ::asio::ip::udp::endpoint client_ep;
     ::asio::ip::udp::endpoint from;
-    std::array<std::byte, 70000> front_buf{};
-    std::array<std::byte, 70000> back_buf{};
+    std::array<std::byte, 70000> front_buf;
+    std::array<std::byte, 70000> back_buf;
 
     std::vector<std::uint16_t> msg_ids; // distinct msg_ids in first-seen order
-    std::uint32_t max_frag_cnt{0};
+    std::uint32_t max_frag_cnt;
 
     fragment_observer(::asio::io_context &ctx, std::uint16_t server_port)
             : io(ctx)
             , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            , front_buf()
+            , back_buf()
+            , max_frag_cnt(0)
     {
         recv_front();
         recv_back();

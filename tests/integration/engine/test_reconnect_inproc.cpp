@@ -105,9 +105,13 @@ struct sink_executor
 struct sink_channel
 {
     explicit sink_channel(sink_executor &)
+            : total_bytes(0)
+            , sends(0)
     {
     }
     sink_channel(sink_executor &, std::error_code &)
+            : total_bytes(0)
+            , sends(0)
     {
     }
     void send(std::span<const std::byte> d)
@@ -134,8 +138,8 @@ struct sink_channel
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
     {
     }
-    std::size_t total_bytes{0};
-    std::size_t sends{0};
+    std::size_t total_bytes;
+    std::size_t sends;
 };
 
 struct sink_timer
@@ -225,14 +229,14 @@ std::vector<std::byte> make_data_frame(const std::string &payload, std::uint64_t
 struct harness
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t transport{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     // The per-peer records own the channel + the epoch well and OUTLIVE every
     // incarnation, so each rebuilt session draws a strictly-later epoch with no
@@ -248,11 +252,19 @@ struct harness
     std::vector<std::string> req_received;
     std::vector<std::string> resp_received;
 
-    bool listening{false};
-    int dead{0};
+    bool listening;
+    int dead;
 
     explicit harness(const reconnect_config &cfg)
-            : driver(transport, ex, cfg, k_svc, k_seed)
+            : ex{bus}
+            , transport{ex, bus}
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{ex, k_long_timeout, sink}
+            , resp_procedures{ex, k_long_timeout, sink}
+            , driver(transport, ex, cfg, k_svc, k_seed)
+            , listening(false)
+            , dead(0)
     {
         transport.on_accepted(
                 [this](std::unique_ptr<inproc_channel<manual_clock>> ch)

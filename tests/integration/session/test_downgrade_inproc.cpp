@@ -139,13 +139,13 @@ int count_rejected(const std::vector<lifecycle_event> &evs)
 struct session_link
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> transport;
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
     plexus::io::peer_context<inproc_policy> req_ctx;
     plexus::io::peer_context<inproc_policy> resp_ctx;
     std::optional<session> requester;
@@ -158,7 +158,13 @@ struct session_link
     std::vector<lifecycle_event> resp_lifecycle;
 
     session_link(const attach_policy *req_policy, const attach_policy *resp_policy, security_seam rseam, security_seam pseam)
-            : req_seam(std::move(rseam))
+            : ex{bus}
+            , transport{ex, bus}
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{ex, k_long_timeout, sink}
+            , resp_procedures{ex, k_long_timeout, sink}
+            , req_seam(std::move(rseam))
             , resp_seam(std::move(pseam))
     {
         transport.on_accepted(

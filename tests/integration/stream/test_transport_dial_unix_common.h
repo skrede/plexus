@@ -103,13 +103,13 @@ struct dial_unix_link
 {
     temp_sock sock;
     ::asio::io_context io;
-    pasio::unix_transport transport{io};
+    pasio::unix_transport transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     plexus::io::peer_context<pasio::unix_policy> req_ctx;  // the dialer slot's per-peer record
     plexus::io::peer_context<pasio::unix_policy> resp_ctx; // the accepted slot's per-peer record
@@ -120,6 +120,11 @@ struct dial_unix_link
     std::vector<std::string> resp_received;
 
     explicit dial_unix_link(std::chrono::nanoseconds timeout = k_long_timeout)
+            : transport(io)
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{io, k_long_timeout, sink}
+            , resp_procedures{io, k_long_timeout, sink}
     {
         transport.on_accepted(
                 [this, timeout](std::unique_ptr<pasio::unix_channel> ch)

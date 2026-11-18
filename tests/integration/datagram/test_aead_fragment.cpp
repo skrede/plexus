@@ -185,11 +185,12 @@ struct receiver_pipe
     wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> channel;
     test_reassembler reasm;
-    std::size_t fragments_fed{0};
+    std::size_t fragments_fed;
 
     receiver_pipe(const derived_keys &keys, plexus::testing::harness &h)
             : channel(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys))
             , reasm(h.ex)
+            , fragments_fed(0)
     {
         channel.on_data(
                 [this](std::span<const std::byte> frame)

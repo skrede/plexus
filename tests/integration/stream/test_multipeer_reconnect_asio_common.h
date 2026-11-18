@@ -98,7 +98,7 @@ struct peer_node
     rpc_forwarder procedures;
     pio::peer_context<pasio::asio_policy> ctx;
     std::optional<session> responder;
-    pasio::asio_channel *accepted{nullptr};
+    pasio::asio_channel *accepted;
     plexus::node_id id;
     endpoint ep;
 
@@ -106,6 +106,7 @@ struct peer_node
             : transport(io)
             , messages(sink)
             , procedures(io, k_long_timeout, sink)
+            , accepted(nullptr)
             , id(make_id(seed))
     {
         transport.on_accepted(
@@ -137,13 +138,14 @@ struct peer_node
 struct multipeer_net
 {
     ::asio::io_context io;
-    pasio::asio_transport transport{io};
+    pasio::asio_transport transport;
     plexus::log::null_logger sink;
     engine a;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = fast_cfg())
-            : a(transport, io, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, sink, false)
+            : transport(io)
+            , a(transport, io, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, sink, false)
     {
         a.listen({"tcp", "127.0.0.1:0"});
         for(std::size_t i = 0; i < n; ++i)

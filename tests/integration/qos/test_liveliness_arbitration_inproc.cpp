@@ -37,18 +37,23 @@ handshake_fsm_config cfg_for(std::uint8_t id_seed, std::uint8_t compatible)
 struct arb_net
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t transport_a;
+    transport_t transport_b;
     plexus::log::null_logger sink;
     recording_liveliness_observer obs;
     engine a;
     std::optional<engine> b;
-    endpoint ep_b{"inproc", "node-b"};
-    plexus::node_id slot_b{endpoint_id(ep_b)};
+    endpoint ep_b;
+    plexus::node_id slot_b;
 
     explicit arb_net(combine policy, std::uint8_t a_compatible = 1)
-            : a(transport_a, ex, cfg_for(0xA1, a_compatible), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, opts(policy))
+            : ex{bus}
+            , transport_a{ex, bus}
+            , transport_b{ex, bus}
+            , a(transport_a, ex, cfg_for(0xA1, a_compatible), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, opts(policy))
+            , ep_b{"inproc", "node-b"}
+            , slot_b{endpoint_id(ep_b)}
     {
         b.emplace(transport_b, ex, cfg_for(0xB2, 1), k_long_timeout, forever_cfg(), k_seed + 1, sink, false);
         b->listen(ep_b);

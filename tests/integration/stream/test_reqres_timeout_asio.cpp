@@ -44,13 +44,13 @@ std::span<const std::byte> as_bytes(const std::string &s)
 struct silent_rpc
 {
     ::asio::io_context io;
-    pasio::asio_listener listener{io};
+    pasio::asio_listener listener;
     std::unique_ptr<pasio::asio_channel> server_channel;
-    pasio::asio_channel client{io};
+    pasio::asio_channel client;
     plexus::log::null_logger sink;
 
-    pio::frame_router server_router{sink};
-    pio::frame_router client_router{sink};
+    pio::frame_router server_router;
+    pio::frame_router client_router;
 
     std::optional<forwarder> provider;
     std::optional<forwarder> caller;
@@ -59,6 +59,10 @@ struct silent_rpc
     std::optional<forwarder::peer> provider_peer;
 
     explicit silent_rpc(std::chrono::nanoseconds caller_deadline)
+            : listener(io)
+            , client(io)
+            , server_router(sink)
+            , client_router(sink)
     {
         listener.on_accepted([this](std::unique_ptr<pasio::asio_channel> ch) { server_channel = std::move(ch); });
         listener.start({"tcp", "127.0.0.1:0"});

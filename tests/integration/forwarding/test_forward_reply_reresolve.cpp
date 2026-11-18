@@ -30,11 +30,11 @@ namespace {
 struct dual_relay_line
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t t_caller{ex, bus};
-    transport_t t_r1{ex, bus};
-    transport_t t_r2{ex, bus};
-    transport_t t_server{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t t_caller;
+    transport_t t_r1;
+    transport_t t_r2;
+    transport_t t_server;
     plexus::log::null_logger sink;
 
     engine caller;
@@ -42,20 +42,33 @@ struct dual_relay_line
     engine relay2;
     engine server;
 
-    node_id id_caller{make_id(0xC1)};
-    node_id id_r1{make_id(0x21)};
-    node_id id_r2{make_id(0x22)};
-    node_id id_server{make_id(0x53)};
-    endpoint ep_caller{"inproc", "rr-caller"};
-    endpoint ep_r1{"inproc", "rr-relay1"};
-    endpoint ep_r2{"inproc", "rr-relay2"};
-    endpoint ep_server{"inproc", "rr-server"};
+    node_id id_caller;
+    node_id id_r1;
+    node_id id_r2;
+    node_id id_server;
+    endpoint ep_caller;
+    endpoint ep_r1;
+    endpoint ep_r2;
+    endpoint ep_server;
 
     dual_relay_line()
-            : caller(t_caller, ex, make_cfg(0xC1), k_long_timeout, forever_cfg(), k_seed, sink)
+            : ex{bus}
+            , t_caller{ex, bus}
+            , t_r1{ex, bus}
+            , t_r2{ex, bus}
+            , t_server{ex, bus}
+            , caller(t_caller, ex, make_cfg(0xC1), k_long_timeout, forever_cfg(), k_seed, sink)
             , relay1(t_r1, ex, make_cfg(0x21), k_long_timeout, forever_cfg(), k_seed, sink)
             , relay2(t_r2, ex, make_cfg(0x22), k_long_timeout, forever_cfg(), k_seed, sink)
             , server(t_server, ex, make_cfg(0x53), k_long_timeout, forever_cfg(), k_seed, sink)
+            , id_caller{make_id(0xC1)}
+            , id_r1{make_id(0x21)}
+            , id_r2{make_id(0x22)}
+            , id_server{make_id(0x53)}
+            , ep_caller{"inproc", "rr-caller"}
+            , ep_r1{"inproc", "rr-relay1"}
+            , ep_r2{"inproc", "rr-relay2"}
+            , ep_server{"inproc", "rr-server"}
     {
         caller.listen(ep_caller);
         relay1.listen(ep_r1);

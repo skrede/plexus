@@ -188,15 +188,17 @@ struct peer_node
 struct multipeer_net
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t transport_a{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t transport_a;
     plexus::log::null_logger sink;
     engine a;
     discovery_stub discovery;
     std::vector<std::unique_ptr<peer_node>> peers;
 
     multipeer_net(std::size_t n, const reconnect_config &a_redial = forever_cfg())
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, sink, false)
+            : ex{bus}
+            , transport_a{ex, bus}
+            , a(transport_a, ex, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, sink, false)
     {
         a.listen({"inproc", "node-a"});
         for(std::size_t i = 0; i < n; ++i)

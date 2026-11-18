@@ -51,6 +51,7 @@ struct receive_sink
 {
     explicit receive_sink(inproc_executor<> &ex)
             : channel(ex)
+            , router(sink)
     {
         router.on_unidirectional(
                 [this](const plexus::wire::frame_header &, std::span<const std::byte> inner)
@@ -63,7 +64,7 @@ struct receive_sink
 
     inproc_channel<> channel;
     plexus::log::null_logger sink;
-    plexus::io::frame_router router{sink};
+    plexus::io::frame_router router;
     std::vector<std::string> bodies;
 };
 

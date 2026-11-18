@@ -87,6 +87,7 @@ struct tagged_channel
 {
     explicit tagged_channel(std::string scheme)
             : m_scheme(std::move(scheme))
+            , sends(0)
     {
     }
 
@@ -115,7 +116,7 @@ struct tagged_channel
     }
 
     std::string m_scheme;
-    std::size_t sends{0};
+    std::size_t sends;
 };
 
 struct tagged_timer

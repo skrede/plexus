@@ -46,22 +46,28 @@ struct remote_dial_link
     // stays a default (invalid) one — the SSL_CTX is only ever touched when a "tls"
     // channel is actually dialed/accepted, which this link never does.
     ptls::tls_credential no_tls;
-    pasio::unix_transport local{io};
-    pasio::asio_transport remote{io};
-    ptls::tls_transport secure{io, no_tls};
+    pasio::unix_transport local;
+    pasio::asio_transport remote;
+    ptls::tls_transport secure;
     // The datagram member stays inert on this tcp-only route — its socket is only ever
     // bound when a "udp" channel is actually dialed/accepted, which this link never does.
-    pasio::udp_transport datagram{io};
+    pasio::udp_transport datagram;
     // The secure-datagram (DTLS) member is likewise inert here: it reuses the same default
     // (invalid) credential and binds no socket unless a "dtls" channel is dialed/accepted.
-    ptls::dtls_transport secure_datagram{io, no_tls};
-    pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
+    ptls::dtls_transport secure_datagram;
+    pasio::all_backends_mux mux;
 
     std::optional<pio::endpoint> dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     remote_dial_link()
+            : local(io)
+            , remote(io)
+            , secure(io, no_tls)
+            , datagram(io)
+            , secure_datagram(io, no_tls)
+            , mux{local, remote, secure, datagram, secure_datagram}
     {
         mux.on_dialed(
                 [this](std::unique_ptr<pio::polymorphic_byte_channel> ch, const pio::endpoint &ep)

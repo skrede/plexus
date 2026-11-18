@@ -18,9 +18,10 @@ struct identity_fixture
     std::filesystem::path dir;
     std::filesystem::path cert_path;
     std::filesystem::path key_path;
-    spki_digest digest{};
+    spki_digest digest;
 
     explicit identity_fixture(const std::string &tag)
+            : digest()
     {
         dir = std::filesystem::temp_directory_path() / ("plexus_oob_" + tag + "_" + std::to_string(reinterpret_cast<std::uintptr_t>(this)));
         std::filesystem::create_directories(dir);

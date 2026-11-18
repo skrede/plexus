@@ -117,19 +117,19 @@ struct cold_cluster
     ::asio::io_context io;
 
     pty_pair pty;
-    std::string slave_device{::ptsname(pty.master)};
-    plexus::io::endpoint serial_line{"serial", slave_device + "@115200"};
+    std::string slave_device;
+    plexus::io::endpoint serial_line;
 
-    plexus::discovery::static_discovery odisc{{}};
-    plexus::discovery::static_discovery rdisc{{}};
-    plexus::discovery::static_discovery cdisc{{}};
-    plexus::discovery::static_discovery o2disc{{}};
+    plexus::discovery::static_discovery odisc;
+    plexus::discovery::static_discovery rdisc;
+    plexus::discovery::static_discovery cdisc;
+    plexus::discovery::static_discovery o2disc;
 
-    pasio::serial_transport origin_serial{io};
-    pasio::serial_transport relay_serial{io};
-    pasio::asio_transport relay_tcp{io};
-    pasio::asio_transport consumer_tcp{io};
-    pasio::asio_transport origin2_tcp{io};
+    pasio::serial_transport origin_serial;
+    pasio::serial_transport relay_serial;
+    pasio::asio_transport relay_tcp;
+    pasio::asio_transport consumer_tcp;
+    pasio::asio_transport origin2_tcp;
 
     // A revived relay is a fresh node under the SAME relay_id on fresh transports and a fresh serial line (the first
     // incarnation's slave fd closed on its death). Declared BEFORE relay so they outlive the node that borrows them.
@@ -137,10 +137,10 @@ struct cold_cluster
     std::optional<pasio::serial_transport> revive_relay_serial;
     std::optional<pasio::asio_transport> revive_relay_tcp;
 
-    node_id origin_id{id_of(0x01)};
-    node_id relay_id{id_of(0x02)};
-    node_id consumer_id{id_of(0x03)};
-    node_id origin2_id{id_of(0x04)};
+    node_id origin_id;
+    node_id relay_id;
+    node_id consumer_id;
+    node_id origin2_id;
 
     capturing_logger relay_log;
     capturing_logger consumer_log;
@@ -150,10 +150,26 @@ struct cold_cluster
     consumer_node consumer;
     std::optional<consumer_node> origin2;
 
-    std::uint16_t tcp_port{0};
+    std::uint16_t tcp_port;
 
     explicit cold_cluster(plexus::io::route_usage consumer_usage = plexus::io::route_usage::prefer_direct, plexus::io::route_usage origin_usage = plexus::io::route_usage::prefer_direct)
-            : consumer{io, cdisc, consumer_id, consumer_tcp, logged(usage_options("consumer", consumer_usage), consumer_log)}
+            : slave_device{::ptsname(pty.master)}
+            , serial_line{"serial", slave_device + "@115200"}
+            , odisc({})
+            , rdisc({})
+            , cdisc({})
+            , o2disc({})
+            , origin_serial(io)
+            , relay_serial(io)
+            , relay_tcp(io)
+            , consumer_tcp(io)
+            , origin2_tcp(io)
+            , origin_id{id_of(0x01)}
+            , relay_id{id_of(0x02)}
+            , consumer_id{id_of(0x03)}
+            , origin2_id{id_of(0x04)}
+            , consumer{io, cdisc, consumer_id, consumer_tcp, logged(usage_options("consumer", consumer_usage), consumer_log)}
+            , tcp_port(0)
     {
         relay.emplace(io, rdisc, relay_id, relay_serial, relay_tcp, logged(named("relay"), relay_log));
         origin.emplace(io, odisc, origin_id, origin_serial, usage_options("origin", origin_usage));
@@ -290,27 +306,38 @@ struct dualhome_cluster
 {
     ::asio::io_context io;
 
-    plexus::discovery::static_discovery odisc{{}};
-    plexus::discovery::static_discovery rdisc{{}};
-    plexus::discovery::static_discovery cdisc{{}};
+    plexus::discovery::static_discovery odisc;
+    plexus::discovery::static_discovery rdisc;
+    plexus::discovery::static_discovery cdisc;
 
-    pasio::asio_transport origin_tcp{io};
-    pasio::asio_transport relay_tcp{io};
-    pasio::asio_transport consumer_tcp{io};
+    pasio::asio_transport origin_tcp;
+    pasio::asio_transport relay_tcp;
+    pasio::asio_transport consumer_tcp;
 
-    node_id origin_id{id_of(0x01)};
-    node_id relay_id{id_of(0x02)};
-    node_id consumer_id{id_of(0x03)};
+    node_id origin_id;
+    node_id relay_id;
+    node_id consumer_id;
 
     std::optional<host_node> origin;
     std::optional<tcp_relay_node> relay;
     host_node consumer;
 
-    std::uint16_t origin_port{0};
-    std::uint16_t relay_port{0};
+    std::uint16_t origin_port;
+    std::uint16_t relay_port;
 
     dualhome_cluster()
-            : consumer{io, cdisc, consumer_id, consumer_tcp, cold_cluster::named("consumer")}
+            : odisc({})
+            , rdisc({})
+            , cdisc({})
+            , origin_tcp(io)
+            , relay_tcp(io)
+            , consumer_tcp(io)
+            , origin_id{id_of(0x01)}
+            , relay_id{id_of(0x02)}
+            , consumer_id{id_of(0x03)}
+            , consumer{io, cdisc, consumer_id, consumer_tcp, cold_cluster::named("consumer")}
+            , origin_port(0)
+            , relay_port(0)
     {
         relay.emplace(io, rdisc, relay_id, relay_tcp, cold_cluster::named("relay"));
         origin.emplace(io, odisc, origin_id, origin_tcp, cold_cluster::named("origin"));

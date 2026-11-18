@@ -189,15 +189,21 @@ plexus::node_id id_of(std::uint8_t seed)
 struct net
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> ta{ex, bus};
-    inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    inproc_executor<> ex;
+    inproc_transport<> ta;
+    inproc_transport<> tb;
+    static_discovery disc;
 
-    inproc_node pub_node{ex, disc, id_of(0x0A), ta, make_opts(0xA, /*eager=*/false)};
-    inproc_node sub_node{ex, disc, id_of(0x0B), tb, make_opts(0xB, /*eager=*/true)};
+    inproc_node pub_node;
+    inproc_node sub_node;
 
     net()
+            : ex{bus}
+            , ta{ex, bus}
+            , tb{ex, bus}
+            , disc({})
+            , pub_node{ex, disc, id_of(0x0A), ta, make_opts(0xA, /*eager=*/false)}
+            , sub_node{ex, disc, id_of(0x0B), tb, make_opts(0xB, /*eager=*/true)}
     {
         sub_node.listen({"inproc", "host-b:6000"});
         pub_node.listen({"inproc", "host-a:5000"});

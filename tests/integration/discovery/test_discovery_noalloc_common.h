@@ -41,6 +41,8 @@ struct sink_executor
 struct sink_timer
 {
     explicit sink_timer(sink_executor &ex)
+            : last_delay{0}
+            , arms(0)
     {
         ex.armed = this;
     }
@@ -63,8 +65,8 @@ struct sink_timer
             m_cb(std::error_code{});
     }
 
-    std::chrono::milliseconds last_delay{0}; // the interval the jittered re-arm requested
-    int arms{0};
+    std::chrono::milliseconds last_delay; // the interval the jittered re-arm requested
+    int arms;
     plexus::detail::move_only_function<void(std::error_code)> m_cb;
 };
 

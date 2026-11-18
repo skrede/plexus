@@ -114,22 +114,29 @@ inline plexus::node_options base_opts(bool eager)
 struct net
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> ta{ex, bus};
-    inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    inproc_executor<> ex;
+    inproc_transport<> ta;
+    inproc_transport<> tb;
+    static_discovery disc;
 
-    plexus::node_id id_a{make_id(0x0A)};
-    plexus::node_id id_b{make_id(0x0B)};
+    plexus::node_id id_a;
+    plexus::node_id id_b;
 
-    plexus::node_options opts_a{base_opts(/*eager=*/true)};
+    plexus::node_options opts_a;
     plexus::node_options opts_b;
 
     inproc_node a;
     inproc_node b;
 
     explicit net(const plexus::node_options &producer_opts)
-            : opts_b(producer_opts)
+            : ex{bus}
+            , ta{ex, bus}
+            , tb{ex, bus}
+            , disc({})
+            , id_a{make_id(0x0A)}
+            , id_b{make_id(0x0B)}
+            , opts_a{base_opts(/*eager=*/true)}
+            , opts_b(producer_opts)
             , a(ex, disc, id_a, ta, opts_a)
             , b(ex, disc, id_b, tb, opts_b)
     {

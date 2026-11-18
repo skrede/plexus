@@ -88,12 +88,14 @@ struct leg
 struct relay_fixture
 {
     inproc::inproc_bus<> bus;
-    inproc::inproc_executor<> ex{bus};
+    inproc::inproc_executor<> ex;
     log::null_logger log_sink;
-    forwarder fwd{log_sink};
+    forwarder fwd;
     std::vector<io::detail::drop_cause> drops;
 
     relay_fixture()
+            : ex{bus}
+            , fwd{log_sink}
     {
         fwd.on_drop([this](const io::detail::drop_event &e) { drops.push_back(e.cause); });
     }

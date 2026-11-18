@@ -60,23 +60,30 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
 struct dial_link
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     plexus::io::peer_context<inproc_policy> req_ctx;  // the dialer slot's per-peer record
     plexus::io::peer_context<inproc_policy> resp_ctx; // the accepted slot's per-peer record
     std::optional<session> requester;                 // the dialer end
     std::optional<session> responder;                 // the accepted end
 
-    bool dial_refused{false};
+    bool dial_refused;
 
     explicit dial_link(std::chrono::nanoseconds timeout = k_long_timeout)
+            : ex{bus}
+            , transport{ex, bus}
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{ex, k_long_timeout, sink}
+            , resp_procedures{ex, k_long_timeout, sink}
+            , dial_refused(false)
     {
         transport.on_accepted(
                 [this, timeout](std::unique_ptr<inproc_channel<>> ch)

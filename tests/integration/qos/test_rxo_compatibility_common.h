@@ -93,14 +93,14 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 struct session_link
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder sub_messages{sink};  // the subscriber's forwarder
-    msg_forwarder prod_messages{sink}; // the producer's forwarder
-    rpc_forwarder sub_procedures{ex, k_long_timeout, sink};
-    rpc_forwarder prod_procedures{ex, k_long_timeout, sink};
+    msg_forwarder sub_messages;  // the subscriber's forwarder
+    msg_forwarder prod_messages; // the producer's forwarder
+    rpc_forwarder sub_procedures;
+    rpc_forwarder prod_procedures;
 
     plexus::io::peer_context<inproc_policy> sub_ctx;
     plexus::io::peer_context<inproc_policy> prod_ctx;
@@ -112,6 +112,12 @@ struct session_link
     std::vector<std::uint8_t> degraded;     // on_subscribe_degraded bitmasks
 
     explicit session_link()
+            : ex{bus}
+            , transport{ex, bus}
+            , sub_messages{sink}
+            , prod_messages{sink}
+            , sub_procedures{ex, k_long_timeout, sink}
+            , prod_procedures{ex, k_long_timeout, sink}
     {
         transport.on_accepted(
                 [this](std::unique_ptr<inproc_channel<>> ch)

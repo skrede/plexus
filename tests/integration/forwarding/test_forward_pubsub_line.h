@@ -8,30 +8,40 @@ namespace forward_pubsub_fixture {
 struct pubsub_line
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t t_pub{ex, bus};
-    transport_t t_relay{ex, bus};
-    transport_t t_sub{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t t_pub;
+    transport_t t_relay;
+    transport_t t_sub;
     plexus::log::null_logger sink;
 
     engine pub;
     relay_engine relay;
     engine sub;
 
-    node_id id_pub{make_id(0xB0)};
-    node_id id_relay{make_id(0x2A)};
-    node_id id_sub{make_id(0x5B)};
-    endpoint ep_pub{"inproc", "pubsub-pub"};
-    endpoint ep_relay{"inproc", "pubsub-relay"};
-    endpoint ep_sub{"inproc", "pubsub-sub"};
+    node_id id_pub;
+    node_id id_relay;
+    node_id id_sub;
+    endpoint ep_pub;
+    endpoint ep_relay;
+    endpoint ep_sub;
 
     std::vector<delivery> sub_got;
     std::vector<delivery> pub_got;
 
     explicit pubsub_line(plexus::io::forward_options fwd = {})
-            : pub(t_pub, ex, make_cfg(0xB0), k_long_timeout, forever_cfg(), k_seed, sink)
+            : ex{bus}
+            , t_pub{ex, bus}
+            , t_relay{ex, bus}
+            , t_sub{ex, bus}
+            , pub(t_pub, ex, make_cfg(0xB0), k_long_timeout, forever_cfg(), k_seed, sink)
             , relay(t_relay, ex, make_cfg(0x2A), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, {}, {}, {}, fwd)
             , sub(t_sub, ex, make_cfg(0x5B), k_long_timeout, forever_cfg(), k_seed, sink)
+            , id_pub{make_id(0xB0)}
+            , id_relay{make_id(0x2A)}
+            , id_sub{make_id(0x5B)}
+            , ep_pub{"inproc", "pubsub-pub"}
+            , ep_relay{"inproc", "pubsub-relay"}
+            , ep_sub{"inproc", "pubsub-sub"}
     {
         sub.on_message_route([this](std::string_view fqn, std::span<const std::byte> b, const plexus::io::message_info &info)
                              { sub_got.push_back({std::string{fqn}, to_string(b), info}); });

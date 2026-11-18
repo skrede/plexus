@@ -93,14 +93,17 @@ struct loopback
 {
     temp_sock sock;
     ::asio::io_context io;
-    pasio::unix_listener listener{io, short_cfg()};
+    pasio::unix_listener listener;
     std::unique_ptr<pasio::unix_channel> server;
-    ::asio::local::stream_protocol::socket client{io};
+    ::asio::local::stream_protocol::socket client;
 
     std::optional<wire::close_cause> caused;
-    int closes{0};
+    int closes;
 
     loopback()
+            : listener(io, short_cfg())
+            , client{io}
+            , closes(0)
     {
         listener.on_accepted(
                 [this](std::unique_ptr<pasio::unix_channel> ch)

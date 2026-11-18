@@ -96,18 +96,23 @@ struct session_under_peer
     using rpc_forwarder = pio::procedure_forwarder<asio_policy>;
 
     ::asio::io_context io;
-    pasio::asio_listener listener{io, short_cfg()};
-    ::asio::ip::tcp::socket client{io};
+    pasio::asio_listener listener;
+    ::asio::ip::tcp::socket client;
 
     plexus::log::null_logger sink;
-    msg_forwarder messages{sink};
-    rpc_forwarder procedures{io, k_long_timeout, sink};
+    msg_forwarder messages;
+    rpc_forwarder procedures;
     pio::peer_context<asio_policy> ctx;
     std::optional<session> peer;
 
-    int drops{0};
+    int drops;
 
     session_under_peer()
+            : listener(io, short_cfg())
+            , client{io}
+            , messages{sink}
+            , procedures{io, k_long_timeout, sink}
+            , drops(0)
     {
         listener.on_accepted(
                 [this](std::unique_ptr<pasio::asio_channel> ch)

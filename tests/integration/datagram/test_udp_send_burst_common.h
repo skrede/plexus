@@ -78,13 +78,15 @@ inline std::string str_of(std::span<const std::byte> b)
 struct pair_fixture
 {
     ::asio::io_context io;
-    pasio::udp_transport server{io};
-    pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs};
+    pasio::udp_transport server;
+    pasio::udp_transport client;
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
     std::vector<std::string> received;
 
     pair_fixture()
+            : server(io)
+            , client(io, pasio::udp_channel::default_max_payload, fast_hs)
     {
         server.on_accepted(
                 [this](std::unique_ptr<pasio::udp_channel> ch)

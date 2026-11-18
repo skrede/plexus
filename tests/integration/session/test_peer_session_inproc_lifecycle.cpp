@@ -33,14 +33,14 @@ namespace {
 struct manual_link
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    inproc_transport<manual_clock> transport{ex, bus};
+    inproc_executor<manual_clock> ex;
+    inproc_transport<manual_clock> transport;
 
     plexus::log::null_logger sink;
-    manual_msg req_messages{sink};
-    manual_msg resp_messages{sink};
-    manual_rpc req_procedures{ex, std::chrono::hours(1), sink};
-    manual_rpc resp_procedures{ex, std::chrono::hours(1), sink};
+    manual_msg req_messages;
+    manual_msg resp_messages;
+    manual_rpc req_procedures;
+    manual_rpc resp_procedures;
 
     plexus::io::peer_context<manual_policy> req_ctx;  // the dialer slot's per-peer record
     plexus::io::peer_context<manual_policy> resp_ctx; // the accepted slot's per-peer record
@@ -48,6 +48,12 @@ struct manual_link
     std::optional<manual_session> responder;
 
     explicit manual_link(std::chrono::nanoseconds timeout)
+            : ex{bus}
+            , transport{ex, bus}
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{ex, std::chrono::hours(1), sink}
+            , resp_procedures{ex, std::chrono::hours(1), sink}
     {
         transport.on_accepted(
                 [this, timeout](std::unique_ptr<inproc_channel<manual_clock>> ch)

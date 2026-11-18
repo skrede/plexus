@@ -121,7 +121,8 @@ struct fan_net
     static constexpr const char *k_topic     = "topic";
 
     explicit fan_net(std::size_t subscriber_count)
-            : pub_transport(ex, bus)
+            : ex{bus}
+            , pub_transport(ex, bus)
             , pub(pub_transport, ex, make_cfg(k_pub_seed), k_long_timeout, forever_cfg(), k_seed, sink, false)
     {
         pub.listen({"inproc", "pub"});
@@ -150,7 +151,7 @@ struct fan_net
     }
 
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
+    inproc_executor<manual_clock> ex;
     transport_t pub_transport;
     plexus::log::null_logger sink;
     engine pub;
@@ -168,7 +169,8 @@ struct rpc_net
     static constexpr const char *k_proc           = "svc";
 
     rpc_net()
-            : caller_transport(ex, bus)
+            : ex{bus}
+            , caller_transport(ex, bus)
             , provider_transport(ex, bus)
             , caller(caller_transport, ex, make_cfg(k_caller_seed), k_long_timeout, forever_cfg(), k_seed, sink, false)
             , provider(provider_transport, ex, make_cfg(k_provider_seed), k_long_timeout, forever_cfg(), k_seed, sink, false)
@@ -194,7 +196,7 @@ struct rpc_net
     }
 
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
+    inproc_executor<manual_clock> ex;
     transport_t caller_transport;
     transport_t provider_transport;
     plexus::log::null_logger sink;

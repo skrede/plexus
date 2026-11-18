@@ -17,9 +17,11 @@ struct sink_executor
 struct sink_channel
 {
     explicit sink_channel(sink_executor &)
+            : pending(0)
     {
     }
     sink_channel(sink_executor &, std::error_code &)
+            : pending(0)
     {
     }
 
@@ -52,7 +54,7 @@ struct sink_channel
     }
 
     std::vector<std::byte> last;
-    int pending{0};
+    int pending;
 };
 
 struct sink_timer

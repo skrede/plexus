@@ -49,18 +49,22 @@ std::vector<std::byte> heartbeat_decline_frame()
 struct lone_responder
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder resp_procedures{ex, k_long_timeout, sink};
+    msg_forwarder resp_messages;
+    rpc_forwarder resp_procedures;
 
     plexus::io::peer_context<inproc_policy> resp_ctx;
     std::unique_ptr<plexus::inproc::inproc_channel<>> dialer_channel;
     std::optional<session> responder;
 
     lone_responder()
+            : ex{bus}
+            , transport{ex, bus}
+            , resp_messages{sink}
+            , resp_procedures{ex, k_long_timeout, sink}
     {
         transport.on_accepted(
                 [this](std::unique_ptr<plexus::inproc::inproc_channel<>> ch)

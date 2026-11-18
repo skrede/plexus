@@ -158,18 +158,22 @@ using manual_rpc     = plexus::io::procedure_forwarder<manual_policy>;
 struct timeout_harness
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    inproc_channel<manual_clock> peer_ch{ex}; // a silent peer that never responds
+    inproc_executor<manual_clock> ex;
+    inproc_channel<manual_clock> peer_ch; // a silent peer that never responds
 
     plexus::log::null_logger sink;
-    manual_msg messages{sink};
-    manual_rpc procedures{ex, std::chrono::hours(1), sink};
+    manual_msg messages;
+    manual_rpc procedures;
 
     plexus::io::peer_context<manual_policy> ctx; // the record owns the dialer channel
     manual_session requester;
 
     explicit timeout_harness(std::chrono::nanoseconds timeout)
-            : ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
+            : ex{bus}
+            , peer_ch{ex}
+            , messages{sink}
+            , procedures{ex, std::chrono::hours(1), sink}
+            , ctx{std::make_unique<inproc_channel<manual_clock>>(ex), {}, "silent-node", {}, {}}
             , requester(ctx, ex, make_cfg(0x02), timeout, messages, procedures, false, sink)
     {
         ctx.channel->connect_to(peer_ch.local_endpoint()); // sends land on a peer that never replies

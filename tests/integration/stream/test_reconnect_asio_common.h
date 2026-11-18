@@ -75,13 +75,13 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
 struct tcp_reconnect
 {
     ::asio::io_context io;
-    pasio::asio_transport transport{io};
+    pasio::asio_transport transport;
 
     plexus::log::null_logger sink;
-    msg_forwarder req_messages{sink};
-    msg_forwarder resp_messages{sink};
-    rpc_forwarder req_procedures{io, k_long_timeout, sink};
-    rpc_forwarder resp_procedures{io, k_long_timeout, sink};
+    msg_forwarder req_messages;
+    msg_forwarder resp_messages;
+    rpc_forwarder req_procedures;
+    rpc_forwarder resp_procedures;
 
     // The per-peer records own the channel + the epoch well and OUTLIVE every
     // incarnation, so each rebuilt session draws a strictly-later epoch with no
@@ -94,13 +94,20 @@ struct tcp_reconnect
     std::optional<session> requester;
     std::optional<session> responder;
 
-    std::uint16_t port{0};
-    int drops_seen{0};
+    std::uint16_t port;
+    int drops_seen;
 
     // listen_first: bind the listener on an ephemeral port BEFORE the driver so the
     // driver dials the real port. When false the caller supplies a (closed) port to
     // exercise the initial-refused path and brings the listener up later.
     tcp_reconnect(const reconnect_config &cfg, bool listen_first, std::uint16_t closed_port = 0)
+            : transport(io)
+            , req_messages{sink}
+            , resp_messages{sink}
+            , req_procedures{io, k_long_timeout, sink}
+            , resp_procedures{io, k_long_timeout, sink}
+            , port(0)
+            , drops_seen(0)
     {
         transport.on_accepted(
                 [this](std::unique_ptr<pasio::asio_channel> ch)
