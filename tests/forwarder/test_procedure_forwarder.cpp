@@ -1,4 +1,4 @@
-#include "test_procedure_forwarder_common.h"
+#include "test_procedure_forwarder_link.h"
 
 using namespace procedure_forwarder_fixture;
 
