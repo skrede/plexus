@@ -120,11 +120,13 @@ struct counters
 struct fixture
 {
     inproc_bus<manual_clock> bus;
-    executor_t ex{bus};
+    executor_t ex;
     counters c;
-    stream_t stream{ex, test_config()};
+    stream_t stream;
 
     fixture()
+            : ex{bus}
+            , stream{ex, test_config()}
     {
         stream.on_frame([this](const complete_frame &) { ++c.frames; });
         stream.on_protocol_close(

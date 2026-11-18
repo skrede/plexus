@@ -19,9 +19,10 @@ struct race_fixture
 {
     race_executor ex;
     counters c;
-    race_stream stream{ex, test_config()};
+    race_stream stream;
 
     race_fixture()
+            : stream{ex, test_config()}
     {
         stream.on_frame([this](const complete_frame &) { ++c.frames; });
         stream.on_protocol_close(
