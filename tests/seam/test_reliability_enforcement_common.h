@@ -101,21 +101,27 @@ inline reconnect_config forever_cfg()
 struct rendezvous
 {
     inproc_bus<manual_clock> bus;
-    inproc_executor<manual_clock> ex{bus};
-    transport_t dialer_tp{ex, bus};
-    transport_t responder_tp{ex, bus};
+    inproc_executor<manual_clock> ex;
+    transport_t dialer_tp;
+    transport_t responder_tp;
     plexus::log::null_logger sink;
 
-    engine dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false};
-    engine responder{responder_tp, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false};
+    engine dialer;
+    engine responder;
 
-    plexus::node_id peer{make_id(0xB2)};
+    plexus::node_id peer;
     endpoint peer_ep;
 
     // Stand the responder up under `scheme` so the bus keys its listener there and the
     // gate classifies the peer's reliability from it; teach the dialer the same endpoint.
     explicit rendezvous(const std::string &scheme)
-            : peer_ep{scheme, "responder"}
+            : ex{bus}
+            , dialer_tp{ex, bus}
+            , responder_tp{ex, bus}
+            , dialer{dialer_tp, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false}
+            , responder{responder_tp, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false}
+            , peer{make_id(0xB2)}
+            , peer_ep{scheme, "responder"}
     {
         responder.listen(peer_ep);
         dialer.note_peer(peer, peer_ep);
