@@ -82,6 +82,7 @@ enum class node_command : std::uint32_t
 struct node_slot
 {
     std::atomic<std::uint32_t> ready;
+    std::atomic<std::uint32_t> listen_failed;
     std::atomic<std::uint32_t> connected;
     std::atomic<std::uint32_t> command;
     std::atomic<std::uint32_t> command_seq;

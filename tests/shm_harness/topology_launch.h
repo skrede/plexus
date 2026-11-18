@@ -17,6 +17,7 @@
 #include <vector>
 #include <cstdint>
 #include <utility>
+#include <iostream>
 #include <optional>
 #include <string_view>
 
@@ -29,7 +30,7 @@ public:
             : m_fqn(std::move(fqn))
             , m_count(count)
             , m_wiring(wiring)
-            , m_ports(free_tcp_ports(count))
+            , m_reservation(count)
             , m_name("shm_harness.")
             , m_regions(m_fqn, harness_ids(count))
             , m_block(plexus::testing::xproc_shared<topology_block>::create(m_name.str()))
@@ -57,7 +58,7 @@ public:
         std::vector<std::string> args{m_name.str(),     std::to_string(index), std::to_string(m_count), m_fqn, std::string(role_name(role)),
                                       hint ? "1" : "0", deny ? "1" : "0",      crossed ? "1" : "0"};
         args.emplace_back(composition_name(composition));
-        for(const std::uint16_t port : m_ports)
+        for(const std::uint16_t port : m_reservation.ports())
             args.push_back(std::to_string(port));
         return launch(index, "shm_harness.node", args);
     }
@@ -126,7 +127,7 @@ private:
     std::string m_fqn;
     std::uint32_t m_count;
     dial_wiring m_wiring;
-    std::vector<std::uint16_t> m_ports;
+    port_reservation m_reservation;
     plexus::testing::scoped_shm_name m_name;
     topic_regions m_regions;
     std::optional<plexus::testing::xproc_shared<topology_block>> m_block;
@@ -140,11 +141,19 @@ private:
     bool launch(std::uint32_t index, std::string_view key, const std::vector<std::string> &args)
     {
         slot(index).ready.store(0, std::memory_order_release);
+        slot(index).listen_failed.store(0, std::memory_order_release);
         m_nodes[index] = plexus::testing::xproc_process::spawn(key, args);
         if(!m_nodes[index])
             return false;
-        return wait_until([&] { return slot(index).ready.load(std::memory_order_acquire) != 0 || !m_nodes[index]->running(); }, 10s) &&
-                slot(index).ready.load(std::memory_order_acquire) != 0;
+        const bool settled = wait_until([&] { return slot(index).ready.load(std::memory_order_acquire) != 0 || listen_failed(index) || !m_nodes[index]->running(); }, 10s);
+        if(listen_failed(index))
+            std::cerr << "shm_harness: node " << index << " could not listen on 127.0.0.1:" << m_reservation.ports()[index] << std::endl;
+        return settled && slot(index).ready.load(std::memory_order_acquire) != 0;
+    }
+
+    bool listen_failed(std::uint32_t index)
+    {
+        return slot(index).listen_failed.load(std::memory_order_acquire) != 0;
     }
 
     std::uint32_t issue(std::uint32_t index, node_command cmd, std::uint32_t arg)

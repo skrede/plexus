@@ -41,9 +41,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <filesystem>
 #include <string_view>
 
+#include <netinet/in.h>
+
 #include <sys/prctl.h>
+#include <sys/socket.h>
 
 namespace {
 
@@ -84,10 +88,30 @@ void report_fallbacks(const Node &node, node_slot &slot)
         slot.fallbacks[reason].store(static_cast<std::uint32_t>(counts[reason]), std::memory_order_release);
 }
 
+// A node surfaces no listen failure, so the child looks for its own listening socket on the port.
+bool listens_on(std::uint16_t port)
+{
+    for(const std::filesystem::directory_entry &entry : std::filesystem::directory_iterator("/proc/self/fd"))
+    {
+        const std::optional<std::uint32_t> fd = to_u32(entry.path().filename().string());
+        std::int32_t accepting                = 0;
+        ::socklen_t accepting_len             = sizeof accepting;
+        ::sockaddr_in addr{};
+        ::socklen_t addr_len = sizeof addr;
+        if(fd && ::getsockopt(static_cast<std::int32_t>(*fd), SOL_SOCKET, SO_ACCEPTCONN, &accepting, &accepting_len) == 0 && accepting != 0 &&
+           ::getsockname(static_cast<std::int32_t>(*fd), reinterpret_cast<::sockaddr *>(&addr), &addr_len) == 0 && addr.sin_family == AF_INET && ntohs(addr.sin_port) == port)
+            return true;
+    }
+    return false;
+}
+
 template<typename Node>
 void serve_node(::asio::io_context &io, Node &node, const node_args &args, node_slot &slot)
 {
-    node.listen({"tcp", "127.0.0.1:" + std::to_string(args.ports[args.index])});
+    const std::uint16_t port = args.ports[args.index];
+    node.listen({"tcp", "127.0.0.1:" + std::to_string(port)});
+    if(!listens_on(port))
+        return slot.listen_failed.store(1, std::memory_order_release);
 
     const std::optional<plexus::io::same_host_geometry> geometry = ring_geometry_for(args);
     std::optional<plexus::publisher<>> pub;
