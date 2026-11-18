@@ -102,26 +102,35 @@ reconnect_config forever_cfg()
 struct rig
 {
     inproc_bus<clock_t_> bus;
-    inproc_executor<clock_t_> ex{bus};
-    transport_t transport_a{ex, bus};
-    transport_t transport_b{ex, bus};
+    inproc_executor<clock_t_> ex;
+    transport_t transport_a;
+    transport_t transport_b;
     plexus::log::null_logger sink;
     engine a;
     engine b;
 
-    plexus::node_id id_a{make_id(0xA1)};
-    plexus::node_id id_b{make_id(0xB2)};
-    endpoint ep_a{"inproc", "node-a"};
-    endpoint ep_b{"inproc", "node-b"};
+    plexus::node_id id_a;
+    plexus::node_id id_b;
+    endpoint ep_a;
+    endpoint ep_b;
 
-    std::uint64_t received{0};
-    engine::session_type *a_to_b{nullptr};
+    std::uint64_t received;
+    engine::session_type *a_to_b;
 
     rig()
-            : a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
+            : ex{bus}
+            , transport_a{ex, bus}
+            , transport_b{ex, bus}
+            , a(transport_a, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink,
                 /*eager=*/true)
             , b(transport_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink,
                 /*eager=*/true)
+            , id_a{make_id(0xA1)}
+            , id_b{make_id(0xB2)}
+            , ep_a{"inproc", "node-a"}
+            , ep_b{"inproc", "node-b"}
+            , received(0)
+            , a_to_b(nullptr)
     {
         a.listen(ep_a);
         b.listen(ep_b);
