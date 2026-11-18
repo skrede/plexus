@@ -17,6 +17,8 @@ namespace plexus::io {
 // driving many concurrent dials over ONE transport routes each completion back to its
 // slot by endpoint, since a real async transport completes dials out of order.
 // on_accepted carries no endpoint (an inbound channel is not correlated to a dial).
+// A handler may close or destroy its transport, but must not touch the transport or its own captures afterwards: the
+// transport invokes the stored handler in place, so destroying the transport destroys the running handler.
 template<typename T, typename Policy>
 concept transport_backend = plexus::Policy<Policy> &&
         requires(T &t, const io::endpoint &ep, plexus::detail::move_only_function<void(std::unique_ptr<typename Policy::byte_channel_type>)> on_acc,

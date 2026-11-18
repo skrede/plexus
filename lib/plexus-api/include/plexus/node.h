@@ -150,7 +150,8 @@ class procedure;
 // LIFETIME: the node BORROWS its executor, discovery, and transport leaves, which MUST outlive it, and OWNS only the
 // engine and (for >1 transport) the multiplexing glue. Its posts and waits capture `this`, so it is non-copyable and
 // non-movable. A closed node may be destroyed inside or after its on_closed while the executor keeps running; a node
-// never closed is destroyed only with its executor not run again.
+// never closed is destroyed only with its executor not run again. Destroying it inside any other of its own callbacks,
+// a completion one of its member transports is delivering included, is undefined.
 // THREADING: one thread drives the executor and makes every member and handle call; other threads hand work in through
 // plexus::post, and executor() and id() are safe from any thread. The first call binds its caller; the driver claims the
 // executor on its first step or handler (the node's creation post is one) and holds it until plexus::release_driver, its
