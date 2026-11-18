@@ -46,6 +46,40 @@ inline void require_exactly(const node_counts &counts, std::uint32_t expected)
     REQUIRE(counts.duplicates == 0);
 }
 
+struct crash_restart_outcome
+{
+    node_counts subscriber;
+    node_counts publisher;
+    std::uint32_t regions_before;
+    std::uint32_t regions_after;
+};
+
+// The subscriber is killed after a first round and respawned, and the publisher's send histogram is cleared before the
+// round of count messages it then sends.
+inline crash_restart_outcome crash_restart(std::string_view name, std::uint32_t count)
+{
+    topology topo{probe_fqn(name), 2};
+    REQUIRE(topo.created());
+    REQUIRE(topo.spawn_registry(0, node_role::pub));
+    REQUIRE(topo.spawn_registry(1, node_role::sub));
+    const bool first_round = topo.publish_round({0}, 10, {1}, 10s);
+    report(topo, std::string(name) + " before", {1});
+    REQUIRE(first_round);
+
+    const std::uint32_t regions_before = topo.regions().entries();
+    topo.kill(1);
+    REQUIRE(topo.spawn_registry(1, node_role::sub));
+    REQUIRE(topo.command(0, node_command::reset));
+    topo.publish_round({0}, count, {1}, 60s);
+    const node_counts subscriber = report(topo, std::string(name) + " after", {1})[0];
+    const node_counts publisher  = topo.counts(0);
+    leave_all(topo, {1, 0});
+    const crash_restart_outcome outcome{subscriber, publisher, regions_before, topo.regions().entries()};
+    std::cout << name << " p99_send_us=" << publisher.p99_send_us << " slowest_send_us=" << publisher.slowest_send_us << " regions_before=" << regions_before
+              << " regions_after=" << outcome.regions_after << std::endl;
+    return outcome;
+}
+
 }
 
 #endif

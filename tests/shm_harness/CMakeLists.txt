@@ -35,6 +35,12 @@ if(LINUX)
         PROPERTIES TIMEOUT 300)
 endif()
 
+# The send-latency bound is a wall-clock figure the scheduler sets under load, so its probe is its own executable and
+# runs alone.
+if(LINUX)
+    plexus_add_shm_harness_test(test_shm_lane_latency registry_role.cpp test_shm_lane_latency.cpp PROPERTIES RUN_SERIAL TRUE)
+endif()
+
 # The subscriber denies itself io_uring with a seccomp filter before it builds its node.
 if(LINUX)
     plexus_add_shm_harness_test(test_shm_harness_denial test_shm_harness_denial.cpp)
