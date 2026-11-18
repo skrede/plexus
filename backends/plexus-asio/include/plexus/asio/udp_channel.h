@@ -59,11 +59,11 @@ class udp_channel
 public:
     static constexpr std::size_t default_max_payload = datagram::mtu_budget{}.max_payload;
     // The not-yet-windowed fragments of a paced reliable message park here while the ARQ send
-    // window is full. This bounds ADDITIONAL backlog ONLY: the per-message ceiling is the sole
-    // size authority, so the live cap is floored at the bytes a ceiling-sized message parks, its
-    // encoded fragments once it fragments (see m_backpressure construction), and a within-ceiling
-    // message's whole fragment backlog is always admissible. The default sizes the EXTRA backlog a
-    // producer outrunning the drain may pile up past one in-flight message.
+    // window is full. The live cap is floored at the bytes a ceiling-sized message parks, its
+    // encoded fragments once it fragments (see m_backpressure construction), so a within-ceiling
+    // message is always admissible into an empty queue; one sent behind a parked backlog may be
+    // refused with would_block. A value below that floor has no effect, which with the default
+    // ceiling includes this default.
     static constexpr std::size_t default_backpressure_bytes = 1u * io::fragmentation_limits::max_message_size;
 
     using arq_type         = datagram::detail::udp_reliable_arq<::asio::io_context &, asio_timer>;
