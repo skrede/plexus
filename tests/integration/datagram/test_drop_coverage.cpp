@@ -18,6 +18,8 @@
 // on a real io_context while the sink posts onto the engine's executor; both are drained.
 // Each leg loops so a single-run fluke cannot pass.
 
+#include "support/stall_policy.h"
+
 #include "plexus/crypto/datagram_authenticated_channel.h"
 #include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
@@ -52,8 +54,6 @@
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
 
-#include "plexus/testing/inline_verbs.h"
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
@@ -68,9 +68,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <system_error>
 
 namespace cause = plexus::io::detail;
+
+using plexus::testing::reported_stall_policy;
+using plexus::testing::reported_stall_channel;
 
 namespace {
 
@@ -279,142 +281,6 @@ std::vector<std::byte> filler(std::size_t n)
     return v;
 }
 
-// A channel whose reported occupancy is held above the low-water mark so the egress
-// scheduler bands every publish instead of draining: a flood past the band depth then
-// sheds under the topic's congestion policy (the egress shed the observer must see). It
-// records nothing — the shed never reaches send().
-struct stall_executor
-{
-};
-
-struct stall_channel
-{
-    explicit stall_channel(std::size_t &reported)
-            : m_reported(&reported)
-    {
-    }
-    stall_channel(stall_executor &)
-    {
-    }
-    stall_channel(stall_executor &, std::error_code &)
-    {
-    }
-
-    void send(std::span<const std::byte>)
-    {
-    }
-    void close()
-    {
-    }
-    plexus::io::endpoint remote_endpoint() const
-    {
-        return {"tcp", "127.0.0.1:0"};
-    }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
-    {
-    }
-    void on_closed(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
-    {
-    }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
-    {
-    }
-    std::size_t backpressured() const noexcept
-    {
-        return *m_reported;
-    }
-
-    std::size_t *m_reported{nullptr};
-};
-
-struct stall_timer
-{
-    explicit stall_timer(stall_executor &)
-    {
-    }
-    stall_timer(stall_executor &, std::error_code &)
-    {
-    }
-    void expires_after(std::chrono::milliseconds)
-    {
-    }
-    void async_wait(plexus::detail::move_only_function<void(std::error_code)>)
-    {
-    }
-    void cancel()
-    {
-    }
-};
-
-struct stall_policy : plexus::testing::inline_verbs<stall_executor &>
-{
-    using byte_channel_type = stall_channel;
-    using timer_type        = stall_timer;
-    using byte_owner        = std::shared_ptr<const void>;
-};
-
-static_assert(plexus::Policy<stall_policy>);
-
-// The same stalling channel reporting the "inproc" scheme: the forwarder classifies its
-// subscriber's delivery tier from the channel scheme, so an inproc subscriber whose egress
-// band saturates sheds with transport=locality::process — the same egress trio the stream
-// tier emits, proving the inproc tier is not a dark drop tier (the egress scheduler governs
-// the band ABOVE the channel, transport-agnostically).
-struct inproc_stall_channel
-{
-    explicit inproc_stall_channel(std::size_t &reported)
-            : m_reported(&reported)
-    {
-    }
-    inproc_stall_channel(stall_executor &)
-    {
-    }
-    inproc_stall_channel(stall_executor &, std::error_code &)
-    {
-    }
-
-    void send(std::span<const std::byte>)
-    {
-    }
-    void close()
-    {
-    }
-    plexus::io::endpoint remote_endpoint() const
-    {
-        return {"inproc", "node-x"};
-    }
-    void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
-    {
-    }
-    void on_closed(plexus::detail::move_only_function<void()>)
-    {
-    }
-    void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
-    {
-    }
-    void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
-    {
-    }
-    std::size_t backpressured() const noexcept
-    {
-        return *m_reported;
-    }
-
-    std::size_t *m_reported{nullptr};
-};
-
-struct inproc_stall_policy : plexus::testing::inline_verbs<stall_executor &>
-{
-    using byte_channel_type = inproc_stall_channel;
-    using timer_type        = stall_timer;
-    using byte_owner        = std::shared_ptr<const void>;
-};
-
-static_assert(plexus::Policy<inproc_stall_policy>);
-
 }
 
 TEST_CASE("integration.drop_coverage replay / too_old / tamper post through the engine hook with "
@@ -603,12 +469,12 @@ TEST_CASE("integration.drop_coverage an egress shed bumps the per-band counter A
           "installed observer",
           "[integration][drop_coverage][egress]")
 {
-    using forwarder = plexus::io::message_forwarder<stall_policy>;
+    using forwarder = plexus::io::message_forwarder<reported_stall_policy>;
 
     for(int loop = 0; loop < 4; ++loop)
     {
         std::size_t reported = 0;
-        stall_channel ch{reported};
+        reported_stall_channel ch{reported};
         plexus::log::null_logger sink;
         forwarder fwd{sink};
         recording_drop_observer observer;
@@ -641,7 +507,7 @@ TEST_CASE("integration.drop_coverage an inproc subscriber's egress shed reaches 
           "transport=process",
           "[integration][drop_coverage][inproc]")
 {
-    using forwarder = plexus::io::message_forwarder<inproc_stall_policy>;
+    using forwarder = plexus::io::message_forwarder<reported_stall_policy>;
 
     // The inproc tier is not a dark drop tier: the egress scheduler bands an inproc
     // subscriber ABOVE the channel and sheds transport-agnostically, so the drop reaches
@@ -650,7 +516,7 @@ TEST_CASE("integration.drop_coverage an inproc subscriber's egress shed reaches 
     for(int loop = 0; loop < 4; ++loop)
     {
         std::size_t reported = 0;
-        inproc_stall_channel ch{reported};
+        reported_stall_channel ch{reported, {"inproc", "node-x"}};
         plexus::log::null_logger sink;
         forwarder fwd{sink};
         std::vector<cause::drop_event> drops;

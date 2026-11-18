@@ -4,13 +4,13 @@
 // own band while the fast leg keeps delivering — no head-of-line blocking — and the delivering leg's
 // sequence stays monotone (per-(origin, band) FIFO). Cross-band order is intentionally NOT asserted.
 
+#include "support/stall_policy.h"
+
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/priority_band_queue.h"
 
-#include "plexus/io/endpoint.h"
-#include "plexus/io/io_error.h"
 #include "plexus/io/priority.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/null_logger.h"
@@ -20,9 +20,6 @@
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
 
-#include "plexus/policy.h"
-#include "plexus/detail/compat.h"
-
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
@@ -30,20 +27,20 @@
 
 #include "plexus/node_id.h"
 
-#include "plexus/testing/inline_verbs.h"
-
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <chrono>
 #include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <system_error>
 
 using namespace plexus;
 namespace wire = plexus::wire;
+
+using plexus::testing::stall_state;
+using plexus::testing::stall_policy;
+using plexus::testing::stall_channel;
 
 namespace {
 
@@ -80,94 +77,6 @@ std::vector<std::byte> capture_inner(std::string_view fqn, std::string_view body
     ex.drain();
     return framed;
 }
-
-// A byte_channel whose backpressure occupancy the test controls and that records every admitted frame,
-// mirroring the egress-priority stall substrate: a synchronous post makes the scheduler drain inline.
-struct stall_state
-{
-    std::size_t reported{0};
-    std::vector<std::vector<std::byte>> sends;
-};
-
-inline std::uint64_t next_stall_key() noexcept
-{
-    static std::uint64_t counter = 0;
-    return ++counter;
-}
-
-struct stall_channel
-{
-    explicit stall_channel(stall_state &st)
-            : m_st(&st)
-    {
-    }
-    void send(std::span<const std::byte> d)
-    {
-        m_st->sends.emplace_back(d.begin(), d.end());
-    }
-    void close()
-    {
-    }
-    io::endpoint remote_endpoint() const
-    {
-        return {"tcp", "127.0.0.1:0"};
-    }
-    void on_data(detail::move_only_function<void(std::span<const std::byte>)>)
-    {
-    }
-    void on_closed(detail::move_only_function<void()>)
-    {
-    }
-    void on_error(detail::move_only_function<void(io::io_error)>)
-    {
-    }
-    void on_protocol_close(detail::move_only_function<void(wire::close_cause)>)
-    {
-    }
-    std::size_t backpressured() const noexcept
-    {
-        return m_st->reported;
-    }
-    std::uint64_t scheduler_key() const noexcept
-    {
-        return m_key;
-    }
-
-    stall_state *m_st{nullptr};
-    std::uint64_t m_key{next_stall_key()};
-};
-
-struct stall_executor
-{
-};
-
-struct stall_timer
-{
-    explicit stall_timer(stall_executor &)
-    {
-    }
-    stall_timer(stall_executor &, std::error_code &)
-    {
-    }
-    void expires_after(std::chrono::milliseconds)
-    {
-    }
-    void async_wait(detail::move_only_function<void(std::error_code)>)
-    {
-    }
-    void cancel()
-    {
-    }
-};
-
-struct stall_policy : plexus::testing::inline_verbs<stall_executor &>
-{
-    using byte_channel_type = stall_channel;
-    using timer_type        = stall_timer;
-    using byte_owner        = std::shared_ptr<const void>;
-};
-
-static_assert(plexus::Policy<stall_policy>);
 
 using forwarder  = io::message_forwarder<stall_policy>;
 using fwd_splice = io::forward_splice<stall_policy>;

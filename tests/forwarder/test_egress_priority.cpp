@@ -1,3 +1,5 @@
+#include "support/stall_policy.h"
+
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/egress_scheduler.h"
@@ -25,7 +27,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,6 +35,12 @@
 #include <system_error>
 
 using namespace plexus;
+
+using plexus::testing::stall_timer;
+using plexus::testing::stall_state;
+using plexus::testing::stall_policy;
+using plexus::testing::stall_channel;
+using plexus::testing::stall_executor;
 
 namespace {
 
@@ -81,107 +88,6 @@ std::vector<std::string> data_bodies(const std::vector<std::vector<std::byte>> &
     }
     return out;
 }
-
-// A deterministic test substrate: a byte_channel that EXPOSES a controllable
-// backpressured() stall and records each send's frame bytes in order. A test-owned
-// `stall` member holds the reported occupancy >= k_low_water until released, so the
-// scheduler bands instead of draining; the synchronous post (below) makes every drain
-// run inline, so the ordering is deterministic without a real runtime.
-struct stall_state
-{
-    std::size_t reported{0};                   // what backpressured() returns
-    std::vector<std::vector<std::byte>> sends; // every frame the channel was handed, in order
-};
-
-struct stall_executor
-{
-};
-
-// A monotonic per-construction id mirroring the real channel's scheduler_key source, so the
-// directly-driven scheduler keys its band map on a stable id and a reconstructed channel
-// (even at a reused address) draws a fresh key — the ABA defense under test.
-inline std::uint64_t next_stall_key() noexcept
-{
-    static std::uint64_t counter = 0;
-    return ++counter;
-}
-
-struct stall_channel
-{
-    explicit stall_channel(stall_state &st)
-            : m_st(&st)
-    {
-    }
-    stall_channel(stall_executor &)
-    {
-    } // Policy convenience ctor (unused)
-    stall_channel(stall_executor &, std::error_code &)
-    {
-    }
-
-    void send(std::span<const std::byte> d)
-    {
-        m_st->sends.emplace_back(d.begin(), d.end());
-    }
-    void close()
-    {
-    }
-    io::endpoint remote_endpoint() const
-    {
-        return {"tcp", "127.0.0.1:0"};
-    }
-    void on_data(detail::move_only_function<void(std::span<const std::byte>)>)
-    {
-    }
-    void on_closed(detail::move_only_function<void()>)
-    {
-    }
-    void on_error(detail::move_only_function<void(io::io_error)>)
-    {
-    }
-    void on_protocol_close(detail::move_only_function<void(wire::close_cause)>)
-    {
-    }
-    std::size_t backpressured() const noexcept
-    {
-        return m_st->reported;
-    }
-    std::uint64_t scheduler_key() const noexcept
-    {
-        return m_key;
-    }
-
-    stall_state *m_st{nullptr};
-    std::uint64_t m_key{next_stall_key()};
-};
-
-struct stall_timer
-{
-    explicit stall_timer(stall_executor &)
-    {
-    }
-    stall_timer(stall_executor &, std::error_code &)
-    {
-    }
-    void expires_after(std::chrono::milliseconds)
-    {
-    }
-    void async_wait(detail::move_only_function<void(std::error_code)>)
-    {
-    }
-    void cancel()
-    {
-    }
-};
-
-struct stall_policy : plexus::testing::inline_verbs<stall_executor &>
-{
-    using byte_channel_type = stall_channel;
-    using timer_type        = stall_timer;
-    using byte_owner        = std::shared_ptr<const void>;
-};
-
-static_assert(plexus::Policy<stall_policy>);
 
 using stall_forwarder = io::message_forwarder<stall_policy>;
 
@@ -258,12 +164,7 @@ struct capped_channel
     capped_state *m_st{nullptr};
 };
 
-struct capped_policy : plexus::testing::inline_verbs<stall_executor &>
-{
-    using byte_channel_type = capped_channel;
-    using timer_type        = stall_timer;
-    using byte_owner        = std::shared_ptr<const void>;
-};
+using capped_policy = plexus::testing::basic_stall_policy<capped_channel>;
 
 static_assert(plexus::Policy<capped_policy>);
 
