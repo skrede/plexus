@@ -137,10 +137,12 @@ for a real reason.
 
 ## Construction
 
-- A class with a constructor initializes its members in the **constructor's init list, never
-  in-declaration** — one place, one source of truth, so two defaults can never drift apart. A member
-  that wants a default on such a class gets it in the init list.
-- A **pure aggregate** — a struct with no user-declared constructor, typically an options struct —
+- Only a pure aggregate keeps in-declaration defaults. Every other class initializes its members in
+  the **constructor's init list, never in-declaration** — one place, one source of truth, so two
+  defaults can never drift apart. A member that wants a default on such a class gets it in the init
+  list; a class without a constructor that is not a pure aggregate declares one to carry it.
+- A **pure aggregate** — a struct with no user-declared constructor, no private or protected data
+  members, no virtual functions and no virtual or non-public bases, typically an options struct —
   may carry its defaults **in-declaration**. That keeps it an aggregate, so a caller designated-
   initializes only the fields it overrides (`node_options{.liveliness = {...}}`) and every other
   field keeps its default. Adding a constructor to carry defaults would forfeit designated
