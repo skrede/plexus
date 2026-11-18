@@ -76,18 +76,26 @@ inline std::string to_string(std::span<const std::byte> b)
 struct net
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> ta{ex, bus};
-    inproc_transport<> tb{ex, bus};
-    static_discovery disc{{}};
+    inproc_executor<> ex;
+    inproc_transport<> ta;
+    inproc_transport<> tb;
+    static_discovery disc;
 
-    plexus::node_id id_a{make_id(0x0A)};
-    plexus::node_id id_b{make_id(0x0B)};
+    plexus::node_id id_a;
+    plexus::node_id id_b;
 
-    inproc_node a{ex, disc, id_a, ta, make_opts(/*eager=*/true)};
-    inproc_node b{ex, disc, id_b, tb, make_opts(/*eager=*/false)};
+    inproc_node a;
+    inproc_node b;
 
     net()
+            : ex{bus}
+            , ta{ex, bus}
+            , tb{ex, bus}
+            , disc({})
+            , id_a{make_id(0x0A)}
+            , id_b{make_id(0x0B)}
+            , a{ex, disc, id_a, ta, make_opts(/*eager=*/true)}
+            , b{ex, disc, id_b, tb, make_opts(/*eager=*/false)}
     {
         a.listen({"inproc", "host-a:5000"});
         b.listen({"inproc", "host-b:6000"});

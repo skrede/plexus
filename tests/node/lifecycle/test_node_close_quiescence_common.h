@@ -98,16 +98,21 @@ inline std::uint64_t transient_declines(const dialer_node &node)
 struct owned_net
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    deferred_dial_transport ta{ex, bus};
-    inproc_transport<> tb{ex, bus};
+    inproc_executor<> ex;
+    deferred_dial_transport ta;
+    inproc_transport<> tb;
     counting_discovery disc_a;
     counting_discovery disc_b;
-    endpoint ep_b{"inproc", "host-b:6000"};
+    endpoint ep_b;
     std::unique_ptr<dialer_node> a;
-    listener_node b{ex, disc_b, make_id(0x0B), tb, make_opts()};
+    listener_node b;
 
     owned_net()
+            : ex{bus}
+            , ta(ex, bus)
+            , tb{ex, bus}
+            , ep_b{"inproc", "host-b:6000"}
+            , b{ex, disc_b, make_id(0x0B), tb, make_opts()}
     {
         a = std::make_unique<dialer_node>(ex, disc_a, make_id(0x0A), ta, make_opts());
         b.listen(ep_b);

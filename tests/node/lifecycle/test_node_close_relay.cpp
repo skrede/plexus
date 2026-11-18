@@ -38,22 +38,33 @@ std::optional<plexus::graph::participant_record> record_of(const listener_node &
 struct relay_net
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> to{ex, bus};
-    inproc_transport<> tc{ex, bus};
-    inproc_transport<> tr{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> to;
+    inproc_transport<> tc;
+    inproc_transport<> tr;
     counting_discovery disc_o;
     counting_discovery disc_c;
     counting_discovery disc_r;
-    endpoint ep_o{"inproc", "host-o:5000"};
-    endpoint ep_c{"inproc", "host-c:6000"};
-    plexus::node_id origin_id{make_id(0x0A)};
-    plexus::node_id relay_id{make_id(0x0B)};
-    listener_node origin{ex, disc_o, origin_id, to, make_opts()};
-    listener_node consumer{ex, disc_c, make_id(0x0C), tc, make_opts()};
-    relay_node relay{ex, disc_r, relay_id, tr, make_opts()};
+    endpoint ep_o;
+    endpoint ep_c;
+    plexus::node_id origin_id;
+    plexus::node_id relay_id;
+    listener_node origin;
+    listener_node consumer;
+    relay_node relay;
 
     relay_net()
+            : ex{bus}
+            , to{ex, bus}
+            , tc{ex, bus}
+            , tr{ex, bus}
+            , ep_o{"inproc", "host-o:5000"}
+            , ep_c{"inproc", "host-c:6000"}
+            , origin_id{make_id(0x0A)}
+            , relay_id{make_id(0x0B)}
+            , origin{ex, disc_o, origin_id, to, make_opts()}
+            , consumer{ex, disc_c, make_id(0x0C), tc, make_opts()}
+            , relay{ex, disc_r, relay_id, tr, make_opts()}
     {
         if(plexus::io::endpoint_id(ep_c) < plexus::io::endpoint_id(ep_o))
             std::swap(ep_o, ep_c);

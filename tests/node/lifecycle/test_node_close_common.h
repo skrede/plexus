@@ -104,18 +104,26 @@ void close_or_fail(Node &node)
 struct close_net
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    deferred_dial_transport ta{ex, bus};
-    inproc_transport<> tb{ex, bus};
+    inproc_executor<> ex;
+    deferred_dial_transport ta;
+    inproc_transport<> tb;
     counting_discovery disc_a;
     counting_discovery disc_b;
-    endpoint ep_a{"inproc", "host-a:5000"};
-    endpoint ep_b{"inproc", "host-b:6000"};
-    plexus::node_id dialed_slot{plexus::io::endpoint_id(ep_b)};
-    dialer_node a{ex, disc_a, make_id(0x0A), ta, make_opts()};
-    listener_node b{ex, disc_b, make_id(0x0B), tb, make_opts()};
+    endpoint ep_a;
+    endpoint ep_b;
+    plexus::node_id dialed_slot;
+    dialer_node a;
+    listener_node b;
 
     close_net()
+            : ex{bus}
+            , ta(ex, bus)
+            , tb{ex, bus}
+            , ep_a{"inproc", "host-a:5000"}
+            , ep_b{"inproc", "host-b:6000"}
+            , dialed_slot{plexus::io::endpoint_id(ep_b)}
+            , a{ex, disc_a, make_id(0x0A), ta, make_opts()}
+            , b{ex, disc_b, make_id(0x0B), tb, make_opts()}
     {
         a.listen(ep_a);
         b.listen(ep_b);
