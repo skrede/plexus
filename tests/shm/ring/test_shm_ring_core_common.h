@@ -34,6 +34,8 @@ struct backing_region
 {
     explicit backing_region(std::size_t bytes)
             : m_storage(bytes + k_cache_line)
+            , m_data(nullptr)
+            , m_size(0)
     {
         auto base    = reinterpret_cast<std::uintptr_t>(m_storage.data());
         auto aligned = (base + (k_cache_line - 1)) & ~static_cast<std::uintptr_t>(k_cache_line - 1);
@@ -48,8 +50,8 @@ struct backing_region
 
 private:
     std::vector<std::byte> m_storage;
-    std::byte *m_data{nullptr};
-    std::size_t m_size{0};
+    std::byte *m_data;
+    std::size_t m_size;
 };
 
 }

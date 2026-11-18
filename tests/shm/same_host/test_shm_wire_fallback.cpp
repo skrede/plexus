@@ -116,6 +116,8 @@ public:
             : m_kind(kind)
             , m_scheme(std::move(scheme))
             , m_ring(ring)
+            , m_last_len(0)
+            , m_last_hash(0)
     {
     }
 
@@ -173,8 +175,8 @@ private:
     std::string m_scheme;
     shm_channel *m_ring;
     std::vector<medium> m_carried;
-    std::size_t m_last_len    = 0;
-    std::uint64_t m_last_hash = 0;
+    std::size_t m_last_len;
+    std::uint64_t m_last_hash;
 };
 
 static_assert(plexus::io::byte_channel<tap_channel>, "tap_channel must satisfy byte_channel");

@@ -78,6 +78,7 @@ public:
 
     explicit stub_broker(region_store &store) noexcept
             : m_store(store)
+            , m_fail(false)
     {
     }
 
@@ -114,7 +115,7 @@ public:
 
 private:
     region_store &m_store;
-    bool m_fail = false;
+    bool m_fail;
 };
 
 static_assert(region_broker<stub_broker>, "stub_broker must satisfy the region_broker seam");

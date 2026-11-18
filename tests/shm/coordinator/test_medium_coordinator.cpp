@@ -59,7 +59,7 @@ struct stub_registry
 struct fake_channel
 {
     std::vector<std::size_t> sent;
-    int *live = nullptr;
+    int *live;
     explicit fake_channel(int *counter)
             : live(counter)
     {

@@ -50,7 +50,10 @@ struct region_store : plexus::testing::heap_region_store
 class stub_handle : public plexus::testing::always_live_slots
 {
 public:
-    stub_handle() = default;
+    stub_handle()
+            : m_store(nullptr)
+    {
+    }
 
     stub_handle(region_store *store, std::string name, std::shared_ptr<region_store::region> region) noexcept
             : m_store(store)
@@ -106,7 +109,7 @@ private:
         m_region.reset();
     }
 
-    region_store *m_store = nullptr;
+    region_store *m_store;
     std::string m_name;
     std::shared_ptr<region_store::region> m_region;
 };

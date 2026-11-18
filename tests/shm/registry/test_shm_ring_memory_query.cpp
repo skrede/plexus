@@ -47,7 +47,10 @@ struct recording_store : plexus::testing::heap_region_store
 class recording_handle : public plexus::testing::always_live_slots
 {
 public:
-    recording_handle() = default;
+    recording_handle()
+            : m_store(nullptr)
+    {
+    }
 
     recording_handle(recording_store *store, std::string name, std::shared_ptr<recording_store::region> region) noexcept
             : m_store(store)
@@ -103,7 +106,7 @@ private:
         m_region.reset();
     }
 
-    recording_store *m_store = nullptr;
+    recording_store *m_store;
     std::string m_name;
     std::shared_ptr<recording_store::region> m_region;
 };

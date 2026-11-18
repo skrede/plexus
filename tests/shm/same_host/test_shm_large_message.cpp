@@ -66,7 +66,7 @@ constexpr std::size_t k_mib = 1024 * 1024;
 // wake crosses address spaces.
 struct futex_signal_notifier
 {
-    std::atomic<std::uint32_t> *generation = nullptr;
+    std::atomic<std::uint32_t> *generation;
 
     explicit futex_signal_notifier(std::atomic<std::uint32_t> *gen = nullptr) noexcept
             : generation(gen)
