@@ -26,11 +26,17 @@ namespace wire = plexus::wire;
 // A test logger whose warn() bumps a counter — proves the warn-and-drop seam fires.
 struct counting_logger final : plexus::log::logger
 {
+    counting_logger()
+            : count(0)
+    {
+    }
+
     void warn(std::string_view) override
     {
         ++count;
     }
-    std::size_t count{0};
+
+    std::size_t count;
 };
 
 // Builds a complete (header-on) frame of the given type carrying body as the

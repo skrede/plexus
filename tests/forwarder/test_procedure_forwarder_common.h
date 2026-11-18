@@ -66,11 +66,17 @@ inline std::string to_string(std::span<const std::byte> b)
 // A counting logger: warn() bumps a counter, proving the warn-and-drop seam fires.
 struct counting_logger final : plexus::log::logger
 {
+    counting_logger()
+            : count(0)
+    {
+    }
+
     void warn(std::string_view) override
     {
         ++count;
     }
-    std::size_t count{0};
+
+    std::size_t count;
 };
 
 // A capture sink recording every frame the forwarder sends.
