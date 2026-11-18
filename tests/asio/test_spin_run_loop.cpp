@@ -54,8 +54,8 @@ struct spin_loopback
 {
     ::asio::io_context io;
     pasio::spin_run_loop loop;
-    pasio::udp_transport server{io};
-    pasio::udp_transport client{io};
+    pasio::udp_transport server;
+    pasio::udp_transport client;
 
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
@@ -63,6 +63,8 @@ struct spin_loopback
 
     explicit spin_loopback(std::uint32_t spin_budget)
             : loop(io, spin_budget)
+            , server(io)
+            , client(io)
     {
         server.on_accepted(
                 [this](std::unique_ptr<pasio::udp_channel> ch)

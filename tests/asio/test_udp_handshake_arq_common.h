@@ -54,17 +54,20 @@ struct lossy_relay
     ::asio::ip::udp::endpoint server_ep;
     ::asio::ip::udp::endpoint client_ep; // learned from the first client datagram
     ::asio::ip::udp::endpoint from;      // scratch for the active recv
-    std::array<std::byte, 2048> front_buf{};
-    std::array<std::byte, 2048> back_buf{};
+    std::array<std::byte, 2048> front_buf;
+    std::array<std::byte, 2048> back_buf;
     int drop_count;
-    int dropped{0};
+    int dropped;
 
     lossy_relay(::asio::io_context &ctx, std::uint16_t server_port, int drops)
             : io(ctx)
             , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            , front_buf()
+            , back_buf()
             , drop_count(drops)
+            , dropped(0)
     {
         recv_front();
         recv_back();

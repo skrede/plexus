@@ -13,17 +13,20 @@ static_assert(plexus::io::transport_backend<pasio::udp_transport, pasio::udp_pol
 struct loopback
 {
     ::asio::io_context io;
-    pasio::udp_transport server{io};
-    pasio::udp_transport client{io};
+    pasio::udp_transport server;
+    pasio::udp_transport client;
 
     std::unique_ptr<pasio::udp_channel> accepted;
     std::unique_ptr<pasio::udp_channel> dialed;
 
     std::vector<std::string> received; // frames posted to the accepted channel
     std::optional<plexus::io::io_error> client_error;
-    int accepted_protocol_closes{0};
+    int accepted_protocol_closes;
 
     loopback()
+            : server(io)
+            , client(io)
+            , accepted_protocol_closes(0)
     {
         server.on_accepted(
                 [this](std::unique_ptr<pasio::udp_channel> ch)

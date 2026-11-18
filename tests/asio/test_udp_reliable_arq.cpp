@@ -93,13 +93,13 @@ struct relay
     ::asio::ip::udp::endpoint server_ep;
     ::asio::ip::udp::endpoint client_ep;
     ::asio::ip::udp::endpoint from;
-    std::array<std::byte, 2048> front_buf{};
-    std::array<std::byte, 2048> back_buf{};
+    std::array<std::byte, 2048> front_buf;
+    std::array<std::byte, 2048> back_buf;
 
     std::deque<action> data_script;           // consumed per client->server data segment
     std::vector<std::vector<std::byte>> held; // held segments to release out of order
     std::vector<std::uint16_t> held_seqs;     // seqs to keep holding (incl. retransmits)
-    int data_seen{0};
+    int data_seen;
 
     static std::uint16_t seq_of(std::span<const std::byte> dg)
     {
@@ -112,6 +112,9 @@ struct relay
             , front(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , back(io, ::asio::ip::udp::endpoint(::asio::ip::udp::v4(), 0))
             , server_ep(::asio::ip::make_address("127.0.0.1"), server_port)
+            , front_buf()
+            , back_buf()
+            , data_seen(0)
     {
         recv_front();
         recv_back();

@@ -36,13 +36,15 @@ namespace plexus::testing {
 struct loopback
 {
     ::asio::io_context io;
-    plexus::asio::udp_transport server{io};
-    plexus::asio::udp_transport client{io};
+    plexus::asio::udp_transport server;
+    plexus::asio::udp_transport client;
 
     std::unique_ptr<plexus::asio::udp_channel> accepted;
     std::unique_ptr<plexus::asio::udp_channel> dialed;
 
     loopback()
+            : server(io)
+            , client(io)
     {
         server.on_accepted([this](std::unique_ptr<plexus::asio::udp_channel> ch) { accepted = std::move(ch); });
         server.listen({"udp", "127.0.0.1:0"});

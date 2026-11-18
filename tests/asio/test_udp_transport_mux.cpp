@@ -35,15 +35,21 @@ struct mux_face
 {
     ::asio::io_context &io;
     ptls::tls_credential no_tls;
-    pasio::unix_transport local{io};
-    pasio::asio_transport remote{io};
-    ptls::tls_transport secure{io, no_tls};
-    pasio::udp_transport datagram{io};
-    ptls::dtls_transport secure_datagram{io, no_tls};
-    pasio::all_backends_mux mux{local, remote, secure, datagram, secure_datagram};
+    pasio::unix_transport local;
+    pasio::asio_transport remote;
+    ptls::tls_transport secure;
+    pasio::udp_transport datagram;
+    ptls::dtls_transport secure_datagram;
+    pasio::all_backends_mux mux;
 
     explicit mux_face(::asio::io_context &ctx)
             : io(ctx)
+            , local(io)
+            , remote(io)
+            , secure(io, no_tls)
+            , datagram(io)
+            , secure_datagram(io, no_tls)
+            , mux{local, remote, secure, datagram, secure_datagram}
     {
     }
 };
@@ -55,14 +61,16 @@ struct mux_face
 struct mux_pair
 {
     ::asio::io_context io;
-    mux_face listen_face{io};
-    mux_face dial_face{io};
+    mux_face listen_face;
+    mux_face dial_face;
 
     std::optional<plexus::io::endpoint> dialed_ep;
     std::unique_ptr<pio::polymorphic_byte_channel> dialed;
     std::unique_ptr<pio::polymorphic_byte_channel> accepted;
 
     mux_pair()
+            : listen_face(io)
+            , dial_face(io)
     {
         listen_face.mux.on_accepted([this](std::unique_ptr<pio::polymorphic_byte_channel> ch) { accepted = std::move(ch); });
         dial_face.mux.on_dialed(
