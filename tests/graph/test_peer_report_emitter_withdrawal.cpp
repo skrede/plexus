@@ -35,25 +35,33 @@ plexus::io::reconnect_config slow_redial()
 struct relay_net
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t tr_r{ex, bus};
-    transport_t tr_o{ex, bus};
-    transport_t tr_d{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t tr_r;
+    transport_t tr_o;
+    transport_t tr_d;
     plexus::log::null_logger sink;
 
     relay_engine r;
     engine o;
     engine d;
 
-    node_id id_o{make_id(0xC3)};
-    node_id id_d{make_id(0xD4)};
-    plexus::io::endpoint ep_o{ep_for("node-o")};
-    plexus::io::endpoint ep_d{ep_for("node-d")};
+    node_id id_o;
+    node_id id_d;
+    plexus::io::endpoint ep_o;
+    plexus::io::endpoint ep_d;
 
     explicit relay_net(plexus::io::liveliness_options live = {}, plexus::io::reconnect_config r_redial = forever_cfg())
-            : r(tr_r, ex, make_cfg(0xA1), k_long_timeout, r_redial, k_seed, sink, false, plexus::io::global_default_max_message_bytes, live)
+            : ex{bus}
+            , tr_r{ex, bus}
+            , tr_o{ex, bus}
+            , tr_d{ex, bus}
+            , r(tr_r, ex, make_cfg(0xA1), k_long_timeout, r_redial, k_seed, sink, false, plexus::io::global_default_max_message_bytes, live)
             , o(tr_o, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false)
             , d(tr_d, ex, make_cfg(0xD4), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            , id_o{make_id(0xC3)}
+            , id_d{make_id(0xD4)}
+            , ep_o{ep_for("node-o")}
+            , ep_d{ep_for("node-d")}
     {
         r.listen(ep_for("node-r"));
         o.listen(ep_o);

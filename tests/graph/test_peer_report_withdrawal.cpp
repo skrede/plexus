@@ -50,17 +50,22 @@ int deltas_for(const recording_graph_observer &obs, const node_id &who, plexus::
 struct aging_node
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t transport{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t transport;
     plexus::log::null_logger sink;
     engine eng;
     recording_graph_observer obs;
-    node_id self{make_id(0xA1)};
-    node_id origin{make_id(0xC3)};
-    node_id reporter{make_id(0xB2)};
+    node_id self;
+    node_id origin;
+    node_id reporter;
 
     aging_node()
-            : eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, live_opts())
+            : ex{bus}
+            , transport{ex, bus}
+            , eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, live_opts())
+            , self{make_id(0xA1)}
+            , origin{make_id(0xC3)}
+            , reporter{make_id(0xB2)}
     {
         eng.listen(ep_for("node-a"));
         obs.graph_opt_in = true;

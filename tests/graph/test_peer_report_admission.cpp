@@ -53,10 +53,12 @@ struct fixture
 {
     one_node node;
     recording_graph_observer obs;
-    node_id origin{make_id(0xC3)};
-    node_id reporter{make_id(0xB2)};
+    node_id origin;
+    node_id reporter;
 
     fixture()
+            : origin{make_id(0xC3)}
+            , reporter{make_id(0xB2)}
     {
         manual_clock::reset();
         obs.graph_opt_in = true;

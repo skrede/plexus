@@ -38,11 +38,11 @@ wire::peer_report assert_report(const node_id &origin, std::uint16_t seq, std::s
 struct bounded_report_node
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t transport{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t transport;
     plexus::log::null_logger sink;
     engine eng;
-    node_id reporter{make_id(0xB2)};
+    node_id reporter;
 
     static plexus::io::report_options caps()
     {
@@ -53,7 +53,10 @@ struct bounded_report_node
     }
 
     bounded_report_node()
-            : eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, {}, {}, caps())
+            : ex{bus}
+            , transport{ex, bus}
+            , eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, {}, {}, caps())
+            , reporter{make_id(0xB2)}
     {
         eng.listen(ep_for("node-a"));
     }

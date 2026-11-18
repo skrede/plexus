@@ -37,23 +37,30 @@ plexus::io::liveliness_options short_ttl()
 struct relay_net
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t tr_r{ex, bus};
-    transport_t tr_o{ex, bus};
-    transport_t tr_d{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t tr_r;
+    transport_t tr_o;
+    transport_t tr_d;
     plexus::log::null_logger sink;
 
     relay_engine r;
     engine o;
     engine d;
 
-    node_id id_o{make_id(0xC3)};
-    node_id id_d{make_id(0xD4)};
+    node_id id_o;
+    node_id id_d;
 
     relay_net()
-            : r(tr_r, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, short_ttl())
+            : ex{bus}
+            , tr_r{ex, bus}
+            , tr_o{ex, bus}
+            , tr_d{ex, bus}
+            , r(tr_r, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, short_ttl())
             , o(tr_o, ex, make_cfg(0xC3), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, short_ttl())
             , d(tr_d, ex, make_cfg(0xD4), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, short_ttl())
+            , id_o{make_id(0xC3)}
+            , id_d{make_id(0xD4)}
+            , id_r{make_id(0xA1)}
     {
         r.listen(ep_for("node-r"));
         o.listen(ep_for("node-o"));
@@ -94,7 +101,7 @@ struct relay_net
         return plexus::graph::reachability::reachable;
     }
 
-    node_id id_r{make_id(0xA1)};
+    node_id id_r;
 };
 
 }

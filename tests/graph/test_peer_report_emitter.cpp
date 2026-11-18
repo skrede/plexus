@@ -46,9 +46,10 @@ struct fixture
 {
     topic_type_table table;
     peer_report_emitter emitter;
-    node_id origin{make_id(0xC3)};
+    node_id origin;
 
     fixture()
+            : origin{make_id(0xC3)}
     {
         table.upsert(topic_edge{origin, "sensor/imu", "sensor_msgs/Imu", std::optional<std::uint64_t>{7}, topic_role::publisher});
         table.upsert(topic_edge{origin, "sensor/temp", "sensor_msgs/Temp", std::optional<std::uint64_t>{9}, topic_role::publisher});

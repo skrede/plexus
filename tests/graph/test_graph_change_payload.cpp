@@ -94,19 +94,24 @@ int deltas_for(const recording_graph_observer &obs, const plexus::node_id &who, 
 struct relay_downstream
 {
     plexus::inproc::inproc_bus<manual_clock> bus;
-    plexus::inproc::inproc_executor<manual_clock> ex{bus};
-    transport_t tr_d{ex, bus};
-    transport_t tr_b{ex, bus};
+    plexus::inproc::inproc_executor<manual_clock> ex;
+    transport_t tr_d;
+    transport_t tr_b;
     plexus::log::null_logger sink;
     engine d;
     engine b;
     recording_graph_observer obs;
-    plexus::node_id id_b{make_id(0xB2)};
-    plexus::node_id origin{make_id(0xC3)};
+    plexus::node_id id_b;
+    plexus::node_id origin;
 
     relay_downstream()
-            : d(tr_d, ex, make_cfg(0xD4), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            : ex{bus}
+            , tr_d{ex, bus}
+            , tr_b{ex, bus}
+            , d(tr_d, ex, make_cfg(0xD4), k_long_timeout, forever_cfg(), k_seed, sink, false)
             , b(tr_b, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            , id_b{make_id(0xB2)}
+            , origin{make_id(0xC3)}
     {
         d.listen(ep_for("node-d"));
         b.listen(ep_for("node-b"));
