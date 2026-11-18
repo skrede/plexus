@@ -101,15 +101,18 @@ inline reconnect_config forever_cfg()
 struct aging_pair
 {
     inproc_bus<test_clock> bus;
-    inproc_executor<test_clock> ex{bus};
-    transport_t a_transport{ex, bus};
-    transport_t b_transport{ex, bus};
+    inproc_executor<test_clock> ex;
+    transport_t a_transport;
+    transport_t b_transport;
     plexus::log::null_logger sink;
     engine a;
     engine b;
 
     aging_pair()
-            : a(a_transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, live_opts())
+            : ex{bus}
+            , a_transport{ex, bus}
+            , b_transport{ex, bus}
+            , a(a_transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, live_opts())
             , b(b_transport, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed + 1, sink, false, plexus::io::global_default_max_message_bytes, live_opts())
     {
         b.listen({"inproc", "svc"});

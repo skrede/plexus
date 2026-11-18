@@ -53,14 +53,19 @@ reconnect_config forever_cfg()
 struct dial_pair
 {
     inproc_bus<> bus;
-    inproc_executor<> ex{bus};
-    inproc_transport<> a_transport{ex, bus};
-    inproc_transport<> b_transport{ex, bus};
+    inproc_executor<> ex;
+    inproc_transport<> a_transport;
+    inproc_transport<> b_transport;
     plexus::log::null_logger sink;
-    engine a{a_transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink};
-    engine b{b_transport, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed + 1, sink};
+    engine a;
+    engine b;
 
     dial_pair()
+            : ex{bus}
+            , a_transport{ex, bus}
+            , b_transport{ex, bus}
+            , a{a_transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink}
+            , b{b_transport, ex, make_cfg(0xB2), k_long_timeout, forever_cfg(), k_seed + 1, sink}
     {
         b.listen({"inproc", "svc"});
     }
