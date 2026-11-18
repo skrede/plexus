@@ -7,6 +7,7 @@
 #include <asio/io_context.hpp>
 #include <asio/steady_timer.hpp>
 
+#include <cerrno>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -35,6 +36,11 @@ inline bool is_pending_connection_error(const std::error_code &ec)
 {
 #if !defined(_WIN32)
     if(ec == ::asio::error::network_down || ec == std::errc::network_down)
+        return true;
+#endif
+#if defined(__linux__)
+    // Linux accept(2) NOTES list these too; BSD and Windows accept do not pass pending network errors through.
+    if(ec == std::errc::no_protocol_option || ec == std::error_code(EHOSTDOWN, std::system_category()) || ec == std::error_code(ENONET, std::system_category()))
         return true;
 #endif
     return ec == ::asio::error::connection_aborted || ec == std::errc::connection_aborted || ec == ::asio::error::connection_reset || ec == std::errc::connection_reset ||

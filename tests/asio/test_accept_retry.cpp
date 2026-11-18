@@ -5,6 +5,7 @@
 #include <asio/error.hpp>
 #include <asio/io_context.hpp>
 
+#include <cerrno>
 #include <chrono>
 #include <vector>
 #include <cstdint>
@@ -117,4 +118,16 @@ TEST_CASE("accept_retry: an error accept(2) does not name as pending on a connec
         CHECK(rearms == i + 1);
     }
     CHECK(backoff.delay() == 40ms);
+}
+
+TEST_CASE("accept_retry: the rest of Linux accept(2)'s pending network errors re-arm, and back off elsewhere", "[asio][accept]")
+{
+#if defined(__linux__)
+    CHECK(of(std::errc::no_protocol_option) == accept_verdict::rearm);
+    CHECK(classify_accept_error(std::error_code(EHOSTDOWN, std::system_category())) == accept_verdict::rearm);
+    CHECK(classify_accept_error(std::error_code(ENONET, std::system_category())) == accept_verdict::rearm);
+#else
+    CHECK(of(std::errc::no_protocol_option) == accept_verdict::backoff);
+#endif
+    CHECK(of(std::errc::operation_not_supported) == accept_verdict::backoff);
 }
