@@ -3,10 +3,11 @@
 
 #include "graph_change_clock.h"
 
+#include "plexus/io/observer.h"
 #include "plexus/io/known_peers.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/fixed_peer_storage.h"
 #include "plexus/io/peer_session_registry.h"
 
@@ -20,16 +21,14 @@
 #include "plexus/graph/topic_record.h"
 #include "plexus/graph/fixed_topic_storage.h"
 
-#include "plexus/io/observer.h"
-
 #include "plexus/log/logger.h"
 
 #include "plexus/policy.h"
 #include "plexus/node_id.h"
 #include "plexus/executor_verbs.h"
 
-#include <vector>
 #include <chrono>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
