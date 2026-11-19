@@ -49,14 +49,8 @@ public:
         m_storage.at_or_insert(id).aware = true;
     }
 
-    void note_awareness_lost(const node_id &id)
-    {
-        if(peer_state *state = m_storage.find(id))
-            state->aware = false;
-    }
-
-    // A goodbye: the verdict settles before the row goes, so its lost edge is posted as a tick would
-    // post it; a session or a fresh heartbeat keeps the row for the tick to judge.
+    // A goodbye or an awareness expiry: the verdict settles before the row goes, so its lost edge is posted
+    // as a tick would post it; a session or a fresh heartbeat keeps the row for the tick to judge.
     void withdraw_awareness(const node_id &id, std::uint64_t now_ns)
     {
         peer_state *state = m_storage.find(id);

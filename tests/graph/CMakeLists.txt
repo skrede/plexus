@@ -102,6 +102,10 @@ plexus_add_catch_test(test_bounded_card_refusal
     SOURCES test_bounded_card_refusal.cpp
     LINKS plexus::plexus plexus::inproc)
 
+plexus_add_catch_test(test_awareness_expiry_arbiter_row
+    SOURCES test_awareness_expiry_arbiter_row.cpp
+    LINKS plexus::plexus plexus::inproc)
+
 # Its own executable: the three-node topology (two rival publishers both remote to the enumerating node) would
 # widen the two-node propagation oracle.
 plexus_add_catch_test(test_graph_topic_query

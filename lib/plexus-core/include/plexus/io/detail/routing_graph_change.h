@@ -54,15 +54,16 @@ void sweep_aged_awareness(Engine &e)
     const std::uint64_t ttl      = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(e.m_liveliness.awareness_ttl).count());
     const std::uint64_t deadline = now > ttl ? now - ttl : 0;
     e.m_known_peers.expire_older_than(deadline,
-                                      [&e](const node_id &id)
+                                      [&e, now](const node_id &id)
                                       {
                                           detail::release_all_reporter_load(e, id);
-                                          e.m_peer_liveliness.note_awareness_lost(id);
                                           e.m_messages.forward_dedup().reset_origin(id);
                                           detail::relay_withdraw(e, id);
                                           if(e.m_reported.erase(id) != 0)
                                               e.m_topics.remove_node(id);
                                           e.bump_graph_generation(true, id, graph::change_kind::disappeared);
+                                          // After the bump, so observers see the disappearance before the lost edge.
+                                          e.m_peer_liveliness.withdraw_awareness(id, now);
                                       });
 }
 
