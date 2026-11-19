@@ -5,10 +5,12 @@
 
 #include "plexus/io/observer.h"
 #include "plexus/io/known_peers.h"
+#include "plexus/io/fragmentation.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/fixed_peer_storage.h"
+#include "plexus/io/liveliness_options.h"
 #include "plexus/io/peer_session_registry.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -112,10 +114,10 @@ struct basic_one_node
     Engine eng;
     plexus::node_id self;
 
-    basic_one_node()
+    explicit basic_one_node(const plexus::io::liveliness_options &live = {})
             : ex{bus}
             , transport{ex, bus}
-            , eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false)
+            , eng(transport, ex, make_cfg(0xA1), k_long_timeout, forever_cfg(), k_seed, sink, false, plexus::io::global_default_max_message_bytes, live)
             , self{make_id(0xA1)}
     {
         eng.listen(ep_for("node-a"));

@@ -269,7 +269,7 @@ public:
         detail::release_all_reporter_load(*this, id);
         const bool changed = m_known_peers.forget(id);
         m_registry.deny_redial(id);
-        m_peer_liveliness.note_awareness_lost(id);
+        m_peer_liveliness.withdraw_awareness(id, now_for_aging());
         m_messages.forward_dedup().reset_origin(id);
         detail::relay_withdraw(*this, id);
         m_emitter.clear_decline(id);

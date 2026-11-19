@@ -132,3 +132,46 @@ TEST_CASE("bounded engine: a refused card raises no liveliness verdict, and the 
     REQUIRE(recorder.count(make_id(9), alive) == 1);
     node.eng.remove_observer(recorder);
 }
+
+TEST_CASE("bounded engine with a fixed liveliness arbiter of 8: a goodbye frees the arbiter row for a card admitted the same turn", "[graph][bounded]")
+{
+    manual_clock::reset();
+    liveliness_recorder recorder;
+    basic_one_node<fixed_arbiter_engine> node;
+    node.eng.add_observer(recorder);
+    announce_eight(node);
+
+    node.eng.forget(make_id(1));
+    CHECK(recorder.count(make_id(1), lost) == 0);
+    node.drain();
+    CHECK(recorder.count(make_id(1), lost) == 1);
+
+    REQUIRE_NOTHROW(node.eng.note_peer(make_id(9), ep_for("ninth")));
+    tick(node);
+
+    REQUIRE(node.eng.known().contains(make_id(9)));
+    REQUIRE(recorder.count(make_id(1), lost) == 1);
+    REQUIRE(recorder.count(make_id(9), alive) == 1);
+    node.eng.remove_observer(recorder);
+}
+
+TEST_CASE("bounded engine with a fixed liveliness arbiter of 8 under all_required: a goodbye leaves no arbiter row behind", "[graph][bounded]")
+{
+    manual_clock::reset();
+    plexus::io::liveliness_options live;
+    live.policy = plexus::io::combine::all_required;
+    liveliness_recorder recorder;
+    basic_one_node<fixed_arbiter_engine> node(live);
+    node.eng.add_observer(recorder);
+    announce_eight(node);
+    tick(node);
+
+    node.eng.forget(make_id(1));
+    tick(node);
+    REQUIRE_NOTHROW(node.eng.note_peer(make_id(9), ep_for("ninth")));
+    tick(node);
+
+    REQUIRE(node.eng.known().contains(make_id(9)));
+    REQUIRE(recorder.count(make_id(9), alive) == 1);
+    node.eng.remove_observer(recorder);
+}

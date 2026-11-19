@@ -55,6 +55,19 @@ public:
             state->aware = false;
     }
 
+    // A goodbye: the verdict settles before the row goes, so its lost edge is posted as a tick would
+    // post it; a session or a fresh heartbeat keeps the row for the tick to judge.
+    void withdraw_awareness(const node_id &id, std::uint64_t now_ns)
+    {
+        peer_state *state = m_storage.find(id);
+        if(state == nullptr)
+            return;
+        state->aware = false;
+        settle(id, *state, now_ns);
+        if(state->session == session_presence::absent && !derive(*state, now_ns).hb_fresh)
+            m_storage.erase(id);
+    }
+
     void note_session_up(const node_id &id)
     {
         m_storage.at_or_insert(id).session = session_presence::up;
