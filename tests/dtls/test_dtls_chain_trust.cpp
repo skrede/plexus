@@ -49,3 +49,21 @@ TEST_CASE("dtls.verify: a pin that misses the leaf refuses a chain the store val
     REQUIRE(l.accepted == nullptr);
     REQUIRE(l.dialed == nullptr);
 }
+
+TEST_CASE("dtls.verify: a pin that misses the leaf refuses a chain whose root the store lacks", "[dtls][verify][chain]")
+{
+    pdt::chain_authority ca;
+    pdt::identity_fixture srv("chain_noroot_srv");
+    pdt::identity_fixture cli("chain_noroot_cli");
+    pdt::identity_fixture other("chain_noroot_oth");
+    ca.issue(srv);
+    ca.issue(cli);
+    auto server_cred = pdt::pin_one(srv, other.digest);
+    auto client_cred = pdt::pin_one(cli, other.digest);
+    ca.present(server_cred);
+    ca.present(client_cred);
+    pdt::relay_link l(std::move(server_cred), std::move(client_cred));
+    REQUIRE_FALSE(handshake(l, std::chrono::milliseconds(1500)));
+    REQUIRE(l.accepted == nullptr);
+    REQUIRE(l.dialed == nullptr);
+}

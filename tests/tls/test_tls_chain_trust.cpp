@@ -116,6 +116,20 @@ TEST_CASE("tls trust: a pin that misses the leaf refuses a chain the store valid
     REQUIRE(l.dialed == nullptr);
 }
 
+TEST_CASE("tls trust: a pin that misses the leaf refuses a chain whose root the store lacks", "[tls][trust][chain][failclosed]")
+{
+    chained_pair p;
+    pdt::identity_fixture other("tls_chain_nor");
+    auto accepter_cred = pin(p.acc, other.digest);
+    auto dialer_cred   = pin(p.dia, other.digest);
+    p.ca.present(accepter_cred);
+    p.ca.present(dialer_cred);
+    chain_link l(std::move(accepter_cred), std::move(dialer_cred));
+    REQUIRE_FALSE(l.handshake(std::chrono::milliseconds(1500)));
+    REQUIRE(l.accepted == nullptr);
+    REQUIRE(l.dialed == nullptr);
+}
+
 TEST_CASE("tls trust: a chain-anchored policy refuses a chain whose root the store lacks", "[tls][trust][chain][failclosed]")
 {
     chained_pair p;
