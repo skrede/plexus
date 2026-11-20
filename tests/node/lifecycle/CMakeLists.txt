@@ -53,6 +53,10 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
         plexus::freertos
         plexus::discovery)
     target_compile_definitions(affinity_trip_child PRIVATE PLEXUS_AFFINITY_CHECKS)
+    # Its role tables instantiate enough templates to pass COFF's default section count (C1128).
+    if(MSVC)
+        target_compile_options(affinity_trip_child PRIVATE /bigobj)
+    endif()
 
     plexus_add_catch_test(test_affinity_check
         SOURCES test_affinity_check.cpp
