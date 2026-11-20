@@ -74,7 +74,7 @@ public:
     void dial(const io::endpoint &ep)
     {
         std::unique_ptr<inproc_channel<Clock>> dialer;
-        if(!m_bus.accept(ep, [this, &dialer](auto &on_accepted) { dialer = connect_pair(on_accepted); }))
+        if(!m_bus.accept(ep, [this, &dialer](auto &on_accepted) { dialer = this->connect_pair(on_accepted); }))
             return report_dial_fail(ep, io::io_error::connection_refused);
         m_retiring.deliver_or_retire(m_on_dialed_cb, std::move(dialer), ep);
     }
