@@ -247,6 +247,8 @@ jobs:
       - name: test
         run: ctest --test-dir build --output-on-failure
 
+      # A check compiled in under a per-target define gives one function two bodies on different lines; gcovr
+      # refuses to merge those unless told to keep them apart.
       - name: generate coverage report
         run: |
           gcovr build --root . \
@@ -255,6 +257,7 @@ jobs:
             --filter 'backends/plexus-.*/(include|src)/' \
             --exclude 'lib/plexus-testing/' \
             --gcov-ignore-errors=source_not_found \
+            --merge-mode-functions=separate \
             --xml coverage.xml
 
       - name: upload coverage to codecov
