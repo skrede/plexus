@@ -4,10 +4,10 @@
 
 #include <span>
 #include <limits>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <vector>
 
 using namespace plexus::wire;
 
