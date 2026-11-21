@@ -52,10 +52,12 @@ struct temp_dir
     }
 };
 
-// The client socket is open before the table fills, so connecting needs no descriptor; the listener's accept is the
-// first allocation that meets EMFILE.
-template<typename Channel, typename Listener, typename Connect>
-std::int32_t accepts_after_exhaustion(::asio::io_context &io, Listener &listener, Connect connect)
+constexpr std::int32_t k_expected_accepts = plexus::testing::emfile_keeps_pending_connection ? 2 : 1;
+
+// Both client sockets are open before the table fills, so connecting needs no descriptor; the listener's accept is the
+// first allocation that meets EMFILE. The stranded client connects into the exhaustion, the late one after release.
+template<typename Channel, typename Listener, typename Stranded, typename Late>
+std::int32_t accepts_after_exhaustion(::asio::io_context &io, Listener &listener, Stranded stranded, Late late)
 {
     std::unique_ptr<Channel> server;
     std::int32_t accepted = 0;
@@ -70,11 +72,12 @@ std::int32_t accepts_after_exhaustion(::asio::io_context &io, Listener &listener
 
     plexus::testing::fd_exhaustion table;
     REQUIRE(table.full());
-    connect();
+    stranded();
     REQUIRE(plexus::testing::pump_until(io, [&] { return errors > 0; }, k_error_bound));
     table.release();
+    late();
 
-    plexus::testing::pump_until(io, [&] { return accepted > 0; }, k_recovery_bound);
+    plexus::testing::pump_until(io, [&] { return accepted >= k_expected_accepts; }, k_recovery_bound);
     return accepted;
 }
 
@@ -91,10 +94,13 @@ TEST_CASE("listener accept retry: an asio listener whose accept fails with EMFIL
     pasio::asio_listener listener{io};
     listener.start({"tcp", "127.0.0.1:0"});
     ::asio::ip::tcp::socket client{io};
+    ::asio::ip::tcp::socket late{io};
     client.open(::asio::ip::tcp::v4());
+    late.open(::asio::ip::tcp::v4());
 
-    const auto target = loopback(listener);
-    REQUIRE(accepts_after_exhaustion<pasio::asio_channel>(io, listener, [&] { client.connect(target); }) == 1);
+    const auto target   = loopback(listener);
+    const auto accepted = accepts_after_exhaustion<pasio::asio_channel>(io, listener, [&] { client.connect(target); }, [&] { late.connect(target); });
+    REQUIRE(accepted == k_expected_accepts);
 }
 
 TEST_CASE("listener accept retry: a unix listener whose accept fails with EMFILE accepts again once descriptors free", "[integration][unix][accept]")
@@ -105,10 +111,13 @@ TEST_CASE("listener accept retry: a unix listener whose accept fails with EMFILE
     pasio::unix_listener listener{io};
     listener.start(pio::endpoint{"unix", t.path});
     ::asio::local::stream_protocol::socket client{io};
+    ::asio::local::stream_protocol::socket late{io};
     client.open();
+    late.open();
 
     const ::asio::local::stream_protocol::endpoint target(t.path);
-    REQUIRE(accepts_after_exhaustion<pasio::unix_channel>(io, listener, [&] { client.connect(target); }) == 1);
+    const auto accepted = accepts_after_exhaustion<pasio::unix_channel>(io, listener, [&] { client.connect(target); }, [&] { late.connect(target); });
+    REQUIRE(accepted == k_expected_accepts);
 }
 
 TEST_CASE("listener accept retry: stopping an asio listener during an armed accept backoff destroys it cleanly", "[integration][asio][accept]")

@@ -83,6 +83,14 @@ private:
     }
 };
 
+    // XNU's accept1 dequeues a completed connection before allocating its descriptor and closes it when that fails
+    // (rdar://problem/8554930); Linux allocates first, so the connection that met EMFILE stays queued for the retry.
+    #if defined(__APPLE__)
+inline constexpr bool emfile_keeps_pending_connection = false;
+    #else
+inline constexpr bool emfile_keeps_pending_connection = true;
+    #endif
+
 }
 
 #endif
