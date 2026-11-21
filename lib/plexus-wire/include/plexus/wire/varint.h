@@ -17,6 +17,8 @@ namespace plexus::wire {
 //   (c) the 10th byte may carry at most a single payload bit (bit 63); a higher bit would
 //       shift past u64, so the accumulate is overflow-guarded BEFORE it runs
 //   (d) a continuation bit still set on the 10th byte is rejected
+//   (e) a multi-byte encoding whose last byte carries no value bits is overlong and is
+//       rejected, so every value has exactly one accepted encoding
 // On any violation `consumed` is NOT advanced, so a malformed varint is discriminable from
 // a partial-buffer underrun.
 constexpr std::size_t k_max_varint_bytes = 10;
@@ -25,16 +27,17 @@ namespace detail {
 
 // Returns true when the terminator (no continuation bit) is seen. On the 10th byte only bit
 // 63 may be set, so the overflow guard runs BEFORE the accumulate.
-inline bool varint_step(std::uint8_t byte, std::size_t i, std::uint64_t &value, bool &overflow) noexcept
+inline bool varint_step(std::uint8_t byte, std::size_t i, std::uint64_t &value, bool &rejected) noexcept
 {
     const std::uint64_t payload = byte & 0x7Fu;
-    if(i == k_max_varint_bytes - 1 && payload > 0x01u)
+    const bool last             = (byte & 0x80u) == 0;
+    if((i == k_max_varint_bytes - 1 && payload > 0x01u) || (last && i != 0 && payload == 0))
     {
-        overflow = true;
+        rejected = true;
         return true;
     }
     value |= payload << (7u * i);
-    return (byte & 0x80u) == 0;
+    return last;
 }
 
 }
@@ -53,10 +56,10 @@ inline std::optional<std::uint64_t> read_varint(std::span<const std::byte> data,
         const auto byte = static_cast<std::uint8_t>(data[offset]);
         ++offset;
 
-        bool overflow = false;
-        if(detail::varint_step(byte, i, value, overflow))
+        bool rejected = false;
+        if(detail::varint_step(byte, i, value, rejected))
         {
-            if(overflow)
+            if(rejected)
                 return std::nullopt;
             consumed = offset;
             return value;
