@@ -11,8 +11,8 @@
 #include "plexus/node.h"
 #include "plexus/expected.h"
 #include "plexus/publisher.h"
-#include "plexus/typed_codec.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/value_logger.h"
 #include "plexus/value_projection.h"
@@ -31,15 +31,15 @@
 
 #include <span>
 #include <array>
-#include <string>
-#include <vector>
+#include <atomic>
 #include <chrono>
 #include <memory>
-#include <atomic>
-#include <sstream>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <ostream>
+#include <sstream>
 #include <streambuf>
 #include <string_view>
 #include <system_error>
