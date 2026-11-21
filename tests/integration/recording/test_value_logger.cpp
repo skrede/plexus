@@ -47,6 +47,7 @@
 #include <cstdint>
 #include <ostream>
 #include <sstream>
+#include <algorithm>
 #include <streambuf>
 #include <string_view>
 #include <system_error>
@@ -235,17 +236,35 @@ struct net
     }
 };
 
-// A discarding streambuf: every written byte is dropped, so the sink itself never
+// A discarding streambuf that only counts records: every written byte is dropped, so the sink itself never
 // allocates. The alloc gate writes the value_logger's records here so only the
 // decode+format path is measured, never an ostream's own buffer growth.
-struct null_streambuf final : std::streambuf
+class line_counting_sink final : public std::streambuf
 {
+public:
+    line_counting_sink()
+            : m_lines(0)
+    {
+    }
+
+    std::size_t lines() const noexcept
+    {
+        return m_lines;
+    }
+
+private:
+    std::size_t m_lines;
+
     int_type overflow(int_type c) override
     {
+        if(c == '\n')
+            ++m_lines;
         return c;
     }
-    std::streamsize xsputn(const char *, std::streamsize n) override
+
+    std::streamsize xsputn(const char *s, std::streamsize n) override
     {
+        m_lines += static_cast<std::size_t>(std::count(s, s + n, '\n'));
         return n;
     }
 };
@@ -384,7 +403,7 @@ TEST_CASE("value logger: the warmed steady projection loop is zero per-sample al
     constexpr int K    = 4096;
 
     net n;
-    null_streambuf sink;
+    line_counting_sink sink;
     std::ostream out{&sink}; // a non-allocating sink: only the format path is measured
     auto logger = n.sub_node.log<reading_codec, reading_projection>("telemetry", plexus::value_logger_options{.out = out, .format = plexus::log_format::csv}, reading_codec{},
                                                                     reading_projection{});
@@ -402,12 +421,14 @@ TEST_CASE("value logger: the warmed steady projection loop is zero per-sample al
     for(int i = 0; i < warm; ++i)
         publish(static_cast<std::uint32_t>(i));
 
+    const std::size_t lines_before = sink.lines();
     plexus::testing::reset_alloc_count();
     const auto before = plexus::testing::alloc_count();
     for(int i = 0; i < K; ++i)
         publish(0xF0000000u + static_cast<std::uint32_t>(i));
     const auto after = plexus::testing::alloc_count();
 
+    REQUIRE(sink.lines() - lines_before == static_cast<std::size_t>(K));
     REQUIRE(logger.decode_failed() == 0);
     REQUIRE(after - before == 0); // the steady decode+format+write path allocated nothing
 }
@@ -419,7 +440,7 @@ TEST_CASE("value logger: the warmed projection loop stays zero per-sample alloc 
     const auto beat    = plexus::io::liveliness_options{}.heartbeat_interval;
 
     net n;
-    null_streambuf sink;
+    line_counting_sink sink;
     std::ostream out{&sink};
     auto logger = n.sub_node.log<reading_codec, reading_projection>("telemetry", plexus::value_logger_options{.out = out, .format = plexus::log_format::csv}, reading_codec{},
                                                                     reading_projection{});
@@ -437,12 +458,14 @@ TEST_CASE("value logger: the warmed projection loop stays zero per-sample alloc 
     for(int i = 0; i < warm; ++i)
         beat_and_publish(static_cast<std::uint32_t>(i));
 
+    const std::size_t lines_before = sink.lines();
     plexus::testing::reset_alloc_count();
     const auto before = plexus::testing::alloc_count();
     for(int i = 0; i < K; ++i)
         beat_and_publish(0xF0000000u + static_cast<std::uint32_t>(i));
     const auto after = plexus::testing::alloc_count();
 
+    REQUIRE(sink.lines() - lines_before == static_cast<std::size_t>(K));
     REQUIRE(logger.decode_failed() == 0);
     REQUIRE(after - before == 0);
 }
