@@ -112,3 +112,39 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     distinct_deltas = static_cast<std::size_t>(std::distance(deltas.begin(), std::unique(deltas.begin(), deltas.end())));
     REQUIRE(distinct_deltas > deltas.size() / 2); // not a single repeating stride
 }
+
+TEST_CASE("udp isn: a spoofed best-effort envelope is refused on a plaintext udpr session", "[udp][isn][spoof]")
+{
+    ::asio::io_context io;
+    pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
+    pasio::udp_transport client{io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq()};
+
+    std::unique_ptr<pasio::udp_channel> accepted, dialed;
+    std::vector<std::string> delivered;
+    server.on_accepted(
+            [&](std::unique_ptr<pasio::udp_channel> ch)
+            {
+                accepted = std::move(ch);
+                accepted->on_data([&](std::span<const std::byte> b) { delivered.push_back(str_of(b)); });
+            });
+    server.listen({"udp", "127.0.0.1:0"});
+    plexus::testing::pump_until(io, [&] { return server.port() != 0; });
+
+    client.on_dialed([&](std::unique_ptr<pasio::udp_channel> ch, const pio::endpoint &) { dialed = std::move(ch); });
+    client.dial({"udpr", "127.0.0.1:" + std::to_string(server.port())});
+    plexus::testing::pump_until(io, [&] { return dialed && accepted; });
+    REQUIRE(accepted != nullptr);
+
+    // A best-effort envelope would bypass the ISN, the ARQ ordering and its dedup on a reliable session.
+    std::vector<std::byte> spoof;
+    wire::wrap_udp_into(spoof, wire::udp_envelope_kind::best_effort, 0, bytes_of("FORGED"));
+    accepted->deliver_inbound(spoof);
+
+    for(std::int32_t i = 0; i < 64; ++i)
+    {
+        io.poll();
+        if(io.stopped())
+            io.restart();
+    }
+    REQUIRE(delivered.empty());
+}
