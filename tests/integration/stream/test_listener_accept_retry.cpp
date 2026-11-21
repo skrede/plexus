@@ -21,6 +21,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <vector>
 #include <cstdint>
 #include <cstdlib>
 
@@ -59,13 +60,13 @@ constexpr std::int32_t k_expected_accepts = plexus::testing::emfile_keeps_pendin
 template<typename Channel, typename Listener, typename Stranded, typename Late>
 std::int32_t accepts_after_exhaustion(::asio::io_context &io, Listener &listener, Stranded stranded, Late late)
 {
-    std::unique_ptr<Channel> server;
+    std::vector<std::unique_ptr<Channel>> servers;
     std::int32_t accepted = 0;
     std::int32_t errors   = 0;
     listener.on_accepted(
             [&](std::unique_ptr<Channel> ch)
             {
-                server = std::move(ch);
+                servers.push_back(std::move(ch));
                 ++accepted;
             });
     listener.on_error([&](pio::io_error) { ++errors; });

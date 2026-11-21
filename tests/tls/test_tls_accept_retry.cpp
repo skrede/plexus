@@ -17,6 +17,7 @@
 
 #include <chrono>
 #include <memory>
+#include <vector>
 #include <cstdint>
 
 using tls_large_payload_fixture::make_cred;
@@ -33,13 +34,13 @@ TEST_CASE("tls listener accept retry: a tls listener whose accept fails with EMF
 
     ::asio::io_context io;
     plexus::tls::tls_listener listener{io, server_cred};
-    std::unique_ptr<plexus::tls::tls_channel> server;
+    std::vector<std::unique_ptr<plexus::tls::tls_channel>> servers;
     std::int32_t accepted = 0;
     std::int32_t errors   = 0;
     listener.on_accepted(
             [&](std::unique_ptr<plexus::tls::tls_channel> ch)
             {
-                server = std::move(ch);
+                servers.push_back(std::move(ch));
                 ++accepted;
             });
     listener.on_error([&](plexus::io::io_error) { ++errors; });
