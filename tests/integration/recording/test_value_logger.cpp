@@ -20,6 +20,8 @@
 #include "plexus/value_projection.h"
 #include "plexus/value_logger_options.h"
 
+#include "plexus/io/liveliness_options.h"
+
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_channel.h"
@@ -408,4 +410,39 @@ TEST_CASE("value logger: the warmed steady projection loop is zero per-sample al
 
     REQUIRE(logger.decode_failed() == 0);
     REQUIRE(after - before == 0); // the steady decode+format+write path allocated nothing
+}
+
+TEST_CASE("value logger: the warmed projection loop stays zero per-sample alloc with heartbeats running", "[integration]")
+{
+    constexpr int warm = 64;
+    constexpr int K    = 1024;
+    const auto beat    = plexus::io::liveliness_options{}.heartbeat_interval;
+
+    net n;
+    null_streambuf sink;
+    std::ostream out{&sink};
+    auto logger = n.sub_node.log<reading_codec, reading_projection>("telemetry", plexus::value_logger_options{.out = out, .format = plexus::log_format::csv}, reading_codec{},
+                                                                    reading_projection{});
+    plexus::publisher<reading_codec> pub{n.pub_node, "telemetry", {}, reading_codec{}};
+    n.drive();
+
+    auto beat_and_publish = [&](std::uint32_t v)
+    {
+        test_clock::advance(beat);
+        pub.publish(reading{7, v});
+        n.drive();
+    };
+
+    // Warm across more heartbeat rounds than the bus has ring slots, so every slot a heartbeat lands in has held one.
+    for(int i = 0; i < warm; ++i)
+        beat_and_publish(static_cast<std::uint32_t>(i));
+
+    plexus::testing::reset_alloc_count();
+    const auto before = plexus::testing::alloc_count();
+    for(int i = 0; i < K; ++i)
+        beat_and_publish(0xF0000000u + static_cast<std::uint32_t>(i));
+    const auto after = plexus::testing::alloc_count();
+
+    REQUIRE(logger.decode_failed() == 0);
+    REQUIRE(after - before == 0);
 }

@@ -192,7 +192,7 @@ public:
     // Storage is threaded off the profile, never off engine_policy/muxify — muxify re-exports only
     // the mechanism members, so reading storage through it silently reverts to the heap twins.
     using engine_type =
-            io::routing_engine<engine_policy, engine_transport, std::chrono::steady_clock, typename detail::profile_traits<Profile>::peer_storage,
+            io::routing_engine<engine_policy, engine_transport, timer_clock_t<typename engine_policy::timer_type>, typename detail::profile_traits<Profile>::peer_storage,
                                typename detail::profile_traits<Profile>::topic_storage, typename detail::profile_traits<Profile>::liveliness_storage,
                                typename detail::profile_traits<Profile>::graph_change_log, typename detail::profile_traits<Profile>::peer_report_emitter, engine_forward_splice>;
     using engine_channel  = typename engine_type::channel_type;
