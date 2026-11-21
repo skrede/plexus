@@ -269,13 +269,14 @@ public:
         detail::release_all_reporter_load(*this, id);
         const bool changed = m_known_peers.forget(id);
         m_registry.deny_redial(id);
-        m_peer_liveliness.withdraw_awareness(id, now_for_aging());
         m_messages.forward_dedup().reset_origin(id);
         detail::relay_withdraw(*this, id);
         m_emitter.clear_decline(id);
         if(m_reported.erase(id) != 0)
             m_topics.remove_node(id);
         bump_graph_generation(changed, id, graph::change_kind::disappeared);
+        // After the bump, so observers see the disappearance before the lost edge, as an expiry orders them.
+        m_peer_liveliness.withdraw_awareness(id, now_for_aging());
     }
 
     // The receive gate chain for an inbound peer_report about a THIRD-party origin: fail-closed
