@@ -105,6 +105,20 @@ TEST_CASE("varint decode rejects a 10th byte that overflows u64", "[wire][varint
     CHECK(consumed == 0);
 }
 
+TEST_CASE("varint decode rejects an overlong encoding of a value that fits fewer bytes", "[wire][varint]")
+{
+    std::vector<std::byte> nine_empty_continuations(9, std::byte{0x80});
+    nine_empty_continuations.push_back(std::byte{0x00});
+    for(const std::vector<std::byte> &buf :
+        {std::vector<std::byte>{std::byte{0x80}, std::byte{0x00}}, std::vector<std::byte>{std::byte{0xFF}, std::byte{0x80}, std::byte{0x00}}, nine_empty_continuations})
+    {
+        std::size_t consumed = 0;
+        const auto decoded   = read_varint(buf, consumed);
+        CHECK_FALSE(decoded.has_value());
+        CHECK(consumed == 0);
+    }
+}
+
 TEST_CASE("varint decode advances consumed only by the bytes it read", "[wire][varint]")
 {
     std::vector<std::byte> out;
