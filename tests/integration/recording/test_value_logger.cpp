@@ -9,21 +9,26 @@
 // per executable, so it is its own ctest binary.
 
 #include "plexus/node.h"
+#include "plexus/policy.h"
 #include "plexus/expected.h"
 #include "plexus/publisher.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/value_logger.h"
+#include "plexus/executor_verbs.h"
 #include "plexus/value_projection.h"
 #include "plexus/value_logger_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
-#include "plexus/inproc/inproc_policy.h"
+#include "plexus/inproc/inproc_timer.h"
+#include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
 #include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/discovery/static_discovery.h"
+
+#include "plexus/testing/test_clock.h"
 
 #include "support/alloc_counter.h"
 
@@ -46,13 +51,25 @@
 
 namespace {
 
+using plexus::testing::test_clock;
 using plexus::inproc::inproc_bus;
-using plexus::inproc::inproc_policy;
+using plexus::inproc::inproc_timer;
+using plexus::inproc::inproc_channel;
 using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_transport;
 using plexus::discovery::static_discovery;
 
-using inproc_node = plexus::node<inproc_policy, inproc_transport<>>;
+// A frozen virtual clock keeps the liveliness tick's heartbeats out of the alloc gate's measured window.
+struct frozen_policy : plexus::executor_verbs<inproc_executor<test_clock>>
+{
+    using byte_channel_type = inproc_channel<test_clock>;
+    using timer_type        = inproc_timer<test_clock>;
+    using byte_owner        = std::shared_ptr<const void>;
+};
+
+static_assert(plexus::Policy<frozen_policy>);
+
+using inproc_node = plexus::node<frozen_policy, inproc_transport<test_clock>>;
 
 struct reading
 {
@@ -188,10 +205,10 @@ plexus::node_id id_of(std::uint8_t seed)
 
 struct net
 {
-    inproc_bus<> bus;
-    inproc_executor<> ex;
-    inproc_transport<> ta;
-    inproc_transport<> tb;
+    inproc_bus<test_clock> bus;
+    inproc_executor<test_clock> ex;
+    inproc_transport<test_clock> ta;
+    inproc_transport<test_clock> tb;
     static_discovery disc;
 
     inproc_node pub_node;
