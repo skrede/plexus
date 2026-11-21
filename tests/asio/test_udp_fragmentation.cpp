@@ -7,10 +7,10 @@ TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal 
     // A small per-datagram budget so a modest payload fragments into many datagrams; the
     // total stays well inside the loopback socket buffer so a lossless best_effort burst
     // arrives intact and reassembles into ONE message.
-    constexpr std::size_t budget = 256;
-    constexpr int k_iterations   = 20;
-    int proven                   = 0;
-    for(int iter = 0; iter < k_iterations; ++iter)
+    constexpr std::size_t budget        = 256;
+    constexpr std::int32_t k_iterations = 20;
+    std::int32_t proven                 = 0;
+    for(std::int32_t iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
         pasio::udp_transport server{io};
@@ -58,7 +58,7 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     pasio::udp_transport client{io, /*budget=*/256, fast_hs};
 
     std::unique_ptr<pasio::udp_channel> accepted, dialed;
-    int deliveries = 0;
+    std::int32_t deliveries = 0;
     server.on_accepted(
             [&](std::unique_ptr<pasio::udp_channel> ch)
             {

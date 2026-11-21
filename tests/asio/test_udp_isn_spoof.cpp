@@ -6,9 +6,9 @@ TEST_CASE("udp isn: a spoofed seq=0 reliable-data segment is rejected on a non-z
           "udpr session",
           "[udp][isn][spoof]")
 {
-    constexpr int k_iterations = 50;
-    int proven                 = 0;
-    for(int iter = 0; iter < k_iterations; ++iter)
+    constexpr std::int32_t k_iterations = 50;
+    std::int32_t proven                 = 0;
+    for(std::int32_t iter = 0; iter < k_iterations; ++iter)
     {
         ::asio::io_context io;
         pasio::udp_transport server{io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, fast_arq()};
@@ -43,7 +43,7 @@ TEST_CASE("udp isn: a spoofed seq=0 reliable-data segment is rejected on a non-z
         accepted->deliver_inbound(spoof);
 
         // Drain any posted work so a (mis)delivery would have surfaced, then assert none did.
-        for(int i = 0; i < 64; ++i)
+        for(std::int32_t i = 0; i < 64; ++i)
         {
             io.poll();
             if(io.stopped())
@@ -67,8 +67,8 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     // and no fixed sequential step (the signatures a low-entropy / reconstructible source
     // would leave). This is a statistical property, so the bar is loose enough to never flake
     // on a sound CSPRNG yet tight enough to catch a constant / counter / single-seed stream.
-    namespace iod            = plexus::datagram::detail;
-    constexpr int k_sessions = 64;
+    namespace iod                     = plexus::datagram::detail;
+    constexpr std::int32_t k_sessions = 64;
 
     ::asio::io_context io;
     pasio::udp_server sniffer{io};
@@ -83,7 +83,7 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     plexus::testing::pump_until(io, [&] { return sniffer.port() != 0; });
 
     std::vector<std::unique_ptr<pasio::udp_transport>> clients;
-    for(int i = 0; i < k_sessions; ++i)
+    for(std::int32_t i = 0; i < k_sessions; ++i)
     {
         auto c = std::make_unique<pasio::udp_transport>(io, pasio::udp_channel::default_max_payload, fast_hs, fast_arq());
         c->dial({"udpr", "127.0.0.1:" + std::to_string(sniffer.port())});
@@ -105,9 +105,9 @@ TEST_CASE("udp isn: per-session ISNs drawn from OS entropy are high-entropy, not
     // No fixed step: a counter / single-stride sequence would show one dominant delta. Across
     // arrival order the consecutive deltas must vary (a CSPRNG yields a spread of deltas).
     std::size_t distinct_deltas = 0;
-    std::vector<int> deltas;
+    std::vector<std::int32_t> deltas;
     for(std::size_t i = 1; i < isns.size(); ++i)
-        deltas.push_back(static_cast<int>(isns[i]) - static_cast<int>(isns[i - 1]));
+        deltas.push_back(static_cast<std::int32_t>(isns[i]) - static_cast<std::int32_t>(isns[i - 1]));
     std::sort(deltas.begin(), deltas.end());
     distinct_deltas = static_cast<std::size_t>(std::distance(deltas.begin(), std::unique(deltas.begin(), deltas.end())));
     REQUIRE(distinct_deltas > deltas.size() / 2); // not a single repeating stride
