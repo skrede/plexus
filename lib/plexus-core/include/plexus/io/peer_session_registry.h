@@ -56,18 +56,22 @@ public:
 
     // Returns whether a slot for id exists after the call: false when the endpoint is already claimed
     // by another peer (no slot is created), so callers must not reach for the driver in that case.
-    // A torn-down accepted slot still filed under id is moved aside first, since it will never dial.
+    // A torn-down accepted slot still filed under id is moved aside first, since it will never dial; an idle dialed slot
+    // whose card now names another endpoint leaves service the way a superseded slot does.
     bool ensure_slot(const node_id &id, const endpoint &ep, const std::string &node_name)
     {
-        auto held = m_slots.find(id);
-        if(held != m_slots.end() && (m_reclaims.closing() || !detail::slot_filing::out_of_service(*held->second)))
+        auto held        = m_slots.find(id);
+        const bool stale = held != m_slots.end() && detail::stale_dial_target(*held->second, ep);
+        if(held != m_slots.end() && (m_reclaims.closing() || !(stale || detail::slot_filing::out_of_service(*held->second))))
             return true;
         if(detail::endpoint_claimed(*this, id, ep))
         {
             m_build.logger.warn("plexus: dial endpoint already claimed by another peer — slot not created");
             return false;
         }
-        if(held != m_slots.end())
+        if(held != m_slots.end() && stale)
+            detail::slot_filing::leave_service(*this, *held->second);
+        else if(held != m_slots.end())
             detail::slot_filing::vacate(*this, *held->second);
         auto slot = std::make_unique<slot_block>(m_transport, m_build, id, ep, node_name);
         detail::wire_redial(*slot);

@@ -35,6 +35,14 @@ bool endpoint_claimed(const Registry &reg, const node_id &id, const endpoint &ep
     return false;
 }
 
+// A dial in flight or a live session holds a slot to its endpoint until it settles, and a closed driver never dials again.
+template<typename Slot>
+bool stale_dial_target(Slot &slot, const endpoint &ep)
+{
+    const bool live = slot.session && !slot.session->pending().closing();
+    return slot.record.dial_endpoint != ep && !slot.driver.pending().closing() && !slot.driver.dialing() && !live;
+}
+
 // A dialed channel, or a failed dial, belongs to the slot whose driver is dialing its endpoint, else to the slot still
 // claiming it, so a slot that released its endpoint only ever hears about the dial it made itself.
 template<typename Slots>
