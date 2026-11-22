@@ -242,8 +242,8 @@ void deliver_reliable(Ch &c, std::uint16_t seq, bool fragmented, std::span<const
     c.m_arq->on_segment(seq, fragmented, *payload);
 }
 
-// The channel mode (not the envelope kind alone) gates the ARQ, so a spoofed datagram cannot spin
-// up an unsolicited engine.
+// The channel mode decides which envelope kind is accepted, so a spoofed datagram can neither spin up
+// an unsolicited ARQ nor bypass a reliable session's ISN, ordering and dedup.
 template<typename Ch>
 void deliver_inbound(Ch &c, std::span<const std::byte> datagram)
 {
@@ -252,6 +252,8 @@ void deliver_inbound(Ch &c, std::span<const std::byte> datagram)
         return; // malformed: drop, never on_protocol_close
     if(dec->kind == wire::udp_envelope_kind::best_effort)
     {
+        if(c.m_mode == datagram::detail::udp_channel_mode::reliable_datagram)
+            return;
         if(c.m_dedup.admit(dec->seq) != wire::udp_dedup_window::outcome::fresh)
             return; // duplicate / too_old: drop
         if(dec->fragmented)
