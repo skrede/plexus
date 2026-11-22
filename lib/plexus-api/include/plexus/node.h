@@ -340,16 +340,19 @@ public:
         affine("router");
         return m_engine;
     }
+
     const engine_type &router() const noexcept
     {
         affine("router");
         return m_engine;
     }
+
     io::message_forwarder<engine_policy> &message_forwarder() noexcept
     {
         affine("message_forwarder");
         return m_engine.messages();
     }
+
     executor_type executor() const noexcept
     {
         return m_executor;
