@@ -1,21 +1,21 @@
 #ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_RELIABLE_ARQ_H
 #define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_UDP_RELIABLE_ARQ_H
 
-#include "plexus/policy.h"
-
-#include "plexus/io/detail/pending_ops.h"
-
 #include "plexus/datagram/detail/seq_ring.h"
 #include "plexus/datagram/detail/udp_rto_estimator.h"
 #include "plexus/datagram/detail/udp_reorder_buffer.h"
+
+#include "plexus/policy.h"
+
+#include "plexus/io/detail/pending_ops.h"
 
 #include "plexus/detail/compat.h"
 
 #include "plexus/wire/udp_ack.h"
 
 #include <span>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
@@ -162,10 +162,12 @@ public:
     {
         return static_cast<std::uint16_t>(m_next - m_slots.base());
     }
+
     std::size_t window_room() const noexcept
     {
         return m_slots.window() - in_flight();
     }
+
     ms rto() const noexcept
     {
         return m_rto.rto();
