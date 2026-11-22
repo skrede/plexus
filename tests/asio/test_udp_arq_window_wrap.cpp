@@ -109,3 +109,23 @@ TEST_CASE("udp reliable_arq: a non-power-of-two window advances across the wrap 
     arq.cancel();
     io.poll();
 }
+
+TEST_CASE("udp reliable_arq: a window requested at half the sequence space is clamped below it, so a full-window cumulative ack frees every slot", "[udp][reliable_arq]")
+{
+    ::asio::io_context io;
+    engine arq{io, config{.window = 32768}};
+    const bytes payload  = bytes_of("x");
+    std::size_t admitted = 0;
+    while(arq.submit(payload) == engine::submit_result::admitted)
+        ++admitted;
+
+    wire::udp_ack ack{};
+    ack.cumulative = static_cast<std::uint16_t>(admitted - 1);
+    arq.on_ack(ack);
+    const std::size_t left = arq.in_flight();
+    arq.cancel();
+    io.poll();
+
+    REQUIRE(admitted < 32768);
+    REQUIRE(left == 0);
+}
