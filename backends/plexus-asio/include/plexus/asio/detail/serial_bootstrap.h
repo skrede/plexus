@@ -26,7 +26,7 @@ class serial_bootstrap
     struct envelope
     {
         std::array<std::byte, plexus::stream::serial_header_size> header;
-        std::array<std::byte, plexus::stream::crc_trailer_size> trailer;
+        std::array<std::byte, plexus::stream::serial_trailer_size> trailer;
     };
 
 public:

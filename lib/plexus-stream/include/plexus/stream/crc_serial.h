@@ -38,7 +38,7 @@ public:
     explicit crc_serial_inbound(std::size_t max_payload = k_serial_default_max_payload)
             : m_pos(0)
             , m_max_payload(std::min(max_payload, wire::k_max_reassembler_payload_bytes))
-            , m_capacity(serial_header_size + m_max_payload + crc_trailer_size)
+            , m_capacity(serial_header_size + m_max_payload + serial_trailer_size)
     {
         m_buf.reserve(m_capacity);
     }
@@ -107,7 +107,7 @@ private:
         if(payload_len > m_max_payload)
             return resync(wire::close_cause::payload_too_large);
         const std::size_t frame_len = serial_header_size + static_cast<std::size_t>(payload_len);
-        if(at.size() < frame_len + crc_trailer_size)
+        if(at.size() < frame_len + serial_trailer_size)
             return step::need_more;
         return verify(at, frame_len);
     }
@@ -116,12 +116,12 @@ private:
     {
         const auto header  = at.first(serial_header_size);
         const auto payload = at.subspan(serial_header_size, frame_len - serial_header_size);
-        if(read_crc_le(at.subspan(frame_len, crc_trailer_size)) != wire::crc32c(payload, wire::crc32c(header)))
+        if(at[frame_len + crc_trailer_size] != k_serial_end_marker || read_crc_le(at.subspan(frame_len, crc_trailer_size)) != wire::crc32c(payload, wire::crc32c(header)))
             return resync(wire::close_cause::crc_mismatch);
         const auto frame = wire_frame_in_place(at.first(frame_len));
         if(m_on_match_cb)
             m_on_match_cb(frame);
-        m_pos += frame_len + crc_trailer_size;
+        m_pos += frame_len + serial_trailer_size;
         return step::consumed;
     }
 

@@ -71,7 +71,7 @@ TEST_CASE("crc_serial: a flipped trailer byte drops the frame and resyncs onto t
     auto dec = s.make();
 
     auto bad = framed("corrupt-me");
-    bad.back() ^= std::byte{0xFF}; // flip the top trailer byte -> CRC fails
+    bad[bad.size() - 2] ^= std::byte{0xFF}; // flip the top CRC byte -> CRC fails
 
     const auto good = framed("recovered");
 

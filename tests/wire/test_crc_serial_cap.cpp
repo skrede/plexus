@@ -66,7 +66,7 @@ TEST_CASE("crc_serial: a damaged header or trailer is still refused as crc_misma
     auto bad_header = framed("hdr");
     bad_header[header_size - sizeof(std::uint64_t)] ^= std::byte{0x80};
     auto bad_trailer = framed("tlr");
-    bad_trailer.back() ^= std::byte{0xFF};
+    bad_trailer[bad_trailer.size() - 2] ^= std::byte{0xFF};
 
     dec.feed(bad_header);
     REQUIRE(s.drops == 1);
@@ -82,7 +82,7 @@ TEST_CASE("crc_serial: a damaged header or trailer is still refused as crc_misma
 TEST_CASE("crc_serial: a cap past the stream ceiling is clamped, so the capacity cannot wrap and feed returns", "[wire][crc_serial]")
 {
     constexpr std::size_t size_max = std::numeric_limits<std::size_t>::max();
-    for(const std::size_t cap : {size_max, size_max - (serial_header_size + crc_trailer_size - 1)})
+    for(const std::size_t cap : {size_max, size_max - (serial_header_size + serial_trailer_size - 1)})
     {
         sink s;
         auto dec = s.make(cap);

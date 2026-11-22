@@ -16,7 +16,7 @@ using namespace crc_serial_test;
 namespace {
 
 constexpr std::size_t k_cap       = 256;
-constexpr std::size_t k_max_frame = serial_header_size + k_cap + crc_trailer_size;
+constexpr std::size_t k_max_frame = serial_header_size + k_cap + serial_trailer_size;
 
 std::vector<std::byte> full_frames(std::size_t count)
 {

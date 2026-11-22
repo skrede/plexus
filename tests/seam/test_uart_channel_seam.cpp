@@ -71,11 +71,11 @@ TEST_CASE("uart_channel drops+resyncs a garbled stream and never wedges", "[seam
     plexus::test::reset_uart_fixture();
 
     // Leading line noise + a magic anchor with a corrupt trailer, then a clean frame.
-    auto garbage       = bytes_of({0x00, 0xFF, 0x13, 0x37});
-    const auto payload = bytes_of({0x01, 0x02, 0x03});
-    auto bad           = on_wire(payload);
-    bad.back()         = std::byte(bad.back() == std::byte{0} ? 0x01 : 0x00); // flip the CRC
-    auto good          = on_wire(payload);
+    auto garbage        = bytes_of({0x00, 0xFF, 0x13, 0x37});
+    const auto payload  = bytes_of({0x01, 0x02, 0x03});
+    auto bad            = on_wire(payload);
+    bad[bad.size() - 2] = std::byte(bad[bad.size() - 2] == std::byte{0} ? 0x01 : 0x00); // flip the CRC
+    auto good           = on_wire(payload);
 
     auto &rx = plexus::test::uart_fixture().rx;
     rx.insert(rx.end(), garbage.begin(), garbage.end());

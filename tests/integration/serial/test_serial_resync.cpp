@@ -62,8 +62,6 @@ TEST_CASE("serial resync: a byte-DROPPED (mid-frame) frame desyncs but the next 
         rx_probe probe;
         probe.wire(*rx);
 
-        // A payload byte is dropped, not the final trailer byte: the next frame's first anchor byte would complete that
-        // trailer and pass the check about one time in 256.
         auto dropped = serial_data_frame("corrupt-drop", 1);
         dropped.erase(dropped.begin() + k_serial_header_bytes + 1);
         write_raw(master, dropped);
@@ -95,7 +93,7 @@ TEST_CASE("serial resync: corruption is non-fatal - neither on_protocol_close no
         probe.wire(*rx);
 
         auto bad1 = serial_data_frame("bad-one", 1);
-        bad1.back() ^= std::byte{0x5A};
+        bad1[bad1.size() - 2] ^= std::byte{0x5A};
         auto bad2 = serial_data_frame("bad-two", 1);
         bad2[k_serial_header_bytes] ^= std::byte{0x33};
         write_raw(master, bad1);

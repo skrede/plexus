@@ -60,7 +60,7 @@ TEST_CASE("serial kat: every row encodes to its pinned bytes", "[wire][serial][k
         const auto literal = from_hex(row.frame_hex);
         const auto payload = from_hex(row.payload_hex);
         REQUIRE(row.header.payload_len == payload.size());
-        REQUIRE(literal.size() == serial_header_size + payload.size() + crc_trailer_size);
+        REQUIRE(literal.size() == serial_header_size + payload.size() + serial_trailer_size);
         REQUIRE(std::equal(row.format_id.begin(), row.format_id.end(), literal.begin()));
         REQUIRE(plexus::testing::serial_bytes(encode_frame(row.header, payload)) == literal);
     }

@@ -21,7 +21,7 @@ namespace {
 
 using namespace fuzz_serial;
 
-constexpr std::size_t k_max_frame = stream::serial_header_size + k_max_payload + stream::crc_trailer_size;
+constexpr std::size_t k_max_frame = stream::serial_header_size + k_max_payload + stream::serial_trailer_size;
 constexpr std::array<std::byte, k_max_frame> k_zero_pad{};
 
 std::vector<bytes> deframe(bytes_view serial, std::span<const std::uint8_t> chunks)

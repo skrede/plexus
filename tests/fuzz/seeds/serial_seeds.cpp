@@ -32,7 +32,7 @@ const std::array<frame_spec, 3> k_frames{{
 
 constexpr std::uint8_t k_header_byte  = 5;
 constexpr std::uint8_t k_payload_byte = stream::serial_header_size + 2;
-constexpr std::uint8_t k_first_end    = stream::serial_header_size + 5 + stream::crc_trailer_size;
+constexpr std::uint8_t k_first_end    = stream::serial_header_size + 5 + stream::serial_trailer_size;
 constexpr std::uint8_t k_second_mid   = k_first_end + 20;
 
 void append_le(seed &out, std::uint64_t value, std::size_t width)

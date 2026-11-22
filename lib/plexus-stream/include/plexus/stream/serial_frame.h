@@ -17,8 +17,12 @@ namespace plexus::stream {
 // The serial format's identity, written where the wire frame carries its magic; the deframer accepts only this value.
 inline constexpr std::array<std::byte, 2> k_serial_format_id{std::byte{0x53}, std::byte{0x50}};
 
-inline constexpr std::size_t crc_trailer_size   = 4;
-inline constexpr std::size_t serial_header_size = wire::header_size + sizeof(std::uint32_t);
+// The end marker sits outside CRC coverage, so a frame cut short at its tail cannot borrow the next frame's anchor.
+inline constexpr std::byte k_serial_end_marker{0x45};
+
+inline constexpr std::size_t crc_trailer_size    = 4;
+inline constexpr std::size_t serial_trailer_size = crc_trailer_size + 1;
+inline constexpr std::size_t serial_header_size  = wire::header_size + sizeof(std::uint32_t);
 
 // The largest payload whose frame holds a 115200-baud line for less than one default heartbeat interval.
 inline constexpr std::size_t k_serial_default_max_payload = 1024;
@@ -54,10 +58,11 @@ inline std::uint32_t read_crc_le(std::span<const std::byte> t) noexcept
             (std::to_integer<std::uint32_t>(t[3]) << 24);
 }
 
-inline std::array<std::byte, crc_trailer_size> crc_trailer(std::span<const std::byte> header, std::span<const std::byte> payload) noexcept
+inline std::array<std::byte, serial_trailer_size> crc_trailer(std::span<const std::byte> header, std::span<const std::byte> payload) noexcept
 {
-    std::array<std::byte, crc_trailer_size> trailer{};
+    std::array<std::byte, serial_trailer_size> trailer{};
     write_crc_le(trailer, wire::crc32c(payload, wire::crc32c(header)));
+    trailer.back() = k_serial_end_marker;
     return trailer;
 }
 
