@@ -31,7 +31,8 @@ TEST_CASE("crypto.datagram_replay round-trips across the 256-epoch boundary", "[
 
         delivered.clear();
         recv_wire.feed(std::span<const std::byte>{on_wire});
-        REQUIRE(delivered == frame); // opens at every epoch, including across the 0xff->0x00 wrap
+        // Opens at every epoch, including across the 0xff->0x00 wrap.
+        REQUIRE(delivered == frame);
 
         send_key = step_forward(send_key);
     }
@@ -48,7 +49,7 @@ TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too
     wire_lower recv_wire;
     datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
 
-    int delivered = 0;
+    std::int32_t delivered = 0;
     receiver.on_data([&](std::span<const std::byte>) { ++delivered; });
 
     // Accept the highest sequence first, then feed a far-older one (below the floor).
