@@ -36,6 +36,7 @@ public:
     {
         return m_registry;
     }
+
     const subscriber_registry<channel_type> &registry() const noexcept
     {
         return m_registry;
@@ -92,14 +93,12 @@ public:
         send_control(channel, wire::msg_type::declare, bytes);
     }
 
-    // The relay re-announcement verb: the caller has already encoded the peer_report, so this only
-    // wraps it in a control frame — the send_declare precedent, allocation-light on the shared scratch.
     void send_peer_report(channel_type &channel, std::span<const std::byte> bytes)
     {
         send_control(channel, wire::msg_type::peer_report, bytes);
     }
 
-    // session_id = 0 on every control frame. Reuses a member scratch to stay allocation-light.
+    // Reuses a member scratch to stay allocation-light.
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
         wire::frame_header fhdr{.type = type, .flags = 0, .session_id = 0, .timestamp_ns = wire::now_timestamp_ns(), .payload_len = inner.size()};
