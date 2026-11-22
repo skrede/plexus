@@ -13,6 +13,58 @@
 
 using namespace crc_serial_test;
 
+namespace {
+
+// A payload whose trailer CRC ends in the format id's first byte, so the next frame's anchor completes it when that
+// last CRC byte is lost.
+std::string payload_with_anchor_ended_crc()
+{
+    for(std::int32_t i = 0; i < 4096; ++i)
+    {
+        const std::string payload = "trailer-" + std::to_string(i);
+        const auto header         = encode_serial_header(encode_header(make_header(payload.size())));
+        if(crc_trailer(header, as_bytes(payload))[crc_trailer_size - 1] == k_serial_format_id[0])
+            return payload;
+    }
+    return {};
+}
+
+}
+
+TEST_CASE("crc_serial: a frame missing its last CRC byte is dropped and the next frame is delivered, even when the next frame's anchor completes the CRC", "[wire][crc_serial]")
+{
+    const auto payload = payload_with_anchor_ended_crc();
+    REQUIRE_FALSE(payload.empty());
+    sink s;
+    auto dec = s.make();
+
+    auto stream = framed(payload);
+    stream.erase(stream.begin() + static_cast<std::ptrdiff_t>(serial_header_size + payload.size() + crc_trailer_size - 1));
+    const auto next = framed("recovered");
+    stream.insert(stream.end(), next.begin(), next.end());
+    dec.feed(stream);
+
+    REQUIRE(s.emitted == std::vector<std::string>{header_on("recovered")});
+    REQUIRE(s.drops >= 1);
+}
+
+TEST_CASE("crc_serial: a frame missing its final byte is dropped and the next frame is delivered", "[wire][crc_serial]")
+{
+    const auto payload = payload_with_anchor_ended_crc();
+    REQUIRE_FALSE(payload.empty());
+    sink s;
+    auto dec = s.make();
+
+    auto stream = framed(payload);
+    stream.pop_back();
+    const auto next = framed("recovered");
+    stream.insert(stream.end(), next.begin(), next.end());
+    dec.feed(stream);
+
+    REQUIRE(s.emitted == std::vector<std::string>{header_on("recovered")});
+    REQUIRE(s.drops >= 1);
+}
+
 TEST_CASE("crc_serial: a flipped trailer byte drops the frame and resyncs onto the next valid frame", "[wire][crc_serial]")
 {
     sink s;
