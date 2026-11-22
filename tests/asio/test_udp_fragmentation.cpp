@@ -1,5 +1,7 @@
 #include "test_udp_fragmentation_common.h"
 
+#include <algorithm>
+
 using namespace udp_fragmentation_fixture;
 
 TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal as one message", "[udp][fragment]")
@@ -91,4 +93,40 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     // The reassembler's per-message timeout (default 5000 ms) reclaims the partial.
     plexus::testing::pump_until(io, [&] { return deliveries > 0; }, ms{6000});
     REQUIRE(deliveries == 0);
+}
+
+TEST_CASE("udp fragment reliable: every fragment datagram of a large reliable send fits the transport budget", "[udp][fragment][reliable]")
+{
+    constexpr std::size_t budget = 512;
+    ::asio::io_context io;
+    const auto loopback_ep = [](std::uint16_t port) { return ::asio::ip::udp::endpoint(::asio::ip::make_address("127.0.0.1"), port); };
+    pasio::udp_server client{io};
+    pasio::udp_server sniffer{io};
+    client.start(loopback_ep(0));
+    sniffer.start(loopback_ep(0));
+
+    std::size_t largest = 0;
+    std::uint32_t seen  = 0;
+    sniffer.on_datagram(
+            [&](const ::asio::ip::udp::endpoint &, std::span<const std::byte> datagram)
+            {
+                largest = std::max(largest, datagram.size());
+                ++seen;
+            });
+
+    pasio::udp_channel ch{io,
+                          client,
+                          loopback_ep(sniffer.port()),
+                          budget,
+                          fast_arq(),
+                          pio::congestion::block,
+                          pasio::udp_channel::default_backpressure_bytes,
+                          plexus::datagram::detail::udp_channel_mode::reliable_datagram,
+                          0};
+    const auto payload = make_payload(4096, 0x3C);
+    ch.send(payload);
+
+    plexus::testing::pump_until(io, [&] { return seen >= pio::fragment_count(payload.size(), budget); }, k_pump_bound);
+    REQUIRE(seen >= pio::fragment_count(payload.size(), budget));
+    REQUIRE(largest <= budget);
 }
