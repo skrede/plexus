@@ -1,4 +1,5 @@
 #include "plexus/freertos/lwip_channel.h"
+#include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/lwip_channel_limits.h"
 
@@ -14,14 +15,20 @@
 
 namespace {
 
-using null_socket  = plexus::freertos::detail::null_stream_socket;
-using lwip_channel = plexus::freertos::lwip_channel<null_socket>;
-using lim          = plexus::freertos::lwip_channel_limits;
+using null_socket    = plexus::freertos::detail::null_stream_socket;
+using lwip_channel   = plexus::freertos::lwip_channel<null_socket>;
+using lwip_transport = plexus::freertos::lwip_transport<null_socket>;
+using lim            = plexus::freertos::lwip_channel_limits;
 
 lwip_channel make_channel(plexus::freertos::freertos_executor &ex, plexus::io::congestion c)
 {
     plexus::io::endpoint remote{"tcp", "127.0.0.1:9000"};
     return lwip_channel{null_socket{}, ex, std::move(remote), lim::read_buffer_bytes, lim::max_message_bytes, lim::reassembly_bytes, lim::egress_cap_bytes, c};
+}
+
+lwip_transport make_transport(plexus::freertos::freertos_executor &ex, plexus::io::congestion c)
+{
+    return lwip_transport{ex, lim::read_buffer_bytes, lim::max_message_bytes, lim::reassembly_bytes, lim::egress_cap_bytes, c};
 }
 
 }
@@ -32,4 +39,12 @@ TEST_CASE("lwip congestion: an lwIP channel configured to drop its oldest frames
     CHECK_THROWS_AS(make_channel(ex, plexus::io::congestion::drop_oldest), std::runtime_error);
     CHECK_NOTHROW(make_channel(ex, plexus::io::congestion::drop_newest));
     CHECK_NOTHROW(make_channel(ex, plexus::io::congestion::block));
+}
+
+TEST_CASE("lwip congestion: an lwIP transport configured to drop its oldest frames is refused when built", "[seam]")
+{
+    plexus::freertos::freertos_executor ex;
+    CHECK_THROWS_AS(make_transport(ex, plexus::io::congestion::drop_oldest), std::runtime_error);
+    CHECK_NOTHROW(make_transport(ex, plexus::io::congestion::drop_newest));
+    CHECK_NOTHROW(make_transport(ex, plexus::io::congestion::block));
 }
