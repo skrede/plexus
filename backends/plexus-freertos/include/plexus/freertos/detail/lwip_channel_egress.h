@@ -4,6 +4,8 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 
+#include "plexus/io/detail/transport_congestion.h"
+
 #include "plexus/stream/stream_socket.h"
 
 #include "plexus/stream/detail/send_queue.h"
@@ -40,7 +42,7 @@ public:
             : m_socket(socket)
             , m_on_error(on_error)
             , m_fail_cb(std::move(fail))
-            , m_congestion(congestion)
+            , m_congestion(plexus::io::detail::checked_transport_congestion(congestion))
             , m_send_queue([this](buffer_seq views, completion done) { drain_views(views, std::move(done)); }, egress_cap)
     {
     }
