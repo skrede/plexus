@@ -92,3 +92,19 @@ TEST_CASE("dialed identity redial: a card with a new endpoint authorizes one dia
     CHECK(t.rec.for_peer(t.advertised).rejected == after_card);
     CHECK(t.net.a.known().lookup(t.advertised) == nowhere);
 }
+
+TEST_CASE("dialed identity redial: a peer whose card moves to a new endpoint is redialed at the new endpoint", "[integration][dialed_identity]")
+{
+    manual_clock::reset();
+    two_node net;
+    const plexus::io::endpoint nowhere{"inproc", "node-nowhere"};
+    net.a.note_peer(net.id_b, nowhere);
+    net.a.reach(net.id_b);
+    net.drive();
+    REQUIRE(!net.a.is_connected(net.id_b));
+    REQUIRE(net.a.attempt_count(net.id_b) == 1);
+    net.a.note_peer(net.id_b, net.ep_b);
+    net.a.reach(net.id_b);
+    net.advance(k_ceiling);
+    CHECK(net.a.is_connected(net.id_b));
+}
