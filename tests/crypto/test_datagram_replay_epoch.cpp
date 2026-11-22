@@ -59,3 +59,46 @@ TEST_CASE("crypto.datagram_replay drops a datagram below the window floor as too
     REQUIRE(delivered == 1);
     REQUIRE(receiver.replay_count() == 1);
 }
+
+namespace {
+
+std::vector<std::vector<std::byte>> send_header_only(datagram_authenticated_channel<wire_lower> &sender, wire_lower &wire, std::uint64_t count, std::uint64_t keep_from)
+{
+    std::uint64_t index = 0;
+    std::vector<std::vector<std::byte>> kept;
+    wire.m_sink = [&](std::span<const std::byte> b)
+    {
+        if(index++ >= keep_from)
+            kept.emplace_back(b.begin(), b.end());
+    };
+    const auto frame = make_frame(7, "");
+    for(std::uint64_t i = 0; i < count; ++i)
+        sender.send(frame);
+    wire.m_sink = nullptr;
+    return kept;
+}
+
+}
+
+TEST_CASE("crypto.datagram_replay rekeys its send direction at the usage threshold and the receiver follows", "[crypto][datagram_replay]")
+{
+    using plexus::crypto::k_rekey_message_threshold;
+    const auto keys = fixed_keys();
+
+    wire_lower send_wire;
+    datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys);
+    const auto kept = send_header_only(sender, send_wire, k_rekey_message_threshold + 1, k_rekey_message_threshold - 1);
+
+    REQUIRE(kept.size() == 2);
+    REQUIRE(kept[1][8] == std::byte{1});
+    REQUIRE(std::vector<std::byte>(kept[1].begin(), kept[1].begin() + 8) == std::vector<std::byte>(8));
+
+    wire_lower recv_wire;
+    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    std::int32_t delivered = 0;
+    receiver.on_data([&](std::span<const std::byte>) { ++delivered; });
+    for(const auto &datagram : kept)
+        recv_wire.feed(std::span<const std::byte>{datagram});
+    REQUIRE(delivered == 2);
+    REQUIRE(receiver.tamper_dropped_count() == 0);
+}
