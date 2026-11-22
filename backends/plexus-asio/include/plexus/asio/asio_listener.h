@@ -15,6 +15,7 @@
 #include "plexus/io/egress_capacity.h"
 
 #include "plexus/io/detail/retiring_table.h"
+#include "plexus/io/detail/transport_congestion.h"
 
 #include "plexus/detail/compat.h"
 
@@ -42,7 +43,7 @@ public:
             , m_backoff(io)
             , m_cfg(cfg)
             , m_no_delay(no_delay)
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
     {

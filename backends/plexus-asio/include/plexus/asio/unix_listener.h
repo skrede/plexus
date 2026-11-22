@@ -16,6 +16,7 @@
 #include "plexus/io/egress_capacity.h"
 
 #include "plexus/io/detail/retiring_table.h"
+#include "plexus/io/detail/transport_congestion.h"
 
 #include "plexus/io/security/peer_cred_policy.h"
 
@@ -63,7 +64,7 @@ public:
             , m_cfg(cfg)
             , m_mode(mode)
             , m_peer_policy(&policy)
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
     {

@@ -22,6 +22,7 @@
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/detail/close_notification.h"
+#include "plexus/io/detail/transport_congestion.h"
 
 #include "plexus/stream/detail/send_queue.h"
 
@@ -62,7 +63,7 @@ public:
             , m_stream(m_bootstrap.make_stream(io))
             , m_inbound(io, cfg)
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_socket_options(socket_options)
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)
@@ -85,7 +86,7 @@ public:
             , m_stream(m_bootstrap.make_stream(io, std::move(connected)))
             , m_inbound(io, cfg)
             , m_read_buf(stream_read_buffer_size(read_buffer_bytes))
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_socket_options(socket_options)
             , m_scheduler_key(io::detail::next_scheduler_key())
             , m_dropped(0)

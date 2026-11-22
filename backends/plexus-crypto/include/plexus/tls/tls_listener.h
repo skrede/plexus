@@ -16,6 +16,8 @@
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/pending_dial_registry.h"
 
+#include "plexus/io/detail/transport_congestion.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -51,7 +53,7 @@ public:
             , m_cred(cred)
             , m_cfg(cfg)
             , m_no_delay(no_delay)
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_egress_capacity(egress)
             , m_socket_options(socket_options)
             , m_accepting()

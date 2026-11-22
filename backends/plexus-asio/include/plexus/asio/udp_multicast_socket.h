@@ -10,6 +10,7 @@
 #include "plexus/io/network_interface.h"
 
 #include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/transport_congestion.h"
 
 #include "plexus/stream/datagram_socket.h"
 
@@ -48,7 +49,7 @@ public:
             : m_socket(io)
             , m_sender{}
             , m_recv_buf{}
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_so_sndbuf(0)
             , m_so_rcvbuf(0)
             , m_dropped(0)

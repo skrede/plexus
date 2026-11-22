@@ -9,6 +9,7 @@
 #include "plexus/io/fragmentation.h"
 
 #include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/transport_congestion.h"
 
 #include "plexus/datagram/detail/send_queue.h"
 
@@ -49,7 +50,7 @@ public:
             : m_socket(io)
             , m_sender{}
             , m_recv_buf{}
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_so_sndbuf(so_sndbuf)
             , m_so_rcvbuf(so_rcvbuf)
             , m_dropped(0)
