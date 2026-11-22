@@ -1,10 +1,5 @@
-// The security attach-gate bridge oracle: two peer_sessions over the inproc backend
-// drive the end-to-end attach surface this wave wires — the dedicated security_event,
-// the lifecycle rejected edge, the AEAD install hook on a successful attach, the
-// stream-tamper teardown, and the auth-only+datagram posture refusal. No OpenSSL: the
-// transcript seam is a deterministic fake and the attach_policy is a test double, so
-// the bridge logic is proven in the plexus::plexus-only core (the litmus that the
-// decorator/EVP instantiation is genuinely behind the type-erased seam).
+// No OpenSSL: the transcript seam is a deterministic fake and the attach policy a test double, so the attach bridge
+// is proven in the core alone, which shows the AEAD instantiation stays behind the type-erased seam.
 
 #include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
@@ -171,7 +166,7 @@ std::vector<std::byte> psk_material(std::uint8_t seed, std::size_t len = 16)
 }
 
 // A two-node inproc link with selectable per-node attach policy + seam + the security
-// observer wiring. Mirrors the peer_session inproc rig.
+// observer wiring.
 struct session_link
 {
     inproc_bus<> bus;
