@@ -4,6 +4,7 @@
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include <vector>
@@ -43,8 +44,8 @@ pasio::udp_transport make_transport(::asio::io_context &io, pio::congestion cong
 
 struct admission_pair
 {
-    int would_block;
-    int fragments_seen;
+    std::int32_t would_block;
+    std::int32_t fragments_seen;
     ::asio::io_context io;
     pasio::udp_transport client;
     pasio::udp_transport server;

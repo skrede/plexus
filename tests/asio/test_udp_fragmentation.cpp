@@ -33,14 +33,13 @@ TEST_CASE("udp fragment best_effort: an oversize payload reassembles byte-equal 
         REQUIRE(dialed != nullptr);
         REQUIRE(accepted != nullptr);
 
-        // ~6 KiB at a 256-byte budget -> ~26 fragments, one logical message.
         auto payload = make_payload(6 * 1024, static_cast<std::uint8_t>(iter));
-        REQUIRE(payload.size() + wire::udp_envelope_overhead > budget); // genuinely oversize
+        REQUIRE(payload.size() + wire::udp_envelope_overhead > budget);
         dialed->send(payload);
 
         plexus::testing::pump_until(io, [&] { return !got.empty(); }, k_pump_bound);
-        REQUIRE(got.size() == 1);                   // exactly ONE reassembled message
-        REQUIRE(equal_bytes(got.front(), payload)); // byte-equal end-to-end
+        REQUIRE(got.size() == 1);
+        REQUIRE(equal_bytes(got.front(), payload));
         ++proven;
     }
     REQUIRE(proven == k_iterations);
@@ -50,9 +49,6 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
           "timeout",
           "[udp][fragment]")
 {
-    // Inject the fragments of one message directly at the accepting channel but WITHHOLD
-    // one: the message never completes, and the per-message reassembly timeout reclaims the
-    // whole partial -> no on_data ever fires (no partial delivery).
     ::asio::io_context io;
     pasio::udp_transport server{io};
     pasio::udp_transport client{io, /*budget=*/256, fast_hs};
@@ -73,7 +69,6 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
     plexus::testing::pump_until(io, [&] { return dialed && accepted; }, k_pump_bound);
     REQUIRE(accepted != nullptr);
 
-    // Build 4 best_effort fragments of one msg_id and inject all but index 2.
     auto payload               = make_payload(1000, 0x5A);
     const std::uint16_t msg_id = 7;
     std::vector<std::vector<std::byte>> datagrams;
@@ -88,14 +83,12 @@ TEST_CASE("udp fragment best_effort: a lost fragment drops the WHOLE message on 
 
     for(std::uint32_t i = 0; i < cnt; ++i)
         if(i != 2)
-            accepted->deliver_inbound(datagrams[i]); // withhold fragment index 2
+            accepted->deliver_inbound(datagrams[i]);
 
-    // Drain briefly: the message is incomplete, nothing is delivered yet.
     plexus::testing::pump_until(io, [&] { return deliveries > 0; }, ms{300});
     REQUIRE(deliveries == 0);
 
-    // The reassembler's per-message timeout (default 5000 ms) reclaims the partial; pump
-    // past it and confirm the whole message was dropped (still no delivery).
+    // The reassembler's per-message timeout (default 5000 ms) reclaims the partial.
     plexus::testing::pump_until(io, [&] { return deliveries > 0; }, ms{6000});
-    REQUIRE(deliveries == 0); // dropped whole — no partial delivery
+    REQUIRE(deliveries == 0);
 }
