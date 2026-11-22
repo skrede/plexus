@@ -39,14 +39,17 @@ public:
     {
         m_install_security = std::move(cb);
     }
+
     void set_security_seam(const security_seam *seam) noexcept
     {
         m_install_security_seam = seam;
     }
+
     void set_attach_entropy(security::rand_fn rand)
     {
         m_rand = std::move(rand);
     }
+
     void set_attach_prover(security::attach_prover prover)
     {
         m_prover = std::move(prover);
@@ -71,10 +74,12 @@ public:
     {
         return m_own_nonce;
     }
+
     const std::array<std::byte, wire::k_handshake_key_id_len> &key_id() const noexcept
     {
         return m_key_id;
     }
+
     std::uint8_t cipher_offer() const noexcept
     {
         return seam_engaged() ? wire::cipher_offer_bits::chacha20_poly1305 : 0;
@@ -84,6 +89,7 @@ public:
     {
         return m_pending_attach;
     }
+
     const security::attach_facts &facts() const noexcept
     {
         return m_pending_attach.facts;
@@ -156,6 +162,7 @@ public:
     {
         m_authenticated_host_identity.reset();
     }
+
     bool engaged() const noexcept
     {
         return m_pending_attach.engaged;
