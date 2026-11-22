@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <cstdint>
 #include <type_traits>
 
 namespace {
@@ -18,8 +19,8 @@ namespace {
 struct fake_pollable
 {
     plexus::freertos::freertos_executor &ex;
-    int polls{0};
-    int drained_after_poll{0};
+    std::int32_t polls{0};
+    std::int32_t drained_after_poll{0};
 
     void poll()
     {
@@ -34,8 +35,8 @@ struct fake_pollable
 struct fake_pollable_b
 {
     plexus::freertos::freertos_executor &ex;
-    int polls{0};
-    int drained_after_poll{0};
+    std::int32_t polls{0};
+    std::int32_t drained_after_poll{0};
 
     void poll()
     {
