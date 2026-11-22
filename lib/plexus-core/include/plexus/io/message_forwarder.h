@@ -379,9 +379,10 @@ public:
     }
 
     template<typename OnMessage>
-    detail::deliver_outcome deliver_demanded(const peer &p, std::span<const std::byte> inner, message_info info, const node_id &source, bool has_source_identity, OnMessage &&on_message)
+    detail::deliver_outcome deliver_demanded(const peer &p, detail::sequence_gating gating, std::span<const std::byte> inner, message_info info, const node_id &source,
+                                             bool has_source_identity, OnMessage &&on_message)
     {
-        return detail::forwarder_deliver_checked(*this, p.node_name, inner, info, source, has_source_identity, std::forward<OnMessage>(on_message));
+        return detail::forwarder_deliver_checked(*this, p.node_name, gating, inner, info, source, has_source_identity, std::forward<OnMessage>(on_message));
     }
 
     void set_on_data_stamp(plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> hook)
@@ -432,8 +433,10 @@ public:
 
     void note_switch(const peer &p, std::uint64_t topic_hash, std::uint64_t first_sequence)
     {
+        const std::string_view fqn = fqn_for(topic_hash);
+        m_endpoint.arm_sequence_gate(p.node_name, fqn, first_sequence);
         if(m_companion_hooks.switch_cb)
-            m_companion_hooks.switch_cb(p.node_name, fqn_for(topic_hash), first_sequence);
+            m_companion_hooks.switch_cb(p.node_name, fqn, first_sequence);
     }
 
     void send_companion(const peer &p, std::string_view fqn, companion_event event, reader_claim reader)
@@ -566,7 +569,8 @@ private:
     template<typename F>
     friend void detail::stamp_received(F &, const node_id &, std::uint64_t);
     template<typename F, typename O>
-    friend detail::deliver_outcome detail::forwarder_deliver_checked(F &, std::optional<std::string_view>, std::span<const std::byte>, message_info, const node_id &, bool, O &&);
+    friend detail::deliver_outcome detail::forwarder_deliver_checked(F &, std::optional<std::string_view>, detail::sequence_gating, std::span<const std::byte>, message_info,
+                                                                     const node_id &, bool, O &&);
     template<typename F>
     friend wire_bytes<> detail::frame_publish(F &, std::uint64_t, std::span<const std::byte>, std::optional<std::uint64_t>, std::uint64_t, message_info &);
     template<typename F>

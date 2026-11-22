@@ -3,7 +3,7 @@
 
 #include "plexus/io/subscriber_registry.h"
 
-#include "plexus/io/detail/keyed_set.h"
+#include "plexus/io/detail/demand_table.h"
 #include "plexus/io/detail/keyed_refcount.h"
 
 #include "plexus/wire/frame.h"
@@ -48,7 +48,7 @@ public:
     }
 
     // The two directions never share state, so neither side's demand gates the other's subscribe,
-    // answer or unsubscribe. The subscribe side is set membership, the admit side counts.
+    // answer or unsubscribe. The subscribe side holds one entry per demanded topic, the admit side counts.
     bool subscribe_gate(std::string_view node_name, std::string_view fqn)
     {
         return m_subscribed.insert(node_name, fqn);
@@ -59,9 +59,16 @@ public:
         return m_subscribed.erase(node_name, fqn);
     }
 
-    bool holds_demand(std::string_view node_name, std::string_view fqn) const
+    // Null when this node holds no demand for fqn from node_name.
+    detail::sequence_gate *demand_gate(std::string_view node_name, std::string_view fqn)
     {
-        return m_subscribed.holds(node_name, fqn);
+        return m_subscribed.gate_for(node_name, fqn);
+    }
+
+    void arm_sequence_gate(std::string_view node_name, std::string_view fqn, std::uint64_t first_sequence)
+    {
+        if(detail::sequence_gate *gate = m_subscribed.gate_for(node_name, fqn))
+            gate->arm(first_sequence);
     }
 
     bool admit_gate(std::string_view node_name, std::string_view fqn)
@@ -109,7 +116,7 @@ public:
 private:
     subscriber_registry<channel_type> m_registry;
     std::vector<std::byte> m_control_scratch;
-    detail::keyed_set m_subscribed;
+    detail::demand_table m_subscribed;
     detail::keyed_refcount m_admitted;
     std::uint64_t m_next_sequence{0};
 };

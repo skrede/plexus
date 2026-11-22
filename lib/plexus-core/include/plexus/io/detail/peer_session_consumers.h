@@ -66,7 +66,7 @@ void on_unidirectional_received(Session &s, const wire::frame_header &hdr, std::
     const deliver_verdict verdict = deliver_session_data(s, hdr, inner);
     if(verdict == deliver_verdict::undecodable)
         return report_malformed(s);
-    if(verdict == deliver_verdict::unsolicited || !s.is_complete())
+    if(verdict == deliver_verdict::unsolicited || verdict == deliver_verdict::duplicate || !s.is_complete())
         return;
     originate_if_pubsub(s, hdr, inner);
 }

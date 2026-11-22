@@ -46,13 +46,15 @@ Result deliver_to_sink(Session &s, const wire::frame_header &hdr, Deliver &&deli
 }
 
 // Relayed data is gated on what this node demanded from the relay session (no demand is ever held against an origin
-// reached only through a relay) and attributes the passed source, never a node_id read from the frame body.
+// reached only through a relay) and attributes the passed source, never a node_id read from the frame body. It skips
+// the sequence gate: one relay session interleaves many origins' sequences, which the forward gate dedups per origin.
 template<typename Session>
 bool deliver_data_with_source(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner, const node_id &source)
 {
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
-    const deliver_outcome outcome  = deliver_to_sink<deliver_outcome>(s, hdr, [&](const message_info &info, auto &&sink)
-                                                                      { return s.m_messages.deliver_demanded(s.m_msg_peer, inner, info, source, has_source_identity, sink); });
+    const deliver_outcome outcome =
+            deliver_to_sink<deliver_outcome>(s, hdr, [&](const message_info &info, auto &&sink)
+                                             { return s.m_messages.deliver_demanded(s.m_msg_peer, sequence_gating::ungated, inner, info, source, has_source_identity, sink); });
     if(outcome.verdict == deliver_verdict::unsolicited)
         detail::note_unsolicited(s, outcome.topic_hash);
     return outcome.verdict != deliver_verdict::undecodable;
@@ -64,10 +66,13 @@ template<typename Session>
 deliver_verdict deliver_session_data(Session &s, const wire::frame_header &hdr, std::span<const std::byte> inner)
 {
     const bool has_source_identity = (hdr.flags & wire::k_flag_source_identity) != 0;
-    const deliver_outcome outcome  = deliver_to_sink<deliver_outcome>(s, hdr, [&](const message_info &info, auto &&sink)
-                                                                      { return s.m_messages.deliver_demanded(s.m_msg_peer, inner, info, s.m_ctx.peer_id, has_source_identity, sink); });
+    const deliver_outcome outcome =
+            deliver_to_sink<deliver_outcome>(s, hdr, [&](const message_info &info, auto &&sink)
+                                             { return s.m_messages.deliver_demanded(s.m_msg_peer, sequence_gating::gated, inner, info, s.m_ctx.peer_id, has_source_identity, sink); });
     if(outcome.verdict == deliver_verdict::unsolicited)
         detail::note_unsolicited(s, outcome.topic_hash);
+    if(outcome.verdict == deliver_verdict::duplicate)
+        detail::report_drop(s, drop_cause::replay, outcome.topic_hash);
     return outcome.verdict;
 }
 
