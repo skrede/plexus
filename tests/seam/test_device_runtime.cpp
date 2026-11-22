@@ -1,8 +1,4 @@
-// Host proof for the constrained-target device facade: drives the borrow-only
-// tick/run loop discipline over a fake pollable and a host-driven freertos_executor.
-// The host shim's no-op vTaskDelay makes the park compile and run off-target, so the
-// poll->drain->park ordering, the single-drain/single-park multi-pollable semantics,
-// and the non-zero park floor are all asserted without hardware.
+// The host shim's vTaskDelay is a no-op, so the park compiles and runs off-target.
 
 #include "plexus/freertos/run_task.h"
 #include "plexus/freertos/device_runtime.h"
