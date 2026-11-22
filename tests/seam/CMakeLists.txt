@@ -17,7 +17,7 @@ plexus_add_catch_test(test_uart_channel_cap
     LINKS plexus::core plexus::wire plexus::freertos)
 
 plexus_add_catch_test(test_device_runtime
-    SOURCES test_device_runtime.cpp
+    SOURCES test_device_runtime.cpp test_device_runtime_second_tu.cpp
     LINKS plexus::core plexus::wire plexus::freertos)
 
 plexus_add_catch_test(test_lwip_channel_compile
