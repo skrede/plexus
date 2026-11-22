@@ -24,6 +24,10 @@ plexus_add_catch_test(test_lwip_channel_compile
     SOURCES test_lwip_channel_compile.cpp
     LINKS plexus::core plexus::wire plexus::freertos)
 
+plexus_add_catch_test(test_lwip_congestion_refusal_seam
+    SOURCES test_lwip_congestion_refusal_seam.cpp
+    LINKS plexus::core plexus::wire plexus::freertos)
+
 # The host loopback pair is a genuine POSIX stream socket (host_tcp_socket.h pulls netinet/in.h), so these slices
 # are excluded from the Windows build.
 if(NOT WIN32)
