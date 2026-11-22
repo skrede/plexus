@@ -284,6 +284,10 @@ private:
     template<typename S>
     friend void detail::register_handshake_consumers(S &);
     template<typename S>
+    friend void detail::on_handshake_request_received(S &, std::span<const std::byte>);
+    template<typename S>
+    friend void detail::on_handshake_response_received(S &, std::span<const std::byte>);
+    template<typename S>
     friend void detail::fold_topic_edge(S &, std::string_view, std::string_view, std::optional<std::uint64_t>, graph::topic_role);
     template<typename S>
     friend void detail::on_subscribe_received(S &, std::span<const std::byte>);
