@@ -588,8 +588,7 @@ private:
                                 std::optional<io::topic_capture_rule> capture = std::nullopt)
     {
         m_engine.messages().declare(fqn, qos, type_id, emit_source_identity, type_name, schema_hint);
-        if(capture)
-            m_engine.capture().set_topic(wire::fqn_topic_hash(fqn), *capture);
+        m_engine.capture().declare_topic(wire::fqn_topic_hash(fqn), capture);
         m_engine.post_endpoint(fqn, {io::endpoint_edge::publisher_declared, wire::fqn_topic_hash(fqn), type_id, type_name, schema_hint});
         const std::size_t effective_bytes = io::effective_max(qos, m_max_message_bytes);
         detail::provision_same_host_ring(*this, fqn, effective_bytes, geometry);

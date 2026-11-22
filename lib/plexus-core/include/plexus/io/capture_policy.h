@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_CAPTURE_POLICY_H
 
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 
 namespace plexus::io {
@@ -35,6 +36,12 @@ struct topic_capture_rule
 
 class capture_policy
 {
+    struct decimation_state
+    {
+        std::uint32_t counter;
+        std::uint64_t last_emit_ns;
+    };
+
 public:
     void set_default(topic_capture_rule rule)
     {
@@ -46,9 +53,23 @@ public:
         return m_default;
     }
 
+    void track(std::uint64_t hash)
+    {
+        m_decimation.try_emplace(hash);
+    }
+
     void set_topic(std::uint64_t hash, topic_capture_rule rule)
     {
+        track(hash);
         m_rules[hash] = rule;
+    }
+
+    void declare_topic(std::uint64_t hash, std::optional<topic_capture_rule> rule)
+    {
+        if(rule)
+            set_topic(hash, *rule);
+        else
+            track(hash);
     }
 
     topic_capture_rule rule_for(std::uint64_t hash) const noexcept
@@ -69,21 +90,25 @@ public:
         return m_observers_present > 0 || !m_rules.empty();
     }
 
-    // Mutates the per-topic decimation state (counter or last-emit stamp).
+    // Mutates the per-topic decimation state (counter or last-emit stamp). An untracked topic is never decimated:
+    // creating its state here would allocate on the publish path.
     bool wants_payload(std::uint64_t hash, std::uint64_t now_ns) noexcept
     {
         const topic_capture_rule rule = rule_for(hash);
         if(rule.fidelity < capture_fidelity::payload)
             return false;
+        const auto it = m_decimation.find(hash);
+        if(it == m_decimation.end())
+            return true;
+        decimation_state &state = it->second;
         if(rule.mode == decimation_mode::count_n)
         {
             const std::uint32_t n = rule.decimation == 0 ? 1 : rule.decimation;
-            return (++m_counters[hash] % n) == 0;
+            return (++state.counter % n) == 0;
         }
-        std::uint64_t &last = m_last_emit_ns[hash];
-        if(now_ns - last < rule.window_ns && last != 0)
+        if(now_ns - state.last_emit_ns < rule.window_ns && state.last_emit_ns != 0)
             return false;
-        last = now_ns == 0 ? 1 : now_ns;
+        state.last_emit_ns = now_ns == 0 ? 1 : now_ns;
         return true;
     }
 
@@ -106,8 +131,7 @@ public:
 private:
     topic_capture_rule m_default{};
     std::unordered_map<std::uint64_t, topic_capture_rule> m_rules;
-    std::unordered_map<std::uint64_t, std::uint32_t> m_counters;
-    std::unordered_map<std::uint64_t, std::uint64_t> m_last_emit_ns;
+    std::unordered_map<std::uint64_t, decimation_state> m_decimation;
     std::size_t m_observers_present{0};
 };
 
