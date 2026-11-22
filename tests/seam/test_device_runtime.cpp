@@ -4,8 +4,8 @@
 // poll->drain->park ordering, the single-drain/single-park multi-pollable semantics,
 // and the non-zero park floor are all asserted without hardware.
 
-#include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/run_task.h"
+#include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 
