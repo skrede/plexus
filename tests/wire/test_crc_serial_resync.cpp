@@ -11,11 +11,6 @@
 #include <cstddef>
 #include <cstdint>
 
-// The corruption/resync/boundedness legs of the decorator oracle: a flipped trailer or header
-// byte is caught by the CRC and the link resyncs onto the next frame, and a lying oversized
-// payload_len stays bounded (no over-read, no over-alloc) and resyncs — all without ever
-// closing or aborting.
-
 using namespace crc_serial_test;
 
 TEST_CASE("crc_serial: a flipped trailer byte drops the frame and resyncs onto the next valid frame", "[wire][crc_serial]")
