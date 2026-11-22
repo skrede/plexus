@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_STREAM_TRANSPORT_H
 
 #include "plexus/asio/stream_channel.h"
+
 #include "plexus/asio/detail/dial_deadline.h"
 #include "plexus/asio/detail/asio_error_map.h"
 
@@ -12,6 +13,7 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/pending_dial_registry.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -40,14 +42,17 @@ public:
     {
         m_on_accepted_cb = std::move(cb);
     }
+
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> cb)
     {
         m_on_dialed_cb = std::move(cb);
     }
+
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
         m_on_dial_failed_cb = std::move(cb);
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);
@@ -123,6 +128,7 @@ protected:
     {
         return m_listener;
     }
+
     const Listener &listener() const noexcept
     {
         return m_listener;

@@ -15,16 +15,18 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/pending_dial_registry.h"
+
 #include "plexus/detail/compat.h"
 
-#include <asio/ip/tcp.hpp>
 #include <asio/io_context.hpp>
 
-#include <string>
+#include <asio/ip/tcp.hpp>
+
 #include <memory>
-#include <utility>
+#include <string>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <system_error>
 
 namespace plexus::tls {
@@ -64,6 +66,7 @@ public:
     {
         m_on_accepted_cb = std::move(cb);
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);

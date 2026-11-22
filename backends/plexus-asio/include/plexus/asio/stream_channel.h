@@ -3,6 +3,7 @@
 
 #include "plexus/asio/asio_timer.h"
 #include "plexus/asio/stream_socket_options.h"
+
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/stream_channel_io.h"
 #include "plexus/asio/detail/stream_consumer_hooks.h"
@@ -17,10 +18,13 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/egress_capacity.h"
+
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/detail/close_notification.h"
+
 #include "plexus/stream/detail/send_queue.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/write.hpp>
@@ -29,9 +33,9 @@
 
 #include <span>
 #include <vector>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <cstddef>
 #include <system_error>
 
 namespace plexus::asio {
@@ -146,10 +150,12 @@ public:
     {
         return Traits::lowest_layer(m_stream);
     }
+
     decltype(auto) socket() const noexcept
     {
         return Traits::lowest_layer(m_stream);
     }
+
     // Idempotent: the accept path arms the read loop once (arm_on_accept -> start_read_loop); a
     // later transport/session start_read() must re-run mark_open + the socket-option apply but NOT
     // issue a SECOND async_read_some into the shared read buffer (two concurrent reads into one
@@ -177,18 +183,22 @@ public:
     {
         return m_congestion;
     }
+
     std::size_t dropped_count() const noexcept
     {
         return m_dropped;
     }
+
     std::size_t backpressured() const noexcept
     {
         return m_egress.queued_bytes();
     }
+
     std::size_t write_queue_capacity() const noexcept
     {
         return m_egress.capacity();
     }
+
     std::size_t outstanding_ops() const noexcept
     {
         return m_ops.count();
@@ -199,16 +209,19 @@ public:
         if(!m_egress.enqueue(bytes))
             detail::stream_on_write_queue_full(*this);
     }
+
     void enqueue_egress_owned(wire_bytes<> bytes)
     {
         if(!m_egress.enqueue(std::move(bytes)))
             detail::stream_on_write_queue_full(*this);
     }
+
     void enqueue_egress_unit(std::span<wire_bytes<>> nodes)
     {
         if(!m_egress.enqueue_unit(nodes))
             detail::stream_on_write_queue_full(*this);
     }
+
     void start_read_loop()
     {
         if(m_reading || m_ops.closing())
@@ -216,22 +229,27 @@ public:
         m_reading = true;
         detail::stream_do_read(*this);
     }
+
     void mark_open() noexcept
     {
         m_open = !m_ops.closing();
     }
+
     Stream &stream() noexcept
     {
         return m_stream;
     }
+
     void fail(const std::error_code &ec)
     {
         detail::stream_fail(*this, ec);
     }
+
     void begin_op() noexcept
     {
         m_ops.begin();
     }
+
     void end_op()
     {
         m_ops.end();
@@ -242,6 +260,7 @@ protected:
     {
         return m_bootstrap;
     }
+
     std::vector<std::byte> &read_buffer() noexcept
     {
         return m_read_buf;

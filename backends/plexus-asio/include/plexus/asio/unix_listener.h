@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_UNIX_LISTENER_H
 
 #include "plexus/asio/unix_channel.h"
+
 #include "plexus/asio/detail/unix_accept.h"
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/unix_private_bind.h"
@@ -13,16 +14,20 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/egress_capacity.h"
+
 #include "plexus/io/detail/retiring_table.h"
+
 #include "plexus/io/security/peer_cred_policy.h"
+
 #include "plexus/detail/compat.h"
 #include "plexus/detail/socket_compat.h"
 
 #include <asio/io_context.hpp>
+
 #include <asio/local/stream_protocol.hpp>
 
-#include <string>
 #include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -71,6 +76,7 @@ public:
     {
         m_on_accepted_cb = std::move(cb);
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);

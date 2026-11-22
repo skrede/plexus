@@ -7,12 +7,16 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/fragmentation.h"
+
 #include "plexus/io/detail/pending_ops.h"
+
 #include "plexus/datagram/detail/send_queue.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>
@@ -147,24 +151,29 @@ public:
     {
         return m_congestion;
     }
+
     std::size_t so_sndbuf() const noexcept
     {
         return m_so_sndbuf;
     }
+
     std::size_t so_rcvbuf() const noexcept
     {
         return m_so_rcvbuf;
     }
+
     std::size_t dropped_count() const noexcept
     {
         return m_dropped;
     }
+
     // Transient per-datagram send failures (unreachable destination, momentary buffer-full): best-effort UDP loss NOT
     // surfaced through on_error, so an unreachable port cannot storm the owner.
     std::size_t send_error_count() const noexcept
     {
         return m_send_errors;
     }
+
     // Spurious connection_reset on the recv path (a Windows ICMP port-unreachable surfacing as a
     // reset on the next recv): re-armed silently, NOT surfaced through on_error.
     std::size_t recv_reset_count() const noexcept

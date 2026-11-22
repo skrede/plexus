@@ -5,6 +5,7 @@
 #include "plexus/tls/tls_channel.h"
 #include "plexus/tls/tls_listener.h"
 #include "plexus/tls/tls_credential.h"
+
 #include "plexus/tls/detail/tls_context.h"
 #include "plexus/tls/detail/tls_transport_accept.h"
 
@@ -22,6 +23,7 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
@@ -86,14 +88,17 @@ public:
     {
         m_on_accepted_cb = std::move(cb);
     }
+
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>, const io::endpoint &)> cb)
     {
         m_on_dialed_cb = std::move(cb);
     }
+
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
         m_on_dial_failed_cb = std::move(cb);
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);
