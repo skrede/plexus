@@ -9,6 +9,7 @@
 #include "plexus/freertos/detail/lwip_dialer.h"
 #include "plexus/freertos/detail/null_acceptor.h"
 #include "plexus/freertos/detail/lwip_channel_views.h"
+#include "plexus/freertos/detail/lwip_channel_settings.h"
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
@@ -44,11 +45,7 @@ public:
             , m_dialer(ex)
             , m_rx_task(std::nullopt)
             , m_listening(false)
-            , m_read_buffer(read_buffer)
-            , m_max_message(max_message)
-            , m_reassembly_budget(reassembly_budget)
-            , m_egress_cap(egress_cap)
-            , m_congestion(congestion)
+            , m_channel_settings{read_buffer, max_message, reassembly_budget, egress_cap, congestion}
     {
     }
 
@@ -166,7 +163,8 @@ private:
             if(!socket.set_receive_timeout(m_rx_task->recv_timeout))
                 return nullptr;
         }
-        auto ch = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_read_buffer, m_max_message, m_reassembly_budget, m_egress_cap, m_congestion);
+        auto ch = std::make_unique<channel_type>(std::move(socket), m_executor, ep, m_channel_settings.read_buffer, m_channel_settings.max_message, m_channel_settings.reassembly_budget,
+                                                 m_channel_settings.egress_cap, m_channel_settings.congestion);
         if(m_rx_task && spawn_lwip_rx_task(*ch, m_executor, *m_rx_task) != pdTRUE)
             return nullptr;
         channel_type *view = ch.get();
@@ -181,11 +179,7 @@ private:
     detail::lwip_dialer<Socket, MaxClients> m_dialer;
     std::optional<rx_task_options> m_rx_task;
     bool m_listening;
-    std::size_t m_read_buffer;
-    std::size_t m_max_message;
-    std::size_t m_reassembly_budget;
-    std::size_t m_egress_cap;
-    plexus::io::congestion m_congestion;
+    detail::lwip_channel_settings m_channel_settings;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted_cb;
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const plexus::io::endpoint &)> m_on_dialed_cb;
     plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error_cb;
