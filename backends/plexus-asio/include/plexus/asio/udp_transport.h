@@ -17,6 +17,8 @@
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
 
+#include "plexus/io/detail/transport_congestion.h"
+
 #include "plexus/datagram/mtu_budget.h"
 
 #include "plexus/datagram/detail/udp_handshake_frame.h"
@@ -74,7 +76,7 @@ public:
             , m_reassembly_timeout(reassembly_timeout)
             , m_hs_ladder(hs_ladder)
             , m_arq_cfg(arq_cfg)
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_dials()
     {
         m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { detail::on_datagram(*this, from, bytes); });

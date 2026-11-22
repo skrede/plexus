@@ -21,6 +21,7 @@
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/detail/close_notification.h"
+#include "plexus/io/detail/transport_congestion.h"
 
 #include "plexus/datagram/mtu_budget.h"
 
@@ -85,7 +86,7 @@ public:
             , m_reassembly_budget(reassembly_budget)
             , m_reassembly_timeout(reassembly_timeout)
             , m_arq_cfg(arq_cfg)
-            , m_congestion(congestion)
+            , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_backpressure(std::max(backpressure_bytes, detail::backpressure_floor(max_message_bytes, max_payload)))
             , m_dropped(0)
             , m_mode(mode)
