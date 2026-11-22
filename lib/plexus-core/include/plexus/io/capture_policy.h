@@ -91,11 +91,13 @@ public:
     {
         ++m_observers_present;
     }
+
     void remove_observer() noexcept
     {
         if(m_observers_present > 0)
             --m_observers_present;
     }
+
     std::size_t observers_present() const noexcept
     {
         return m_observers_present;
