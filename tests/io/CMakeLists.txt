@@ -88,6 +88,13 @@ plexus_add_catch_test(test_move_only_function
     LINKS plexus::core
     PROPERTIES RUN_SERIAL TRUE)
 
+# Owns the single replaceable operator new (support/alloc_counter.h), so it is its own executable; RUN_SERIAL keeps
+# its zero-heap count immune to the contention of concurrent test processes.
+plexus_add_catch_test(test_capture_policy_alloc
+    SOURCES test_capture_policy_alloc.cpp
+    LINKS plexus::core
+    PROPERTIES RUN_SERIAL TRUE)
+
 # The interface selector is a core value type, but its resolver lives in the asio backend.
 if(PLEXUS_ENABLE_ASIO_BACKEND)
     plexus_add_catch_test(test_network_interface
