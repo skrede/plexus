@@ -84,11 +84,9 @@ public:
     }
 
 private:
-    // Send the gather, resuming past the bytes a prior turn already wrote (m_sent). The send_queue re-issues the SAME
-    // front-N nodes per turn and its completion IGNORES the bool and pops them on ANY call, so a soft short/zero send
-    // MUST NOT call done() — that would pop and discard the unsent tail (data loss / success-of-zero-bytes). On a soft
-    // stall stash the gather + completion and return; poll_egress() retries from m_sent. A hard close fires on_error.
-    // Only a fully-flushed gather resets the cursor and calls done(true).
+    // A soft short or zero send must not call done(): the send_queue re-issues the same front nodes each turn and its
+    // completion pops them whatever the bool says, so the unsent tail would be lost. The gather and completion are
+    // stashed and poll_egress() resumes past m_sent; only a fully flushed gather resets it and calls done(true).
     void drain_views(buffer_seq views, completion done)
     {
         std::size_t skip = m_sent;
