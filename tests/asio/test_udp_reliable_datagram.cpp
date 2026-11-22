@@ -1,5 +1,7 @@
 #include "test_udp_reliable_datagram_common.h"
 
+#include <stdexcept>
+
 using namespace udp_reliable_datagram_fixture;
 
 TEST_CASE("udp reliable_datagram: a 'udpr' dial mints reliable-mode channels on BOTH ends "
@@ -90,4 +92,14 @@ TEST_CASE("udp reliable_datagram: a message beyond the max-message size is rejec
     REQUIRE(dialed_error.has_value());
     REQUIRE(*dialed_error == pio::io_error::message_too_large);
     REQUIRE(dialed->is_open()); // rejected at publish, channel stays open
+}
+
+TEST_CASE("udp reliable_datagram: a transport or channel configured to drop its oldest frames is refused when built", "[udp][reliable_datagram]")
+{
+    ::asio::io_context io;
+    CHECK_THROWS_AS(pasio::udp_transport(io, pasio::udp_channel::default_max_payload, fast_hs, {}, pio::congestion::drop_oldest), std::runtime_error);
+
+    pasio::udp_server server{io};
+    const ::asio::ip::udp::endpoint dest{::asio::ip::address_v4::loopback(), 9};
+    CHECK_THROWS_AS(pasio::udp_channel(io, server, dest, pasio::udp_channel::default_max_payload, {}, pio::congestion::drop_oldest), std::runtime_error);
 }
