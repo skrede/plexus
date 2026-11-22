@@ -94,3 +94,16 @@ TEST_CASE("udp reliable_datagram: a transport or channel configured to drop its 
     const ::asio::ip::udp::endpoint dest{::asio::ip::address_v4::loopback(), 9};
     CHECK_THROWS_AS(pasio::udp_channel(io, server, dest, pasio::udp_channel::default_max_payload, {}, pio::congestion::drop_oldest), std::runtime_error);
 }
+
+TEST_CASE("udp reliable_datagram: a transport or channel whose fragment budget cannot carry the smallest fragment is refused when built", "[udp][reliable_datagram]")
+{
+    constexpr std::size_t smallest_budget = 142;
+    ::asio::io_context io;
+    CHECK_THROWS_AS(pasio::udp_transport(io, smallest_budget - 1, fast_hs), std::runtime_error);
+    CHECK_NOTHROW(pasio::udp_transport(io, smallest_budget, fast_hs));
+
+    pasio::udp_server server{io};
+    const ::asio::ip::udp::endpoint dest{::asio::ip::address_v4::loopback(), 9};
+    CHECK_THROWS_AS(pasio::udp_channel(io, server, dest, smallest_budget - 1), std::runtime_error);
+    CHECK_NOTHROW(pasio::udp_channel(io, server, dest, smallest_budget));
+}

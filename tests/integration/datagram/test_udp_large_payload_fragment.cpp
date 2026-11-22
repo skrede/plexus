@@ -100,7 +100,7 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
     // At the smallest fragment budget a 16 MiB message spans more fragments than a uint16 can count, so the uint32
     // frag_cnt is load-bearing while msg_id still advances once per message. The relay reads the headers on the wire,
     // so loss does not matter.
-    constexpr std::size_t budget     = 128u; // the fragment floor -> the largest count
+    constexpr std::size_t budget     = 142u; // the smallest budget a transport admits
     constexpr std::size_t payload    = 16u * 1024u * 1024u;
     constexpr std::size_t ceiling    = 20u * 1024u * 1024u;
     constexpr std::size_t reassembly = 48u * 1024u * 1024u;
