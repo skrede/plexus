@@ -1,12 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_DELIVER_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_DELIVER_H
 
-#include "plexus/io/message_info.h"
-#include "plexus/io/object_carrier.h"
-
 #include "plexus/io/detail/forwarder_deliver.h"
 #include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_unsolicited.h"
+
+#include "plexus/io/message_info.h"
+#include "plexus/io/object_carrier.h"
 
 #include "plexus/node_id.h"
 

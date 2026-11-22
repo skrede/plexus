@@ -1,15 +1,6 @@
 #ifndef HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 #define HPP_GUARD_PLEXUS_IO_MESSAGE_FORWARDER_H
 
-#include "plexus/policy.h"
-#include "plexus/node_id.h"
-#include "plexus/topic_qos.h"
-#include "plexus/wire_bytes.h"
-
-#include "plexus/detail/compat.h"
-
-#include "plexus/graph/topic_record.h"
-
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/message_info.h"
@@ -28,8 +19,8 @@
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/forward_gate.h"
 #include "plexus/io/detail/history_ring.h"
-#include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/forwarder_fan.h"
+#include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/detail/forwarder_demand.h"
 #include "plexus/io/detail/forwarder_fanout.h"
@@ -38,13 +29,22 @@
 #include "plexus/io/detail/forwarder_companion.h"
 #include "plexus/io/detail/forwarder_subscribe.h"
 
+#include "plexus/policy.h"
+#include "plexus/node_id.h"
+#include "plexus/topic_qos.h"
+#include "plexus/wire_bytes.h"
+
+#include "plexus/detail/compat.h"
+
+#include "plexus/graph/topic_record.h"
+
 #include "plexus/log/logger.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/data_frame.h"
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/peer_report.h"
 #include "plexus/wire/forwarded_frame.h"
 #include "plexus/wire/topic_declaration.h"
