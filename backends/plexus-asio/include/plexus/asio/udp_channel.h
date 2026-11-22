@@ -156,15 +156,18 @@ public:
     {
         m_on_data_cb = std::move(cb);
     }
+
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
         m_closed.install(std::move(cb));
         detail::udp_notify_closed(*this);
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);
     }
+
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
         m_on_protocol_close_cb = std::move(cb);
@@ -227,24 +230,29 @@ public:
     {
         return m_dest;
     }
+
     bool is_open() const noexcept
     {
         return m_open;
     }
+
     io::congestion congestion_mode() const noexcept
     {
         return m_congestion;
     }
+
     std::size_t dropped_count() const noexcept
     {
         return m_dropped;
     }
+
     // Byte-valued (not the frame count) so it shares the stream channel's occupancy contract and
     // the egress scheduler's byte-denominated low-water gate compares like with like.
     std::size_t backpressured() const noexcept
     {
         return m_backpressure.queued_bytes();
     }
+
     std::size_t write_queue_capacity() const noexcept
     {
         return m_backpressure.capacity();

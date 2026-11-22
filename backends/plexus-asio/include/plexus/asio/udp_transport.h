@@ -1,9 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_UDP_TRANSPORT_H
 #define HPP_GUARD_PLEXUS_ASIO_UDP_TRANSPORT_H
 
+#include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_channel.h"
-#include "plexus/asio/udp_policy.h"
+
 #include "plexus/asio/detail/asio_error_map.h"
 #include "plexus/asio/detail/asio_inbound_demux.h"
 #include "plexus/asio/detail/udp_transport_setup.h"
@@ -12,26 +13,30 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
-#include "plexus/datagram/mtu_budget.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/pending_dial_registry.h"
+
+#include "plexus/datagram/mtu_budget.h"
+
 #include "plexus/datagram/detail/udp_handshake_frame.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>
 #include <array>
 #include <chrono>
-#include <random>
 #include <memory>
+#include <random>
 #include <string>
 #include <vector>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <optional>
 #include <string_view>
 #include <system_error>
@@ -94,10 +99,12 @@ public:
     {
         m_on_accepted_cb = std::move(cb);
     }
+
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> cb)
     {
         m_on_dialed_cb = std::move(cb);
     }
+
     void on_dial_failed(plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> cb)
     {
         m_on_dial_failed_cb = std::move(cb);
@@ -109,6 +116,7 @@ public:
     {
         m_on_drop_cb = std::move(cb);
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);
