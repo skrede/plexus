@@ -1,13 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CONSUMERS_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CONSUMERS_H
 
-#include "plexus/io/frame_router.h"
-
 #include "plexus/io/detail/peer_session_gate.h"
-#include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_control.h"
+#include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_originate.h"
+
+#include "plexus/io/frame_router.h"
 
 #include "plexus/io/security/attach_facts.h"
 

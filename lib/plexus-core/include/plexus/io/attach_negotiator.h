@@ -1,10 +1,6 @@
 #ifndef HPP_GUARD_PLEXUS_IO_ATTACH_NEGOTIATOR_H
 #define HPP_GUARD_PLEXUS_IO_ATTACH_NEGOTIATOR_H
 
-#include "plexus/node_id.h"
-
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/host_identity.h"
 #include "plexus/io/security_seam.h"
 #include "plexus/io/security_event.h"
@@ -14,6 +10,10 @@
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/attach_policy.h"
 #include "plexus/io/security/cookie_secret.h"
+
+#include "plexus/node_id.h"
+
+#include "plexus/detail/compat.h"
 
 #include "plexus/wire/handshake.h"
 

@@ -1,10 +1,6 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_H
 
-#include "plexus/policy.h"
-
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/peer_kind.h"
@@ -36,6 +32,10 @@
 #include "plexus/io/detail/peer_session_unsolicited.h"
 
 #include "plexus/io/security/attach_policy.h"
+
+#include "plexus/policy.h"
+
+#include "plexus/detail/compat.h"
 
 #include "plexus/log/logger.h"
 
