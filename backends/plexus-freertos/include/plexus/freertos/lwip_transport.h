@@ -11,8 +11,8 @@
 #include "plexus/freertos/detail/lwip_channel_views.h"
 #include "plexus/freertos/detail/lwip_channel_settings.h"
 
-#include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
 
@@ -65,14 +65,17 @@ public:
     {
         m_on_accepted_cb = std::move(cb);
     }
+
     void on_dialed(plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const plexus::io::endpoint &)> cb)
     {
         m_on_dialed_cb = std::move(cb);
     }
+
     void on_dial_failed(plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> cb)
     {
         m_dialer.on_failed(std::move(cb));
     }
+
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);
