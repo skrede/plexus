@@ -5,6 +5,7 @@
 
 #include "plexus/asio/udp_channel.h"
 
+#include "plexus/wire/udp_ack.h"
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/io/detail/drop_event.h"
@@ -43,6 +44,14 @@ const std::array<std::byte, 16> k_payload{};
 std::vector<std::byte> best_effort_datagram()
 {
     return plexus::wire::wrap_udp(plexus::wire::udp_envelope_kind::best_effort, 0, k_payload);
+}
+
+// The segment at the channel's initial sequence, which its reliable receiver delivers in order and acks.
+std::vector<std::byte> first_reliable_segment()
+{
+    std::vector<std::byte> inner;
+    plexus::wire::encode_udp_segment_into(inner, k_payload);
+    return plexus::wire::wrap_udp(plexus::wire::udp_envelope_kind::reliable_arq, 0, inner);
 }
 
 }
@@ -134,8 +143,9 @@ TEST_CASE("udp_retire_drain a retired channel's posts and timers all complete be
         std::int32_t delivered = 0;
         h.channel->on_data([&delivered](std::span<const std::byte>) { ++delivered; });
         h.channel->send(k_payload);
-        plexus::testing::pump_until(h.io, [&] { return h.peer.available() != 0; }, 5s);
-        h.channel->deliver_inbound(best_effort_datagram());
+        // An idle send queue lets the delivery's ack complete before the erase instead of queueing behind this send.
+        plexus::testing::pump_until(h.io, [&] { return h.peer.available() != 0 && h.server.queued_send_bytes() == 0; }, 5s);
+        h.channel->deliver_inbound(first_reliable_segment());
 
         std::int32_t ran          = 0;
         std::int32_t ran_at_erase = -1;
