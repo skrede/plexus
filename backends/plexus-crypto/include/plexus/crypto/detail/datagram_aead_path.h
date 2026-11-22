@@ -1,6 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_CRYPTO_DETAIL_DATAGRAM_AEAD_PATH_H
 #define HPP_GUARD_PLEXUS_CRYPTO_DETAIL_DATAGRAM_AEAD_PATH_H
 
+#include "plexus/crypto/detail/aead_path.h"
+
 #include "plexus/crypto/aead_epoch.h"
 #include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/key_schedule.h"
@@ -32,17 +34,17 @@ void datagram_send(Ch &c, std::span<const std::byte> data)
 {
     if(data.size() < wire::header_size)
     {
-        // A frame too small to carry the AEAD-AAD header is a local malformed input, surfaced
-        // through the drop seam (the locally-sourced tier) so the caller observes the dropped send.
+        // A frame too small to carry the AEAD-AAD header is a local malformed input, surfaced through the local drop tier.
         emit_drop(c, io::detail::drop_cause::malformed, io::locality::local);
         return;
     }
     const auto header  = data.first(wire::header_size);
     const auto payload = data.subspan(wire::header_size);
 
+    if(c.m_send_seq >= c.m_rekey_threshold)
+        rekey_send(c);
     const std::uint64_t seq = c.m_send_seq++;
-    // Only 8 bits of epoch ride the wire, so seal masks to that domain to match the receiver's
-    // open.
+    // Only 8 bits of epoch ride the wire, so seal masks to that domain to match the receiver's open.
     const auto nonce = make_nonce(c.m_send_epoch & 0xffu, seq);
     if(!seal(c.m_cipher, c.m_send_key, nonce, header, payload, c.m_seal_scratch))
         return;

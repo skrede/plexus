@@ -102,3 +102,25 @@ TEST_CASE("crypto.datagram_replay rekeys its send direction at the usage thresho
     REQUIRE(delivered == 2);
     REQUIRE(receiver.tamper_dropped_count() == 0);
 }
+
+TEST_CASE("crypto.datagram_replay rekeys every two sends and the receiver follows each epoch", "[crypto][datagram_replay]")
+{
+    const auto keys = fixed_keys();
+
+    wire_lower send_wire;
+    datagram_authenticated_channel<wire_lower> sender(send_wire, aead_cipher_id::chacha20_poly1305, keys, 0, 2);
+    const auto kept = send_header_only(sender, send_wire, 6, 0);
+
+    REQUIRE(kept.size() == 6);
+    for(std::size_t i = 0; i < kept.size(); ++i)
+        REQUIRE(kept[i][8] == static_cast<std::byte>(i / 2));
+
+    wire_lower recv_wire;
+    datagram_authenticated_channel<wire_lower> receiver(recv_wire, aead_cipher_id::chacha20_poly1305, swapped(keys));
+    std::int32_t delivered = 0;
+    receiver.on_data([&](std::span<const std::byte>) { ++delivered; });
+    for(const auto &datagram : kept)
+        recv_wire.feed(std::span<const std::byte>{datagram});
+    REQUIRE(delivered == 6);
+    REQUIRE(receiver.tamper_dropped_count() == 0);
+}

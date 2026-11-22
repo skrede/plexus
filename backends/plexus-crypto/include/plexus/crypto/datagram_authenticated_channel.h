@@ -5,6 +5,7 @@
 #include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/key_schedule.h"
 
+#include "plexus/crypto/detail/aead_path.h"
 #include "plexus/crypto/detail/datagram_aead_path.h"
 
 #include "plexus/datagram/anti_replay_window.h"
@@ -39,13 +40,15 @@ template<typename Lower>
 class datagram_authenticated_channel
 {
 public:
-    datagram_authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys, std::uint32_t initial_epoch = 0)
+    datagram_authenticated_channel(Lower &lower, aead_cipher_id cipher, const derived_keys &keys, std::uint32_t initial_epoch = 0,
+                                   std::uint64_t rekey_threshold = k_rekey_message_threshold)
             : m_lower(lower)
             , m_cipher(cipher)
             , m_send_key(keys.k_send)
             , m_recv_key(keys.k_recv)
             , m_send_epoch(initial_epoch)
             , m_recv_epoch(initial_epoch)
+            , m_rekey_threshold(rekey_threshold)
     {
         wire_lower();
     }
@@ -124,6 +127,8 @@ public:
 
 private:
     template<typename C>
+    friend void detail::rekey_send(C &);
+    template<typename C>
     friend void detail::emit_drop(C &, io::detail::drop_cause, io::locality);
     template<typename C>
     friend void detail::datagram_send(C &, std::span<const std::byte>);
@@ -160,6 +165,7 @@ private:
     aead_key m_recv_key;
     std::uint32_t m_send_epoch;
     std::uint32_t m_recv_epoch;
+    std::uint64_t m_rekey_threshold;
     std::uint64_t m_send_seq{0};
     datagram::anti_replay_window<> m_window;
     std::size_t m_replay_dropped{0};
