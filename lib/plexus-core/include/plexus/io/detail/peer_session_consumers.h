@@ -4,6 +4,7 @@
 #include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_control.h"
 #include "plexus/io/detail/peer_session_deliver.h"
+#include "plexus/io/detail/peer_session_refusal.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_originate.h"
 
@@ -30,6 +31,8 @@ void on_handshake_request_received(Session &s, std::span<const std::byte> inner)
     s.m_negotiator.latch_peer_proof(*req);
     if(s.m_negotiator.posture_mismatched(*req))
         return refuse_posture(s);
+    if(s.m_negotiator.crypto_degraded())
+        return refuse_degraded(s);
     execute(s, s.m_fsm.on_request(*req, s.m_is_inbound_bootstrap, s.m_negotiator.facts()));
 }
 
@@ -43,6 +46,8 @@ void on_handshake_response_received(Session &s, std::span<const std::byte> inner
     s.m_negotiator.latch_peer_proof(*resp);
     if(s.m_negotiator.posture_mismatched(*resp))
         return refuse_posture(s);
+    if(s.m_negotiator.crypto_degraded())
+        return refuse_degraded(s);
     execute(s, s.m_fsm.on_response(*resp, s.m_negotiator.facts()));
 }
 

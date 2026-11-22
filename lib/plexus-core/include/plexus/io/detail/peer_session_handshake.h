@@ -55,18 +55,25 @@ void send_control(Session &s, wire::msg_type type)
 }
 
 template<typename Session>
-void send_handshake_request(Session &s)
+bool send_handshake_request(Session &s)
 {
+    if(s.m_negotiator.crypto_degraded())
+        return false;
     wire::encode_handshake_request_into(s.m_payload_scratch, self_request(s));
     send_control(s, wire::msg_type::handshake_req);
+    return true;
 }
 
 // The response is the one leg the local node proves on: a request carries no proof (a 1-RTT
 // PSK dialer cannot prove before seeing the responder's nonce). The proof MACs the dialer's
 // facts-view so the dialer, recomputing under the shared PSK with its mirror view, matches.
+// Nothing is sent when the local RNG or MAC failed.
 template<typename Session>
-void send_handshake_response(Session &s, handshake_outcome outcome)
+bool send_handshake_response(Session &s, handshake_outcome outcome)
 {
+    const auto proof = s.m_negotiator.response_proof();
+    if(!proof || s.m_negotiator.crypto_degraded())
+        return false;
     const auto r = self_request(s);
     wire::handshake_response resp{.id                       = r.id,
                                   .version_major            = r.version_major,
@@ -79,10 +86,11 @@ void send_handshake_response(Session &s, handshake_outcome outcome)
                                   .own_nonce                = r.own_nonce,
                                   .cipher_offer             = r.cipher_offer,
                                   .chosen_cipher            = r.chosen_cipher,
-                                  .proof                    = s.m_negotiator.response_proof(),
+                                  .proof                    = *proof,
                                   .status                   = status_for(outcome)};
     wire::encode_handshake_response_into(s.m_payload_scratch, resp);
     send_control(s, wire::msg_type::handshake_resp);
+    return true;
 }
 
 }

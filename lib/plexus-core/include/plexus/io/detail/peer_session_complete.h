@@ -28,6 +28,13 @@ void on_complete(Session &s);
 template<typename Session>
 void demote_loser(Session &s);
 
+// Defined in peer_session_refusal.h, which builds on the event helpers below.
+template<typename Session>
+void refuse_posture(Session &s);
+
+template<typename Session>
+void refuse_degraded(Session &s);
+
 template<typename Session>
 peer_kind session_kind(const Session &s) noexcept
 {
@@ -82,15 +89,6 @@ bool channel_is_self_securing(const Session &s)
     return scheme == "tls" || scheme == "dtls";
 }
 
-template<typename Session>
-void refuse_posture(Session &s)
-{
-    s.m_negotiator.clear_identity();
-    fire_lifecycle(s, lifecycle_edge::rejected, handshake_outcome::reject_unauthorized);
-    fire_security(s, security_kind::posture_mismatch);
-    s.close_for_protocol_error(wire::close_cause::invalid_magic);
-}
-
 // Fire rejected carrying the refusal reason BEFORE the close. An abort is an un-established
 // session, so tear_down's prior-complete guard suppresses disconnected — only rejected fires.
 template<typename Session>
@@ -125,9 +123,13 @@ void execute(Session &s, const fsm_step_result &step)
     switch(step.action)
     {
         case fsm_action::send_request:
-            return send_handshake_request(s);
+            if(!send_handshake_request(s))
+                refuse_degraded(s);
+            return;
         case fsm_action::send_response:
-            return send_handshake_response(s, step.outcome);
+            if(!send_handshake_response(s, step.outcome))
+                refuse_degraded(s);
+            return;
         case fsm_action::complete:
             return on_complete(s);
         case fsm_action::retry:
@@ -173,8 +175,8 @@ void on_complete(Session &s)
 {
     if(s.m_forwarders_installed)
         return;
-    if(s.m_is_inbound_bootstrap)
-        send_handshake_response(s, handshake_outcome::accept_inbound);
+    if(s.m_is_inbound_bootstrap && !send_handshake_response(s, handshake_outcome::accept_inbound))
+        return refuse_degraded(s);
     s.m_session_timer.cancel();
     s.m_session_id = s.m_ctx.epochs.next();
     record_same_host(s);

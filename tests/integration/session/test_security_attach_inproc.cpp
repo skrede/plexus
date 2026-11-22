@@ -677,6 +677,7 @@ TEST_CASE("io.security_attach a responder whose entropy fails refuses the attach
     REQUIRE_FALSE(saw_edge(l.resp_lifecycle, lifecycle_edge::connected));
     REQUIRE(count_rejected(l.resp_lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE(l.resp_installs == 0);
+    REQUIRE(count_kind(l.resp_security, security_kind::local_crypto_failure) == 1);
     REQUIRE_FALSE(l.requester->is_complete());
 }
 
@@ -691,6 +692,7 @@ TEST_CASE("io.security_attach a responder whose proof MAC fails refuses locally 
     REQUIRE_FALSE(saw_edge(l.resp_lifecycle, lifecycle_edge::connected));
     REQUIRE(count_rejected(l.resp_lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE(l.resp_installs == 0);
+    REQUIRE(count_kind(l.resp_security, security_kind::local_crypto_failure) == 1);
     REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 0);
 }
 
@@ -706,6 +708,7 @@ TEST_CASE("io.security_attach a session whose transcript MAC fails refuses the a
     REQUIRE_FALSE(saw_edge(l.resp_lifecycle, lifecycle_edge::connected));
     REQUIRE(count_rejected(l.resp_lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE(l.resp_installs == 0);
+    REQUIRE(count_kind(l.resp_security, security_kind::local_crypto_failure) == 1);
 }
 
 TEST_CASE("io.security_attach a dialer whose entropy fails refuses locally before it sends its request", "[io][security_attach]")
@@ -719,6 +722,7 @@ TEST_CASE("io.security_attach a dialer whose entropy fails refuses locally befor
     REQUIRE_FALSE(saw_edge(l.req_lifecycle, lifecycle_edge::connected));
     REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE(l.req_installs == 0);
+    REQUIRE(count_kind(l.req_security, security_kind::local_crypto_failure) == 1);
     REQUIRE_FALSE(l.responder->is_complete());
 }
 
@@ -733,5 +737,6 @@ TEST_CASE("io.security_attach a dialer whose transcript MAC fails refuses locall
     REQUIRE_FALSE(l.requester->is_complete());
     REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE(l.req_installs == 0);
+    REQUIRE(count_kind(l.req_security, security_kind::local_crypto_failure) == 1);
     REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 0);
 }

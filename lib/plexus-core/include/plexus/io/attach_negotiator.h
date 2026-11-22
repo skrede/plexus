@@ -33,6 +33,7 @@ public:
         security::attach_facts facts{};
         security_negotiation negotiation{};
         bool engaged{false};
+        bool crypto_failed{false};
     };
 
     void on_install_security(plexus::detail::move_only_function<void(const security_negotiation &)> cb)
@@ -61,11 +62,10 @@ public:
     }
 
     // Mint own_nonce ONCE so the SAME value feeds self_request, the transcript, and the proof; a
-    // degraded RNG leaves the nonce zeroed.
+    // degraded RNG is latched so the attach is refused before the zero nonce is sent.
     void prime() noexcept
     {
-        if(m_rand)
-            (void)m_rand(m_own_nonce);
+        m_pending_attach.crypto_failed = m_rand && !m_rand(m_own_nonce);
         if(m_prover.engaged())
             m_key_id = m_prover.key_id();
     }
@@ -100,6 +100,11 @@ public:
         return m_install_security_seam != nullptr && m_install_security_seam->engaged();
     }
 
+    bool crypto_degraded() const noexcept
+    {
+        return m_pending_attach.crypto_failed && (seam_engaged() || m_prover.engaged());
+    }
+
     // A gate refusal on a SECURED pair is a transcript-bound proof failure (a forced downgrade);
     // a refusal with no security posture is a plain unauthorized attach.
     security_kind classify_unauthorized() const noexcept
@@ -108,13 +113,14 @@ public:
     }
 
     // The peer's own_nonce is, from the local standpoint, the peer_nonce the proof must cover
-    // (anti-reflection); ids and nonces are pinned by local role.
+    // (anti-reflection); ids and nonces are pinned by local role. A failed RNG or transcript MAC stays latched.
     template<typename Frame>
     void assemble(const Frame &frame, security::attach_role local_role, const node_id &peer_id, const node_id &self_id, bool policy_engaged)
     {
         pending_attach out;
-        detail::assemble_pending(out, m_own_nonce, m_install_security_seam, policy_engaged && seam_engaged(), frame, local_role, peer_id, self_id);
-        m_pending_attach = out;
+        const bool computed = detail::assemble_pending(out, m_own_nonce, m_install_security_seam, policy_engaged && seam_engaged(), frame, local_role, peer_id, self_id);
+        out.crypto_failed   = m_pending_attach.crypto_failed || !computed;
+        m_pending_attach    = out;
     }
 
     // Latch the wire proof into a stable member buffer; a span into the transient decoded frame
@@ -135,8 +141,8 @@ public:
     }
 
     // Reconstruct the dialer's attach_facts view (role and nonces swapped to the dialer's
-    // standpoint) and MAC it under the shared PSK; a disengaged prover returns a zero proof.
-    std::array<std::byte, wire::k_handshake_proof_len> response_proof() const
+    // standpoint) and MAC it under the shared PSK; a disengaged prover returns a zero proof, a failed MAC none.
+    std::optional<std::array<std::byte, wire::k_handshake_proof_len>> response_proof() const
     {
         return detail::response_proof(m_prover, m_pending_attach.facts);
     }

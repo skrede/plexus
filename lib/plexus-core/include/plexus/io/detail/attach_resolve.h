@@ -12,6 +12,7 @@
 #include <array>
 #include <cstddef>
 #include <utility>
+#include <optional>
 
 namespace plexus::io::detail {
 
@@ -19,7 +20,7 @@ namespace plexus::io::detail {
 // order) into the digest: a stripped/forced offer changes the digest, hence the recomputed
 // proof and derived keys (downgrade refusal).
 template<typename Frame>
-void compute_transcript(const security_seam &seam, security::attach_facts &facts, const security_negotiation &negotiation, const Frame &frame)
+bool compute_transcript(const security_seam &seam, security::attach_facts &facts, const security_negotiation &negotiation, const Frame &frame)
 {
     std::array<std::byte, 1 + 1 + 1 + 16 + 16> transcript{};
     std::size_t n   = 0;
@@ -31,14 +32,16 @@ void compute_transcript(const security_seam &seam, security::attach_facts &facts
     for(auto b : negotiation.responder_nonce)
         transcript[n++] = b;
     std::array<std::byte, 32> digest{};
-    if(seam.compute(transcript, digest))
-        facts.transcript_digest = digest;
+    if(!seam.compute(transcript, digest))
+        return false;
+    facts.transcript_digest = digest;
+    return true;
 }
 
 // The peer's own_nonce is, locally, the peer_nonce the proof must cover (anti-reflection);
-// initiator/responder ids and nonces are pinned by local role.
+// initiator/responder ids and nonces are pinned by local role. False when the transcript MAC fails.
 template<typename Pending, typename Frame>
-void assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce, const security_seam *seam, bool engaged, const Frame &frame, security::attach_role local_role,
+bool assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce, const security_seam *seam, bool engaged, const Frame &frame, security::attach_role local_role,
                       const node_id &peer_id, const node_id &self_id)
 {
     const bool initiator            = local_role == security::attach_role::initiator;
@@ -54,22 +57,24 @@ void assemble_pending(Pending &out, const std::array<std::byte, 16> &own_nonce, 
     out.facts.peer_nonce            = frame.own_nonce;
     out.facts.own_nonce             = own_nonce;
     out.facts.role                  = local_role;
-    if(out.engaged)
-        compute_transcript(*seam, out.facts, out.negotiation, frame);
+    if(out.engaged && !compute_transcript(*seam, out.facts, out.negotiation, frame))
+        return false;
     out.negotiation.transcript_digest = out.facts.transcript_digest;
+    return true;
 }
 
 // Reconstruct the dialer's attach_facts view (role and nonces swapped to its standpoint) and
-// MAC it under the shared PSK. A disengaged prover returns a zero proof.
+// MAC it under the shared PSK. A disengaged prover returns a zero proof, a failed MAC none.
 template<typename Prover>
-std::array<std::byte, wire::k_handshake_proof_len> response_proof(const Prover &prover, security::attach_facts dialer_view)
+std::optional<std::array<std::byte, wire::k_handshake_proof_len>> response_proof(const Prover &prover, security::attach_facts dialer_view)
 {
     std::array<std::byte, wire::k_handshake_proof_len> proof{};
     if(!prover.engaged())
         return proof;
     dialer_view.role = security::attach_role::initiator;
     std::swap(dialer_view.peer_nonce, dialer_view.own_nonce);
-    (void)prover.prove(dialer_view, proof);
+    if(!prover.prove(dialer_view, proof))
+        return std::nullopt;
     return proof;
 }
 

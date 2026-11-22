@@ -328,6 +328,8 @@ private:
     template<typename S>
     friend void detail::refuse_posture(S &);
     template<typename S>
+    friend void detail::refuse_degraded(S &);
+    template<typename S>
     friend bool detail::channel_is_self_securing(const S &);
     template<typename S>
     friend void detail::fire_connect_edge(S &);
@@ -348,9 +350,9 @@ private:
     template<typename S>
     friend void detail::send_control(S &, wire::msg_type);
     template<typename S>
-    friend void detail::send_handshake_request(S &);
+    friend bool detail::send_handshake_request(S &);
     template<typename S>
-    friend void detail::send_handshake_response(S &, handshake_outcome);
+    friend bool detail::send_handshake_response(S &, handshake_outcome);
     template<typename S>
     friend void detail::tear_down_session(S &);
     template<typename S>
