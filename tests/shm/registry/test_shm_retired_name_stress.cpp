@@ -12,10 +12,12 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <string>
 #include <thread>
 #include <cstddef>
 #include <cstdint>
+#include <algorithm>
 
 namespace {
 
@@ -29,10 +31,19 @@ using plexus::testing::native_broker;
 constexpr std::uint32_t k_rounds    = 10000;
 constexpr std::uint32_t k_round_cap = 10 * k_rounds;
 
+constexpr std::chrono::seconds k_dwell{1};
+constexpr std::chrono::seconds k_dwell_budget{10};
+
 struct tally
 {
     std::uint32_t acquired   = 0;
     std::uint32_t mismatched = 0;
+};
+
+struct progress
+{
+    std::atomic<std::uint32_t> unacquired;
+    std::atomic<std::uint32_t> unread;
 };
 
 bool names_held_ring(native_broker &broker, const std::string &name, const ring_holder &holder)
@@ -41,23 +52,41 @@ bool names_held_ring(native_broker &broker, const std::string &name, const ring_
     return broker.attach(name, fresh) == plexus::shm::region_status::ok && plexus::shm::detail::ring_names::identity_of(fresh.bytes()) == holder.bound_identity();
 }
 
+// A reader acquires only while a publisher's ring stays live through its cursor claim, which a free-running publisher
+// rarely leaves time for, so until every reader has acquired once a publisher holds each ring it acquires for up to
+// k_dwell. The budget turns a reader that never acquires into a failure, not a hang.
+std::chrono::steady_clock::duration dwell(const progress &state)
+{
+    const auto start = std::chrono::steady_clock::now();
+    while(state.unread.load() > 0 && std::chrono::steady_clock::now() - start < k_dwell)
+        std::this_thread::sleep_for(std::chrono::microseconds{50});
+    return std::chrono::steady_clock::now() - start;
+}
+
 // One registry of its own in one role, retiring the ring whenever its release leaves no holder, while the other registry
-// does the same in the other role. A reader acquires only while a publisher's ring exists, so every thread churns past
-// k_rounds until each has acquired once, and the cap turns a thread that never acquires into a failure, not a hang.
-tally churn(const std::string &fqn, const std::string &name, ring_role role, std::atomic<std::uint32_t> &unacquired)
+// does the same in the other role. Every thread churns past k_rounds until each has acquired once, and the cap turns a
+// thread that never acquires into a failure, not a hang.
+tally churn(const std::string &fqn, const std::string &name, ring_role role, progress &state)
 {
     wake_bus bus;
     ring_holder holder{bus, fqn};
     native_broker broker;
     tally counted;
-    for(std::uint32_t round = 0; round < k_round_cap && (round < k_rounds || unacquired.load() > 0); ++round)
+    std::chrono::steady_clock::duration dwelt{};
+    for(std::uint32_t round = 0; round < k_round_cap && (round < k_rounds || state.unacquired.load() > 0); ++round)
     {
         if(holder.acquire(role) == acquire_result::failed)
             continue;
         if(++counted.acquired == 1)
-            unacquired.fetch_sub(1);
+        {
+            state.unacquired.fetch_sub(1);
+            if(role == ring_role::consumer)
+                state.unread.fetch_sub(1);
+        }
         if(!names_held_ring(broker, name, holder))
             ++counted.mismatched;
+        if(role == ring_role::producer && dwelt < k_dwell_budget)
+            dwelt += dwell(state);
         holder.release(role);
     }
     return counted;
@@ -68,9 +97,9 @@ std::array<tally, N> churn_together(const ring_view &view, const std::array<ring
 {
     std::array<tally, N> counted{};
     std::array<std::thread, N> threads;
-    std::atomic<std::uint32_t> unacquired{N};
+    progress state{N, static_cast<std::uint32_t>(std::ranges::count(roles, ring_role::consumer))};
     for(std::size_t i = 0; i < N; ++i)
-        threads[i] = std::thread([&counted, &view, &roles, &unacquired, i] { counted[i] = churn(view.fqn, view.name, roles[i], unacquired); });
+        threads[i] = std::thread([&counted, &view, &roles, &state, i] { counted[i] = churn(view.fqn, view.name, roles[i], state); });
     for(std::thread &thread : threads)
         thread.join();
     return counted;
