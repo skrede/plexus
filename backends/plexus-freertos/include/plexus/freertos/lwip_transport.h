@@ -16,6 +16,8 @@
 #include "plexus/io/congestion.h"
 #include "plexus/io/transport_backend.h"
 
+#include "plexus/io/detail/transport_congestion.h"
+
 #include "plexus/detail/compat.h"
 
 #include <chrono>
@@ -45,7 +47,7 @@ public:
             , m_dialer(ex)
             , m_rx_task(std::nullopt)
             , m_listening(false)
-            , m_channel_settings{read_buffer, max_message, reassembly_budget, egress_cap, congestion}
+            , m_channel_settings{read_buffer, max_message, reassembly_budget, egress_cap, plexus::io::detail::checked_transport_congestion(congestion)}
     {
     }
 
