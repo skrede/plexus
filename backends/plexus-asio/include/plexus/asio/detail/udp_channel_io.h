@@ -28,7 +28,13 @@ namespace plexus::asio::detail {
 
 inline bool sends_fragmented(std::size_t size, std::size_t max_payload) noexcept
 {
-    return size + wire::udp_envelope_overhead + 1 > max_payload;
+    return size + wire::udp_envelope_overhead + wire::udp_segment_marker_size > max_payload;
+}
+
+// A reliable fragment carries the segment marker inside its envelope, so it is split against the budget less that byte.
+inline std::size_t reliable_fragment_budget(std::size_t max_payload) noexcept
+{
+    return max_payload > wire::udp_segment_marker_size ? max_payload - wire::udp_segment_marker_size : 0;
 }
 
 // The bytes a ceiling-sized message parks behind a full window; an unlimited ceiling saturates.
@@ -36,7 +42,7 @@ inline std::size_t backpressure_floor(std::size_t max_message_bytes, std::size_t
 {
     if(!sends_fragmented(max_message_bytes, max_payload))
         return max_message_bytes;
-    const std::size_t subheaders = std::size_t{io::fragment_count(max_message_bytes, max_payload)} * wire::udp_fragment_subheader;
+    const std::size_t subheaders = std::size_t{io::fragment_count(max_message_bytes, reliable_fragment_budget(max_payload))} * wire::udp_fragment_subheader;
     return max_message_bytes > std::numeric_limits<std::size_t>::max() - subheaders ? std::numeric_limits<std::size_t>::max() : max_message_bytes + subheaders;
 }
 
@@ -167,17 +173,18 @@ typename Ch::submit_result send_reliable_large(Ch &c, std::span<const std::byte>
         return Ch::submit_result::window_full;
     }
     ensure_arq(c);
-    const std::uint32_t count = io::fragment_count(payload.size(), c.m_max_payload);
+    const std::size_t budget  = reliable_fragment_budget(c.m_max_payload);
+    const std::uint32_t count = io::fragment_count(payload.size(), budget);
     const std::size_t room    = c.m_arq->window_room();
     if(count > room)
     {
-        const std::size_t parked = io::fragment_tail_size(payload.size(), c.m_max_payload, room) + (count - room) * wire::udp_fragment_subheader;
+        const std::size_t parked = io::fragment_tail_size(payload.size(), budget, room) + (count - room) * wire::udp_fragment_subheader;
         if(refuses_overflow(c, parked))
             return Ch::submit_result::window_full;
     }
     const std::uint16_t msg_id = c.m_out_msg_id++;
     io::fragment_sink sink     = [&c, msg_id](std::uint32_t idx, std::uint32_t cnt, std::span<const std::byte> slice) { submit_reliable_fragment(c, msg_id, idx, cnt, slice); };
-    io::split(payload, c.m_max_payload, msg_id, sink);
+    io::split(payload, budget, msg_id, sink);
     return Ch::submit_result::admitted;
 }
 

@@ -80,11 +80,13 @@ inline std::optional<udp_ack> decode_udp_ack(std::span<const std::byte> frame)
     return ack;
 }
 
+constexpr std::size_t udp_segment_marker_size = 1;
+
 // Wrap a reliable data payload behind the segment marker: [segment-marker:1][payload]. Reused
 // caller buffer.
 inline void encode_udp_segment_into(std::vector<std::byte> &out, std::span<const std::byte> payload)
 {
-    out.resize(1 + payload.size());
+    out.resize(udp_segment_marker_size + payload.size());
     writer w{out};
     w.u8(static_cast<std::uint8_t>(udp_arq_kind::segment));
     w.bytes(payload);

@@ -19,7 +19,7 @@ namespace {
 using submit_result = pasio::udp_channel::submit_result;
 
 constexpr std::size_t k_budget  = 256;
-constexpr std::size_t k_slice   = pio::effective_fragment_budget(k_budget);
+constexpr std::size_t k_slice   = pio::effective_fragment_budget(k_budget - wire::udp_segment_marker_size);
 constexpr std::size_t k_frame   = k_slice + wire::udp_fragment_subheader;
 constexpr std::size_t k_payload = 6 * k_slice;
 
