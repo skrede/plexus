@@ -129,11 +129,11 @@ hmac_fn real_keyed_hmac()
             return false;
         for(std::size_t i = 0; i < out.size(); ++i)
         {
-            unsigned acc = 0x811c9dc5u + static_cast<unsigned>(i);
+            std::uint32_t acc = 0x811c9dc5u + static_cast<std::uint32_t>(i);
             for(std::size_t k = 0; k < key.size(); ++k)
-                acc = (acc ^ std::to_integer<unsigned>(key[k])) * 0x01000193u + static_cast<unsigned>(k);
+                acc = (acc ^ std::to_integer<std::uint32_t>(key[k])) * 0x01000193u + static_cast<std::uint32_t>(k);
             for(std::size_t m = 0; m < msg.size(); ++m)
-                acc = (acc ^ std::to_integer<unsigned>(msg[m])) * 0x01000193u + static_cast<unsigned>(m + i);
+                acc = (acc ^ std::to_integer<std::uint32_t>(msg[m])) * 0x01000193u + static_cast<std::uint32_t>(m + i);
             out[i] = static_cast<std::byte>(acc & 0xffu);
         }
         return true;
@@ -196,8 +196,8 @@ struct session_link
     std::vector<security_event> resp_security;
     std::vector<lifecycle_event> req_lifecycle;
     std::vector<lifecycle_event> resp_lifecycle;
-    int req_installs;
-    int resp_installs;
+    std::int32_t req_installs;
+    std::int32_t resp_installs;
 
     // wire_install gates whether the AEAD install hook is set: a secured posture with NO
     // install hook is the auth-only configuration (admission without AEAD).
@@ -285,8 +285,8 @@ struct psk_link
     std::vector<security_event> resp_security;
     std::vector<lifecycle_event> req_lifecycle;
     std::vector<lifecycle_event> resp_lifecycle;
-    int req_installs;
-    int resp_installs;
+    std::int32_t req_installs;
+    std::int32_t resp_installs;
 
     // dialer_keystore: the keyed_psk set the DIALER's policy verifies the responder's proof
     // against (an empty/wrong set drives the refuse legs). responder_key: the keyed_psk the
@@ -352,18 +352,18 @@ private:
     std::optional<psk_keystore_policy> m_dialer_policy;
 };
 
-int count_kind(const std::vector<security_event> &evs, security_kind k)
+std::int32_t count_kind(const std::vector<security_event> &evs, security_kind k)
 {
-    int n = 0;
+    std::int32_t n = 0;
     for(const auto &e : evs)
         if(e.kind == k)
             ++n;
     return n;
 }
 
-int count_rejected(const std::vector<lifecycle_event> &evs, handshake_outcome reason)
+std::int32_t count_rejected(const std::vector<lifecycle_event> &evs, handshake_outcome reason)
 {
-    int n = 0;
+    std::int32_t n = 0;
     for(const auto &e : evs)
         if(e.edge == lifecycle_edge::rejected && e.reason == reason)
             ++n;
@@ -546,7 +546,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
     msg_forwarder messages{sink};
     rpc_forwarder procedures{ex, k_long_timeout, sink};
 
-    int installs = 0;
+    std::int32_t installs = 0;
     build_context build{ex,
                         make_cfg(0x08, &admit),
                         k_long_timeout,
