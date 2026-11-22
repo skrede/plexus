@@ -1,23 +1,28 @@
 #ifndef HPP_GUARD_PLEXUS_NODE_H
 #define HPP_GUARD_PLEXUS_NODE_H
 
+#include "plexus/muxify.h"
+#include "plexus/policy.h"
+#include "plexus/node_id.h"
 #include "plexus/recorder.h"
+#include "plexus/topic_qos.h"
 #include "plexus/node_options.h"
 #include "plexus/relay_posture.h"
 #include "plexus/target_profile.h"
+#include "plexus/transport_priority.h"
 #include "plexus/graph_change_handle.h"
 #include "plexus/typed_publisher_options.h"
 
 #include "plexus/io/endpoint.h"
+#include "plexus/io/observer.h"
 #include "plexus/io/node_name.h"
-#include "plexus/io/endpoint_seam.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/message_info.h"
-#include "plexus/io/object_carrier.h"
-#include "plexus/io/subscriber_qos.h"
-#include "plexus/io/observer.h"
-#include "plexus/io/routing_engine.h"
+#include "plexus/io/endpoint_seam.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/object_carrier.h"
+#include "plexus/io/routing_engine.h"
+#include "plexus/io/subscriber_qos.h"
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
@@ -35,12 +40,6 @@
 #include "plexus/graph/participant_record.h"
 
 #include "plexus/match/key_pattern.h"
-
-#include "plexus/muxify.h"
-#include "plexus/node_id.h"
-#include "plexus/topic_qos.h"
-#include "plexus/policy.h"
-#include "plexus/transport_priority.h"
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/node_close.h"
@@ -66,7 +65,6 @@
 #include <tuple>
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
@@ -75,8 +73,9 @@
 #include <optional>
 #include <algorithm>
 #include <functional>
-#include <type_traits>
 #include <string_view>
+#include <type_traits>
+#include <unordered_map>
 
 namespace plexus {
 
