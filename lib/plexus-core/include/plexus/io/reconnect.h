@@ -126,6 +126,7 @@ public:
     {
         return m_attempt;
     }
+
     bool is_surrendered() const noexcept
     {
         return m_surrendered;
