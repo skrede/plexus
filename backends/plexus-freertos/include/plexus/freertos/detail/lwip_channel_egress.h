@@ -3,7 +3,9 @@
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
+
 #include "plexus/stream/stream_socket.h"
+
 #include "plexus/stream/detail/send_queue.h"
 
 #include "plexus/detail/compat.h"
@@ -18,7 +20,6 @@ namespace plexus::freertos::detail {
 // stream_socket. The borrowed socket and the on_error hook outlive this helper (the owning channel
 // holds both), and a hard drop fails the channel through the injected fail hook. lwIP has no
 // scatter writev, so the gathered views are sent one by one.
-//
 // Two distinct failure classes ride this path, kept textually separate so a reader
 // sees soft != hard:
 //   * SOFT/transient — a full send_queue (egress cap exceeded) or a short/zero send the socket
@@ -81,11 +82,10 @@ public:
     }
 
 private:
-    // Send the gather, resuming past the bytes a prior turn already wrote (m_sent). The send_queue
-    // re-issues the SAME front-N nodes per turn and its completion (send_queue.h:142-152) IGNORES the
-    // bool and pops them on ANY call, so a soft short/zero send MUST NOT call done() — that would pop
-    // and discard the unsent tail (data loss / success-of-zero-bytes). On a soft stall stash the
-    // gather + completion and return; poll_egress() retries from m_sent. A hard close fires on_error.
+    // Send the gather, resuming past the bytes a prior turn already wrote (m_sent). The send_queue re-issues the SAME
+    // front-N nodes per turn and its completion IGNORES the bool and pops them on ANY call, so a soft short/zero send
+    // MUST NOT call done() — that would pop and discard the unsent tail (data loss / success-of-zero-bytes). On a soft
+    // stall stash the gather + completion and return; poll_egress() retries from m_sent. A hard close fires on_error.
     // Only a fully-flushed gather resets the cursor and calls done(true).
     void drain_views(buffer_seq views, completion done)
     {
@@ -102,7 +102,7 @@ private:
             m_sent += wrote;
             skip = 0;
             if(wrote < chunk.size())
-                return stall(views, std::move(done)); // a view short-sent: retry from m_sent
+                return stall(views, std::move(done));
         }
         m_pending = false;
         m_sent    = 0;
