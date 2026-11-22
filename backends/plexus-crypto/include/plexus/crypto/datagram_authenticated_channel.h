@@ -30,23 +30,11 @@
 
 namespace plexus::crypto {
 
-// A datagram byte_channel decorator mirroring dtls_channel's drop-not-teardown
-// discipline. Unlike the stream variant (an implicit counter), each datagram carries
-// its AEAD sequence EXPLICITLY on the wire so the receiver reconstructs the nonce
-// regardless of UDP drop/reorder (a pure implicit counter desyncs on the first
-// dropped datagram). An RFC 4303 sliding-window filter rejects replays per epoch.
-//
-// Wire shape per datagram: seq(8 BE) || key_epoch(1) || frame_header(28) ||
-// ciphertext||tag(16). The plaintext frame_header is the AEAD AAD (RFC 8439); only
-// the payload is sealed, so the stack above sees plaintext header-on frames.
-//
-// On a replayed/too-old sequence OR a tag failure the datagram is DROPPED and a
-// per-session counter increments — NEVER on_protocol_close (a teardown would hand a
-// spoofer a remote-disconnect DoS on ambient UDP garbage), NEVER a per-packet event
-// (the observer would become the DoS). The drop counters are occupancy reads,
-// readable on demand. This is the AEAD-required datagram path: an auth-only datagram
-// configuration is refused at the wiring layer, so this decorator is never installed
-// without AEAD.
+// A datagram byte_channel decorator with dtls_channel's drop-not-teardown discipline. Each datagram carries its AEAD
+// sequence explicitly, so the receiver rebuilds the nonce across UDP drop and reorder, and an RFC 4303 sliding window
+// rejects replays per epoch. Wire shape: seq(8 BE) || key_epoch(1) || frame_header(28) || ciphertext||tag(16), the
+// plaintext header being the AEAD AAD (RFC 8439). A replayed, too-old or tag-failing datagram is dropped and counted,
+// never closed: a teardown would hand a spoofer a remote-disconnect DoS on ambient UDP garbage.
 template<typename Lower>
 class datagram_authenticated_channel
 {
@@ -86,25 +74,23 @@ public:
     {
         m_on_data_cb = std::move(cb);
     }
+
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
         m_lower.on_closed(std::move(cb));
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_lower.on_error(std::move(cb));
     }
+
     void on_protocol_close(plexus::detail::move_only_function<void(wire::close_cause)> cb)
     {
         m_lower.on_protocol_close(std::move(cb));
     }
 
-    // The drop-observability seam (null by default — zero cost when unobserved). The
-    // owner installs the engine's posted drop_sink; this decorator increments its
-    // occupancy counter at each drop site AND hands a coalesced event to the sink. The
-    // sink POSTS, so the per-packet site never fires the observer synchronously (the DoS
-    // guard). peer/topic are left default here — this decorator sits below the demux that
-    // knows them; the cause is the load-bearing field.
+    // The sink posts, so a per-packet drop never runs the observer synchronously; the observer would become the DoS.
     void on_drop(plexus::detail::move_only_function<void(const io::detail::drop_event &)> cb)
     {
         m_on_drop_cb = std::move(cb);
@@ -114,18 +100,22 @@ public:
     {
         return m_replay_dropped + m_tamper_dropped;
     }
+
     std::size_t replay_count() const noexcept
     {
         return m_replay_dropped;
     }
+
     std::size_t tamper_dropped_count() const noexcept
     {
         return m_tamper_dropped;
     }
+
     std::size_t backpressured() const
     {
         return m_lower.backpressured();
     }
+
     std::uint64_t scheduler_key() const
         requires requires(const Lower &l) { l.scheduler_key(); }
     {

@@ -20,9 +20,6 @@
 
 namespace plexus::crypto::detail {
 
-// The per-datagram seal/open AEAD path for datagram_authenticated_channel: the seal/open calls, the
-// nonce construction, the epoch/key handling, and the RFC 4303/9147 verify-before-commit order.
-
 template<typename Ch>
 void emit_drop(Ch &c, io::detail::drop_cause cause, io::locality transport = io::locality::remote)
 {
