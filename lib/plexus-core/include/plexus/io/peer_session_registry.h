@@ -1,11 +1,6 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PEER_SESSION_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_PEER_SESSION_REGISTRY_H
 
-#include "plexus/policy.h"
-#include "plexus/node_id.h"
-
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/node_name.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/reconnect.h"
@@ -23,6 +18,11 @@
 #include "plexus/io/detail/peer_session_retire.h"
 #include "plexus/io/detail/peer_session_rebuild.h"
 #include "plexus/io/detail/peer_session_reclaim.h"
+
+#include "plexus/policy.h"
+#include "plexus/node_id.h"
+
+#include "plexus/detail/compat.h"
 
 #include "plexus/log/logger.h"
 

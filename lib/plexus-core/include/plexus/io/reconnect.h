@@ -1,16 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECONNECT_H
 #define HPP_GUARD_PLEXUS_IO_RECONNECT_H
 
-#include "plexus/policy.h"
-
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/reconnect_backoff.h"
 
 #include "plexus/io/detail/pending_ops.h"
+
+#include "plexus/policy.h"
+
+#include "plexus/detail/compat.h"
 
 #include <chrono>
 #include <random>

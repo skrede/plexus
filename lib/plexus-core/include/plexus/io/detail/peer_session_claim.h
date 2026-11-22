@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CLAIM_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CLAIM_H
 
+#include "plexus/io/detail/peer_session_filing.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/lifecycle_event.h"
-
-#include "plexus/io/detail/peer_session_filing.h"
 
 #include "plexus/node_id.h"
 
