@@ -16,4 +16,8 @@ if(PLEXUS_ENABLE_CRYPTO_BACKEND)
         SOURCES test_tls_retire_drain.cpp $<TARGET_OBJECTS:plexus-crypto>
         LINKS plexus::core plexus::wire plexus::asio plexus::crypto
         PROPERTIES RUN_SERIAL TRUE RESOURCE_LOCK tcp-loopback)
+
+    plexus_add_catch_test(test_tls_congestion_refusal
+        SOURCES test_tls_congestion_refusal.cpp $<TARGET_OBJECTS:plexus-crypto>
+        LINKS plexus::core plexus::wire plexus::asio plexus::crypto)
 endif()

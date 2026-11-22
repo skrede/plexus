@@ -100,6 +100,11 @@ plexus_add_catch_test(test_udp_multicast_socket
     SOURCES test_udp_multicast_socket.cpp
     LINKS plexus::asio)
 
+plexus_add_catch_test(test_transport_congestion_refusal
+    PREFIX "asio."
+    SOURCES test_transport_congestion_refusal.cpp
+    LINKS plexus::asio)
+
 plexus_add_catch_test(test_accept_retry
     PREFIX "asio."
     SOURCES test_accept_retry.cpp
