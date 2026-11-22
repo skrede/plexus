@@ -31,7 +31,7 @@ struct udp_arq_config
 {
     // The selective-ack bitmap names only bitmap_bits holes above the cumulative edge; holes beyond a larger window
     // fall back to per-segment RTO-driven retransmit (idempotent at the receiver).
-    std::size_t window{512};                    // in-flight segment bound (<= 2^15)
+    std::size_t window{512};                    // in-flight segment bound (< 2^15)
     std::chrono::milliseconds initial_rto{200}; // before any RTT sample
     std::chrono::milliseconds min_rto{50};
     std::chrono::milliseconds max_rto{2000};
@@ -61,7 +61,7 @@ public:
     explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {}, std::uint16_t initial_seq = 0)
             : m_executor(executor)
             , m_cfg(cfg)
-            , m_slots(cfg.window == 0 ? std::size_t{512} : std::min(cfg.window, std::size_t{32768}), initial_seq)
+            , m_slots(cfg.window == 0 ? std::size_t{512} : std::min(cfg.window, std::size_t{udp_reorder_buffer::half_space} - 1), initial_seq)
             , m_recv(m_slots.window(), initial_seq)
             , m_next(initial_seq)
             , m_rto(cfg.initial_rto, cfg.min_rto, cfg.max_rto)
