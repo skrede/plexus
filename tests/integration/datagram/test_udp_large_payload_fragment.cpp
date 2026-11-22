@@ -97,22 +97,11 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
           "uint16 msg_id; consecutive messages advance the msg_id by one without wrapping",
           "[udp_large_payload][envelope16][msgid]")
 {
-    // The EXPLICIT msg_id-wrap assertion. A single large message is split into many
-    // fragments; the fragment COUNT is a uint32 field, while msg_id
-    // stays uint16 and advances per-MESSAGE, never per-fragment. At a 128-byte fragment
-    // budget a 16 MiB message is ~131072 fragments — far past the uint16 max (65535) — so a
-    // single message's fragment count CANNOT be expressed in a uint16 msg_id: the old
-    // confusion (that msg_id bounds the per-message fragment count) is closed here on the
-    // wire. Two consecutive messages are sent best-effort through an observing relay that
-    // decodes each fragment header; the assertion reads the observed headers (loss does not
-    // matter — the headers carry the true counts):
-    //   * every observed fragment of the run carries frag_cnt > 0xFFFF (a single message's
-    //     fragment count exceeds what a uint16 could ever hold), proving the uint32 widening
-    //     is load-bearing;
-    //   * exactly TWO distinct msg_ids are observed (one per message), and they differ by
-    //     exactly one — msg_id advances per-message and does not wrap/collide.
-    constexpr std::size_t budget     = 128u;                // the fragment floor -> the largest count
-    constexpr std::size_t payload    = 16u * 1024u * 1024u; // ~131072 fragments per message
+    // At the smallest fragment budget a 16 MiB message spans more fragments than a uint16 can count, so the uint32
+    // frag_cnt is load-bearing while msg_id still advances once per message. The relay reads the headers on the wire,
+    // so loss does not matter.
+    constexpr std::size_t budget     = 128u; // the fragment floor -> the largest count
+    constexpr std::size_t payload    = 16u * 1024u * 1024u;
     constexpr std::size_t ceiling    = 20u * 1024u * 1024u;
     constexpr std::size_t reassembly = 48u * 1024u * 1024u;
 
@@ -145,8 +134,7 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
             [&](std::unique_ptr<pasio::udp_channel> ch)
             {
                 accepted = std::move(ch);
-                accepted->on_data([&](std::span<const std::byte>) {}); // delivery is incidental to
-                                                                       // this assertion
+                accepted->on_data([&](std::span<const std::byte>) {});
             });
     server.listen({"udp", "127.0.0.1:0"});
     plexus::testing::pump_until(io, [&] { return server.port() != 0; }, k_pump_bound);
@@ -158,7 +146,6 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
     REQUIRE(dialed != nullptr);
     REQUIRE(accepted != nullptr);
 
-    // Two consecutive large messages: their msg_ids must differ by exactly one.
     auto first  = make_payload(payload, 0x11);
     auto second = make_payload(payload, 0x22);
     dialed->send(first);
@@ -166,8 +153,8 @@ TEST_CASE("udp_large_payload: a 16 MB datagram message spans many uint32 fragmen
     dialed->send(second);
     plexus::testing::pump_until(io, [&] { return obs.msg_ids.size() >= 2; }, ms{4000});
 
-    REQUIRE(obs.max_frag_cnt > 0xFFFFu); // a single message's fragment count exceeds uint16
-    REQUIRE(obs.msg_ids.size() == 2);    // exactly one msg_id per message
-    const int delta = static_cast<int>(obs.msg_ids[1]) - static_cast<int>(obs.msg_ids[0]);
-    REQUIRE(delta == 1); // per-message advance, no wrap/collision
+    REQUIRE(obs.max_frag_cnt > 0xFFFFu);
+    REQUIRE(obs.msg_ids.size() == 2);
+    const std::int32_t delta = static_cast<std::int32_t>(obs.msg_ids[1]) - static_cast<std::int32_t>(obs.msg_ids[0]);
+    REQUIRE(delta == 1);
 }
