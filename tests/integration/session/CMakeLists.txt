@@ -1,6 +1,6 @@
 plexus_add_catch_test(test_peer_session_inproc
     SOURCES test_peer_session_inproc.cpp test_peer_session_inproc_flow.cpp test_peer_session_inproc_staleness.cpp
-        test_peer_session_inproc_lifecycle.cpp
+        test_peer_session_inproc_lifecycle.cpp test_peer_session_inproc_sequence.cpp
     LINKS plexus::core plexus::wire plexus::inproc)
 
 plexus_add_catch_test(test_transport_dial_inproc
