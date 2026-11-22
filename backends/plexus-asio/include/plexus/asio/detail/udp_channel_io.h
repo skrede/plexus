@@ -17,6 +17,8 @@
 
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 
+#include "plexus/detail/fail_closed.h"
+
 #include <span>
 #include <limits>
 #include <memory>
@@ -35,6 +37,14 @@ inline bool sends_fragmented(std::size_t size, std::size_t max_payload) noexcept
 inline std::size_t reliable_fragment_budget(std::size_t max_payload) noexcept
 {
     return max_payload > wire::udp_segment_marker_size ? max_payload - wire::udp_segment_marker_size : 0;
+}
+
+// Below this budget even the smallest reliable fragment would overrun it, since the splitter never slices finer.
+inline std::size_t checked_fragment_budget(std::size_t max_payload)
+{
+    if(max_payload < wire::udp_fragment_header_overhead + wire::udp_segment_marker_size + io::fragmentation_limits::min_fragment_payload)
+        plexus::detail::fail_closed("a UDP fragment budget must hold the fragment headers, the segment marker and the smallest fragment slice");
+    return max_payload;
 }
 
 // The bytes a ceiling-sized message parks behind a full window; an unlimited ceiling saturates.

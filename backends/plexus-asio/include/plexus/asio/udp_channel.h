@@ -81,7 +81,7 @@ public:
             : m_io(io)
             , m_server(server)
             , m_dest(std::move(dest))
-            , m_max_payload(max_payload)
+            , m_max_payload(detail::checked_fragment_budget(max_payload))
             , m_max_message_bytes(max_message_bytes)
             , m_reassembly_budget(reassembly_budget)
             , m_reassembly_timeout(reassembly_timeout)

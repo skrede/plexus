@@ -6,6 +6,7 @@
 #include "plexus/asio/udp_channel.h"
 
 #include "plexus/asio/detail/asio_error_map.h"
+#include "plexus/asio/detail/udp_channel_io.h"
 #include "plexus/asio/detail/asio_inbound_demux.h"
 #include "plexus/asio/detail/udp_transport_setup.h"
 #include "plexus/asio/detail/asio_udp_endpoint_parse.h"
@@ -69,7 +70,7 @@ public:
             , m_server(io, congestion, send_queue_bytes, so_sndbuf, so_rcvbuf)
             , m_max_peers(max_peers)
             , m_demux(max_peers)
-            , m_max_payload(max_payload)
+            , m_max_payload(detail::checked_fragment_budget(max_payload))
             , m_global_default(global_default)
             , m_reassembly_budget(reassembly_budget)
             , m_backpressure_bytes(backpressure_bytes)
