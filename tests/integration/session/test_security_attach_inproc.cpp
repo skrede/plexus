@@ -38,6 +38,7 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
+#include <algorithm>
 
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_executor;
@@ -113,6 +114,11 @@ security_seam fake_seam()
     return s;
 }
 
+void fail_transcript(security_seam &seam)
+{
+    seam.transcript = [](std::span<const std::byte>, std::span<std::byte, 32>) { return false; };
+}
+
 // A deterministic keyed MAC over key||msg (a real keyed mixing function, NOT an identity
 // stub — every key/msg bit feeds every output byte, so a wrong key or a tampered input
 // yields a different MAC). The proof verification needs a genuine keyed dependence; this
@@ -149,6 +155,16 @@ rand_fn counter_rand(std::uint8_t seed)
             b = static_cast<std::byte>((seed << 4) ^ (*counter)++);
         return true;
     };
+}
+
+rand_fn failing_rand()
+{
+    return [](std::span<std::byte>) { return false; };
+}
+
+hmac_fn failing_hmac()
+{
+    return [](std::span<const std::byte>, std::span<const std::byte>, std::span<std::byte>) { return false; };
 }
 
 std::array<std::byte, k_key_id_len> psk_key_id(std::uint8_t v)
@@ -287,7 +303,8 @@ struct psk_link
     // dialer_keystore: the keyed_psk set the DIALER's policy verifies the responder's proof
     // against (an empty/wrong set drives the refuse legs). responder_key: the keyed_psk the
     // responder PROVES under (its own material + the key_id it stamps).
-    psk_link(std::vector<keyed_psk> dialer_keystore, keyed_psk responder_key)
+    psk_link(std::vector<keyed_psk> dialer_keystore, keyed_psk responder_key, rand_fn responder_rand = counter_rand(0x0a), hmac_fn responder_hmac = real_keyed_hmac(),
+             rand_fn dialer_rand = counter_rand(0x0b))
             : ex{bus}
             , transport{ex, bus}
             , req_messages{sink}
@@ -301,7 +318,7 @@ struct psk_link
         resp_seam = fake_seam();
 
         transport.on_accepted(
-                [this, responder_key](std::unique_ptr<inproc_channel<>> ch) mutable
+                [this, responder_key, responder_rand = std::move(responder_rand), responder_hmac = std::move(responder_hmac)](std::unique_ptr<inproc_channel<>> ch) mutable
                 {
                     resp_ctx.channel   = std::move(ch);
                     resp_ctx.node_name = "requester-node";
@@ -311,15 +328,15 @@ struct psk_link
                     // the response via the prover.
                     responder.emplace(resp_ctx, ex, make_cfg(0x01, &m_accept_any), k_long_timeout, resp_messages, resp_procedures, true, sink);
                     responder->set_security_seam(&resp_seam);
-                    responder->set_attach_entropy(counter_rand(0x0a));
-                    responder->set_attach_prover(attach_prover{responder_key, real_keyed_hmac()});
+                    responder->set_attach_entropy(std::move(responder_rand));
+                    responder->set_attach_prover(attach_prover{responder_key, std::move(responder_hmac)});
                     responder->on_security([this](const security_event &ev) { resp_security.push_back(ev); });
                     responder->on_lifecycle([this](const lifecycle_event &ev) { resp_lifecycle.push_back(ev); });
                     responder->on_install_security([this](const security_negotiation &) { ++resp_installs; });
                     responder->start();
                 });
         transport.on_dialed(
-                [this, dialer_keystore](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) mutable
+                [this, dialer_keystore, dialer_rand = std::move(dialer_rand)](std::unique_ptr<inproc_channel<>> ch, const plexus::io::endpoint &) mutable
                 {
                     req_ctx.channel   = std::move(ch);
                     req_ctx.node_name = "responder-node";
@@ -327,7 +344,7 @@ struct psk_link
                     m_dialer_policy.emplace(std::move(dialer_keystore), real_keyed_hmac());
                     requester.emplace(req_ctx, ex, make_cfg(0x02, &*m_dialer_policy), k_long_timeout, req_messages, req_procedures, false, sink);
                     requester->set_security_seam(&req_seam);
-                    requester->set_attach_entropy(counter_rand(0x0b));
+                    requester->set_attach_entropy(std::move(dialer_rand));
                     requester->on_security([this](const security_event &ev) { req_security.push_back(ev); });
                     requester->on_lifecycle([this](const lifecycle_event &ev) { req_lifecycle.push_back(ev); });
                     requester->on_install_security([this](const security_negotiation &) { ++req_installs; });
@@ -364,6 +381,11 @@ std::int32_t count_rejected(const std::vector<lifecycle_event> &evs, handshake_o
         if(e.edge == lifecycle_edge::rejected && e.reason == reason)
             ++n;
     return n;
+}
+
+bool saw_edge(const std::vector<lifecycle_event> &evs, lifecycle_edge edge)
+{
+    return std::ranges::any_of(evs, [edge](const lifecycle_event &e) { return e.edge == edge; });
 }
 
 }
@@ -642,4 +664,74 @@ TEST_CASE("io.security_attach the REAL psk_keystore_policy refuses a removed-key
     REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 1);
     REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
     REQUIRE_FALSE(l.requester->is_complete());
+}
+
+TEST_CASE("io.security_attach a responder whose entropy fails refuses the attach locally and never completes", "[io][security_attach]")
+{
+    const keyed_psk key{psk_key_id(0x01), psk_material(0xA0)};
+
+    psk_link l{/*dialer_keystore=*/{key}, /*responder_key=*/key, /*responder_rand=*/failing_rand()};
+    l.drive();
+
+    REQUIRE_FALSE(l.responder->is_complete());
+    REQUIRE_FALSE(saw_edge(l.resp_lifecycle, lifecycle_edge::connected));
+    REQUIRE(count_rejected(l.resp_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE(l.resp_installs == 0);
+    REQUIRE_FALSE(l.requester->is_complete());
+}
+
+TEST_CASE("io.security_attach a responder whose proof MAC fails refuses locally instead of sending a zero proof", "[io][security_attach]")
+{
+    const keyed_psk key{psk_key_id(0x01), psk_material(0xA0)};
+
+    psk_link l{/*dialer_keystore=*/{key}, /*responder_key=*/key, /*responder_rand=*/counter_rand(0x0a), /*responder_hmac=*/failing_hmac()};
+    l.drive();
+
+    REQUIRE_FALSE(l.responder->is_complete());
+    REQUIRE_FALSE(saw_edge(l.resp_lifecycle, lifecycle_edge::connected));
+    REQUIRE(count_rejected(l.resp_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE(l.resp_installs == 0);
+    REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 0);
+}
+
+TEST_CASE("io.security_attach a session whose transcript MAC fails refuses the attach locally", "[io][security_attach]")
+{
+    const keyed_psk key{psk_key_id(0x01), psk_material(0xA0)};
+
+    psk_link l{/*dialer_keystore=*/{key}, /*responder_key=*/key};
+    fail_transcript(l.resp_seam);
+    l.drive();
+
+    REQUIRE_FALSE(l.responder->is_complete());
+    REQUIRE_FALSE(saw_edge(l.resp_lifecycle, lifecycle_edge::connected));
+    REQUIRE(count_rejected(l.resp_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE(l.resp_installs == 0);
+}
+
+TEST_CASE("io.security_attach a dialer whose entropy fails refuses locally before it sends its request", "[io][security_attach]")
+{
+    const keyed_psk key{psk_key_id(0x01), psk_material(0xA0)};
+
+    psk_link l{/*dialer_keystore=*/{key}, /*responder_key=*/key, /*responder_rand=*/counter_rand(0x0a), /*responder_hmac=*/real_keyed_hmac(), /*dialer_rand=*/failing_rand()};
+    l.drive();
+
+    REQUIRE_FALSE(l.requester->is_complete());
+    REQUIRE_FALSE(saw_edge(l.req_lifecycle, lifecycle_edge::connected));
+    REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE(l.req_installs == 0);
+    REQUIRE_FALSE(l.responder->is_complete());
+}
+
+TEST_CASE("io.security_attach a dialer whose transcript MAC fails refuses locally instead of blaming the peer", "[io][security_attach]")
+{
+    const keyed_psk key{psk_key_id(0x01), psk_material(0xA0)};
+
+    psk_link l{/*dialer_keystore=*/{key}, /*responder_key=*/key};
+    fail_transcript(l.req_seam);
+    l.drive();
+
+    REQUIRE_FALSE(l.requester->is_complete());
+    REQUIRE(count_rejected(l.req_lifecycle, handshake_outcome::reject_unauthorized) == 1);
+    REQUIRE(l.req_installs == 0);
+    REQUIRE(count_kind(l.req_security, security_kind::downgrade_refused) == 0);
 }
