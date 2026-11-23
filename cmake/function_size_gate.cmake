@@ -59,9 +59,12 @@ set(_diagnostic_regex
     "${FUNC_GATE_SCOPE}[^ ]*:[0-9]+:[0-9]+: (warning: .*readability-function-(size|cognitive-complexity)|note: [0-9]+ lines including)")
 
 # FUNC_GATE_TIDY_LOG replays a recorded clang-tidy output so the gate's parsing can be tested against fixed
-# diagnostics.
+# diagnostics; FUNC_GATE_TIDY_RC with FUNC_GATE_TIDY_ERR adds the run's exit status and error output for the run check.
 set(_tidy_log "${FUNC_GATE_TIDY_LOG}")
-if(NOT FUNC_GATE_TIDY_LOG)
+if(FUNC_GATE_TIDY_LOG AND DEFINED FUNC_GATE_TIDY_RC)
+    file(READ "${FUNC_GATE_TIDY_ERR}" _tidy_err)
+    function_size_gate_check_run("${_tidy_log}" "${FUNC_GATE_TIDY_RC}" "${_tidy_err}")
+elseif(NOT FUNC_GATE_TIDY_LOG)
     set(_tidy_log "${FUNC_GATE_BUILD_DIR}/function_size_gate_tidy.log")
     find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)
     if(NOT RUN_CLANG_TIDY)

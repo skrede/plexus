@@ -1,0 +1,2 @@
+@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/screen_fixture.h:35:22: warning: function 'within_on_screen' exceeds recommended size/complexity thresholds [readability-function-size]
+@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/screen_fixture.h:35:22: note: 23 lines including whitespace and comments (threshold 0)

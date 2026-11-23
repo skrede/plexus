@@ -118,6 +118,26 @@ add_test(NAME function_size_gate.unmeasurable_rejected
 set_tests_properties(function_size_gate.unmeasurable_rejected PROPERTIES
     PASS_REGULAR_EXPRESSION "1 unsuppressed library function overage\\(s\\):[^/]*- [^ ]*/unmeasurable_fixture\\.h:9:22: warning: function 'brace_on_signature_line' exceeds [^\n]* -- not measurable from the source")
 
+# The run check over a recorded run that exits nonzero with clang-tidy's per-TU lines in its error output, where an
+# older run-clang-tidy writes them: those lines pass and are never echoed, while a library source left unprocessed,
+# a clang-tidy that died, or any other error output fails the gate.
+configure_file(function/stderr/measured_tidy.txt.in ${CMAKE_CURRENT_BINARY_DIR}/function/measured_tidy.txt @ONLY)
+set(_stderr_cases noise_accepted library_error_rejected signal_rejected residue_rejected)
+set(_stderr_fixtures noise library_error signal residue)
+set(_stderr_verdicts "clean"
+    "clang-tidy did not finish a source:[^/]*Error while processing /src/backends/plexus-demo/src/broken\\.cpp"
+    "clang-tidy did not finish a source:[^/]*/src/tests/node/crash\\.cpp: terminated by signal 11"
+    "run-clang-tidy failed \\(exit 1\\):[^/]*Unable to run clang-tidy\\.")
+foreach(_case _fixture _verdict IN ZIP_LISTS _stderr_cases _stderr_fixtures _stderr_verdicts)
+    add_test(NAME function_size_gate.stderr_${_case}
+        COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON
+                -DFUNC_GATE_TIDY_LOG=${CMAKE_CURRENT_BINARY_DIR}/function/measured_tidy.txt -DFUNC_GATE_TIDY_RC=1
+                -DFUNC_GATE_TIDY_ERR=${CMAKE_CURRENT_SOURCE_DIR}/function/stderr/${_fixture}.txt
+                -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+    set_tests_properties(function_size_gate.stderr_${_case} PROPERTIES
+        PASS_REGULAR_EXPRESSION "function size gate: ${_verdict}" FAIL_REGULAR_EXPRESSION "warnings generated")
+endforeach()
+
 # The function gate fails closed on a clang-tidy run that measured nothing: run-clang-tidy without a database, a
 # database without a source, and a library source clang-tidy cannot open. Each runs the real tool, so each needs it.
 find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)

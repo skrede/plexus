@@ -1,0 +1,14 @@
+
+2585 warnings generated.
+
+5385 warnings and 1 error generated.
+Error while processing /src/tests/node/facade/codec_identity_fail_subscriber.cpp.
+
+
+2 errors generated.
+Suppressed 12 warnings (12 in non-user code).
+Use -header-filter=.* to display errors from all non-system headers. Use -system-headers to display errors from system headers as well.
+Found compiler error(s).
+
+722 warnings generated.
+/src/tests/node/crash.cpp: terminated by signal 11
