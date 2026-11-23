@@ -56,6 +56,25 @@ void on_sync_send_error(S &s, const std::error_code &ec)
     s.m_send_queue.close();
 }
 
+// The async send's verdict: true chains the next queued datagram, false stops the chain.
+template<typename S>
+bool on_async_send_done(S &s, const std::error_code &ec)
+{
+    s.m_ops.end();
+    if(ec == ::asio::error::operation_aborted || !s.m_open)
+        return false;
+    if(!ec)
+        return true;
+    if(transient_send_error(ec))
+    {
+        ++s.m_send_errors; // best-effort UDP loss: chain past it
+        return true;
+    }
+    server_report(s, ec); // a fatal socket error: report once and stop the chain
+    s.m_send_queue.close();
+    return false;
+}
+
 template<typename S>
 typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink make_send_sink(S &s)
 {
@@ -64,22 +83,7 @@ typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink make
     {
         s.m_ops.begin();
         s.m_socket.async_send_to(::asio::buffer(bytes.data(), bytes.size()), dest,
-                                 [&s, done = std::move(done)](std::error_code ec, std::size_t) mutable
-                                 {
-                                     s.m_ops.end();
-                                     if(ec == ::asio::error::operation_aborted || !s.m_open)
-                                         return done(false);
-                                     if(!ec)
-                                         return done(true);
-                                     if(transient_send_error(ec))
-                                     {
-                                         ++s.m_send_errors; // best-effort UDP loss: chain past it
-                                         return done(true);
-                                     }
-                                     server_report(s, ec); // a fatal socket error: report once and stop the chain
-                                     s.m_send_queue.close();
-                                     done(false);
-                                 });
+                                 [&s, done = std::move(done)](std::error_code ec, std::size_t) mutable { done(on_async_send_done(s, ec)); });
     };
 }
 

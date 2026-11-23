@@ -142,6 +142,8 @@ private:
     template<typename S>
     friend void detail::on_sync_send_error(S &, const std::error_code &);
     template<typename S>
+    friend bool detail::on_async_send_done(S &, const std::error_code &);
+    template<typename S>
     friend auto detail::make_send_sink(S &) -> typename datagram::detail::send_queue<typename S::endpoint_type>::send_sink;
     template<typename S>
     friend void detail::apply_socket_buffers(S &);
