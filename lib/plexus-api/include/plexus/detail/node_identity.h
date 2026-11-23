@@ -1,9 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_DETAIL_NODE_IDENTITY_H
 #define HPP_GUARD_PLEXUS_DETAIL_NODE_IDENTITY_H
 
+#include "plexus/io/endpoint_id.h"
+
 #include "plexus/node_id.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -26,13 +27,7 @@ inline node_id hash_node_id(std::string_view name) noexcept
         lo              = (lo ^ byte) * k_prime;
         hi              = (hi ^ byte) * k_prime;
     }
-    node_id id{};
-    for(std::size_t i = 0; i < 8; ++i)
-    {
-        id[i]     = static_cast<std::byte>((lo >> (8 * i)) & 0xff);
-        id[8 + i] = static_cast<std::byte>((hi >> (8 * i)) & 0xff);
-    }
-    return id;
+    return io::detail::fold_digest_lanes(lo, hi);
 }
 
 }
