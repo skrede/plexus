@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_BYTE_CHANNEL_H
 #define HPP_GUARD_PLEXUS_IO_BYTE_CHANNEL_H
 
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+
+#include "plexus/detail/compat.h"
 
 #include "plexus/wire/close_cause.h"
 

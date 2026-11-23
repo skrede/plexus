@@ -23,6 +23,7 @@
 #include "plexus/io/same_host_geometry.h"
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
+
 #include "plexus/io/detail/retiring_table.h"
 
 #include "plexus/node_id.h"

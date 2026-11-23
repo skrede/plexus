@@ -1,13 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_LIVELINESS_MONITOR_H
 #define HPP_GUARD_PLEXUS_IO_LIVELINESS_MONITOR_H
 
+#include "plexus/io/liveness_event.h"
+#include "plexus/io/liveness_storage.h"
+
 #include "plexus/policy.h"
 #include "plexus/node_id.h"
 
 #include "plexus/detail/compat.h"
-
-#include "plexus/io/liveness_event.h"
-#include "plexus/io/liveness_storage.h"
 
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/liveliness_scan.h"

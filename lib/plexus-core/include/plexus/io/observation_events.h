@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_OBSERVATION_EVENTS_H
 #define HPP_GUARD_PLEXUS_IO_OBSERVATION_EVENTS_H
 
-#include "plexus/node_id.h"
-#include "plexus/wire_bytes.h"
-
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/subscriber_qos.h"
+
+#include "plexus/node_id.h"
+#include "plexus/wire_bytes.h"
 
 #include "plexus/wire/rpc_status.h"
 

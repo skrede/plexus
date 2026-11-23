@@ -1,16 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_FANOUT_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_FANOUT_H
 
+#include "plexus/io/detail/forwarder_publish.h"
+#include "plexus/io/detail/forwarder_companion.h"
+#include "plexus/io/detail/egress_channel_traits.h"
+
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/companion_event.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/observation_events.h"
-
-#include "plexus/io/detail/forwarder_publish.h"
-#include "plexus/io/detail/forwarder_companion.h"
-#include "plexus/io/detail/egress_channel_traits.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/subscribe.h"

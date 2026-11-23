@@ -2,14 +2,13 @@
 #define HPP_GUARD_PLEXUS_TYPED_CODEC_H
 
 #include "plexus/expected.h"
-
 #include "plexus/wire_bytes.h"
 
 #include <span>
 #include <cstdint>
 #include <utility>
-#include <optional>
 #include <concepts>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 #include <system_error>

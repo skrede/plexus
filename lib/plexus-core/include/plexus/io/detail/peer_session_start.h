@@ -1,14 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_START_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_START_H
 
-#include "plexus/io/io_error.h"
-#include "plexus/io/object_carrier.h"
-#include "plexus/io/disconnect_cause.h"
-
 #include "plexus/io/detail/peer_session_deliver.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_consumers.h"
 #include "plexus/io/detail/peer_session_lifecycle.h"
+
+#include "plexus/io/io_error.h"
+#include "plexus/io/object_carrier.h"
+#include "plexus/io/disconnect_cause.h"
 
 #include "plexus/wire/close_cause.h"
 

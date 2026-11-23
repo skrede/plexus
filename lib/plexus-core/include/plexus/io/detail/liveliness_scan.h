@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_LIVELINESS_SCAN_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_LIVELINESS_SCAN_H
 
-#include "plexus/io/liveness_event.h"
-
 #include "plexus/io/detail/endpoint_liveness.h"
+
+#include "plexus/io/liveness_event.h"
 
 #include "plexus/node_id.h"
 

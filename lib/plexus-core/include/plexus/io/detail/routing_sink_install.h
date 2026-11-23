@@ -1,6 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_SINK_INSTALL_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_SINK_INSTALL_H
 
+#include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/routing_tick.h"
+#include "plexus/io/detail/routing_sinks.h"
+#include "plexus/io/detail/routing_dispatch.h"
+#include "plexus/io/detail/routing_lifecycle.h"
+#include "plexus/io/detail/routing_relay_emit.h"
+#include "plexus/io/detail/routing_forward_rpc.h"
+
 #include "plexus/io/locality.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/liveness_event.h"
@@ -10,14 +18,6 @@
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/peer_liveliness_event.h"
 
-#include "plexus/io/detail/pending_ops.h"
-#include "plexus/io/detail/routing_tick.h"
-#include "plexus/io/detail/routing_sinks.h"
-#include "plexus/io/detail/routing_dispatch.h"
-#include "plexus/io/detail/routing_lifecycle.h"
-#include "plexus/io/detail/routing_relay_emit.h"
-#include "plexus/io/detail/routing_forward_rpc.h"
-
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"
 
@@ -25,8 +25,8 @@
 #include "plexus/wire/peer_report.h"
 #include "plexus/wire/topic_declaration.h"
 
-#include "plexus/node_id.h"
 #include "plexus/policy.h"
+#include "plexus/node_id.h"
 
 #include <span>
 #include <chrono>

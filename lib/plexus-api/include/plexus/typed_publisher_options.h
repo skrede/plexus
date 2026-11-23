@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TYPED_PUBLISHER_OPTIONS_H
 #define HPP_GUARD_PLEXUS_TYPED_PUBLISHER_OPTIONS_H
 
-#include "plexus/typed_codec.h"
 #include "plexus/topic_qos.h"
+#include "plexus/typed_codec.h"
 #include "plexus/recording_qos.h"
 
 #include "plexus/io/same_host_geometry.h"

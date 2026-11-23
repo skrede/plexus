@@ -7,9 +7,9 @@
 #include "plexus/wire/udp_dedup_window.h"
 
 #include <map>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
-#include <compare>
 
 namespace plexus::io::detail {
 

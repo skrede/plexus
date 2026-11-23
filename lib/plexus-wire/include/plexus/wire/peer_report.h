@@ -4,6 +4,7 @@
 #include "plexus/wire/topic_declaration.h"
 
 #include "plexus/node_id.h"
+
 #include "plexus/match/key_pattern_bounds.h"
 
 #include <string>

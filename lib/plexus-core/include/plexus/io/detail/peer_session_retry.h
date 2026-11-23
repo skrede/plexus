@@ -1,13 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_RETRY_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_RETRY_H
 
-#include "plexus/io/remembered_demand.h"
-#include "plexus/io/subscribe_retry_config.h"
-
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/forwarder_subscribe.h"
 #include "plexus/io/detail/peer_session_complete.h"
+
+#include "plexus/io/remembered_demand.h"
+#include "plexus/io/subscribe_retry_config.h"
 
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/topic_hash.h"

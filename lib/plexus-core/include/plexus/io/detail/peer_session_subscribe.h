@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_SUBSCRIBE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_SUBSCRIBE_H
 
-#include "plexus/io/companion_event.h"
-
 #include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_retry.h"
+
+#include "plexus/io/companion_event.h"
 
 #include "plexus/wire/subscribe.h"
 

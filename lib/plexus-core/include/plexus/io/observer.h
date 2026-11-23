@@ -1,15 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_OBSERVER_H
 #define HPP_GUARD_PLEXUS_IO_OBSERVER_H
 
-#include "plexus/node_id.h"
-
 #include "plexus/io/peer_kind.h"
-#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/disconnect_cause.h"
 #include "plexus/io/observation_events.h"
 #include "plexus/io/peer_liveliness_event.h"
+
+#include "plexus/node_id.h"
 
 #include "plexus/graph/graph_change.h"
 

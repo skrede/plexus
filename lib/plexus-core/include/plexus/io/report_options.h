@@ -4,6 +4,7 @@
 #include "plexus/discovery/universe.h"
 
 #include "plexus/match/key_pattern.h"
+
 #include "plexus/match/detail/match_engine.h"
 
 #include "plexus/wire/udp_dedup_window.h"

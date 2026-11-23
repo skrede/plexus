@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_DETAIL_NODE_INTERNALS_H
 #define HPP_GUARD_PLEXUS_DETAIL_NODE_INTERNALS_H
 
-#include "plexus/node_id.h"
-
 #include "plexus/detail/compat.h"
 #include "plexus/detail/affinity_check.h"
 #include "plexus/detail/node_discovery_glue.h"
+
+#include "plexus/node_id.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/observer.h"

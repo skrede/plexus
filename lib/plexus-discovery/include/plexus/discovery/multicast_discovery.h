@@ -1,8 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_DISCOVERY_MULTICAST_DISCOVERY_H
 #define HPP_GUARD_PLEXUS_DISCOVERY_MULTICAST_DISCOVERY_H
 
+#include "plexus/discovery/discovery.h"
 #include "plexus/discovery/discovery_health.h"
 #include "plexus/discovery/discovery_options.h"
+
 #include "plexus/discovery/detail/discovery_emit.h"
 #include "plexus/discovery/detail/announce_jitter.h"
 #include "plexus/discovery/detail/discovery_inbound.h"
@@ -10,11 +12,13 @@
 #include "plexus/discovery/detail/discovery_card_codec.h"
 
 #include "plexus/match/key_pattern.h"
+
 #include "plexus/match/detail/match_engine.h"
 
 #include "plexus/stream/datagram_socket.h"
+
 #include "plexus/wire/announcement.h"
-#include "plexus/discovery/discovery.h"
+
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"
 

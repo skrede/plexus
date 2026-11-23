@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 #define HPP_GUARD_PLEXUS_IO_SUBSCRIBER_REGISTRY_H
 
-#include "plexus/topic_qos.h"
-
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
+
+#include "plexus/topic_qos.h"
 
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/priority_band_queue.h"

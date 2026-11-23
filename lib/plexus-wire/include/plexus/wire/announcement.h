@@ -7,7 +7,9 @@
 #include "plexus/wire/length_prefixed.h"
 
 #include "plexus/node_id.h"
+
 #include "plexus/discovery/contact_card.h"
+
 #include "plexus/match/key_pattern_bounds.h"
 
 #include <span>

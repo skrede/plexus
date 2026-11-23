@@ -1,19 +1,22 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_STREAM_WRITER_H
 #define HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_STREAM_WRITER_H
 
+#include "plexus/io/recording/wire_record.h"
+#include "plexus/io/recording/record_format.h"
+#include "plexus/io/recording/dropout_record.h"
+#include "plexus/io/recording/record_envelope.h"
+
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/observation_events.h"
+
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/recording/record_format.h"
-#include "plexus/io/recording/dropout_record.h"
-#include "plexus/io/recording/record_envelope.h"
-#include "plexus/io/recording/wire_record.h"
+
 #include "plexus/io/recording/detail/record_frame.h"
 
-#include "plexus/wire/cursor.h"
 #include "plexus/wire/crc32c.h"
+#include "plexus/wire/cursor.h"
 
 #include "plexus/node_id.h"
 

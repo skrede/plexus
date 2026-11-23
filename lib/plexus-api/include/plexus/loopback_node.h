@@ -2,14 +2,13 @@
 #define HPP_GUARD_PLEXUS_LOOPBACK_NODE_H
 
 #include "plexus/node.h"
+#include "plexus/policy.h"
+#include "plexus/node_id.h"
 #include "plexus/node_options.h"
 
 #include "plexus/io/intra_node_transport.h"
 
 #include "plexus/discovery/discovery.h"
-
-#include "plexus/node_id.h"
-#include "plexus/policy.h"
 
 namespace plexus {
 

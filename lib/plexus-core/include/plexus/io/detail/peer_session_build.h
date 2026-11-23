@@ -1,6 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_BUILD_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_BUILD_H
 
+#include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/peer_session_slot.h"
+#include "plexus/io/detail/peer_session_claim.h"
+#include "plexus/io/detail/peer_session_dedup.h"
+#include "plexus/io/detail/peer_session_redial.h"
+
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/security_seam.h"
@@ -9,12 +15,6 @@
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/handshake_protocol.h"
 #include "plexus/io/reliability_requirement.h"
-
-#include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/peer_session_slot.h"
-#include "plexus/io/detail/peer_session_claim.h"
-#include "plexus/io/detail/peer_session_dedup.h"
-#include "plexus/io/detail/peer_session_redial.h"
 
 #include "plexus/node_id.h"
 

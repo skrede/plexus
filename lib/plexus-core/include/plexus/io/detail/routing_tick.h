@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_TICK_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_TICK_H
 
-#include "plexus/io/disconnect_cause.h"
-
 #include "plexus/io/detail/routing_relay_emit.h"
 #include "plexus/io/detail/routing_graph_change.h"
 #include "plexus/io/detail/peer_session_lifecycle.h"
+
+#include "plexus/io/disconnect_cause.h"
 
 #include "plexus/node_id.h"
 

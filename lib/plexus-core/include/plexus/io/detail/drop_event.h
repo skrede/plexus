@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_DETAIL_DROP_EVENT_H
 
 #include "plexus/io/locality.h"
+
 #include "plexus/node_id.h"
 
 #include <cstdint>

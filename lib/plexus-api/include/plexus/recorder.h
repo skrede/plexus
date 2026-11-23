@@ -1,13 +1,18 @@
 #ifndef HPP_GUARD_PLEXUS_RECORDER_H
 #define HPP_GUARD_PLEXUS_RECORDER_H
 
+#include "plexus/node_id.h"
 #include "plexus/recorder_options.h"
 #include "plexus/wire_capture_qos.h"
+
+#include "plexus/detail/compat.h"
+#include "plexus/detail/affinity_check.h"
 #include "plexus/detail/recorder_drain.h"
 #include "plexus/detail/recorder_variant_sink.h"
 
 #include "plexus/io/observer.h"
 #include "plexus/io/capture_policy.h"
+
 #include "plexus/io/recording/byte_sink.h"
 #include "plexus/io/recording/flat_recorder.h"
 #include "plexus/io/recording/recording_sink.h"
@@ -18,18 +23,14 @@
 #include "plexus/wire/varint.h"
 #include "plexus/wire/frame_codec.h"
 
-#include "plexus/detail/compat.h"
-#include "plexus/detail/affinity_check.h"
-#include "plexus/node_id.h"
-
 #include <span>
-#include <vector>
 #include <memory>
-#include <variant>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <utility>
+#include <variant>
+#include <optional>
 #include <algorithm>
 
 namespace plexus {

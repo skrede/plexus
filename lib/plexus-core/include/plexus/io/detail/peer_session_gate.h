@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_GATE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_GATE_H
 
-#include "plexus/io/locality.h"
-
 #include "plexus/io/detail/drop_event.h"
+
+#include "plexus/io/locality.h"
 
 #include "plexus/wire/frame.h"
 

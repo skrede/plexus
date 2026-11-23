@@ -4,8 +4,8 @@
 #include "plexus/io/recording/record_decode.h"
 #include "plexus/io/recording/record_format.h"
 
-#include "plexus/wire/cursor.h"
 #include "plexus/wire/crc32c.h"
+#include "plexus/wire/cursor.h"
 #include "plexus/wire/varint.h"
 
 #include <span>

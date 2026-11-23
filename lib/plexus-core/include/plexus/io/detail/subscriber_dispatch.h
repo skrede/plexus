@@ -1,22 +1,22 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_SUBSCRIBER_DISPATCH_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_SUBSCRIBER_DISPATCH_H
 
+#include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/priority_band_queue.h"
+
 #include "plexus/topic_qos.h"
 
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_qos.h"
-
-#include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/priority_band_queue.h"
 
 #include <array>
 #include <string>
 #include <vector>
 #include <cstdint>
 #include <optional>
-#include <string_view>
 #include <algorithm>
 #include <functional>
+#include <string_view>
 
 namespace plexus::io::detail {
 

@@ -1,17 +1,17 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_LIFECYCLE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_LIFECYCLE_H
 
-#include "plexus/io/peer_kind.h"
-#include "plexus/io/liveness_event.h"
-#include "plexus/io/lifecycle_event.h"
-#include "plexus/io/disconnect_cause.h"
-#include "plexus/io/handshake_protocol.h"
-
 #include "plexus/io/detail/routing_reports.h"
 #include "plexus/io/detail/routing_dispatch.h"
 #include "plexus/io/detail/peer_announcements.h"
 #include "plexus/io/detail/routing_relay_emit.h"
 #include "plexus/io/detail/routing_session_scan.h"
+
+#include "plexus/io/peer_kind.h"
+#include "plexus/io/liveness_event.h"
+#include "plexus/io/lifecycle_event.h"
+#include "plexus/io/disconnect_cause.h"
+#include "plexus/io/handshake_protocol.h"
 
 #include "plexus/graph/graph_change.h"
 

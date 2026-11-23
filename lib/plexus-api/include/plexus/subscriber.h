@@ -2,14 +2,13 @@
 #define HPP_GUARD_PLEXUS_SUBSCRIBER_H
 
 #include "plexus/node.h"
-
-#include "plexus/io/message_info.h"
-#include "plexus/io/object_carrier.h"
-#include "plexus/io/subscriber_qos.h"
-#include "plexus/io/endpoint_seam.h"
-
 #include "plexus/typed_codec.h"
 #include "plexus/recording_qos.h"
+
+#include "plexus/io/message_info.h"
+#include "plexus/io/endpoint_seam.h"
+#include "plexus/io/object_carrier.h"
+#include "plexus/io/subscriber_qos.h"
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/affinity_check.h"
@@ -22,8 +21,8 @@
 #include <utility>
 #include <optional>
 #include <functional>
-#include <type_traits>
 #include <string_view>
+#include <type_traits>
 #include <system_error>
 
 namespace plexus {

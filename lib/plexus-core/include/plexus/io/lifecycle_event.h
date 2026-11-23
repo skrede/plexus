@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_LIFECYCLE_EVENT_H
 #define HPP_GUARD_PLEXUS_IO_LIFECYCLE_EVENT_H
 
-#include "plexus/node_id.h"
-
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/disconnect_cause.h"
+
+#include "plexus/node_id.h"
 
 #include <string>
 

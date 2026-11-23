@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_SECURITY_COOKIE_SECRET_H
 
 #include "plexus/io/security/ct_equal.h"
+
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"
 

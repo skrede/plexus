@@ -1,21 +1,22 @@
 #ifndef HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_H
 #define HPP_GUARD_PLEXUS_DATAGRAM_DETAIL_REASSEMBLER_H
 
-#include "plexus/policy.h"
-
 #include "plexus/datagram/detail/reassembler_flat_map.h"
+
+#include "plexus/policy.h"
 
 #include "plexus/detail/compat.h"
 
 #include "plexus/io/fragmentation.h"
+
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/pending_ops.h"
 
 #include "plexus/wire/frame_reassembler.h"
 
 #include <span>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <vector>
 #include <cstddef>
 #include <cstdint>

@@ -10,13 +10,16 @@
 #include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/shm_companion_consumer.h"
 
+#include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
-#include "plexus/io/endpoint.h"
+
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/scheduler_key.h"
 #include "plexus/io/detail/close_notification.h"
+
 #include "plexus/wire/close_cause.h"
+
 #include "plexus/node_id.h"
 #include "plexus/wire_bytes.h"
 

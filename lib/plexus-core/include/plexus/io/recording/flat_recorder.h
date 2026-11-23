@@ -1,19 +1,22 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECORDING_FLAT_RECORDER_H
 #define HPP_GUARD_PLEXUS_IO_RECORDING_FLAT_RECORDER_H
 
+#include "plexus/io/recording/byte_ring.h"
+#include "plexus/io/recording/byte_sink.h"
+#include "plexus/io/recording/wire_record.h"
+#include "plexus/io/recording/record_format.h"
+#include "plexus/io/recording/dropout_record.h"
+#include "plexus/io/recording/record_stream_writer.h"
+
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/observation_events.h"
+
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/recording/byte_ring.h"
-#include "plexus/io/recording/byte_sink.h"
-#include "plexus/io/recording/record_format.h"
-#include "plexus/io/recording/wire_record.h"
-#include "plexus/io/recording/dropout_record.h"
-#include "plexus/io/recording/record_stream_writer.h"
 
 #include "plexus/detail/compat.h"
+
 #include "plexus/node_id.h"
 
 #include <span>

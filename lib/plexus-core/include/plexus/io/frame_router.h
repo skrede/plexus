@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_IO_FRAME_ROUTER_H
 #define HPP_GUARD_PLEXUS_IO_FRAME_ROUTER_H
 
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/null_logger.h"
+
+#include "plexus/detail/compat.h"
 
 #include "plexus/log/logger.h"
 

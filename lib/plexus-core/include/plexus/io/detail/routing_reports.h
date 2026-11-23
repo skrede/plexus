@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_REPORTS_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_REPORTS_H
 
-#include "plexus/io/endpoint.h"
-#include "plexus/io/route_candidate.h"
-
 #include "plexus/io/detail/route_admission.h"
 #include "plexus/io/detail/routing_session_scan.h"
+
+#include "plexus/io/endpoint.h"
+#include "plexus/io/route_candidate.h"
 
 #include "plexus/graph/graph_change.h"
 #include "plexus/graph/topic_record.h"

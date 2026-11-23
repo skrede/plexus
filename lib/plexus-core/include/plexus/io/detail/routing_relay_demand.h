@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_RELAY_DEMAND_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_RELAY_DEMAND_H
 
-#include "plexus/io/demand_transition.h"
-
 #include "plexus/io/detail/forward_splice.h"
+
+#include "plexus/io/demand_transition.h"
 
 #include "plexus/graph/topic_record.h"
 

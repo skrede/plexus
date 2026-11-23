@@ -6,8 +6,8 @@
 #include "plexus/io/detail/upgrade_send_lanes.h"
 #include "plexus/io/detail/upgrade_receive_lanes.h"
 
-#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/companion_event.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 
 #include <chrono>

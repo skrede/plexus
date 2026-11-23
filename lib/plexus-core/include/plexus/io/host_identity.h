@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_HOST_IDENTITY_H
 #define HPP_GUARD_PLEXUS_IO_HOST_IDENTITY_H
 
-#include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/cert_facts.h"
+#include "plexus/io/security/attach_facts.h"
 
 #include "plexus/node_id.h"
 

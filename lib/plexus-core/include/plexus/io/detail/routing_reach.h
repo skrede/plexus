@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_REACH_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_REACH_H
 
+#include "plexus/io/detail/routing_session_scan.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/node_name.h"
 #include "plexus/io/endpoint_id.h"
-
-#include "plexus/io/detail/routing_session_scan.h"
 
 #include "plexus/node_id.h"
 

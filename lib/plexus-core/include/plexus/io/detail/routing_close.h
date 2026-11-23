@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_CLOSE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_CLOSE_H
 
+#include "plexus/io/detail/pending_ops.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/endpoint_id.h"
-
-#include "plexus/io/detail/pending_ops.h"
 
 namespace plexus::io::detail {
 

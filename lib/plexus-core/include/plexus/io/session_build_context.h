@@ -1,10 +1,6 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 #define HPP_GUARD_PLEXUS_IO_SESSION_BUILD_CONTEXT_H
 
-#include "plexus/policy.h"
-
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/observer.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/handshake_fsm.h"
@@ -15,6 +11,10 @@
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/subscribe_retry_config.h"
+
+#include "plexus/policy.h"
+
+#include "plexus/detail/compat.h"
 
 #include "plexus/io/detail/drop_event.h"
 

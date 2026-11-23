@@ -1,16 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_DEDUP_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_DEDUP_H
 
-#include "plexus/io/node_name.h"
-#include "plexus/io/peer_kind.h"
-#include "plexus/io/remembered_demand.h"
-#include "plexus/io/handshake_protocol.h"
-
 #include "plexus/io/detail/warn_line.h"
 #include "plexus/io/detail/handshake_resolve.h"
 #include "plexus/io/detail/peer_session_filing.h"
 #include "plexus/io/detail/peer_session_complete.h"
 #include "plexus/io/detail/peer_session_lifecycle.h"
+
+#include "plexus/io/node_name.h"
+#include "plexus/io/peer_kind.h"
+#include "plexus/io/remembered_demand.h"
+#include "plexus/io/handshake_protocol.h"
 
 #include "plexus/log/logger.h"
 

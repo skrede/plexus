@@ -1,9 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_SECURITY_ATTACH_POLICY_H
 #define HPP_GUARD_PLEXUS_IO_SECURITY_ATTACH_POLICY_H
 
+#include "plexus/io/security/ct_equal.h"
 #include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/cookie_secret.h"
-#include "plexus/io/security/ct_equal.h"
+
 #include "plexus/detail/fail_closed.h"
 
 #include <span>

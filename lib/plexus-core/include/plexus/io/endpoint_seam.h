@@ -3,8 +3,8 @@
 
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
-#include "plexus/io/subscriber_qos.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/io/subscriber_qos.h"
 #include "plexus/io/same_host_geometry.h"
 
 #include "plexus/topic_qos.h"

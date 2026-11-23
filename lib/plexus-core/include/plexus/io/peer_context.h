@@ -1,12 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PEER_CONTEXT_H
 #define HPP_GUARD_PLEXUS_IO_PEER_CONTEXT_H
 
-#include "plexus/node_id.h"
-#include "plexus/policy.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/epoch_source.h"
 #include "plexus/io/host_fingerprint.h"
+
+#include "plexus/policy.h"
+#include "plexus/node_id.h"
 
 #include <memory>
 #include <string>

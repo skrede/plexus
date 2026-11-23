@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_GRAPH_CHANGE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_GRAPH_CHANGE_H
 
-#include "plexus/io/observer.h"
-
 #include "plexus/io/detail/routing_reports.h"
 #include "plexus/io/detail/routing_relay_emit.h"
+
+#include "plexus/io/observer.h"
 
 #include "plexus/graph/graph_change.h"
 

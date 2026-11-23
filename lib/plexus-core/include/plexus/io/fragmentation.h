@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_FRAGMENTATION_H
 
 #include "plexus/topic_qos.h"
+
 #include "plexus/wire/udp_envelope.h"
 
 #include "plexus/detail/compat.h"

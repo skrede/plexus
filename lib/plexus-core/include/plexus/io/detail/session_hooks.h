@@ -1,13 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_SESSION_HOOKS_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_SESSION_HOOKS_H
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
-
-#include "plexus/io/detail/drop_event.h"
 
 #include "plexus/wire/subscribe.h"
 

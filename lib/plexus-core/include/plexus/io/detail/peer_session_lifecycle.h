@@ -1,14 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_LIFECYCLE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_LIFECYCLE_H
 
+#include "plexus/io/detail/peer_session_gate.h"
+#include "plexus/io/detail/peer_session_retry.h"
+#include "plexus/io/detail/peer_session_complete.h"
+
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/disconnect_cause.h"
 #include "plexus/io/handshake_protocol.h"
-
-#include "plexus/io/detail/peer_session_gate.h"
-#include "plexus/io/detail/peer_session_retry.h"
-#include "plexus/io/detail/peer_session_complete.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/close_cause.h"

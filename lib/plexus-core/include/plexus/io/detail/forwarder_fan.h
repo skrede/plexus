@@ -1,17 +1,17 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_FAN_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_FAN_H
 
+#include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/forwarder_companion.h"
+#include "plexus/io/detail/priority_band_queue.h"
+#include "plexus/io/detail/subscriber_dispatch.h"
+
 #include "plexus/io/locality.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/observation_events.h"
-
-#include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/priority_band_queue.h"
-#include "plexus/io/detail/forwarder_companion.h"
-#include "plexus/io/detail/subscriber_dispatch.h"
 
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"

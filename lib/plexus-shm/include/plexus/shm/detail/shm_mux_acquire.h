@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_MUX_ACQUIRE_H
 #define HPP_GUARD_PLEXUS_SHM_DETAIL_SHM_MUX_ACQUIRE_H
 
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_channel.h"
 #include "plexus/shm/waiter_loss.h"
+#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_selection.h"
 #include "plexus/shm/shm_acquire_result.h"
 

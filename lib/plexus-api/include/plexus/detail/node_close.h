@@ -4,6 +4,7 @@
 #include "plexus/detail/node_self_carrier_sync.h"
 
 #include "plexus/io/observation_events.h"
+
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/close_notification.h"
 

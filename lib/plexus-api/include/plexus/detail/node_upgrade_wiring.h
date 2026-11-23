@@ -10,14 +10,14 @@
 #include "plexus/wire/detail/data_frame_codec.h"
 
 #include <span>
-#include <string>
 #include <memory>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <optional>
-#include <type_traits>
 #include <string_view>
+#include <type_traits>
 
 namespace plexus::detail {
 

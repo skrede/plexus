@@ -1,13 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_RETIRE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_RETIRE_H
 
-#include "plexus/io/peer_kind.h"
-#include "plexus/io/disconnect_cause.h"
-
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/peer_session_dedup.h"
 #include "plexus/io/detail/peer_session_rebuild.h"
 #include "plexus/io/detail/peer_session_lifecycle.h"
+
+#include "plexus/io/peer_kind.h"
+#include "plexus/io/disconnect_cause.h"
 
 #include "plexus/node_id.h"
 

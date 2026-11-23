@@ -1,14 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_SINKS_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_SINKS_H
 
-#include "plexus/io/observer.h"
-#include "plexus/io/message_info.h"
-#include "plexus/io/observation_events.h"
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/routing_dispatch.h"
 
-#include "plexus/node_id.h"
+#include "plexus/io/observer.h"
+#include "plexus/io/message_info.h"
+#include "plexus/io/observation_events.h"
+
 #include "plexus/policy.h"
+#include "plexus/node_id.h"
 
 #include "plexus/detail/compat.h"
 

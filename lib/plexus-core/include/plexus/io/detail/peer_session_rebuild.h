@@ -1,14 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_REBUILD_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_REBUILD_H
 
-#include "plexus/io/endpoint.h"
-#include "plexus/io/node_name.h"
-
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_build.h"
 #include "plexus/io/detail/peer_session_claim.h"
 #include "plexus/io/detail/peer_session_filing.h"
 #include "plexus/io/detail/peer_session_reclaim.h"
+
+#include "plexus/io/endpoint.h"
+#include "plexus/io/node_name.h"
 
 #include "plexus/node_id.h"
 

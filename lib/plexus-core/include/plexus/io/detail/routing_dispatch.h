@@ -1,17 +1,19 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_DISPATCH_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_ROUTING_DISPATCH_H
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/io/observer.h"
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/peer_liveliness_event.h"
-#include "plexus/io/recording/wire_record.h"
-#include "plexus/io/detail/drop_event.h"
 
-#include "plexus/node_id.h"
+#include "plexus/io/recording/wire_record.h"
+
 #include "plexus/policy.h"
+#include "plexus/node_id.h"
 
 #include <span>
 #include <vector>

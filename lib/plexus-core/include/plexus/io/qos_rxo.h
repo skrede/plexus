@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_QOS_RXO_H
 #define HPP_GUARD_PLEXUS_IO_QOS_RXO_H
 
-#include "plexus/topic_qos.h"
-
 #include "plexus/io/reliability.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/subscriber_qos.h"
+
+#include "plexus/topic_qos.h"
 
 #include <cstddef>
 #include <cstdint>

@@ -1,11 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_FILING_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_FILING_H
 
-#include "plexus/io/node_name.h"
-
 #include "plexus/io/detail/peer_session_slot.h"
 #include "plexus/io/detail/peer_session_reclaim.h"
 #include "plexus/io/detail/peer_session_complete.h"
+
+#include "plexus/io/node_name.h"
 
 #include "plexus/node_id.h"
 

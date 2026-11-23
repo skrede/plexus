@@ -1,15 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_PROCEDURE_FORWARDER_H
 #define HPP_GUARD_PLEXUS_IO_PROCEDURE_FORWARDER_H
 
-#include "plexus/policy.h"
-
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/node_name.h"
 #include "plexus/io/null_logger.h"
 #include "plexus/io/observation_events.h"
 #include "plexus/io/subscriber_registry.h"
 #include "plexus/io/subscription_endpoint.h"
+
+#include "plexus/policy.h"
+
+#include "plexus/detail/compat.h"
 
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/procedure_fanout.h"
@@ -19,8 +19,8 @@
 #include "plexus/log/logger.h"
 
 #include "plexus/wire/frame.h"
-#include "plexus/wire/subscribe.h"
 #include "plexus/wire/rpc_frame.h"
+#include "plexus/wire/subscribe.h"
 #include "plexus/wire/data_frame.h"
 #include "plexus/wire/rpc_status.h"
 #include "plexus/wire/topic_hash.h"

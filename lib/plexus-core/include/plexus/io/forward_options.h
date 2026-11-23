@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_IO_FORWARD_OPTIONS_H
 
 #include "plexus/match/key_pattern.h"
+
 #include "plexus/match/detail/match_engine.h"
 
 #include "plexus/wire/udp_dedup_window.h"

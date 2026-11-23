@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_DETAIL_EXPECTED_FALLBACK_H
 #define HPP_GUARD_PLEXUS_DETAIL_EXPECTED_FALLBACK_H
 
-#include <variant>
 #include <utility>
+#include <variant>
 #include <type_traits>
 
 namespace plexus::detail {

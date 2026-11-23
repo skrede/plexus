@@ -2,9 +2,9 @@
 #define HPP_GUARD_PLEXUS_IO_NETWORK_INTERFACE_H
 
 #include <string>
-#include <variant>
 #include <cstdint>
 #include <utility>
+#include <variant>
 
 namespace plexus::io {
 

@@ -5,14 +5,13 @@
 #include "plexus/expected.h"
 #include "plexus/call_error.h"
 #include "plexus/typed_codec.h"
+#include "plexus/publisher_gid.h"
 
 #include "plexus/io/endpoint_seam.h"
 
 #include "plexus/wire/varint.h"
 #include "plexus/wire/rpc_status.h"
 #include "plexus/wire/frame_codec.h"
-
-#include "plexus/publisher_gid.h"
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/caller_call.h"
@@ -25,8 +24,8 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
-#include <system_error>
 #include <string_view>
+#include <system_error>
 
 namespace plexus {
 

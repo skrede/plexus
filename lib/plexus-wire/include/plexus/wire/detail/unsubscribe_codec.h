@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_WIRE_DETAIL_UNSUBSCRIBE_CODEC_H
 #define HPP_GUARD_PLEXUS_WIRE_DETAIL_UNSUBSCRIBE_CODEC_H
 
-#include "plexus/wire/byte_order.h"
 #include "plexus/wire/subscribe.h"
+#include "plexus/wire/byte_order.h"
 
 #include <span>
 #include <vector>

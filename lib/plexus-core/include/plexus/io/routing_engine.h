@@ -1,35 +1,36 @@
 #ifndef HPP_GUARD_PLEXUS_IO_ROUTING_ENGINE_H
 #define HPP_GUARD_PLEXUS_IO_ROUTING_ENGINE_H
 
-#include "plexus/node_id.h"
-#include "plexus/policy.h"
-
 #include "plexus/io/locality.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/node_name.h"
 #include "plexus/io/known_peers.h"
+#include "plexus/io/route_select.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/route_options.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/liveness_event.h"
+#include "plexus/io/report_options.h"
 #include "plexus/io/lifecycle_event.h"
+#include "plexus/io/peer_liveliness.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/transport_backend.h"
-#include "plexus/io/peer_liveliness.h"
 #include "plexus/io/liveliness_monitor.h"
-#include "plexus/io/route_select.h"
-#include "plexus/io/route_options.h"
-#include "plexus/io/report_options.h"
 #include "plexus/io/liveliness_options.h"
+#include "plexus/io/peer_report_emitter.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/upgrade_coordinator.h"
 #include "plexus/io/peer_session_registry.h"
-#include "plexus/io/peer_report_emitter.h"
 #include "plexus/io/session_build_context.h"
 #include "plexus/io/subscribe_retry_config.h"
 #include "plexus/io/reliability_requirement.h"
 
+#include "plexus/policy.h"
+#include "plexus/node_id.h"
+
 #include "plexus/graph/graph_change.h"
+#include "plexus/graph/topic_record.h"
 #include "plexus/graph/topic_type_table.h"
 #include "plexus/graph/vector_graph_change_log.h"
 
@@ -49,8 +50,6 @@
 #include "plexus/io/detail/routing_relay_demand.h"
 #include "plexus/io/detail/routing_sink_install.h"
 #include "plexus/io/detail/peer_report_consumers.h"
-
-#include "plexus/graph/topic_record.h"
 
 #include "plexus/log/logger.h"
 

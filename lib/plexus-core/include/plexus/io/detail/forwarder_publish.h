@@ -1,15 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_PUBLISH_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_FORWARDER_PUBLISH_H
 
+#include "plexus/io/detail/history_ring.h"
+#include "plexus/io/detail/forwarder_fan.h"
+
 #include "plexus/io/locality.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/history_limits.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/observation_events.h"
-
-#include "plexus/io/detail/history_ring.h"
-#include "plexus/io/detail/forwarder_fan.h"
 
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"

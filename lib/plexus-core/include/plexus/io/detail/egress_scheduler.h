@@ -11,9 +11,9 @@
 #include "plexus/wire_bytes.h"
 
 #include <span>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <unordered_map>
 
 namespace plexus::io::detail {

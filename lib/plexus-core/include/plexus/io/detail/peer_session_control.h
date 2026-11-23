@@ -1,15 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CONTROL_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_CONTROL_H
 
-#include "plexus/io/frame_router.h"
-#include "plexus/io/companion_event.h"
-#include "plexus/io/upgrade_channel.h"
-#include "plexus/io/subscribe_qos_wire.h"
-
 #include "plexus/io/detail/peer_session_gate.h"
 #include "plexus/io/detail/peer_session_forward.h"
 #include "plexus/io/detail/peer_report_consumers.h"
 #include "plexus/io/detail/peer_session_subscribe.h"
+
+#include "plexus/io/frame_router.h"
+#include "plexus/io/companion_event.h"
+#include "plexus/io/upgrade_channel.h"
+#include "plexus/io/subscribe_qos_wire.h"
 
 #include "plexus/graph/topic_record.h"
 

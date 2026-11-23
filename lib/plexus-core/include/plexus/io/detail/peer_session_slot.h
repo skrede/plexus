@@ -1,15 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_SLOT_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_SLOT_H
 
+#include "plexus/io/detail/pending_ops.h"
+#include "plexus/io/detail/channel_graveyard.h"
+
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reconnect.h"
 #include "plexus/io/endpoint_id.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/peer_session.h"
 #include "plexus/io/session_build_context.h"
-
-#include "plexus/io/detail/pending_ops.h"
-#include "plexus/io/detail/channel_graveyard.h"
 
 #include "plexus/node_id.h"
 

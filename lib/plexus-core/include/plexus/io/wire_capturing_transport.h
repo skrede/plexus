@@ -1,14 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_IO_WIRE_CAPTURING_TRANSPORT_H
 #define HPP_GUARD_PLEXUS_IO_WIRE_CAPTURING_TRANSPORT_H
 
-#include "plexus/policy.h"
-
-#include "plexus/detail/compat.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/recording_channel.h"
 #include "plexus/io/transport_backend.h"
+
+#include "plexus/policy.h"
+
+#include "plexus/detail/compat.h"
 
 #include <memory>
 #include <utility>

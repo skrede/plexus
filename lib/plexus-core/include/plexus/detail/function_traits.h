@@ -3,8 +3,8 @@
 
 #include "plexus/expected.h"
 
-#include <system_error>
 #include <type_traits>
+#include <system_error>
 
 namespace plexus::detail {
 

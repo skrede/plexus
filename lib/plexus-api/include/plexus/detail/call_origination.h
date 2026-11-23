@@ -10,11 +10,11 @@
 
 #include <span>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <cstddef>
 #include <utility>
 #include <optional>
-#include <string>
 #include <string_view>
 
 namespace plexus::detail {

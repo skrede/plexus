@@ -1,9 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_DECODE_H
 #define HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_DECODE_H
 
-#include "plexus/io/capture_policy.h"
 #include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/record_envelope.h"
+
+#include "plexus/io/capture_policy.h"
 
 #include "plexus/wire/cursor.h"
 

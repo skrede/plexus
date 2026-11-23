@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTING_HARNESS_H
 #define HPP_GUARD_PLEXUS_TESTING_HARNESS_H
 
-#include "plexus/testing/mock_policy.h"
 #include "plexus/testing/test_clock.h"
+#include "plexus/testing/mock_policy.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"

@@ -4,8 +4,8 @@
 #include "plexus/io/recording/byte_sink.h"
 
 #include <span>
-#include <fstream>
 #include <cstddef>
+#include <fstream>
 #include <filesystem>
 
 namespace plexus::recording::host {

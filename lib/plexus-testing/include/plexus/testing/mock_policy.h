@@ -9,15 +9,18 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/byte_channel.h"
+
 #include "plexus/io/detail/pending_ops.h"
 #include "plexus/io/detail/close_notification.h"
+
 #include "plexus/policy.h"
 #include "plexus/executor_verbs.h"
+
 #include "plexus/detail/compat.h"
 
 #include <span>
-#include <vector>
 #include <memory>
+#include <vector>
 #include <cstddef>
 #include <utility>
 

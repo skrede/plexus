@@ -1,9 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PRIORITY_BAND_QUEUE_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PRIORITY_BAND_QUEUE_H
 
+#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/io/priority.h"
 #include "plexus/io/congestion.h"
-#include "plexus/io/detail/drop_event.h"
+
 #include "plexus/wire_bytes.h"
 
 #include <span>

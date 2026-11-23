@@ -1,13 +1,15 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECORDING_RECORDING_SINK_H
 #define HPP_GUARD_PLEXUS_IO_RECORDING_RECORDING_SINK_H
 
+#include "plexus/io/recording/flat_recorder.h"
+#include "plexus/io/recording/record_rate_gate.h"
+
 #include "plexus/io/observer.h"
 #include "plexus/io/message_info.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/observation_events.h"
+
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/io/recording/flat_recorder.h"
-#include "plexus/io/recording/record_rate_gate.h"
 
 #include "plexus/wire/topic_hash.h"
 
@@ -16,8 +18,8 @@
 #include <span>
 #include <vector>
 #include <cstddef>
-#include <utility>
 #include <cstdint>
+#include <utility>
 #include <optional>
 #include <string_view>
 

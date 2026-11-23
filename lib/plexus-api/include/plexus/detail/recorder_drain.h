@@ -1,17 +1,17 @@
 #ifndef HPP_GUARD_PLEXUS_DETAIL_RECORDER_DRAIN_H
 #define HPP_GUARD_PLEXUS_DETAIL_RECORDER_DRAIN_H
 
-#include "plexus/recorder_options.h"
-
 #include "plexus/detail/compat.h"
+
+#include "plexus/recorder_options.h"
 
 #include "plexus/io/recording/flat_recorder.h"
 #include "plexus/io/recording/pre_buffer_controller.h"
 
 #include <memory>
-#include <variant>
 #include <cstddef>
 #include <utility>
+#include <variant>
 
 namespace plexus::detail {
 

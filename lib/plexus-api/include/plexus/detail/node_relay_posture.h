@@ -10,8 +10,8 @@
 #include "plexus/relay_posture.h"
 
 #include <cstddef>
-#include <type_traits>
 #include <string_view>
+#include <type_traits>
 
 namespace plexus::detail {
 

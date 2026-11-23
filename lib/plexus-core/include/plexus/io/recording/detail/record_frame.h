@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECORDING_DETAIL_RECORD_FRAME_H
 #define HPP_GUARD_PLEXUS_IO_RECORDING_DETAIL_RECORD_FRAME_H
 
-#include "plexus/wire/cursor.h"
 #include "plexus/wire/crc32c.h"
+#include "plexus/wire/cursor.h"
 
 #include <span>
 #include <vector>

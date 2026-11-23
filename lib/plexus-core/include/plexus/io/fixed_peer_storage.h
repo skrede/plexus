@@ -1,11 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_FIXED_PEER_STORAGE_H
 #define HPP_GUARD_PLEXUS_IO_FIXED_PEER_STORAGE_H
 
-#include "plexus/node_id.h"
-
 #include "plexus/io/endpoint.h"
 #include "plexus/io/route_options.h"
 #include "plexus/io/route_candidate.h"
+
+#include "plexus/node_id.h"
+
 #include "plexus/io/detail/route_admission.h"
 #include "plexus/io/detail/fixed_peer_admission.h"
 

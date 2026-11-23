@@ -3,8 +3,8 @@
 
 #include "plexus/detail/compat.h"
 
-#include "plexus/io/endpoint_seam.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/endpoint_seam.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
 
@@ -14,8 +14,8 @@
 #include <utility>
 #include <optional>
 #include <functional>
-#include <type_traits>
 #include <string_view>
+#include <type_traits>
 #include <system_error>
 
 namespace plexus::detail {

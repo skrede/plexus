@@ -1,14 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_STREAM_READER_H
 #define HPP_GUARD_PLEXUS_IO_RECORDING_RECORD_STREAM_READER_H
 
-#include "plexus/io/capture_policy.h"
 #include "plexus/io/recording/record_decode.h"
 #include "plexus/io/recording/record_format.h"
 #include "plexus/io/recording/record_envelope.h"
+
+#include "plexus/io/capture_policy.h"
+
 #include "plexus/io/recording/detail/record_scan.h"
 
-#include "plexus/wire/cursor.h"
 #include "plexus/wire/crc32c.h"
+#include "plexus/wire/cursor.h"
 #include "plexus/wire/varint.h"
 
 #include "plexus/node_id.h"
@@ -16,9 +18,9 @@
 #include <span>
 #include <string>
 #include <vector>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace plexus::io::recording {
 

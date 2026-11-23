@@ -1,28 +1,29 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SHM_CHANNEL_H
 #define HPP_GUARD_PLEXUS_SHM_SHM_CHANNEL_H
 
-#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/loan_status.h"
-#include "plexus/shm/loaned_buffer.h"
-#include "plexus/shm/notifier_concept.h"
 #include "plexus/shm/ring_cursors.h"
+#include "plexus/shm/loaned_buffer.h"
+#include "plexus/shm/taken_message.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/slot_publisher.h"
 #include "plexus/shm/slot_subscriber.h"
-#include "plexus/shm/taken_message.h"
+#include "plexus/shm/notifier_concept.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 #include "plexus/io/upgrade_channel.h"
+
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
 
+#include <span>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <optional>
-#include <span>
 #include <utility>
+#include <optional>
 
 namespace plexus::shm {
 

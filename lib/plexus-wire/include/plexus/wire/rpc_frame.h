@@ -8,8 +8,8 @@
 #include <span>
 #include <vector>
 #include <cstddef>
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 
 namespace plexus::wire {

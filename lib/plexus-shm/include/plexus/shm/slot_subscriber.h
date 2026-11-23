@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_SHM_SLOT_SUBSCRIBER_H
 #define HPP_GUARD_PLEXUS_SHM_SLOT_SUBSCRIBER_H
 
-#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/cpu_relax.h"
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/taken_message.h"
+#include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/shm/detail/shm_ring_mapping.h"
 

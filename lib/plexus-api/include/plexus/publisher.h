@@ -2,21 +2,19 @@
 #define HPP_GUARD_PLEXUS_PUBLISHER_H
 
 #include "plexus/node.h"
-
-#include "plexus/io/object_carrier.h"
-#include "plexus/io/endpoint_seam.h"
-
-#include "plexus/detail/loan_pool.h"
-#include "plexus/detail/affinity_check.h"
-#include "plexus/detail/publisher_publish.h"
-
-#include "plexus/typed_codec.h"
 #include "plexus/topic_qos.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/typed_codec.h"
 #include "plexus/recording_qos.h"
 #include "plexus/typed_publisher_options.h"
 
+#include "plexus/io/endpoint_seam.h"
+#include "plexus/io/object_carrier.h"
+
 #include "plexus/detail/compat.h"
+#include "plexus/detail/loan_pool.h"
+#include "plexus/detail/affinity_check.h"
+#include "plexus/detail/publisher_publish.h"
 
 #include <span>
 #include <string>

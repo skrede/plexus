@@ -3,8 +3,8 @@
 
 #include "plexus/io/detail/lane_holders.h"
 
-#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/companion_event.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 
 #include "plexus/detail/compat.h"

@@ -3,15 +3,16 @@
 
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+
 #include "plexus/io/recording/wire_record.h"
 
 #include "plexus/detail/compat.h"
 
 #include <span>
 #include <memory>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace plexus::io {
 

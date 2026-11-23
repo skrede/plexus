@@ -1,22 +1,23 @@
 #ifndef HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 #define HPP_GUARD_PLEXUS_NODE_OPTIONS_H
 
+#include "plexus/recording_qos.h"
+#include "plexus/wire_capture_qos.h"
+
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/route_options.h"
 #include "plexus/io/report_options.h"
 #include "plexus/io/host_fingerprint.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/liveliness_options.h"
-#include "plexus/io/security/attach_policy.h"
 #include "plexus/io/subscribe_retry_config.h"
+
+#include "plexus/io/security/attach_policy.h"
 
 #include "plexus/log/logger.h"
 
-#include "plexus/recording_qos.h"
-#include "plexus/wire_capture_qos.h"
-
-#include <string>
 #include <chrono>
+#include <string>
 #include <cstdint>
 #include <optional>
 

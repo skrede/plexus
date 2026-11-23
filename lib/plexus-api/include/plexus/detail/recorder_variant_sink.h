@@ -15,8 +15,8 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <utility>
+#include <optional>
 #include <string_view>
 
 namespace plexus::detail {

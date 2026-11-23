@@ -2,15 +2,14 @@
 #define HPP_GUARD_PLEXUS_VALUE_LOGGER_H
 
 #include "plexus/node.h"
-
-#include "plexus/io/message_info.h"
-#include "plexus/io/object_carrier.h"
-#include "plexus/io/subscriber_qos.h"
-#include "plexus/io/endpoint_seam.h"
-
 #include "plexus/typed_codec.h"
 #include "plexus/value_projection.h"
 #include "plexus/value_logger_options.h"
+
+#include "plexus/io/message_info.h"
+#include "plexus/io/endpoint_seam.h"
+#include "plexus/io/object_carrier.h"
+#include "plexus/io/subscriber_qos.h"
 
 #include "plexus/detail/affinity_check.h"
 #include "plexus/detail/value_logger_project.h"

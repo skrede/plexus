@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_SHM_SHM_SELECTION_H
 
 #include "plexus/shm/region_naming.h"
+
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/host_fingerprint.h"
 #include "plexus/io/same_host_geometry.h"

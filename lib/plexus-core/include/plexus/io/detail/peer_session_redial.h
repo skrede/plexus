@@ -1,12 +1,12 @@
 #ifndef HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_REDIAL_H
 #define HPP_GUARD_PLEXUS_IO_DETAIL_PEER_SESSION_REDIAL_H
 
+#include "plexus/io/detail/peer_session_dedup.h"
+
 #include "plexus/io/peer_kind.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/disconnect_cause.h"
 #include "plexus/io/handshake_protocol.h"
-
-#include "plexus/io/detail/peer_session_dedup.h"
 
 namespace plexus::io::detail {
 
