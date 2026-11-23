@@ -4,13 +4,14 @@
 # third-party, standard, each group holds one directory, the file's own directory leads the project groups, a directory
 # forms one group, names sort by length and then byte-wise, and one blank line separates two groups. A quoted include
 # is project when it names a scanned file, and an angle include is standard when it names a C++ standard header.
-# Included from the build, this file registers an ALL target that re-runs it through -P; the target only warns until
-# the tree conforms, and a run with INCLUDE_GATE_FATAL=ON fails instead.
+# Included from the build, this file registers an ALL target that re-runs it through -P with INCLUDE_GATE_FATAL=ON, so
+# any violation fails the build; a -P run without INCLUDE_GATE_FATAL only warns.
 
 if(NOT INCLUDE_GATE_SCAN)
     add_custom_target(include_order_gate ALL
         COMMAND ${CMAKE_COMMAND}
                 -DINCLUDE_GATE_SCAN=ON
+                -DINCLUDE_GATE_FATAL=ON
                 -DINCLUDE_GATE_ROOT=${PROJECT_SOURCE_DIR}
                 -P ${CMAKE_CURRENT_LIST_FILE}
         COMMENT "Checking the include order of every C++ file"

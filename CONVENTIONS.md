@@ -143,8 +143,8 @@ for a real reason.
 - A **block** is a run of include and blank lines, ended by any other line, and the order is
   checked within each block. An include that must precede another for a real reason stands in its
   own block, under a one-line comment saying why.
-- The include-order gate checks every source root: lib, backends, tests, examples, tools and
-  benchmarks.
+- The include-order gate checks every source root (lib, backends, tests, examples, tools and
+  benchmarks) and fails the build on any violation.
 
 ## Naming
 
