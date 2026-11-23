@@ -66,14 +66,14 @@ void tick(freertos_executor &ex, Ps &...ps)
 }
 
 template<pollable P>
-[[noreturn]] void run(freertos_executor &ex, std::span<P *const> ps, run_options opts)
+void run(freertos_executor &ex, std::span<P *const> ps, run_options opts)
 {
     for(;;)
         tick(ex, ps, opts);
 }
 
 template<pollable... Ps>
-[[noreturn]] void run(freertos_executor &ex, run_options opts, Ps &...ps)
+void run(freertos_executor &ex, run_options opts, Ps &...ps)
 {
     for(;;)
         tick(ex, opts, ps...);
@@ -81,7 +81,7 @@ template<pollable... Ps>
 
 template<pollable... Ps>
     requires(sizeof...(Ps) >= 1)
-[[noreturn]] void run(freertos_executor &ex, Ps &...ps)
+void run(freertos_executor &ex, Ps &...ps)
 {
     run(ex, run_options{}, ps...);
 }

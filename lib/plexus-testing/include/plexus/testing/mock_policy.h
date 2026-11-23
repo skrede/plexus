@@ -65,7 +65,7 @@ public:
             enter_closed();
     }
 
-    [[nodiscard]] io::endpoint remote_endpoint() const
+    io::endpoint remote_endpoint() const
     {
         return m_remote;
     }
@@ -118,17 +118,17 @@ public:
         m_remote = std::move(ep);
     }
 
-    [[nodiscard]] const std::vector<std::vector<std::byte>> &sent() const noexcept
+    const std::vector<std::vector<std::byte>> &sent() const noexcept
     {
         return m_sent;
     }
 
-    [[nodiscard]] std::size_t sent_packets() const noexcept
+    std::size_t sent_packets() const noexcept
     {
         return m_sent.size();
     }
 
-    [[nodiscard]] bool closed() const noexcept
+    bool closed() const noexcept
     {
         return m_ops.closing();
     }

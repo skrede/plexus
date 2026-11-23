@@ -66,7 +66,7 @@ public:
 
     // The firable predicate try_fire gates on, exposed so the executor can skip the
     // tick read entirely when nothing could fire.
-    [[nodiscard]] bool armed() const noexcept
+    bool armed() const noexcept
     {
         return m_active && m_handler;
     }

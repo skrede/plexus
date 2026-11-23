@@ -48,17 +48,17 @@ struct harness
         ex.drain();
     }
 
-    [[nodiscard]] mock_channel<test_clock> make_channel()
+    mock_channel<test_clock> make_channel()
     {
         return mock_channel<test_clock>{ex};
     }
 
-    [[nodiscard]] std::unique_ptr<mock_channel<test_clock>> make_channel_ptr()
+    std::unique_ptr<mock_channel<test_clock>> make_channel_ptr()
     {
         return std::make_unique<mock_channel<test_clock>>(ex);
     }
 
-    [[nodiscard]] plexus::inproc::inproc_timer<test_clock> make_timer()
+    plexus::inproc::inproc_timer<test_clock> make_timer()
     {
         return plexus::inproc::inproc_timer<test_clock>{ex};
     }

@@ -242,7 +242,7 @@ extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     return 1;
 }
 
-[[noreturn]] void fail(const std::string &msg)
+void fail(const std::string &msg)
 {
     throw std::runtime_error(msg);
 }
