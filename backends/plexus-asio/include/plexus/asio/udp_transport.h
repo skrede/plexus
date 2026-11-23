@@ -80,13 +80,7 @@ public:
             , m_congestion(io::detail::checked_transport_congestion(congestion))
             , m_dials()
     {
-        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { detail::on_datagram(*this, from, bytes); });
-        m_server.on_error(
-                [this](io::io_error e)
-                {
-                    if(m_on_error_cb)
-                        m_on_error_cb(e);
-                });
+        wire_server_sinks();
     }
 
     udp_transport(const udp_transport &)            = delete;
@@ -181,6 +175,17 @@ private:
     static datagram::detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
     {
         return scheme == "udpr" ? datagram::detail::udp_channel_mode::reliable_datagram : datagram::detail::udp_channel_mode::best_effort;
+    }
+
+    void wire_server_sinks()
+    {
+        m_server.on_datagram([this](const endpoint_type &from, std::span<const std::byte> bytes) { detail::on_datagram(*this, from, bytes); });
+        m_server.on_error(
+                [this](io::io_error e)
+                {
+                    if(m_on_error_cb)
+                        m_on_error_cb(e);
+                });
     }
 
     // Draw a per-session ISN (RFC 6528) DIRECTLY from std::random_device, the OS CSPRNG: a shared
