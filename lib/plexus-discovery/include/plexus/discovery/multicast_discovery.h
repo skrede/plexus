@@ -111,6 +111,22 @@ public:
     }
 
 private:
+    executor_type m_executor;
+    Socket &m_socket;
+    typename Policy::timer_type m_timer;
+    discovery_options m_options;
+    detail::discovery_flood_cap<Clock> m_flood_cap;
+    detail::announce_jitter<std::chrono::milliseconds> m_jitter;
+    typename Clock::time_point m_bind_time;
+    std::optional<match::key_pattern> m_universe_pattern;
+    bool m_universe_is_concrete;
+    std::optional<wire::announcement> m_announcement;
+    std::vector<std::byte> m_scratch;
+    resolved_callback m_on_resolved_cb;
+    ::plexus::discovery::discovery::withdrawn_callback m_on_withdrawn_cb;
+    bool m_advertising;
+    bool m_self_seen;
+
     typename Socket::endpoint_type bind_endpoint() const
     {
         typename Socket::endpoint_type ep{};
@@ -146,22 +162,6 @@ private:
     {
         return static_cast<std::uint64_t>(m_options.announce_ttl.count());
     }
-
-    executor_type m_executor;
-    Socket &m_socket;
-    typename Policy::timer_type m_timer;
-    discovery_options m_options;
-    detail::discovery_flood_cap<Clock> m_flood_cap;
-    detail::announce_jitter<std::chrono::milliseconds> m_jitter;
-    typename Clock::time_point m_bind_time;
-    std::optional<match::key_pattern> m_universe_pattern;
-    bool m_universe_is_concrete;
-    std::optional<wire::announcement> m_announcement;
-    std::vector<std::byte> m_scratch;
-    resolved_callback m_on_resolved_cb;
-    ::plexus::discovery::discovery::withdrawn_callback m_on_withdrawn_cb;
-    bool m_advertising;
-    bool m_self_seen;
 
     template<typename C, typename D, typename Endpoint>
     friend void detail::on_inbound(D &, const Endpoint &, std::span<const std::byte>);
