@@ -56,19 +56,7 @@ public:
             , m_self_seen(false)
     {
         m_socket.bind(bind_endpoint());
-        // Single source of truth: derive the concrete uint32 from the authoritative label so the
-        // fast-path key and hard-scope group agree with the pattern. A consumer that left the default
-        // label but set a custom uint32 (the concrete-only uint32 shape) keeps it and stays concrete.
-        if(m_options.universe_pattern != k_default_universe_label)
-            m_options.universe = universe_from_label(m_options.universe_pattern);
-        // Parse the local label once. A misconfigured label fails closed: m_universe_pattern stays empty
-        // so the non-fast-path drops every flagged peer, while m_universe_is_concrete stays true so a
-        // flagless peer still takes the uint32 fast-path.
-        if(auto pattern = match::key_pattern::make(m_options.universe_pattern))
-        {
-            m_universe_pattern     = *pattern;
-            m_universe_is_concrete = match::detail::is_concrete(*pattern);
-        }
+        resolve_universe();
         m_socket.on_datagram([this](const typename Socket::endpoint_type &from, std::span<const std::byte> bytes) { detail::on_inbound<Clock>(*this, from, bytes); });
     }
 
@@ -128,6 +116,23 @@ private:
         typename Socket::endpoint_type ep{};
         ep.port(m_options.port);
         return ep;
+    }
+
+    void resolve_universe()
+    {
+        // Single source of truth: derive the concrete uint32 from the authoritative label so the
+        // fast-path key and hard-scope group agree with the pattern. A consumer that left the default
+        // label but set a custom uint32 (the concrete-only uint32 shape) keeps it and stays concrete.
+        if(m_options.universe_pattern != k_default_universe_label)
+            m_options.universe = universe_from_label(m_options.universe_pattern);
+        // Parse the local label once. A misconfigured label fails closed: m_universe_pattern stays empty
+        // so the non-fast-path drops every flagged peer, while m_universe_is_concrete stays true so a
+        // flagless peer still takes the uint32 fast-path.
+        if(auto pattern = match::key_pattern::make(m_options.universe_pattern))
+        {
+            m_universe_pattern     = *pattern;
+            m_universe_is_concrete = match::detail::is_concrete(*pattern);
+        }
     }
 
     static discovery_options checked(discovery_options options)
