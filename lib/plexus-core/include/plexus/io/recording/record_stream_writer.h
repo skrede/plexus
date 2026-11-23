@@ -60,16 +60,7 @@ public:
         w.u8(static_cast<std::uint8_t>(rule.mode));
         w.varint(rule.decimation);
         w.varint(rule.window_ns);
-        w.varint(schema.size());
-        for(const type_schema_entry &e : schema)
-        {
-            w.varint(e.type_id);
-            detail::blob(w, detail::as_bytes(e.type_name));
-            detail::blob(w, detail::as_bytes(e.message_encoding));
-            detail::blob(w, detail::as_bytes(e.schema_name));
-            detail::blob(w, detail::as_bytes(e.schema_encoding));
-            detail::blob(w, e.schema_data);
-        }
+        write_schema(w, schema);
         w.u8(static_cast<std::uint8_t>(crypto));
         return {m_scratch.data(), w.offset()};
     }
@@ -192,6 +183,20 @@ public:
     }
 
 private:
+    static void write_schema(wire::writer &w, std::span<const type_schema_entry> schema)
+    {
+        w.varint(schema.size());
+        for(const type_schema_entry &e : schema)
+        {
+            w.varint(e.type_id);
+            detail::blob(w, detail::as_bytes(e.type_name));
+            detail::blob(w, detail::as_bytes(e.message_encoding));
+            detail::blob(w, detail::as_bytes(e.schema_name));
+            detail::blob(w, detail::as_bytes(e.schema_encoding));
+            detail::blob(w, e.schema_data);
+        }
+    }
+
     std::span<const std::byte> seal(std::size_t body_len)
     {
         return detail::seal_in(m_scratch, body_len);
