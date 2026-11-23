@@ -106,6 +106,17 @@ inline bool decode_universe_pattern(reader &r, announcement &ann)
     return true;
 }
 
+inline void write_listens(writer &w, const announcement &ann)
+{
+    w.u8(static_cast<std::uint8_t>(ann.listens.size()));
+    for(const auto &[transport, port] : ann.listens)
+    {
+        w.u8(static_cast<std::uint8_t>(transport.size()));
+        w.bytes(std::as_bytes(std::span<const char>{transport.data(), transport.size()}));
+        w.u16(port);
+    }
+}
+
 }
 
 inline void encode_announcement_into(std::vector<std::byte> &out, const announcement &ann)
@@ -118,13 +129,7 @@ inline void encode_announcement_into(std::vector<std::byte> &out, const announce
     w.u32(ann.universe);
     w.bytes(std::span<const std::byte>{ann.node_id.data(), ann.node_id.size()});
     w.varint(ann.ttl_secs);
-    w.u8(static_cast<std::uint8_t>(ann.listens.size()));
-    for(const auto &[transport, port] : ann.listens)
-    {
-        w.u8(static_cast<std::uint8_t>(transport.size()));
-        w.bytes(std::as_bytes(std::span<const char>{transport.data(), transport.size()}));
-        w.u16(port);
-    }
+    detail::write_listens(w, ann);
     // Append-only: the pattern is the last field, gated on its presence flag, so a flagless emit
     // is byte-identical to the pre-pattern layout and a decoder reading only the prefix ignores it.
     if(ann.flags & k_announcement_universe_pattern_flag)
