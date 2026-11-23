@@ -5,20 +5,20 @@
 #include "plexus/expected.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/typed_codec.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 
-#include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
-#include "plexus/io/intra_node_transport.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/transport_selector.h"
+#include "plexus/io/intra_node_transport.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_executor.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/discovery/static_discovery.h"
 

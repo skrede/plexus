@@ -2,8 +2,10 @@
 #define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PRIORITY_BAND_QUEUE_COMMON_H
 
 #include "plexus/io/detail/priority_band_queue.h"
-#include "plexus/io/congestion.h"
+
 #include "plexus/io/priority.h"
+#include "plexus/io/congestion.h"
+
 #include "plexus/wire_bytes.h"
 
 #include <catch2/catch_test_macros.hpp>

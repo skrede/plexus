@@ -1,22 +1,23 @@
-#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <span>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <span>
-#include <vector>
 
 // shm_channel send -> drain round-trip over an anonymous mapped span: a payload
 // loans, one memcpy fills the slab, publish commits, the notifier signals exactly

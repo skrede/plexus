@@ -7,23 +7,23 @@
 // matching the auth channel's on-wire layout (proven at the unit level against the auth channel
 // directly; the secured node stack is NOT wired here — out of scope).
 
-#include "plexus/crypto/authenticated_channel.h"
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
+#include "plexus/crypto/authenticated_channel.h"
 
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/recording_channel.h"
 
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
 #include <array>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <utility>

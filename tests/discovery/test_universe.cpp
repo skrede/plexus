@@ -1,5 +1,5 @@
-#include "plexus/discovery/discovery_options.h"
 #include "plexus/discovery/universe.h"
+#include "plexus/discovery/discovery_options.h"
 
 #include <catch2/catch_test_macros.hpp>
 

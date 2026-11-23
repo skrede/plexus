@@ -15,19 +15,21 @@
 #include "plexus/node_options.h"
 
 #include "plexus/stream/datagram_socket.h"
+
 #include "plexus/detail/compat.h"
 
 #include "plexus/testing/pump.h"
 
 #include <asio/post.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 #include <asio/ip/address_v4.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <utility>

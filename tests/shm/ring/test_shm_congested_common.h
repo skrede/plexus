@@ -7,14 +7,15 @@
 // order, none skipped. And the reliable blocking spin/yield path allocates nothing
 // across N sends (the alloc-counter idiom).
 
-#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+
 #include "plexus/wire_bytes.h"
 
 #include "plexus/detail/compat.h"
@@ -23,14 +24,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <span>
 #include <atomic>
 #include <chrono>
+#include <thread>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <span>
-#include <thread>
-#include <vector>
 
 namespace shm_congested_fixture {
 

@@ -1,8 +1,7 @@
-#include "launch_helpers.h"
-
 #include "bus_notifier.h"
 #include "lifetime_rig.h"
 #include "xproc_process.h"
+#include "launch_helpers.h"
 
 #include "plexus/shm/slot_liveness.h"
 #include "plexus/shm/shm_acquire_result.h"
@@ -10,6 +9,7 @@
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/generators/catch_generators.hpp>
 
 #include <chrono>

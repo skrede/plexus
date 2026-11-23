@@ -1,5 +1,5 @@
-#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/shm/region_broker_concept.h"
 
@@ -7,10 +7,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <sys/mman.h>
+
 #include <string>
 #include <cstddef>
-
-#include <sys/mman.h>
 
 // The portable POSIX region-broker negative-path behaviors: an oversize create fast-fails
 // (too_large) with no region minted, an attach of a name that was never created returns

@@ -4,6 +4,7 @@
 // rather than over-read.
 
 #include "fuzz_sink.h"
+
 #include "plexus/wire/heartbeat.h"
 
 #include <span>

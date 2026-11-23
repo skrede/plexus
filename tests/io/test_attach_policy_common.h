@@ -5,9 +5,9 @@
 // decision over INJECTED fake hmac_fn (no OpenSSL, no backend link — plexus::plexus
 // only; the litmus proof the decision needs no crypto lib).
 
-#include "plexus/io/security/attach_policy.h"
-#include "plexus/io/security/attach_facts.h"
 #include "plexus/io/security/ct_equal.h"
+#include "plexus/io/security/attach_facts.h"
+#include "plexus/io/security/attach_policy.h"
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -8,8 +8,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_RELIABLE_DATAGRAM_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_RELIABLE_DATAGRAM_COMMON_H
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
 
 #include "plexus/wire/udp_ack.h"
@@ -23,6 +23,7 @@
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <array>

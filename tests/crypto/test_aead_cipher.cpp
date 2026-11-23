@@ -5,8 +5,8 @@
 // master (per-direction separation) and a transcript-bound derivation (a changed
 // transcript_digest changes the keys).
 
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
 
 #include <catch2/catch_test_macros.hpp>
 

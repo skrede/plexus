@@ -4,6 +4,7 @@
 // rather than over-read or materialize an unbounded string.
 
 #include "fuzz_sink.h"
+
 #include "plexus/wire/topic_declaration.h"
 
 #include <span>

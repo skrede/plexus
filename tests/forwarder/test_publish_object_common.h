@@ -8,14 +8,14 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
 
-#include "plexus/io/message_forwarder.h"
 #include "plexus/io/object_carrier.h"
+#include "plexus/io/message_forwarder.h"
 
+#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_timer.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"

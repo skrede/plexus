@@ -1,5 +1,5 @@
-#include "plexus/match/key_pattern_bounds.h"
 #include "plexus/match/key_pattern_error.h"
+#include "plexus/match/key_pattern_bounds.h"
 
 #include "plexus/wire/subscribe.h"
 

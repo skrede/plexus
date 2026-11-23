@@ -8,10 +8,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <cstddef>
-#include <cstdint>
 #include <span>
 #include <vector>
+#include <cstddef>
+#include <cstdint>
 
 using plexus::wire::udp_envelope_kind;
 using plexus::wire::udp_envelope_overhead;

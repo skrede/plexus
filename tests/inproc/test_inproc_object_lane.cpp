@@ -1,7 +1,7 @@
+#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_timer.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/io/object_carrier.h"
 
@@ -10,8 +10,8 @@
 #include <span>
 #include <string>
 #include <vector>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 using namespace plexus::inproc;
 using plexus::io::loan_slot;

@@ -3,7 +3,6 @@
 
 #include "fuzz_sink.h"
 #include "fuzz_region.h"
-
 #include "noop_notifier.h"
 
 #include "plexus/shm/loan_status.h"

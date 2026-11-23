@@ -4,8 +4,8 @@
 // never an over-read), and the forward-compatible over-long handling (the fixed
 // prefix decodes, the trailing bytes are ignored). A pure header-only wire unit.
 
-#include "plexus/wire/heartbeat.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/heartbeat.h"
 
 #include <catch2/catch_test_macros.hpp>
 

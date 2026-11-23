@@ -6,14 +6,14 @@
 // carries the qos so a deferred dial resurrects the real periods through
 // remembered_topics.
 
+#include "plexus/io/subscriber_qos.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/subscriber_registry.h"
-#include "plexus/io/subscriber_qos.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/wire/topic_hash.h"
 

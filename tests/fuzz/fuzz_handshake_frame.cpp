@@ -9,6 +9,7 @@
 // region because it decodes raw bytes, but the wider decode is exactly what it covers.
 
 #include "fuzz_sink.h"
+
 #include "plexus/wire/handshake.h"
 
 #include <span>

@@ -7,9 +7,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <cstddef>
 #include <span>
 #include <vector>
+#include <cstddef>
 
 using namespace plexus::wire;
 

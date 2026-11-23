@@ -1,12 +1,12 @@
 #include "plexus/tls/tls_policy.h"
+#include "plexus/tls/dtls_cookie.h"
+#include "plexus/tls/dtls_policy.h"
 #include "plexus/tls/tls_channel.h"
+#include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/tls_transport.h"
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/spki_fingerprint.h"
 
-#include "plexus/tls/dtls_policy.h"
-#include "plexus/tls/dtls_channel.h"
-#include "plexus/tls/dtls_cookie.h"
 #include "plexus/tls/detail/dtls_context.h"
 
 #include "plexus/io/security/verify_policy.h"
@@ -21,9 +21,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <asio/ssl/context.hpp>
 #include <asio/ssl/stream.hpp>
+#include <asio/ssl/context.hpp>
+
 #include <asio/ip/tcp.hpp>
+
 #include <asio/io_context.hpp>
 
 #include <openssl/evp.h>
@@ -33,12 +35,12 @@
 #include <span>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
-#include <cstdio>
-#include <utility>
 #include <cstddef>
+#include <utility>
 #include <optional>
 #include <filesystem>
 

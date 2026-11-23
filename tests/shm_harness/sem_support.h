@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_SEM_SUPPORT_H
 
 #include "plexus/asio/asio_policy.h"
+
 #include "plexus/asio/shm/macos/sem_notifier.h"
 
 #include "plexus/native/posix_shm_region_broker.h"

@@ -3,11 +3,13 @@
 #include "plexus/asio/asio_policy.h"
 
 #include "plexus/node_id.h"
+
 #include "plexus/discovery/contact_card.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/address_v4.hpp>
 
 #include <string>

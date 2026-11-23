@@ -1,25 +1,26 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PROCEDURE_FORWARDER_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PROCEDURE_FORWARDER_COMMON_H
 
-#include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/wire_forwarder.h"
 #include "plexus/io/frame_router.h"
+#include "plexus/io/wire_forwarder.h"
+#include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/log/logger.h"
+
 #include "plexus/policy.h"
 
 #include "plexus/wire/frame.h"
-#include "plexus/wire/subscribe.h"
 #include "plexus/wire/rpc_frame.h"
-#include "plexus/wire/rpc_status.h"
+#include "plexus/wire/subscribe.h"
 #include "plexus/wire/data_frame.h"
-#include "plexus/wire/frame_codec.h"
+#include "plexus/wire/rpc_status.h"
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -4,6 +4,7 @@
 // or yield a partial struct.
 
 #include "fuzz_sink.h"
+
 #include "plexus/wire/announcement.h"
 
 #include <span>

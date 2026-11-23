@@ -4,6 +4,7 @@
 #include "wake_block.h"
 
 #include "plexus/asio/asio_policy.h"
+
 #include "plexus/asio/shm/shm_notifier.h"
 
 #include "plexus/native/region_handle.h"

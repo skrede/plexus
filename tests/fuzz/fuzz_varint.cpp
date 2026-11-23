@@ -7,9 +7,9 @@
 
 #include "plexus/wire/varint.h"
 
+#include <span>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {

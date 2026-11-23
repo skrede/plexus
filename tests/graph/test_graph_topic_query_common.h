@@ -5,6 +5,8 @@
 
 #include "plexus/match/key_pattern.h"
 
+#include <catch2/catch_test_macros.hpp>
+
 #include <span>
 #include <array>
 #include <string>
@@ -13,8 +15,6 @@
 #include <cstdint>
 #include <algorithm>
 #include <string_view>
-
-#include <catch2/catch_test_macros.hpp>
 
 namespace graph_topics_fixture {
 

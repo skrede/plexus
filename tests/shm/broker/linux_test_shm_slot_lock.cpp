@@ -7,13 +7,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fcntl.h>
+
 #include <string>
 #include <cstdint>
 #include <optional>
 #include <filesystem>
 #include <system_error>
-
-#include <fcntl.h>
 
 // The Linux slot locks are open-file-description locks on a region's own /dev/shm descriptor; these cases pin them
 // within one process, where two handles on one region are two descriptions and so two holders.

@@ -3,10 +3,9 @@
 #include "node_driver.h"
 #include "seccomp_deny.h"
 #include "notifier_legs.h"
-#include "topology_block.h"
-
 #include "xproc_control.h"
 #include "xproc_harness.h"
+#include "topology_block.h"
 
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"
@@ -33,6 +32,11 @@
 #include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
+#include <netinet/in.h>
+
+#include <sys/prctl.h>
+#include <sys/socket.h>
+
 #include <span>
 #include <chrono>
 #include <string>
@@ -43,11 +47,6 @@
 #include <optional>
 #include <filesystem>
 #include <string_view>
-
-#include <netinet/in.h>
-
-#include <sys/prctl.h>
-#include <sys/socket.h>
 
 namespace {
 

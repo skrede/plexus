@@ -3,10 +3,10 @@
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
-#include "plexus/typed_codec.h"
 #include "plexus/wire_bytes.h"
-#include "plexus/loopback_node.h"
+#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
+#include "plexus/loopback_node.h"
 #include "plexus/executor_verbs.h"
 
 #include "plexus/io/process_loopback_channel.h"

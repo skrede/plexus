@@ -1,9 +1,9 @@
 #include "plexus/testing/harness.h"
-#include "plexus/testing/mock_policy.h"
 #include "plexus/testing/test_clock.h"
+#include "plexus/testing/mock_policy.h"
 
-#include "plexus/io/byte_channel.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/byte_channel.h"
 
 #include <catch2/catch_test_macros.hpp>
 

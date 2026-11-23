@@ -7,12 +7,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/address_v4.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <optional>
 

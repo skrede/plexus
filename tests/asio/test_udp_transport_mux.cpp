@@ -11,14 +11,14 @@ using namespace udp_transport_fixture;
 // (TCP) member, NEVER to bare best_effort UDP. The mux header pulls in plexus::tls for
 // its secure member (inert here — never dialed), hence the PLEXUS_HAVE_TLS_MUX gate.
 
-    #include "plexus/asio/all_backends_mux.h"
     #include "plexus/asio/unix_transport.h"
+    #include "plexus/asio/all_backends_mux.h"
 
     #include "plexus/io/polymorphic_byte_channel.h"
 
-    #include "plexus/tls/tls_credential.h"
     #include "plexus/tls/tls_transport.h"
     #include "plexus/tls/dtls_transport.h"
+    #include "plexus/tls/tls_credential.h"
 
     #include "plexus/testing/pump.h"
 

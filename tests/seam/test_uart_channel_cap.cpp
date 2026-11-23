@@ -13,6 +13,7 @@
 #include "plexus/wire/frame_codec.h"
 
 #include "plexus/io/io_error.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include <catch2/catch_test_macros.hpp>

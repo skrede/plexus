@@ -10,14 +10,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <unistd.h>
+
+#include <sys/syscall.h>
+
 #include <cerrno>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-
-#include <unistd.h>
-
-#include <sys/syscall.h>
 
 namespace {
 

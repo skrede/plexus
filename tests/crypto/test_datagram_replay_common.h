@@ -9,15 +9,16 @@
 // on_protocol_close; a datagram displaced below the window floor is dropped as
 // too-old. The drop counters read on demand.
 
-#include "plexus/crypto/datagram_authenticated_channel.h"
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
+#include "plexus/crypto/datagram_authenticated_channel.h"
 
 #include "plexus/datagram/anti_replay_window.h"
 
 #include "plexus/io/byte_channel.h"
-#include "plexus/wire/frame_codec.h"
+
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 

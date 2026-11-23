@@ -1,20 +1,22 @@
 #include <asio/io_context.hpp>
+
 #include <asio/posix/stream_descriptor.hpp>
 
+#include <unistd.h>
 #include <liburing.h>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <sys/eventfd.h>
 #include <sys/mman.h>
+#include <sys/eventfd.h>
 #include <sys/syscall.h>
-#include <linux/futex.h>
-#include <unistd.h>
 
+#include <linux/futex.h>
+
+#include <ctime>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <ctime>
 #include <system_error>
 
 // The thread-free notifier spike (NON-GATING). It answers ONE question

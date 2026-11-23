@@ -3,38 +3,40 @@
 
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
-#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+
 #include "plexus/wire_bytes.h"
 
 #include "plexus/asio/io_context_verbs.h"
 
-#include <asio/io_context.hpp>
-
 #include "plexus/testing/platform.h"
+
+#include <asio/io_context.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <cstring>
-#include <span>
-#include <string>
-#include <thread>
-
 #include <unistd.h>
+
 #include <sys/mman.h>
 #include <sys/wait.h>
+
+#include <span>
+#include <atomic>
+#include <chrono>
+#include <string>
+#include <thread>
+#include <cstdint>
+#include <cstring>
 
 // Dual-delivery (xproc): the same-host shared-memory upgrade ADDS a fast path; it
 // does NOT REPLACE the wire path. For ONE topic, this oracle proves both flows coexist:

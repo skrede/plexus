@@ -8,11 +8,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <limits>
 #include <vector>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
-#include <climits>
-#include <limits>
 
 using namespace plexus::wire;
 

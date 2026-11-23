@@ -1,6 +1,5 @@
-#include "region_doorbells.h"
-
 #include "region_names.h"
+#include "region_doorbells.h"
 
 #include "plexus/asio/shm/macos/sem_doorbell.h"
 
@@ -10,12 +9,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fcntl.h>
+#include <semaphore.h>
+
 #include <string>
 #include <cstdint>
 #include <optional>
-
-#include <fcntl.h>
-#include <semaphore.h>
 
 namespace {
 

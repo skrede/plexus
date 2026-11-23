@@ -1,7 +1,8 @@
 #include "plexus/io/message_info.h"
-#include "plexus/publisher_gid.h"
-#include "plexus/session_id.h"
+
 #include "plexus/node_id.h"
+#include "plexus/session_id.h"
+#include "plexus/publisher_gid.h"
 
 #include <catch2/catch_test_macros.hpp>
 

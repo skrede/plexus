@@ -1,10 +1,9 @@
 #include "wake_block.h"
 #include "topic_regions.h"
-#include "launch_helpers.h"
-
 #include "xproc_control.h"
 #include "xproc_harness.h"
 #include "xproc_process.h"
+#include "launch_helpers.h"
 
 #include "plexus/testing/platform.h"
 

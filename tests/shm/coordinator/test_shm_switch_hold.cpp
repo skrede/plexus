@@ -6,9 +6,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <thread>
 #include <vector>
-#include <cstdio>
 #include <cstdint>
 
 using plexus::testing::measure;

@@ -4,6 +4,7 @@
 // the fixed 12 bytes must reject (return nullopt) rather than over-read.
 
 #include "fuzz_sink.h"
+
 #include "plexus/wire/fetch_latched.h"
 
 #include <span>

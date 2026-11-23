@@ -1,6 +1,6 @@
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_layout.h"
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -9,11 +9,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <thread>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <thread>
-#include <vector>
 
 // The overwrite-vs-pin Dekker race between a best_effort producer and a consumer pinning each slot via
 // pin_if_current: a torn read (an overwrite stomping a live pin) would leave a pinned payload's halves disagreeing.

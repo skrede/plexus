@@ -1,6 +1,5 @@
-#include "test_shm_ring_core_common.h"
-
 #include "noop_notifier.h"
+#include "test_shm_ring_core_common.h"
 
 #include "plexus/shm/ring_cells.h"
 #include "plexus/shm/shm_channel.h"

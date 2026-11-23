@@ -5,6 +5,7 @@
 #include "plexus/wire/announcement.h"
 
 #include "plexus/node_id.h"
+
 #include "plexus/discovery/universe.h"
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"

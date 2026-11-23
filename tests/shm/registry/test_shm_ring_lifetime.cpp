@@ -5,6 +5,7 @@
 #include "plexus/shm/shm_acquire_result.h"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/generators/catch_generators.hpp>
 
 #include <latch>

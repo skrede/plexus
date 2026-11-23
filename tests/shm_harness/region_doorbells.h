@@ -6,6 +6,8 @@
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/doorbell_naming.h"
 
+#include <semaphore.h>
+
 #include <atomic>
 #include <string>
 #include <cstdint>
@@ -13,8 +15,6 @@
 #include <filesystem>
 #include <string_view>
 #include <system_error>
-
-#include <semaphore.h>
 
 namespace shm_harness {
 

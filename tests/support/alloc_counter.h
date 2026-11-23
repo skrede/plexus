@@ -1,10 +1,10 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SUPPORT_ALLOC_COUNTER_H
 #define HPP_GUARD_PLEXUS_TESTS_SUPPORT_ALLOC_COUNTER_H
 
+#include <new>
 #include <atomic>
 #include <cstddef>
 #include <cstdlib>
-#include <new>
 
 // Allocation counter for the no-hot-path-alloc gate: a test snapshots alloc_count(), runs a steady-state loop and
 // asserts a zero delta. A plain build replaces the global operator new/delete, which a program may do only once, so

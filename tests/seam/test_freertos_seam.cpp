@@ -11,8 +11,9 @@
 #include "plexus/freertos/freertos_policy.h"
 
 #include "plexus/io/peer_context.h"
-#include "plexus/wire_bytes.h"
+
 #include "plexus/policy.h"
+#include "plexus/wire_bytes.h"
 
 #include <catch2/catch_test_macros.hpp>
 

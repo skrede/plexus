@@ -1,17 +1,18 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_RELAY_H
 #define HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_RELAY_H
 
-#include <asio/io_context.hpp>
-#include <asio/ip/udp.hpp>
 #include <asio/buffer.hpp>
+#include <asio/io_context.hpp>
+
+#include <asio/ip/udp.hpp>
 
 #include <span>
 #include <array>
 #include <deque>
 #include <memory>
 #include <vector>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <system_error>
 
 // The programmable loss-injecting relay (ported from tests/asio/test_udp_reliable_arq.cpp,

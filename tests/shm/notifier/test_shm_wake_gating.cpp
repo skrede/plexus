@@ -7,13 +7,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
+
 #include <new>
 #include <atomic>
 #include <cstdint>
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 namespace {
 

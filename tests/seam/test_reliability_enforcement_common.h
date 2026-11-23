@@ -8,8 +8,8 @@
 // peer and (over a real inproc rendezvous) COMPLETES a session; a refused demand
 // establishes NO path (no slot, no demand, no dial), so no session ever forms.
 
-#include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/reliability_requirement.h"
 
@@ -19,14 +19,14 @@
 #include "plexus/inproc/inproc_executor.h"
 #include "plexus/inproc/inproc_transport.h"
 
-#include "plexus/node_id.h"
 #include "plexus/policy.h"
+#include "plexus/node_id.h"
 #include "plexus/executor_verbs.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <string>
 #include <chrono>
+#include <string>
 #include <cstdint>
 
 namespace reliability_enforcement_fixture {

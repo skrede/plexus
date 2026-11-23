@@ -6,12 +6,13 @@
 #define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_LOAN_POOL_COMMON_H
 
 #include "plexus/detail/loan_pool.h"
+
 #include "plexus/io/object_carrier.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <utility>
 #include <cstdint>
+#include <utility>
 
 namespace loan_pool_fixture {
 

@@ -1,8 +1,7 @@
-#include "sem_support.h"
-#include "region_doorbells.h"
-
 #include "heap_ring.h"
+#include "sem_support.h"
 #include "region_names.h"
+#include "region_doorbells.h"
 
 #include "support/alloc_counter.h"
 

@@ -3,6 +3,7 @@
 
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/subscriber_qos.h"
+
 #include "plexus/io/detail/egress_scheduler.h"
 
 #include "plexus/wire/topic_hash.h"
@@ -10,6 +11,7 @@
 #include "plexus/topic_qos.h"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/generators/catch_generators.hpp>
 
 #include <span>

@@ -4,21 +4,21 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_BACKPRESSURE_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_BACKPRESSURE_COMMON_H
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/slot_subscriber.h"
-#include "plexus/shm/taken_message.h"
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/taken_message.h"
+#include "plexus/shm/broadcast_ring.h"
+#include "plexus/shm/slot_subscriber.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <vector>
 
 namespace shm_ring_backpressure_fixture {
 

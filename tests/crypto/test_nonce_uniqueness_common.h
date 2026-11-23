@@ -8,20 +8,21 @@
 // CSPRNG draw, and never the ARQ sequence (a retransmit-reused ARQ sequence does not
 // reuse an AEAD nonce).
 
-#include "plexus/crypto/authenticated_channel.h"
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
+#include "plexus/crypto/authenticated_channel.h"
 
 #include "plexus/io/byte_channel.h"
-#include "plexus/wire/frame_codec.h"
+
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <set>
 #include <span>
-#include <tuple>
 #include <array>
+#include <tuple>
 #include <string>
 #include <vector>
 #include <cstddef>

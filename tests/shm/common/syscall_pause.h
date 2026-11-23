@@ -5,15 +5,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <bit>
-#include <cerrno>
-#include <future>
-#include <thread>
-#include <vector>
-#include <cstddef>
-#include <cstdint>
-#include <utility>
-
 #include <poll.h>
 #include <unistd.h>
 
@@ -24,6 +15,15 @@
 #include <linux/audit.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
+
+#include <bit>
+#include <cerrno>
+#include <future>
+#include <thread>
+#include <vector>
+#include <cstddef>
+#include <cstdint>
+#include <utility>
 
 namespace plexus::testing {
 

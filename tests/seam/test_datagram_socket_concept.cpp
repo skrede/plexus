@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/address_v4.hpp>
 
 namespace {

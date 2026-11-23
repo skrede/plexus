@@ -6,8 +6,8 @@
 
 #include "support/graph_change_inproc.h"
 
-#include "plexus/io/peer_report_emitter.h"
 #include "plexus/io/liveliness_options.h"
+#include "plexus/io/peer_report_emitter.h"
 
 #include "plexus/graph/std_map_topic_storage.h"
 #include "plexus/graph/vector_graph_change_log.h"

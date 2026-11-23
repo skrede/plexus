@@ -12,8 +12,8 @@
 #include "plexus/inproc/inproc_executor.h"
 #include "plexus/inproc/inproc_transport.h"
 
-#include "plexus/discovery/static_discovery.h"
 #include "plexus/discovery/contact_card.h"
+#include "plexus/discovery/static_discovery.h"
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -11,20 +11,20 @@
 // runs for cross-process reproducibility (a live-socket claim is never made from one
 // run).
 
-#include "plexus/asio/spin_run_loop.h"
 #include "plexus/asio/udp_channel.h"
+#include "plexus/asio/spin_run_loop.h"
 #include "plexus/asio/udp_transport.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <asio/io_context.hpp>
 #include <asio/post.hpp>
+#include <asio/io_context.hpp>
 
 #include <span>
-#include <string>
-#include <vector>
 #include <chrono>
 #include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <optional>
 

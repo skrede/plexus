@@ -1,12 +1,11 @@
 #include "sem_support.h"
-#include "topic_regions.h"
-#include "launch_helpers.h"
-#include "region_doorbells.h"
-
 #include "region_names.h"
+#include "topic_regions.h"
 #include "xproc_control.h"
 #include "xproc_harness.h"
 #include "xproc_process.h"
+#include "launch_helpers.h"
+#include "region_doorbells.h"
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/region_naming.h"
@@ -21,6 +20,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fcntl.h>
+#include <semaphore.h>
+
 #include <span>
 #include <atomic>
 #include <cerrno>
@@ -29,9 +31,6 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
-
-#include <fcntl.h>
-#include <semaphore.h>
 
 namespace {
 

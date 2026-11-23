@@ -11,8 +11,9 @@
 // over the inproc backend instantiates the seam table and the guarded cleanup bodies. The proof
 // is structural (compile + link under -fno-exceptions); no flow is driven.
 
-#include "plexus/publisher.h"
 #include "plexus/node.h"
+#include "plexus/node_id.h"
+#include "plexus/publisher.h"
 #include "plexus/node_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -21,8 +22,6 @@
 #include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/discovery/static_discovery.h"
-
-#include "plexus/node_id.h"
 
 #include <cstddef>
 

@@ -4,9 +4,11 @@
 #include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/upgrade_coordinator.h"
+
 #include "plexus/io/detail/upgrade_retry.h"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/generators/catch_generators.hpp>
 
 #include <chrono>

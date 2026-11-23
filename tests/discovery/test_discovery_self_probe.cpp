@@ -3,26 +3,29 @@
 #include "plexus/asio/default_discovery.h"
 
 #include "plexus/discovery/detail/announcement_card.h"
+
+#include "plexus/discovery/discovery.h"
+#include "plexus/discovery/contact_card.h"
 #include "plexus/discovery/discovery_health.h"
 #include "plexus/discovery/discovery_options.h"
 
 #include "plexus/wire/announcement.h"
 
 #include "plexus/io/network_interface.h"
+
 #include "plexus/log/logger.h"
+
 #include "plexus/node_id.h"
-#include "plexus/discovery/discovery.h"
-#include "plexus/discovery/contact_card.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
 
-#include <string>
-#include <string_view>
-#include <vector>
 #include <chrono>
+#include <string>
+#include <vector>
 #include <cstdint>
+#include <string_view>
 
 using namespace multicast_discovery_fixture;
 

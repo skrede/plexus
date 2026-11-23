@@ -15,12 +15,12 @@
 #include <openssl/x509.h>
 
 #include <array>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
-#include <cstdio>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <system_error>
 

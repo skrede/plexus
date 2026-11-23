@@ -6,8 +6,11 @@
 // type that compiles with no shm header in scope.
 
 #include "plexus/node.h"
+#include "plexus/policy.h"
+#include "plexus/node_id.h"
 #include "plexus/publisher.h"
 #include "plexus/node_options.h"
+#include "plexus/executor_verbs.h"
 
 #include "plexus/discovery/static_discovery.h"
 
@@ -17,16 +20,12 @@
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/same_host_geometry.h"
 
-#include "plexus/policy.h"
-#include "plexus/node_id.h"
-#include "plexus/executor_verbs.h"
-
 #include "plexus/wire/close_cause.h"
 
 #include <span>
 #include <deque>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <cstddef>
 #include <utility>
 #include <system_error>

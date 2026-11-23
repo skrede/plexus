@@ -3,19 +3,20 @@
 // by-value executor_type, the one shape in which a closure aliasing the source's executor reads freed memory once the
 // source is destroyed; every in-tree Policy's executor_type is a reference (ASan is the gate).
 
+#include "plexus/node_id.h"
 #include "plexus/recorder.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
 
 #include "plexus/io/observer.h"
 #include "plexus/io/capture_policy.h"
+
 #include "plexus/io/recording/byte_sink.h"
 #include "plexus/io/recording/record_stream_reader.h"
 
 #include "plexus/wire/topic_hash.h"
 
 #include "plexus/detail/compat.h"
-#include "plexus/node_id.h"
 
 #include "test_self_loopback_common.h"
 
@@ -23,12 +24,12 @@
 
 #include <span>
 #include <array>
-#include <vector>
 #include <memory>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <utility>
+#include <optional>
 
 using plexus::io::recording::record_category;
 using plexus::io::recording::decoded_record;

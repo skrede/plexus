@@ -1,7 +1,6 @@
-#include "region_doorbells.h"
-
 #include "region_names.h"
 #include "xproc_process.h"
+#include "region_doorbells.h"
 
 #include "plexus/shm/region_naming.h"
 

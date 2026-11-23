@@ -1,10 +1,12 @@
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/discovery/static_discovery.h"
+
 #include "plexus/log/logger.h"
+
 #include "plexus/policy.h"
 
 #include "support/alloc_counter.h"

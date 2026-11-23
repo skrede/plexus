@@ -1,5 +1,5 @@
-#include "plexus/post.h"
 #include "plexus/node.h"
+#include "plexus/post.h"
 #include "plexus/policy.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"

@@ -10,8 +10,8 @@
 
 #include "plexus/graph/topic_record.h"
 #include "plexus/graph/topic_type_table.h"
-#include "plexus/graph/fixed_topic_storage.h"
 #include "plexus/graph/participant_record.h"
+#include "plexus/graph/fixed_topic_storage.h"
 #include "plexus/graph/null_graph_change_log.h"
 #include "plexus/graph/vector_graph_change_log.h"
 

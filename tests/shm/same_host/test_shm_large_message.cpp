@@ -25,6 +25,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
+
 #include <span>
 #include <atomic>
 #include <memory>
@@ -36,10 +41,6 @@
 #include <optional>
 #include <string_view>
 #include <type_traits>
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 // The large-message live-mux round-trip: a publisher declares a sizing same_host_geometry and
 // mints the ring through shm_mux_member's ACQUIRE PATH (the live acquire — NOT the

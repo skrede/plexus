@@ -1,30 +1,31 @@
 #include "region_names.h"
 
-#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/io/dispatch_hint.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/shm_selection.h"
+#include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/dispatch_hint.h"
 
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
+
 #include <atomic>
+#include <string>
 #include <cstdint>
 #include <cstring>
 #include <optional>
-#include <string>
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 // The bilateral, consumer-sovereign shared-memory upgrade via DEMAND-DRIVEN
 // CONVERGENCE. Two real processes over the POSIX broker each decide INDEPENDENTLY

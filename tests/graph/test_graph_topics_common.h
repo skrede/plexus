@@ -12,17 +12,17 @@
 
 #include "plexus/graph/topic_record.h"
 
+#include <catch2/catch_test_macros.hpp>
+
 #include <span>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
 #include <string_view>
 #include <system_error>
-
-#include <catch2/catch_test_macros.hpp>
 
 namespace graph_topics_fixture {
 

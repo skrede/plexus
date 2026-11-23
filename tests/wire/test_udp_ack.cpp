@@ -9,8 +9,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
 #include <span>
+#include <array>
 #include <vector>
 #include <cstddef>
 #include <cstdint>

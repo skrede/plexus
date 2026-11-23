@@ -1,25 +1,26 @@
 #include "region_names.h"
 
+#include "plexus/native/region_handle.h"
 #include "plexus/native/machine_fingerprint.h"
 #include "plexus/native/posix_shm_region_broker.h"
-#include "plexus/native/region_handle.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <atomic>
-#include <cstdint>
-#include <cstring>
-#include <string>
-
 #include <unistd.h>
+
 #include <sys/mman.h>
 #include <sys/wait.h>
+
+#include <atomic>
+#include <string>
+#include <cstdint>
+#include <cstring>
 
 // The first whole-stack cross-process proof: TWO processes converge on the SAME
 // deterministically-named regions with NO name exchange (the demand-driven

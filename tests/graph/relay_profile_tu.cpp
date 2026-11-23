@@ -3,9 +3,8 @@
 // real emitter while preserving every storage/log alias, and both spellings still satisfy
 // target_profile. All proofs are compile-time host-side presence/absence proofs; main() only signals.
 
-#include "plexus/target_profile.h"
-
 #include "plexus/node.h"
+#include "plexus/target_profile.h"
 
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_transport.h"

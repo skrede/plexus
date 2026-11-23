@@ -7,8 +7,8 @@
 
 #include "plexus/io/endpoint_id.h"
 #include "plexus/io/known_peers.h"
-#include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/liveliness_options.h"
 

@@ -1,6 +1,5 @@
-#include "test_shm_ring_core_common.h"
-
 #include "handle_test_access.h"
+#include "test_shm_ring_core_common.h"
 
 #include "plexus/shm/loaned_buffer.h"
 #include "plexus/shm/taken_message.h"

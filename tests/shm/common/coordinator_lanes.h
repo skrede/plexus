@@ -2,8 +2,8 @@
 #define HPP_GUARD_PLEXUS_TESTS_SHM_COORDINATOR_LANES_H
 
 #include "plexus/io/dispatch_hint.h"
-#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/companion_event.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/upgrade_coordinator.h"
 

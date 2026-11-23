@@ -9,8 +9,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_LIVELINESS_MONITOR_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_LIVELINESS_MONITOR_COMMON_H
 
-#include "plexus/io/liveliness_monitor.h"
 #include "plexus/io/liveness_event.h"
+#include "plexus/io/liveliness_monitor.h"
 
 #include "plexus/testing/test_clock.h"
 #include "plexus/testing/mock_policy.h"

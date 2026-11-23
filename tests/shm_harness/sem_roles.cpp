@@ -1,10 +1,9 @@
-#include "sem_support.h"
-#include "region_doorbells.h"
-
 #include "heap_ring.h"
+#include "sem_support.h"
 #include "region_names.h"
 #include "xproc_control.h"
 #include "xproc_harness.h"
+#include "region_doorbells.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/region_naming.h"
@@ -21,6 +20,8 @@
 
 #include <asio/io_context.hpp>
 
+#include <semaphore.h>
+
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -32,12 +33,10 @@
 #include <functional>
 #include <string_view>
 
-#include <semaphore.h>
-
 #if defined(__linux__)
-    #include <csignal>
-
     #include <sys/prctl.h>
+
+    #include <csignal>
 #endif
 
 namespace {

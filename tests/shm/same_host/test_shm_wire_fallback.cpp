@@ -31,6 +31,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
+
 #include <span>
 #include <atomic>
 #include <memory>
@@ -41,10 +46,6 @@
 #include <cstring>
 #include <optional>
 #include <algorithm>
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 // The wire_fallback per-message routing proof, driven through BOTH the live
 // shm_mux_member acquire path (the capped ring is minted + sized by the member) AND

@@ -9,8 +9,8 @@
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
 
-#include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"

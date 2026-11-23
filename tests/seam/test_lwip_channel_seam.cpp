@@ -13,14 +13,14 @@
 #include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
 
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <vector>
 #include <memory>
+#include <vector>
 #include <cstddef>
 
 using plexus::test::host_tcp_socket;

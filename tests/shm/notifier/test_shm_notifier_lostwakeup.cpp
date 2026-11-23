@@ -2,12 +2,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <atomic>
-#include <cstdint>
-
 #include <unistd.h>
+
 #include <sys/mman.h>
 #include <sys/wait.h>
+
+#include <atomic>
+#include <cstdint>
 
 // The cross-process futex notifier: a producer process bumps the shared
 // generation word + signals; a consumer process reads the word -> drains -> waits.

@@ -1,5 +1,5 @@
-#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/native/detail/posix_shm_status.h"
 
@@ -9,17 +9,18 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/stat.h>
+
 #include <cerrno>
 #include <string>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
-
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 
 // The Linux-only region-broker behaviors that verify the broker THROUGH the /dev/shm tmpfs
 // view of POSIX shm: the 0600 owner-only mode of a minted region and the name contract (no

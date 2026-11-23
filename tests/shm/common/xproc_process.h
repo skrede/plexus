@@ -4,10 +4,10 @@
 #include "xproc_launch.h"
 
 #if !defined(_WIN32)
+    #include <sys/wait.h>
+
     #include <cerrno>
     #include <csignal>
-
-    #include <sys/wait.h>
 #endif
 
 #include <chrono>

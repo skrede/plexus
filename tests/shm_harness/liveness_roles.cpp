@@ -1,5 +1,4 @@
 #include "child_args.h"
-
 #include "region_names.h"
 #include "noop_notifier.h"
 #include "xproc_harness.h"
@@ -25,9 +24,9 @@
 #include <optional>
 
 #if defined(__linux__)
-    #include <csignal>
-
     #include <sys/prctl.h>
+
+    #include <csignal>
 #endif
 
 namespace {

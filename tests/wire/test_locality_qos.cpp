@@ -7,7 +7,9 @@
 
 #include "plexus/io/locality.h"
 #include "plexus/io/subscriber_registry.h"
+
 #include "plexus/io/detail/drop_event.h"
+
 #include "plexus/topic_qos.h"
 
 #include <catch2/catch_test_macros.hpp>

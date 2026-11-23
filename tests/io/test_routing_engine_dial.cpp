@@ -4,8 +4,8 @@
 // second dial of the same endpoint mints no second slot (the hash-of-endpoint redial-dedup contract).
 
 #include "plexus/io/endpoint_id.h"
-#include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 
 #include "plexus/inproc/inproc_bus.h"

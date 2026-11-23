@@ -1,7 +1,6 @@
-#include "launch_helpers.h"
-
 #include "region_names.h"
 #include "xproc_process.h"
+#include "launch_helpers.h"
 
 #include "plexus/native/shm_region_broker.h"
 
@@ -17,11 +16,12 @@
 #include <optional>
 
 #if !defined(_WIN32)
-    #include <cerrno>
-
     #include <fcntl.h>
     #include <unistd.h>
+
     #include <sys/mman.h>
+
+    #include <cerrno>
 #endif
 
 // The slot liveness proof seen from another process on every platform: a slot a child holds reads held while the child

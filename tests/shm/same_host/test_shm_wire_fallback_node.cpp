@@ -19,6 +19,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
+
 #include <span>
 #include <atomic>
 #include <memory>
@@ -27,10 +32,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 // The PRODUCTION-SEAM proof for wire_fallback: the same-host medium decision a node
 // reaches through node.advertise(...) is the multiplexer's selection hook over the

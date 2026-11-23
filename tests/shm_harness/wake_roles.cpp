@@ -1,13 +1,13 @@
 #include "child_args.h"
 #include "wake_block.h"
-#include "wake_producer.h"
-
 #include "region_names.h"
+#include "wake_producer.h"
 #include "xproc_control.h"
 #include "xproc_harness.h"
 
 #include "plexus/asio/shm/shm_member.h"
 #include "plexus/asio/shm/shm_notifier.h"
+
 #include "plexus/asio/shm/linux/futex_notifier.h"
 
 #include "plexus/native/posix_shm_region_broker.h"
@@ -28,6 +28,8 @@
 
 #include <asio/io_context.hpp>
 
+#include <sys/prctl.h>
+
 #include <chrono>
 #include <random>
 #include <string>
@@ -37,8 +39,6 @@
 #include <optional>
 #include <string_view>
 #include <type_traits>
-
-#include <sys/prctl.h>
 
 namespace {
 

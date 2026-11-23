@@ -3,8 +3,8 @@
 // the spki_pin_policy contract: a pin hit accepts, a pin miss rejects, and an EMPTY allowlist
 // rejects ANY facts (fail-closed — the prior-art-inverting default).
 
-#include "plexus/io/security/verify_policy.h"
 #include "plexus/io/security/cert_facts.h"
+#include "plexus/io/security/verify_policy.h"
 
 #include <catch2/catch_test_macros.hpp>
 

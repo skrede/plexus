@@ -7,6 +7,7 @@
 // arbitrary span.
 
 #include "plexus/datagram/detail/reassembler.h"
+
 #include "plexus/io/fragmentation.h"
 
 #include "plexus/wire/udp_envelope.h"
@@ -15,10 +16,10 @@
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_executor.h"
 
+#include <span>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 namespace {
 

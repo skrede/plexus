@@ -1,5 +1,5 @@
-#include "plexus/topic_query.h"
 #include "plexus/node.h"
+#include "plexus/topic_query.h"
 #include "plexus/node_options.h"
 #include "plexus/participant_query.h"
 

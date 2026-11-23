@@ -7,11 +7,11 @@
 #define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_TYPED_INTEROP_MATRIX_COMMON_H
 
 #include "plexus/node.h"
+#include "plexus/expected.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/expected.h"
-#include "plexus/typed_codec.h"
 #include "plexus/wire_bytes.h"
+#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -29,9 +29,9 @@
 
 #include <span>
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

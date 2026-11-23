@@ -2,12 +2,12 @@
 
 #include "plexus/asio/same_host_transports.h"
 
-#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/node_options.h"
 
@@ -19,15 +19,16 @@
 
 #include <asio/io_context.hpp>
 
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
+
 #include <atomic>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <string>
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 // The portable same-host composition: the consumer writes the SAME code on every platform
 // (no #if), and on Linux it resolves to the shm + AF_UNIX + TCP fast path. Two things are

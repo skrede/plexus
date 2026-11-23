@@ -9,8 +9,8 @@
 // Deterministic (fixed inputs, a monotonic counter) — a second run gives the identical
 // result (no RNG, no ad-hoc single run).
 
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -18,8 +18,8 @@
 #include <array>
 #include <string>
 #include <vector>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <unordered_set>
 

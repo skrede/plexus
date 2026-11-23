@@ -2,7 +2,6 @@
 #define HPP_GUARD_PLEXUS_TESTS_SHM_PARKER_MODEL_H
 
 #include "park_enumerator.h"
-
 #include "registered_waiters.h"
 
 #include "plexus/shm/ring_layout.h"

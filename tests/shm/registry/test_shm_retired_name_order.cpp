@@ -12,15 +12,16 @@
 #include "plexus/native/detail/posix_slot_lock.h"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/generators/catch_generators.hpp>
+
+#include <sys/mman.h>
 
 #include <string>
 #include <vector>
 #include <cstdint>
 #include <utility>
 #include <optional>
-
-#include <sys/mman.h>
 
 namespace {
 

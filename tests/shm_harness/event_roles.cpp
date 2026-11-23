@@ -2,6 +2,7 @@
 #include "xproc_harness.h"
 
 #include "plexus/asio/asio_policy.h"
+
 #include "plexus/asio/shm/windows/event_notifier.h"
 
 #include "plexus/native/win_shm_region_broker.h"

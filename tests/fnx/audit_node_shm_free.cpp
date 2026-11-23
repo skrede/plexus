@@ -16,6 +16,7 @@
 // compiles shm-free.
 
 #include "plexus/node.h"
+#include "plexus/node_id.h"
 #include "plexus/node_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -24,8 +25,6 @@
 #include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/discovery/static_discovery.h"
-
-#include "plexus/node_id.h"
 
 #include <cstddef>
 

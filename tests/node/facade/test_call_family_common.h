@@ -22,10 +22,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

@@ -35,9 +35,9 @@
 #include <optional>
 
 #if defined(__linux__)
-    #include <csignal>
-
     #include <sys/prctl.h>
+
+    #include <csignal>
 #endif
 
 namespace {

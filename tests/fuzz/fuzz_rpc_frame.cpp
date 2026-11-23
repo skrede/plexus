@@ -3,11 +3,12 @@
 // span; a fresh decode per call holds no shared state across inputs.
 
 #include "fuzz_sink.h"
+
 #include "plexus/wire/rpc_frame.h"
 
+#include <span>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {

@@ -26,6 +26,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/tcp.hpp>
 
 #include <openssl/evp.h>
@@ -35,10 +36,10 @@
 #include <span>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
-#include <cstdio>
 #include <cstddef>
 #include <utility>
 #include <optional>

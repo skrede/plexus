@@ -3,9 +3,9 @@
 
 #include "dtls_test_support.h"
 
-#include "plexus/tls/dtls_transport.h"
-#include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/dtls_cookie.h"
+#include "plexus/tls/dtls_channel.h"
+#include "plexus/tls/dtls_transport.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -13,12 +13,12 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
-#include <cstring>
 #include <cstddef>
+#include <cstring>
 
 namespace pdt  = plexus::dtls_test;
 namespace ptls = plexus::tls;

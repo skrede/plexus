@@ -2,38 +2,40 @@
 
 #include "plexus/asio/shm/linux/ring_notifier.h"
 
-#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/region_handle.h"
+#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/futex_notifier_primitive.h"
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/shm_channel.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
+
 #include "plexus/wire_bytes.h"
 
 #include "plexus/asio/io_context_verbs.h"
 
-#include <asio/io_context.hpp>
-
 #include "plexus/testing/platform.h"
+
+#include <asio/io_context.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <cstring>
-#include <span>
-#include <string>
-
 #include <unistd.h>
+
 #include <sys/mman.h>
 #include <sys/wait.h>
+
+#include <span>
+#include <atomic>
+#include <chrono>
+#include <string>
+#include <cstdint>
+#include <cstring>
 
 // The wakeup -> reactor bridge functional proof (xproc): a PRODUCER process
 // publishes into the shared ring and wakes the consumer's parked slot; the

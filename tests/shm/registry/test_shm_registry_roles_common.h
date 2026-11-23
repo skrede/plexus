@@ -5,8 +5,8 @@
 #include "delaying_broker.h"
 
 #include "plexus/shm/arm_status.h"
-#include "plexus/shm/ring_header.h"
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_header.h"
 #include "plexus/shm/broadcast_ring.h"
 #include "plexus/shm/shm_slot_owner.h"
 #include "plexus/shm/shm_acquire_result.h"

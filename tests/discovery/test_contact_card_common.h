@@ -11,7 +11,9 @@
 
 #include "plexus/discovery/contact_card.h"
 #include "plexus/discovery/static_discovery.h"
+
 #include "plexus/io/host_identity.h"
+
 #include "plexus/io/security/attach_facts.h"
 
 #include <catch2/catch_test_macros.hpp>

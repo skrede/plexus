@@ -7,8 +7,8 @@
 
 #include "plexus/inproc/inproc_policy.h"
 
-#include "plexus/io/io_error.h"
 #include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/fixed_peer_storage.h"
 
 #include "plexus/graph/fixed_topic_storage.h"
@@ -21,8 +21,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <utility>
-#include <type_traits>
 #include <string_view>
+#include <type_traits>
 
 namespace {
 

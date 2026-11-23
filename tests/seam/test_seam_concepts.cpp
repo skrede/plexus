@@ -5,17 +5,19 @@
 // single static_assert line, not a template-instantiation dump.
 
 #include "plexus/policy.h"
-#include "plexus/io/byte_channel.h"
 #include "plexus/wire_bytes.h"
+
+#include "plexus/io/byte_channel.h"
+
 #include "plexus/detail/compat.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <vector>
 #include <chrono>
-#include <cstddef>
 #include <memory>
+#include <vector>
+#include <cstddef>
 #include <system_error>
 
 using plexus::detail::move_only_function;

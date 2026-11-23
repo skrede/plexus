@@ -3,8 +3,8 @@
 
 #include "dtls_test_support.h"
 
-#include "plexus/tls/dtls_channel.h"
 #include "plexus/tls/dtls_cookie.h"
+#include "plexus/tls/dtls_channel.h"
 
 #include "plexus/asio/udp_server.h"
 
@@ -16,13 +16,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 
 namespace pdt   = plexus::dtls_test;

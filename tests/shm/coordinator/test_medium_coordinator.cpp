@@ -1,18 +1,21 @@
-#include "plexus/io/same_host_geometry.h"
-#include "plexus/io/upgrade_coordinator.h"
-#include "plexus/shm/shm_selection.h"
+#include "plexus/io/peer_context.h"
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/companion_event.h"
-#include "plexus/io/message_forwarder.h"
 #include "plexus/io/demand_transition.h"
-#include "plexus/io/peer_context.h"
+#include "plexus/io/message_forwarder.h"
+#include "plexus/io/same_host_geometry.h"
+#include "plexus/io/upgrade_coordinator.h"
 
+#include "plexus/shm/shm_selection.h"
+
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/policy.h"
+
+#include <catch2/catch_test_macros.hpp>
 
 #include <map>
 #include <span>
@@ -22,8 +25,6 @@
 #include <cstddef>
 #include <utility>
 #include <string_view>
-
-#include <catch2/catch_test_macros.hpp>
 
 // The medium-assert oracle: on a co-host qualifying demand edge the coordinator MINTS the
 // per-topic companion ring channel THROUGH the injected mint gate and RETAINS it — NEVER a direct

@@ -5,9 +5,9 @@
 
 #include "plexus/wire/frame_reassembler.h"
 
+#include <span>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size)
 {

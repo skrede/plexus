@@ -1,7 +1,6 @@
 #include "node_config.h"
-#include "topology_launch.h"
-
 #include "region_names.h"
+#include "topology_launch.h"
 
 #include "plexus/native/shm_region_broker.h"
 

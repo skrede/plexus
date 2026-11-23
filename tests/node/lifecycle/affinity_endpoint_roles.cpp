@@ -1,7 +1,6 @@
 #include "affinity_roles.h"
-#include "affinity_trip_child_common.h"
-
 #include "in_memory_byte_sink.h"
+#include "affinity_trip_child_common.h"
 
 #include "plexus/caller.h"
 #include "plexus/expected.h"

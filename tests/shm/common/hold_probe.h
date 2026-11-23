@@ -10,6 +10,7 @@
 #include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/io/observer.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include "plexus/discovery/universe.h"

@@ -8,11 +8,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <windows.h>
+
 #include <string>
 #include <cstdint>
 #include <optional>
-
-#include <windows.h>
 
 namespace {
 

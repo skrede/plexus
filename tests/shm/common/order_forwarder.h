@@ -14,6 +14,7 @@
 #include "plexus/wire/detail/data_frame_codec.h"
 
 #include "plexus/policy.h"
+
 #include "plexus/detail/compat.h"
 
 #include "plexus/testing/inline_verbs.h"

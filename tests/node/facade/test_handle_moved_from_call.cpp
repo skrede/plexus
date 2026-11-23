@@ -1,14 +1,14 @@
 // Debug turns the single-executor check on, and under it a moved-from call aborts; these cases pin the inert path.
 #undef PLEXUS_AFFINITY_CHECKS
 
+#include "test_call_family_common.h"
+#include "test_self_loopback_common.h"
+
 #include "plexus/caller.h"
 #include "plexus/procedure.h"
 #include "plexus/call_error.h"
 
 #include "plexus/wire/rpc_status.h"
-
-#include "test_call_family_common.h"
-#include "test_self_loopback_common.h"
 
 #include <catch2/catch_test_macros.hpp>
 

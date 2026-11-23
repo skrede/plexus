@@ -9,14 +9,15 @@
 // threshold re-derives a fresh key, bumps the key-epoch, and straddles an
 // in-flight pre-rekey frame; and the fragment budget subtracts the AEAD tag.
 
-#include "plexus/crypto/authenticated_channel.h"
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
+#include "plexus/crypto/authenticated_channel.h"
 
-#include "plexus/io/fragmentation.h"
 #include "plexus/io/byte_channel.h"
-#include "plexus/wire/frame_codec.h"
+#include "plexus/io/fragmentation.h"
+
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 

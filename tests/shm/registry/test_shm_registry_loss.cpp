@@ -1,6 +1,5 @@
-#include "notifier_legs.h"
-
 #include "region_names.h"
+#include "notifier_legs.h"
 
 #include "plexus/asio/asio_policy.h"
 

@@ -1,12 +1,13 @@
 #include "coordinator_lanes.h"
 
 #include "plexus/io/dispatch_hint.h"
-#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/companion_event.h"
+#include "plexus/io/upgrade_channel.h"
 #include "plexus/io/demand_transition.h"
 #include "plexus/io/upgrade_coordinator.h"
 
 #include <catch2/catch_test_macros.hpp>
+
 #include <catch2/generators/catch_generators.hpp>
 
 #include <cstddef>

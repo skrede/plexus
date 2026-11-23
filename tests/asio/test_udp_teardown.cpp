@@ -7,9 +7,9 @@
 
 #include "support/retire_drain.h"
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
 
 #include "plexus/io/byte_channel.h"
@@ -20,13 +20,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>
-#include <string>
-#include <vector>
 #include <chrono>
 #include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

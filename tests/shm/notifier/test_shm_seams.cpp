@@ -1,5 +1,5 @@
-#include "plexus/shm/region_broker_concept.h"
 #include "plexus/shm/notifier_concept.h"
+#include "plexus/shm/region_broker_concept.h"
 
 #include "plexus/detail/compat.h"
 
@@ -7,8 +7,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string_view>
 #include <utility>
+#include <string_view>
 
 // The two core seams (region_broker + notifier) the shared-memory backend and the
 // reactor bridge satisfy. These stub models prove the concepts are SATISFIABLE

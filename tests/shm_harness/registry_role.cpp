@@ -1,10 +1,9 @@
 #include "child_args.h"
 #include "node_config.h"
 #include "node_driver.h"
-#include "topology_block.h"
-
 #include "xproc_control.h"
 #include "xproc_harness.h"
+#include "topology_block.h"
 
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/same_host_transports.h"
@@ -27,6 +26,8 @@
 
 #include <asio/io_context.hpp>
 
+#include <sys/prctl.h>
+
 #include <span>
 #include <chrono>
 #include <string>
@@ -35,8 +36,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-
-#include <sys/prctl.h>
 
 namespace {
 

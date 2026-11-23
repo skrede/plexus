@@ -13,21 +13,22 @@
 // absence of those includes (a build that needed them would fail header-not-found). Do not
 // add them.
 
-#include "plexus/io/routing_engine.h"
 #include "plexus/io/known_peers.h"
-#include "plexus/io/fixed_peer_storage.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
-#include "plexus/io/liveliness_monitor.h"
+#include "plexus/io/routing_engine.h"
 #include "plexus/io/peer_liveliness.h"
+#include "plexus/io/reconnect_config.h"
+#include "plexus/io/fixed_peer_storage.h"
+#include "plexus/io/liveliness_monitor.h"
 
-#include "plexus/io/security/cookie_secret.h"
 #include "plexus/io/security/attach_policy.h"
+#include "plexus/io/security/cookie_secret.h"
 
 #include "plexus/stream/crc_serial.h"
+
+#include "plexus/wire/topic_hash.h"
 #include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame_reassembler.h"
-#include "plexus/wire/topic_hash.h"
 
 #include "plexus/detail/compat.h"
 #include "plexus/detail/fail_closed.h"

@@ -9,8 +9,9 @@
 #define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_QOS_RXO_COMMON_H
 
 #include "plexus/io/qos_rxo.h"
-#include "plexus/io/subscriber_qos.h"
 #include "plexus/io/reliability.h"
+#include "plexus/io/subscriber_qos.h"
+
 #include "plexus/topic_qos.h"
 
 #include <catch2/catch_test_macros.hpp>

@@ -4,10 +4,10 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_CORE_COMMON_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_CORE_COMMON_H
 
-#include "plexus/shm/broadcast_ring.h"
-#include "plexus/shm/ring_geometry.h"
-#include "plexus/shm/ring_layout.h"
 #include "plexus/shm/loan_status.h"
+#include "plexus/shm/ring_layout.h"
+#include "plexus/shm/ring_geometry.h"
+#include "plexus/shm/broadcast_ring.h"
 
 #include "plexus/io/congestion.h"
 #include "plexus/io/reliability.h"
@@ -15,11 +15,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <type_traits>
-#include <vector>
 
 namespace shm_ring_core_fixture {
 

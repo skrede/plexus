@@ -13,8 +13,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <array>
-#include <cstddef>
 #include <memory>
+#include <cstddef>
 #include <utility>
 
 using plexus::detail::move_only_function;

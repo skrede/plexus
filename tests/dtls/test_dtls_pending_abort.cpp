@@ -1,16 +1,17 @@
 #include "dtls_test_support.h"
 
-#include "plexus/tls/dtls_transport.h"
 #include "plexus/tls/dtls_channel.h"
+#include "plexus/tls/dtls_transport.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
+#include <chrono>
 #include <memory>
 #include <string>
-#include <chrono>
 
 namespace pdt  = plexus::dtls_test;
 namespace ptls = plexus::tls;

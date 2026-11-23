@@ -9,6 +9,7 @@
 #include "plexus/asio/default_discovery.h"
 
 #include "plexus/io/message_info.h"
+
 #include "plexus/discovery/universe.h"
 #include "plexus/discovery/discovery_options.h"
 
@@ -24,8 +25,8 @@
 
 #include <span>
 #include <array>
-#include <string>
 #include <chrono>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>

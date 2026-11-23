@@ -1,17 +1,17 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_SECCOMP_DENY_H
 #define HPP_GUARD_PLEXUS_TESTS_SHM_HARNESS_SECCOMP_DENY_H
 
-#include <array>
-#include <cerrno>
-#include <cstddef>
-#include <cstdint>
-
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
 #include <linux/audit.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
+
+#include <array>
+#include <cerrno>
+#include <cstddef>
+#include <cstdint>
 
 namespace shm_harness {
 

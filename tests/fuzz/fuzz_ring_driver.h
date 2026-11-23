@@ -3,9 +3,8 @@
 
 #include "fuzz_sink.h"
 #include "fuzz_region.h"
-#include "fuzz_ring_readers.h"
-
 #include "noop_notifier.h"
+#include "fuzz_ring_readers.h"
 
 #include "plexus/shm/detail/shm_ring_lifetime.h"
 

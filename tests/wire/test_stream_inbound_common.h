@@ -14,13 +14,14 @@
 // on_protocol_close(no_progress_timeout).
 
 #include "plexus/stream/stream_inbound.h"
-#include "plexus/wire/frame_codec.h"
-#include "plexus/wire/frame.h"
 
-#include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_channel.h"
-#include "plexus/inproc/inproc_timer.h"
+#include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
+
 #include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_timer.h"
+#include "plexus/inproc/inproc_channel.h"
+#include "plexus/inproc/inproc_executor.h"
 
 #include <catch2/catch_test_macros.hpp>
 

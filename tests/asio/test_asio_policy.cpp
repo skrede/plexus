@@ -1,5 +1,5 @@
-#include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_timer.h"
+#include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_channel.h"
 
 #include "plexus/policy.h"

@@ -1,11 +1,11 @@
-#include "plexus/inproc/inproc_transport.h"
-#include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_policy.h"
+#include "plexus/inproc/inproc_executor.h"
+#include "plexus/inproc/inproc_transport.h"
 
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
 
 #include "plexus/node_id.h"
 

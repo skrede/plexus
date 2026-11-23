@@ -3,13 +3,13 @@
 #include <catch2/catch_test_macros.hpp>
 
 #if !defined(_WIN32)
-    #include <cerrno>
     #include <unistd.h>
 
     #include <sys/mman.h>
     #include <sys/wait.h>
 
     #include <atomic>
+    #include <cerrno>
     #include <cstdint>
 #endif
 

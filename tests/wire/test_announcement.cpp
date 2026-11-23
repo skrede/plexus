@@ -6,8 +6,8 @@
 // value-agnostic — the discovery leaf, not the codec, gates on it). These cases double
 // as the codec's fuzz oracle.
 
-#include "plexus/wire/announcement.h"
 #include "plexus/wire/byte_order.h"
+#include "plexus/wire/announcement.h"
 
 #include "plexus/node_id.h"
 

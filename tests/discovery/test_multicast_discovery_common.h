@@ -7,6 +7,7 @@
 #include "plexus/discovery/multicast_discovery.h"
 
 #include "plexus/stream/datagram_socket.h"
+
 #include "plexus/detail/compat.h"
 
 #include "plexus/testing/inline_verbs.h"

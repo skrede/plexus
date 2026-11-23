@@ -3,13 +3,12 @@
 
 #include "node_config.h"
 #include "topic_regions.h"
-#include "launch_helpers.h"
-#include "topology_block.h"
-#include "topology_rounds.h"
-
 #include "xproc_control.h"
 #include "xproc_harness.h"
 #include "xproc_process.h"
+#include "launch_helpers.h"
+#include "topology_block.h"
+#include "topology_rounds.h"
 
 #include <array>
 #include <chrono>

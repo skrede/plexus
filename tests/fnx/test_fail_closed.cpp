@@ -8,8 +8,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <stdexcept>
 #include <string>
+#include <stdexcept>
 #include <type_traits>
 
 using plexus::detail::fail_closed;
