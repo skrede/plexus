@@ -1,0 +1,7 @@
+#ifndef HPP_GUARD_TESTS_INCLUDE_ORDER_GATE_FOLDER_FOLDER_FIXTURE_H
+#define HPP_GUARD_TESTS_INCLUDE_ORDER_GATE_FOLDER_FOLDER_FIXTURE_H
+
+#include "alpha/one.h"
+#include "beta/two.h"
+
+#endif

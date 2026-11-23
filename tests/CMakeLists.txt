@@ -29,6 +29,7 @@ if(PLEXUS_BUILD_TESTS)
     # way, so its result does not depend on PLEXUS_ENABLE_SHM_BACKEND.
     include(${PROJECT_SOURCE_DIR}/cmake/shm_leak_gate.cmake)
     include(${PROJECT_SOURCE_DIR}/cmake/size_gate.cmake)
+    include(${PROJECT_SOURCE_DIR}/cmake/include_order_gate.cmake)
     # The function-size and cognitive-complexity gate reaches the header-only library bodies through the test TUs that
     # include them, so it needs the compile database those TUs produce.
     include(${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)

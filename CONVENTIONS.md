@@ -128,7 +128,23 @@ for a real reason.
   section the file's **own subsystem comes first** (its own folder/module), then the remaining
   project folder groups. Only one blank line between any two groups.
 - Within a folder group, sort by the include's **file-name length, shortest first**; file names
-  of equal length sort alphabetically.
+  of equal length sort alphabetically, comparing byte-wise, so an uppercase letter sorts before
+  every lowercase one.
+- A folder group is **one directory**: `plexus/io` and `plexus/io/detail` are two groups. A
+  directory forms one group per block, and so does the standard-library section, whose headers
+  have no directory.
+- The own subsystem is the file's **own directory**: for a header, its path below `include/` (or
+  `shm-include/`); for a source or a test, the directory of the header it is named after, or its
+  own directory when it includes a file beside it. The remaining project groups may come in any
+  order.
+- A section is decided by what the include names, not by its quotes: a quoted include of a file
+  the repository does not hold, and every angle include that is not a C++ standard-library header
+  (operating-system headers, OpenSSL, asio and Catch2 among them), is third-party.
+- A **block** is a run of include and blank lines, ended by any other line, and the order is
+  checked within each block. An include that must precede another for a real reason stands in its
+  own block, under a one-line comment saying why.
+- The include-order gate checks every source root: lib, backends, tests, examples, tools and
+  benchmarks.
 
 ## Naming
 

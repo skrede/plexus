@@ -1,0 +1,8 @@
+#ifndef HPP_GUARD_TESTS_INCLUDE_ORDER_GATE_SECTION_SECTION_FIXTURE_H
+#define HPP_GUARD_TESTS_INCLUDE_ORDER_GATE_SECTION_SECTION_FIXTURE_H
+
+#include <string>
+
+#include "section_stub.h"
+
+#endif

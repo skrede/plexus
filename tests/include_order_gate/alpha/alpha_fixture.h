@@ -1,0 +1,7 @@
+#ifndef HPP_GUARD_TESTS_INCLUDE_ORDER_GATE_ALPHA_ALPHA_FIXTURE_H
+#define HPP_GUARD_TESTS_INCLUDE_ORDER_GATE_ALPHA_ALPHA_FIXTURE_H
+
+#include "parts/beta.h"
+#include "parts/alfa.h"
+
+#endif
