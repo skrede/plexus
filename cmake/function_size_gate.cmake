@@ -49,11 +49,14 @@ function(function_size_gate_check_run log rc err)
         message(FATAL_ERROR "function size gate: run-clang-tidy failed (exit ${rc}):\n${err}")
     elseif(_failures)
         list(JOIN _failures "\n  " _failures)
-        message(FATAL_ERROR "function size gate: clang-tidy could not check a library source:\n  ${_failures}")
+        message(FATAL_ERROR "function size gate: clang-tidy did not finish a source:\n  ${_failures}")
     elseif(NOT _measured)
         message(FATAL_ERROR "function size gate: clang-tidy measured no function")
     endif()
 endfunction()
+
+set(_diagnostic_regex
+    "${FUNC_GATE_SCOPE}[^ ]*:[0-9]+:[0-9]+: (warning: .*readability-function-(size|cognitive-complexity)|note: [0-9]+ lines including)")
 
 # FUNC_GATE_TIDY_LOG replays a recorded clang-tidy output so the gate's parsing can be tested against fixed
 # diagnostics.
@@ -71,7 +74,9 @@ if(NOT FUNC_GATE_TIDY_LOG)
 
     # -checks keeps an unrelated diagnostic out of the result. clang-tidy counts a body from brace to brace, so a zero
     # line threshold reports every body's length for the screen count; -config replaces .clang-tidy, hence the
-    # restated limits.
+    # restated limits. The log keeps only the lines the gate reads, each once: a header's diagnostics repeat in every TU
+    # that includes it, which made the raw output hundreds of megabytes. The filters run in the C locale so a source
+    # line's non-UTF-8 byte cannot make grep treat the stream as binary.
     string(CONCAT _tidy_config "{CheckOptions: {"
         "readability-function-size.LineThreshold: 0, readability-function-size.StatementThreshold: -1, "
         "readability-function-cognitive-complexity.Threshold: 25, readability-function-cognitive-complexity.IgnoreMacros: true}}")
@@ -82,15 +87,17 @@ if(NOT FUNC_GATE_TIDY_LOG)
                 -checks=-*,readability-function-size,readability-function-cognitive-complexity
                 "-config=${_tidy_config}"
                 "-header-filter=.*/(lib|backends)/plexus.*"
+        COMMAND ${CMAKE_COMMAND} -E env LC_ALL=C grep -a -E "${_diagnostic_regex}|terminated by signal|^Error while processing "
+        COMMAND ${CMAKE_COMMAND} -E env LC_ALL=C awk "!seen[$0]++"
         OUTPUT_FILE ${_tidy_log}
         ERROR_VARIABLE _tidy_err
-        RESULT_VARIABLE _tidy_rc)
+        RESULTS_VARIABLE _tidy_results)
+    list(GET _tidy_results 0 _tidy_rc)
     function_size_gate_check_run("${_tidy_log}" "${_tidy_rc}" "${_tidy_err}")
 endif()
 
 # Read line by line, so a quoted source line's unbalanced bracket cannot fold neighboring diagnostics together.
-file(STRINGS "${_tidy_log}" _diagnostics REGEX
-    "${FUNC_GATE_SCOPE}[^ ]*:[0-9]+:[0-9]+: (warning: .*readability-function-(size|cognitive-complexity)|note: [0-9]+ lines including)")
+file(STRINGS "${_tidy_log}" _diagnostics REGEX "${_diagnostic_regex}")
 list(REMOVE_DUPLICATES _diagnostics)
 function_size_gate_overages(_diagnostics _violations)
 list(LENGTH _violations _nviol)

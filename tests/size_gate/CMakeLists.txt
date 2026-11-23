@@ -111,7 +111,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND RUN_CLANG_TIDY)
         "[{\"directory\": \"${_run_dir}/missing_source\", \"command\": \"c++ -std=c++20 -c ${_missing}\", \"file\": \"${_missing}\"}]\n")
     set(_run_cases no_database empty_database missing_source)
     set(_run_verdicts "run-clang-tidy failed \\(exit [0-9]+\\)" "clang-tidy measured no function"
-        "clang-tidy could not check a library source:[^/]*Error while processing [^ ]*/missing_source/backends/plexus-demo/src/missing\\.cpp")
+        "clang-tidy did not finish a source:[^/]*Error while processing [^ ]*/missing_source/backends/plexus-demo/src/missing\\.cpp")
     foreach(_case _verdict IN ZIP_LISTS _run_cases _run_verdicts)
         add_test(NAME function_size_gate.${_case}_run_rejected
             COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON -DFUNC_GATE_BUILD_DIR=${_run_dir}/${_case}
