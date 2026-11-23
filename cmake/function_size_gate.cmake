@@ -39,17 +39,27 @@ if(FUNC_GATE_SOURCES_FILE)
     function_size_gate_check_coverage()
 endif()
 
-# clang-tidy exits nonzero on a TU that fails to compile, as the compile-fail tests' TUs do by design, so the exit
-# status alone cannot tell a broken run: one is broken when run-clang-tidy itself fails, a clang-tidy dies, a library
-# TU cannot be processed, or no function was measured at all.
+# clang-tidy exits nonzero on a TU that fails to compile, as the compile-fail tests' TUs do by design, and
+# run-clang-tidy before LLVM 19 writes clang-tidy's per-TU summary lines to its own error output. A run is broken when
+# a clang-tidy dies or a library TU cannot be processed, as either output says, when it exits nonzero with error output
+# beyond those summary lines, or when it measured no function.
 function(function_size_gate_check_run log rc err)
-    file(STRINGS "${log}" _failures REGEX "terminated by signal|^Error while processing .*${FUNC_GATE_SCOPE}")
+    set(_failure_regex "terminated by signal|^Error while processing .*${FUNC_GATE_SCOPE}")
+    string(CONCAT _summary_regex "^([0-9]+ (warnings?|errors?|warnings? and [0-9]+ errors?) generated\\.|"
+        "Error while processing .*|Suppressed [0-9]+ warnings? .*|Use -header-filter=.*|"
+        "Found compiler error\\(s\\)\\.|[ \t]*)$")
+    file(STRINGS "${log}" _failures REGEX "${_failure_regex}")
+    file(STRINGS "${err}" _err_failures REGEX "${_failure_regex}")
+    list(APPEND _failures ${_err_failures})
+    file(STRINGS "${err}" _residue)
+    list(FILTER _residue EXCLUDE REGEX "${_summary_regex}")
     file(STRINGS "${log}" _measured REGEX ": note: [0-9]+ lines including" LIMIT_COUNT 1)
-    if(NOT rc EQUAL 0 AND NOT err STREQUAL "")
-        message(FATAL_ERROR "function size gate: run-clang-tidy failed (exit ${rc}):\n${err}")
-    elseif(_failures)
+    if(_failures)
         list(JOIN _failures "\n  " _failures)
         message(FATAL_ERROR "function size gate: clang-tidy did not finish a source:\n  ${_failures}")
+    elseif(NOT rc EQUAL 0 AND NOT _residue STREQUAL "")
+        list(JOIN _residue "\n  " _residue)
+        message(FATAL_ERROR "function size gate: run-clang-tidy failed (exit ${rc}):\n  ${_residue}")
     elseif(NOT _measured)
         message(FATAL_ERROR "function size gate: clang-tidy measured no function")
     endif()
@@ -62,10 +72,10 @@ set(_diagnostic_regex
 # diagnostics; FUNC_GATE_TIDY_RC with FUNC_GATE_TIDY_ERR adds the run's exit status and error output for the run check.
 set(_tidy_log "${FUNC_GATE_TIDY_LOG}")
 if(FUNC_GATE_TIDY_LOG AND DEFINED FUNC_GATE_TIDY_RC)
-    file(READ "${FUNC_GATE_TIDY_ERR}" _tidy_err)
-    function_size_gate_check_run("${_tidy_log}" "${FUNC_GATE_TIDY_RC}" "${_tidy_err}")
+    function_size_gate_check_run("${_tidy_log}" "${FUNC_GATE_TIDY_RC}" "${FUNC_GATE_TIDY_ERR}")
 elseif(NOT FUNC_GATE_TIDY_LOG)
     set(_tidy_log "${FUNC_GATE_BUILD_DIR}/function_size_gate_tidy.log")
+    set(_tidy_err "${FUNC_GATE_BUILD_DIR}/function_size_gate_tidy.err")
     find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)
     if(NOT RUN_CLANG_TIDY)
         message(WARNING
@@ -93,7 +103,7 @@ elseif(NOT FUNC_GATE_TIDY_LOG)
         COMMAND ${CMAKE_COMMAND} -E env LC_ALL=C grep -a -E "${_diagnostic_regex}|terminated by signal|^Error while processing "
         COMMAND ${CMAKE_COMMAND} -E env LC_ALL=C awk "!seen[$0]++"
         OUTPUT_FILE ${_tidy_log}
-        ERROR_VARIABLE _tidy_err
+        ERROR_FILE ${_tidy_err}
         RESULTS_VARIABLE _tidy_results)
     list(GET _tidy_results 0 _tidy_rc)
     function_size_gate_check_run("${_tidy_log}" "${_tidy_rc}" "${_tidy_err}")
