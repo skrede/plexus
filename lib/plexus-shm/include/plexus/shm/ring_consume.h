@@ -23,6 +23,17 @@ inline bool pin_if_current(cell_t &c, std::uint64_t cursor) noexcept
     return false;
 }
 
+template<typename Ring>
+loan_status ahead_of_cursor(Ring &r, std::uint64_t cursor, std::int64_t dif, typename Ring::consume_result &out) noexcept
+{
+    if(dif < static_cast<std::int64_t>(r.cell_count()))
+        return loan_status::congested;
+    // A lap leaves the producer's tail past the cursor. A sequence a lap ahead with no tail past the cursor is one no
+    // producer wrote, and following it could walk a reader through the ring forever.
+    out.position = r.tail_position();
+    return out.position > cursor ? loan_status::lagged : loan_status::empty;
+}
+
 // sequence==cursor+1 -> ok with a read-only slab span; nothing newer -> empty; lapped by at least a full ring ->
 // lagged, carrying the producer tail so the caller jumps there in one step; the producer mid-commit less than a lap
 // ahead, or a skip tombstone -> congested (the caller steps its cursor forward by one without delivering).
@@ -35,14 +46,7 @@ loan_status ring_consume(Ring &r, std::uint64_t cursor, typename Ring::consume_r
     if(dif < 0)
         return loan_status::empty;
     if(dif > 0)
-    {
-        if(dif < static_cast<std::int64_t>(r.cell_count()))
-            return loan_status::congested;
-        // A lap leaves the producer's tail past the cursor. A sequence a lap ahead with no tail past the cursor is one no
-        // producer wrote, and following it could walk a reader through the ring forever.
-        out.position = r.tail_position();
-        return out.position > cursor ? loan_status::lagged : loan_status::empty;
-    }
+        return ahead_of_cursor(r, cursor, dif, out);
 
     const std::uint32_t len = c.payload_len.load(std::memory_order_relaxed);
     if(len == k_skip_len)
