@@ -36,6 +36,18 @@ void wire_inbound_drop(Registry &reg, Slot &slot)
             });
 }
 
+template<typename Build, typename Slot>
+void wire_relay_decline(Build &build, Slot &slot)
+{
+    slot.session->set_declines_relay(build.declines_relay);
+    slot.session->on_decline_seen(
+            [&build](const node_id &id, bool declines)
+            {
+                if(build.on_decline_seen)
+                    build.on_decline_seen(id, declines);
+            });
+}
+
 template<typename Registry, typename Slot>
 void wire_observer(Registry &reg, Slot &slot)
 {
@@ -53,13 +65,7 @@ void wire_observer(Registry &reg, Slot &slot)
                 if(reg.m_build.on_stamp_seen)
                     reg.m_build.on_stamp_seen(id);
             });
-    slot.session->set_declines_relay(reg.m_build.declines_relay);
-    slot.session->on_decline_seen(
-            [&reg](const node_id &id, bool declines)
-            {
-                if(reg.m_build.on_decline_seen)
-                    reg.m_build.on_decline_seen(id, declines);
-            });
+    detail::wire_relay_decline(reg.m_build, slot);
     slot.session->on_security([&reg](const security_event &ev) { reg.m_build.session_observer.on_security(ev); });
 }
 
