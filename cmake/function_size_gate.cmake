@@ -1,13 +1,14 @@
-# No library function may exceed the function ceiling (25 lines, comments and blanks included) or the
-# cognitive-complexity ceiling unless it carries a function-scoped NOLINTNEXTLINE(readability-function-size) and an
-# EXCEPTIONS.md row. clang-tidy checks a header's bodies through any TU that includes it, and lib/ is header-only, so
-# the run visits the whole compile database, test TUs included, and -header-filter scopes diagnostics back to the
-# library. A source compiled by a lib/ or backends/ target but absent from the database would go unchecked, so the
-# gate fails on one. clang-tidy runs advisory and the gate fails itself on a surviving library diagnostic, because
-# -warnings-as-errors keys on the check, not its location, and -header-filter cannot suppress a TU's own main file.
-# Included from the build, the file registers an ALL target that re-runs it through -P with FUNC_GATE_FATAL=ON; a
-# bare -P run stays advisory.
+# No library function may exceed the function ceiling (25 lines as it sits on screen, from its signature's first line
+# to its closing brace, comments and blanks included) or the cognitive-complexity ceiling unless it carries a
+# function-scoped NOLINTNEXTLINE(readability-function-size) and an EXCEPTIONS.md row. clang-tidy checks a header's
+# bodies through any TU that includes it, and lib/ is header-only, so the run visits the whole compile database, test
+# TUs included, and -header-filter scopes diagnostics back to the library. A source compiled by a lib/ or backends/
+# target but absent from the database would go unchecked, so the gate fails on one. clang-tidy runs advisory and the
+# gate fails itself on a surviving library diagnostic, because -warnings-as-errors keys on the check, not its location,
+# and -header-filter cannot suppress a TU's own main file. Included from the build, the file registers an ALL target
+# that re-runs it through -P with FUNC_GATE_FATAL=ON; a bare -P run stays advisory.
 set(FUNC_GATE_SCOPE "/(lib|backends)/plexus")
+set(FUNC_GATE_CEILING 25)
 
 function(function_size_gate_target_sources target out)
     set(_found "")
@@ -76,6 +77,10 @@ if(NOT FUNC_GATE_SCAN)
     return()
 endif()
 
+# A bare -P run sets no policy, and the line lists need CMP0007's empty elements.
+cmake_policy(VERSION 3.25)
+include(${CMAKE_CURRENT_LIST_DIR}/function_size_gate_lines.cmake)
+
 # One regex over the whole database, because a per-entry string(JSON ... GET) re-parses the file on every call.
 function(function_size_gate_database_files out)
     set(_database "")
@@ -117,9 +122,9 @@ endif()
 
 # FUNC_GATE_TIDY_LOG replays a recorded clang-tidy output so the gate's parsing can be tested against fixed
 # diagnostics.
-if(FUNC_GATE_TIDY_LOG)
-    file(READ "${FUNC_GATE_TIDY_LOG}" _tidy_out)
-else()
+set(_tidy_log "${FUNC_GATE_TIDY_LOG}")
+if(NOT FUNC_GATE_TIDY_LOG)
+    set(_tidy_log "${FUNC_GATE_BUILD_DIR}/function_size_gate_tidy.log")
     find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)
     if(NOT RUN_CLANG_TIDY)
         message(WARNING
@@ -129,30 +134,29 @@ else()
         return()
     endif()
 
-    # -checks keeps an unrelated diagnostic out of the result.
+    # -checks keeps an unrelated diagnostic out of the result. clang-tidy counts a body from brace to brace, so a zero
+    # line threshold reports every body's length for the screen count; -config replaces .clang-tidy, hence the
+    # restated limits.
+    string(CONCAT _tidy_config "{CheckOptions: {"
+        "readability-function-size.LineThreshold: 0, readability-function-size.StatementThreshold: -1, "
+        "readability-function-cognitive-complexity.Threshold: 25, readability-function-cognitive-complexity.IgnoreMacros: true}}")
     execute_process(
         COMMAND ${RUN_CLANG_TIDY}
                 -p ${FUNC_GATE_BUILD_DIR}
                 -quiet
                 -checks=-*,readability-function-size,readability-function-cognitive-complexity
+                "-config=${_tidy_config}"
                 "-header-filter=.*/(lib|backends)/plexus.*"
-        OUTPUT_VARIABLE _tidy_out
+        OUTPUT_FILE ${_tidy_log}
         ERROR_VARIABLE _tidy_err
         RESULT_VARIABLE _tidy_rc)
 endif()
 
-# Warning lines are matched out of the raw output rather than split into a list, because CMake does not split a list
-# on ';' inside brackets and clang-tidy's quoted source lines carry unbalanced ones.
-set(_violations "")
-string(REGEX MATCHALL
-    "[^\n]*warning:[^\n]*(readability-function-size|readability-function-cognitive-complexity)[^\n]*"
-    _warnings "${_tidy_out}")
-foreach(_line IN LISTS _warnings)
-    if(_line MATCHES "${FUNC_GATE_SCOPE}")
-        list(APPEND _violations "${_line}")
-    endif()
-endforeach()
-list(REMOVE_DUPLICATES _violations)
+# Read line by line, so a quoted source line's unbalanced bracket cannot fold neighboring diagnostics together.
+file(STRINGS "${_tidy_log}" _diagnostics REGEX
+    "${FUNC_GATE_SCOPE}[^ ]*:[0-9]+:[0-9]+: (warning: .*readability-function-(size|cognitive-complexity)|note: [0-9]+ lines including)")
+list(REMOVE_DUPLICATES _diagnostics)
+function_size_gate_overages(_diagnostics _violations)
 list(LENGTH _violations _nviol)
 
 if(_nviol EQUAL 0)

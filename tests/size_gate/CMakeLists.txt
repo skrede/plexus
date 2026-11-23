@@ -87,3 +87,14 @@ add_test(NAME function_size_gate.coverage_complete_accepted
             -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
 set_tests_properties(function_size_gate.coverage_complete_accepted PROPERTIES
     PASS_REGULAR_EXPRESSION "function size gate: clean")
+
+# The function gate counts a function as it sits on screen: a template header puts a body that clang-tidy measures
+# within the ceiling over it, and a function that fits is not named.
+configure_file(function/screen/screen_tidy.txt.in ${CMAKE_CURRENT_BINARY_DIR}/function/screen_tidy.txt @ONLY)
+add_test(NAME function_size_gate.screen_count_overage_rejected
+    COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON
+            -DFUNC_GATE_TIDY_LOG=${CMAKE_CURRENT_BINARY_DIR}/function/screen_tidy.txt
+            -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+set_tests_properties(function_size_gate.screen_count_overage_rejected PROPERTIES
+    PASS_REGULAR_EXPRESSION "1 unsuppressed library function overage\\(s\\):[^/]*- [^ ]*/screen_fixture\\.h:9:3: warning: function 'over_on_screen' exceeds [^\n]* -- 26 lines on screen"
+    FAIL_REGULAR_EXPRESSION "within_on_screen")
