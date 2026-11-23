@@ -32,11 +32,21 @@ void register_endpoint(Engine &e, const node_id &id, const std::string &node_nam
         e.m_monitor.register_endpoint(id, wire::fqn_topic_hash(demand.fqn), demand.qos.requested_deadline_ns, demand.qos.requested_lease_ns);
 }
 
+// A down edge leaves the tables alone while another complete session for the identity survives.
+template<typename Engine>
+void note_identity_down(Engine &e, const lifecycle_event &ev)
+{
+    if(any_session_for(e, ev.id))
+        return;
+    e.m_monitor.deregister_endpoint(ev.id);
+    e.m_coordinator.on_peer_dead(ev.node_name);
+    e.m_peer_liveliness.note_session_down(ev.id, e.now_for_aging());
+}
+
 // A rejected handshake is an un-established session: tear_down's prior-complete guard suppresses
 // the disconnected edge, so a dead/disconnected feed is NOT guaranteed to follow. Mapping rejected
 // to session-down settles the peer as not-alive rather than leaving a stuck session state. An
 // accepted session refused before it proved an identity names node_id{}, which no table tracks.
-// A down edge leaves the tables alone while another complete session for the identity survives.
 template<typename Engine>
 void feed_liveliness_session(Engine &e, const lifecycle_event &ev)
 {
@@ -52,11 +62,7 @@ void feed_liveliness_session(Engine &e, const lifecycle_event &ev)
             return e.m_peer_liveliness.note_session_up(ev.id);
         case lifecycle_edge::disconnected:
         case lifecycle_edge::dead:
-            if(any_session_for(e, ev.id))
-                return;
-            e.m_monitor.deregister_endpoint(ev.id);
-            e.m_coordinator.on_peer_dead(ev.node_name);
-            return e.m_peer_liveliness.note_session_down(ev.id, e.now_for_aging());
+            return note_identity_down(e, ev);
         case lifecycle_edge::rejected:
             if(!any_session_for(e, ev.id))
                 e.m_peer_liveliness.note_session_down(ev.id, e.now_for_aging());

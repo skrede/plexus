@@ -646,6 +646,9 @@ private:
     friend void detail::register_endpoint(E &, const node_id &, const std::string &);
 
     template<typename E>
+    friend void detail::note_identity_down(E &, const lifecycle_event &);
+
+    template<typename E>
     friend void detail::feed_liveliness_session(E &, const lifecycle_event &);
 
     template<typename E>
