@@ -67,6 +67,21 @@ shm::acquire_result topic_mint(Broker &broker, shm::acquire_failure &failure, En
     return shm::acquire_result::created;
 }
 
+// The bound a ring attach failed on, or none when the ring attached.
+inline shm::acquire_bound ring_attach_bound(shm::loan_status status) noexcept
+{
+    switch(status)
+    {
+        case shm::loan_status::ok:
+            return shm::acquire_bound::none;
+        case shm::loan_status::unstamped:
+        case shm::loan_status::retired:
+            return shm::acquire_bound::transient_join;
+        default:
+            return shm::acquire_bound::incompatible;
+    }
+}
+
 // The consumer path: maps the publisher's regions and re-reads the geometry from the control header. A slab missing
 // beside a live control region, or a header not stamped yet, is a creator still minting, and a retired header a ring
 // whose names are going: both a transient join. A retired ring whose holder died before removing its names is removed
@@ -89,16 +104,10 @@ shm::acquire_result topic_join(Broker &broker, shm::acquire_failure &failure, En
     }
     if(const shm::region_status ss = broker.attach(slab_name, e.slab); ss != shm::region_status::ok)
         return fail(ss == shm::region_status::not_found ? shm::acquire_bound::transient_join : shm::acquire_bound::os_allocator, ss);
-    switch(shm::broadcast_ring::attach(e.control.bytes(), e.slab.bytes(), publisher, e.ring))
-    {
-        case shm::loan_status::ok:
-            return shm::acquire_result::attached;
-        case shm::loan_status::unstamped:
-        case shm::loan_status::retired:
-            return fail(shm::acquire_bound::transient_join);
-        default:
-            return fail(shm::acquire_bound::incompatible);
-    }
+    const shm::acquire_bound bound = ring_attach_bound(shm::broadcast_ring::attach(e.control.bytes(), e.slab.bytes(), publisher, e.ring));
+    if(bound == shm::acquire_bound::none)
+        return shm::acquire_result::attached;
+    return fail(bound);
 }
 
 }
