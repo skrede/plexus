@@ -11,14 +11,11 @@
 // to plexus::detail. The reach is by namespace fall-through.
 namespace plexus::detail {
 
-// An object whose target vanished still releases (no leak); an unmatched data packet reports
-// unroutable to its sender if that is still registered (already off the synchronous send path).
-template<typename Bus, typename Packet>
-void dispatch_packet(Bus &bus, Packet &pkt)
+template<typename Channels, typename Packet>
+bool deliver_to_target(Channels &channels, Packet &pkt)
 {
-    using packet_kind = typename Bus::packet_kind;
-    bool delivered    = false;
-    for(auto &entry : bus.m_channels)
+    using packet_kind = decltype(Packet::kind);
+    for(auto &entry : channels)
         if(pkt.to_key == entry.key)
         {
             if(pkt.kind == packet_kind::close)
@@ -27,10 +24,18 @@ void dispatch_packet(Bus &bus, Packet &pkt)
                 entry.chan->deliver_object(pkt.carrier);
             else
                 entry.chan->deliver(std::span<const std::byte>(pkt.data));
-            delivered = true;
-            break;
+            return true;
         }
+    return false;
+}
 
+// An object whose target vanished still releases (no leak); an unmatched data packet reports
+// unroutable to its sender if that is still registered (already off the synchronous send path).
+template<typename Bus, typename Packet>
+void dispatch_packet(Bus &bus, Packet &pkt)
+{
+    using packet_kind    = typename Bus::packet_kind;
+    const bool delivered = deliver_to_target(bus.m_channels, pkt);
     if(pkt.kind == packet_kind::object && !delivered)
         io::release(pkt.carrier);
     if(pkt.kind == packet_kind::data && !delivered && pkt.from_key != 0)
