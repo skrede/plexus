@@ -135,19 +135,24 @@ public:
     void close()
     {
     }
+
     endpoint remote_endpoint() const
     {
         return endpoint{m_scheme, "peer"};
     }
+
     void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)>)
     {
     }
+
     void on_closed(plexus::detail::move_only_function<void()>)
     {
     }
+
     void on_error(plexus::detail::move_only_function<void(plexus::io::io_error)>)
     {
     }
+
     void on_protocol_close(plexus::detail::move_only_function<void(plexus::wire::close_cause)>)
     {
     }
@@ -156,10 +161,12 @@ public:
     {
         return static_cast<std::size_t>(std::ranges::count(m_carried, m));
     }
+
     std::size_t last_len() const
     {
         return m_last_len;
     }
+
     std::uint64_t last_hash() const
     {
         return m_last_hash;

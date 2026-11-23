@@ -42,11 +42,13 @@ public:
             : m_state(seed)
     {
     }
+
     std::uint64_t next() noexcept
     {
         m_state = m_state * 6364136223846793005ull + 1442695040888963407ull;
         return m_state >> 17u;
     }
+
     std::size_t bounded(std::size_t n) noexcept
     {
         return static_cast<std::size_t>(next() % n);
