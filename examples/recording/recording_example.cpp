@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <filesystem>
 
 using plexus::inproc::inproc_policy;
