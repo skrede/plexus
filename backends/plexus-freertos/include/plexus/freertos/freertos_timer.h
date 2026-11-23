@@ -26,9 +26,9 @@ public:
     using clock_type = std::chrono::steady_clock;
 
     explicit freertos_timer(freertos_executor &ex)
-            : m_exec(&ex)
+            : m_exec(ex)
     {
-        m_exec->register_timer(this);
+        m_exec.register_timer(this);
     }
 
     freertos_timer(freertos_executor &ex, std::error_code &)
@@ -38,8 +38,7 @@ public:
 
     ~freertos_timer()
     {
-        if(m_exec)
-            m_exec->deregister_timer(this);
+        m_exec.deregister_timer(this);
     }
 
     freertos_timer(const freertos_timer &)            = delete;
@@ -91,7 +90,7 @@ private:
         }
     }
 
-    freertos_executor *m_exec;
+    freertos_executor &m_exec;
     TickType_t m_expiry{};
     plexus::detail::move_only_function<void(std::error_code)> m_handler;
     bool m_active{false};
