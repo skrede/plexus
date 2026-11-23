@@ -4,12 +4,8 @@ using namespace udp_transport_fixture;
 
 #ifdef PLEXUS_HAVE_TLS_MUX
 
-// The mux-route legs prove the (tier, scheme->reliability) composition reaches the
-// right member through the REAL dial(ep) path: a "udp" best_effort dial flows over the
-// UDP member; a "tcp" reliable dial routes to the TCP member and never touches UDP; and
-// the SLICE-state guard — a "udpr" reliable_datagram dial routes to the reliable STREAM
-// (TCP) member, NEVER to bare best_effort UDP. The mux header pulls in plexus::tls for
-// its secure member (inert here — never dialed), hence the PLEXUS_HAVE_TLS_MUX gate.
+// The mux header pulls in plexus::tls for its secure member (inert here — never dialed),
+// hence the PLEXUS_HAVE_TLS_MUX gate.
 
     #include "plexus/asio/unix_transport.h"
     #include "plexus/asio/all_backends_mux.h"
@@ -143,23 +139,18 @@ TEST_CASE("udp mux: a reliable 'tcp' dial routes to the TCP member, never touchi
 
 TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member, NEVER TCP", "[udp][mux][route][flip]")
 {
-    // THE FLIP (the other half of the no-downgrade fix): the datagram-with-retransmit ARQ
-    // now exists, so a "udpr" demand rides the UDP DATAGRAM member with the ARQ engaged —
-    // not the TCP stream fallback it took before the engine landed. The route and the
-    // channel's reliable mode engage together: the datagram member reads "udpr" and mints
-    // a reliable-datagram channel (its send() drives the selective-repeat engine). The
-    // standing invariant holds — reliable_datagram is NEVER served over bare best_effort
-    // UDP; it was TCP before the ARQ, it is UDP+ARQ now. This deliberately REPLACES the
-    // Slice-A guard assertion (udpr->TCP), making the flip explicit and test-pinned.
+    // The route and the channel's reliable mode engage together: the datagram member reads
+    // "udpr" and mints a reliable-datagram channel (its send() drives the selective-repeat
+    // engine). reliable_datagram is NEVER served over bare best_effort UDP.
     mux_pair n;
-    // The listen face accepts on UDP (the family the flip now routes "udpr" to) AND TCP
-    // (to prove "udpr" does NOT land on the stream member any more).
+    // The listen face accepts on UDP AND TCP, so a "udpr" dial landing on the stream member
+    // would show.
     n.listen_face.mux.listen({"udp", "127.0.0.1:0"});
     n.listen_face.mux.listen({"tcp", "127.0.0.1:0"});
     n.pump_until([&] { return n.listen_face.datagram.port() != 0; });
 
-    // Dial "udpr" at the UDP member's port: the flip routes a reliable_datagram demand to
-    // the datagram member with the ARQ. The dialed channel reports "udpr" — proof it rode
+    // Dial "udpr" at the UDP member's port: a reliable_datagram demand routes to the
+    // datagram member with the ARQ. The dialed channel reports "udpr" — proof it rode
     // the datagram member in reliable mode, NOT the TCP stream.
     n.dial_face.mux.dial({"udpr", "127.0.0.1:" + std::to_string(n.listen_face.datagram.port())});
     n.pump_until([&] { return n.dialed && n.accepted; });
@@ -172,7 +163,7 @@ TEST_CASE("udp mux: a reliable_datagram 'udpr' dial routes to the UDP+ARQ member
     REQUIRE(n.dial_face.remote.port() == 0);
 
     // And it delivers in-order reliably: a frame flows through the erased channel's single
-    // send() verb (which now drives the ARQ) and the acceptor posts it identically.
+    // send() verb (which drives the ARQ) and the acceptor posts it identically.
     std::optional<std::string> got;
     n.accepted->on_data([&](std::span<const std::byte> b) { got = str_of(b); });
     const std::string payload = "mux-udpr-reliable";
