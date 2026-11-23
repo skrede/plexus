@@ -245,9 +245,9 @@ std::string slab_name(const std::string &fqn)
 // small message the forwarder routed over the ring, and fingerprint it against the
 // framed bytes the parent recorded — proving byte-exact cross-process SHM delivery of
 // the actual forwarder frame.
-bool subscribe_and_check(const std::string &fqn, coord *c)
+bool subscribe_and_check(const std::string &fqn, coord &c)
 {
-    while(c->publisher_ready.load(std::memory_order_acquire) == 0)
+    while(c.publisher_ready.load(std::memory_order_acquire) == 0)
         ;
 
     posix_shm_region_broker broker;
@@ -258,8 +258,8 @@ bool subscribe_and_check(const std::string &fqn, coord *c)
     if(pio::broadcast_ring::attach(ctrl.bytes(), slab.bytes(), plexus::testing::test_publisher(), ring) != pio::loan_status::ok)
         return false;
 
-    const std::uint64_t want_len  = c->expect_len.load(std::memory_order_acquire);
-    const std::uint64_t want_hash = c->expect_hash.load(std::memory_order_acquire);
+    const std::uint64_t want_len  = c.expect_len.load(std::memory_order_acquire);
+    const std::uint64_t want_hash = c.expect_hash.load(std::memory_order_acquire);
 
     std::uint64_t cursor = 0;
     bool ok              = false;
@@ -305,7 +305,7 @@ route_result drive_round_trip(const std::string &fqn, std::size_t declared_paylo
     REQUIRE(pid >= 0);
     if(pid == 0)
     {
-        const bool ok = subscribe_and_check(fqn, c);
+        const bool ok = subscribe_and_check(fqn, *c);
         c->bytes_ok.store(ok ? 1u : 0u, std::memory_order_release);
         c->subscriber_done.store(1, std::memory_order_release);
         ::_exit(ok ? 0 : 1);
