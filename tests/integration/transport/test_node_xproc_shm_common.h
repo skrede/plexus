@@ -13,6 +13,8 @@
 
 #include "plexus/topic_qos.h"
 
+#include "plexus/testing/platform.h"
+
 #include <span>
 #include <atomic>
 #include <cerrno>
@@ -110,6 +112,33 @@ inline int reap(pid_t pid)
         if(errno != EINTR)
             return -1;
     return status;
+}
+
+struct run_endpoints
+{
+    std::uint16_t sub_port;
+    std::uint16_t pub_port;
+    plexus::node_id sub_id;
+    plexus::node_id pub_id;
+    std::string sub_name;
+    std::string pub_name;
+};
+
+struct run_setup
+{
+    const std::string &fqn;
+    const std::string &small;
+    const std::string &large;
+    bool same_host;
+    const run_endpoints &ends;
+    coord &c;
+};
+
+inline run_endpoints make_endpoints()
+{
+    const std::uint16_t sub_port = static_cast<std::uint16_t>(41000 + 2 * (plexus::testing::process_id() % 9000));
+    const std::uint16_t pub_port = sub_port + 1;
+    return {sub_port, pub_port, make_id(0x51), make_id(0x52), "node.sub." + std::to_string(plexus::testing::process_id()), "node.pub." + std::to_string(plexus::testing::process_id())};
 }
 
 // The same-host hint makes the upgrade eligible; the small cap makes the companion the wire_fallback bounded ring.

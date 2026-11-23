@@ -11,7 +11,6 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/testing/pump.h"
-#include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -28,33 +27,6 @@
 #include <sys/mman.h>
 
 namespace node_xproc_shm_fixture {
-
-struct run_endpoints
-{
-    std::uint16_t sub_port;
-    std::uint16_t pub_port;
-    plexus::node_id sub_id;
-    plexus::node_id pub_id;
-    std::string sub_name;
-    std::string pub_name;
-};
-
-struct run_setup
-{
-    const std::string &fqn;
-    const std::string &small;
-    const std::string &large;
-    bool same_host;
-    const run_endpoints &ends;
-    coord &c;
-};
-
-inline run_endpoints make_endpoints()
-{
-    const std::uint16_t sub_port = static_cast<std::uint16_t>(41000 + 2 * (plexus::testing::process_id() % 9000));
-    const std::uint16_t pub_port = sub_port + 1;
-    return {sub_port, pub_port, make_id(0x51), make_id(0x52), "node.sub." + std::to_string(plexus::testing::process_id()), "node.pub." + std::to_string(plexus::testing::process_id())};
-}
 
 inline void tag_arrival(int fd, const run_setup &run, std::span<const std::byte> b)
 {
