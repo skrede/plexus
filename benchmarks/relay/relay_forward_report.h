@@ -4,12 +4,12 @@
 #include "relay_topology.h"
 
 #include <array>
-#include <vector>
-#include <string>
 #include <cstdio>
-#include <ostream>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 #include <algorithm>
 
 namespace relay_bench {

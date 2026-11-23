@@ -8,10 +8,10 @@
 // must be defined before the first mcap include, so the mcap headers precede the
 // emitter header (which includes the writer without the implementation macro).
 #define MCAP_IMPLEMENTATION
-#include <mcap/writer.hpp>
-#include <mcap/reader.hpp>
-
 #include "plexus/tools/detail/mcap_channel_emitter.h"
+
+#include <mcap/reader.hpp>
+#include <mcap/writer.hpp>
 
 #include <span>
 #include <filesystem>

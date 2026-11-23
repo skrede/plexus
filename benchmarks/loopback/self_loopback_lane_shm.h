@@ -12,6 +12,7 @@
 
     #include "plexus/asio/asio_transport.h"
     #include "plexus/asio/unix_transport.h"
+
     #include "plexus/asio/detail/same_host_shm_config.h"
 
     #include "plexus/native/posix_shm_region_broker.h"
@@ -20,14 +21,14 @@
 
     #include <asio/io_context.hpp>
 
+    #include <unistd.h>
+
     #include <span>
     #include <string>
     #include <vector>
     #include <cstddef>
     #include <cstdint>
     #include <algorithm>
-
-    #include <unistd.h>
 
 namespace self_loopback {
 

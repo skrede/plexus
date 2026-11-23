@@ -1,24 +1,25 @@
 #ifndef HPP_GUARD_BENCHMARKS_RELAY_RELAY_TOPOLOGY_H
 #define HPP_GUARD_BENCHMARKS_RELAY_RELAY_TOPOLOGY_H
 
+#include "plexus/io/null_logger.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/message_forwarder.h"
-#include "plexus/io/message_info.h"
-#include "plexus/io/null_logger.h"
+
 #include "plexus/io/detail/forward_splice.h"
 
-#include "plexus/inproc/inproc_policy.h"
-#include "plexus/inproc/inproc_transport.h"
-#include "plexus/inproc/inproc_executor.h"
 #include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_policy.h"
+#include "plexus/inproc/inproc_executor.h"
+#include "plexus/inproc/inproc_transport.h"
 
-#include "plexus/topic_qos.h"
 #include "plexus/node_id.h"
+#include "plexus/topic_qos.h"
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <cstdint>
-#include <chrono>
 
 namespace relay_bench {
 

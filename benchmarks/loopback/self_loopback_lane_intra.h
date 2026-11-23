@@ -7,8 +7,8 @@
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
 #include "plexus/typed_codec.h"
-#include "plexus/loopback_node.h"
 #include "plexus/node_options.h"
+#include "plexus/loopback_node.h"
 #include "plexus/executor_verbs.h"
 
 #include "plexus/io/message_info.h"
@@ -27,8 +27,8 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <utility>
 #include <cstdlib>
+#include <utility>
 #include <iostream>
 
 namespace self_loopback {

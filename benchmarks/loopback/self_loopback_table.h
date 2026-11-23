@@ -4,9 +4,9 @@
 #include "self_loopback_report.h"
 
 #include <array>
+#include <cstdio>
 #include <string>
 #include <vector>
-#include <cstdio>
 #include <cstddef>
 #include <ostream>
 #include <algorithm>

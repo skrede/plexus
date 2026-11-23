@@ -11,6 +11,8 @@
 #include <asio/post.hpp>
 #include <asio/io_context.hpp>
 
+#include <unistd.h>
+
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -21,8 +23,6 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
-
-#include <unistd.h>
 
 namespace {
 

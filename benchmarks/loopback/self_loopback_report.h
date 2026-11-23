@@ -3,10 +3,10 @@
 
 #include <span>
 #include <array>
-#include <string>
-#include <vector>
 #include <chrono>
 #include <cstdio>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <ostream>

@@ -4,8 +4,8 @@
 // point publishes and drains one message at a time on the real steady_clock and is repeated, so the
 // report carries the median and the relayed-minus-direct hop overhead, never a single run.
 
-#include "relay_forward_report.h"
 #include "relay_topology.h"
+#include "relay_forward_report.h"
 
 #include <vector>
 #include <fstream>
