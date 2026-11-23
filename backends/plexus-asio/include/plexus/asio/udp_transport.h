@@ -171,6 +171,27 @@ public:
 private:
     using dial_registry = io::pending_dial_registry<udp_channel>;
 
+    ::asio::io_context &m_io;
+    udp_server m_server;
+    std::size_t m_max_peers;
+    detail::udp_inbound_demux m_demux;
+    std::size_t m_max_payload;                      // per-FRAGMENT MTU budget (NOT the message ceiling)
+    std::size_t m_global_default;                   // node-level per-MESSAGE size ceiling
+    std::size_t m_reassembly_budget;                // aggregate reassembly-memory cap (always-on)
+    std::size_t m_backpressure_bytes;               // per-channel bounded send queue for windowed fragments
+    std::chrono::milliseconds m_reassembly_timeout; // per-message reassembly reclaim window
+    arq_type::schedule m_hs_ladder;
+    datagram::detail::udp_arq_config m_arq_cfg;
+    io::congestion m_congestion;
+    std::random_device m_isn_rng;
+    std::vector<std::byte> m_hs_scratch;
+    dial_registry m_dials; // the half-open dial table + the accepted table
+    plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+
     static datagram::detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
     {
         return scheme == "udpr" ? datagram::detail::udp_channel_mode::reliable_datagram : datagram::detail::udp_channel_mode::best_effort;
@@ -224,27 +245,6 @@ private:
     friend void detail::route_to_peer(U &, const typename U::endpoint_type &, udp_channel *, std::span<const std::byte>);
     template<typename U>
     friend void detail::on_datagram(U &, const typename U::endpoint_type &, std::span<const std::byte>);
-
-    ::asio::io_context &m_io;
-    udp_server m_server;
-    std::size_t m_max_peers;
-    detail::udp_inbound_demux m_demux;
-    std::size_t m_max_payload;                      // per-FRAGMENT MTU budget (NOT the message ceiling)
-    std::size_t m_global_default;                   // node-level per-MESSAGE size ceiling
-    std::size_t m_reassembly_budget;                // aggregate reassembly-memory cap (always-on)
-    std::size_t m_backpressure_bytes;               // per-channel bounded send queue for windowed fragments
-    std::chrono::milliseconds m_reassembly_timeout; // per-message reassembly reclaim window
-    arq_type::schedule m_hs_ladder;
-    datagram::detail::udp_arq_config m_arq_cfg;
-    io::congestion m_congestion;
-    std::random_device m_isn_rng;
-    std::vector<std::byte> m_hs_scratch;
-    dial_registry m_dials; // the half-open dial table + the accepted table
-    plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>)> m_on_accepted_cb;
-    plexus::detail::move_only_function<void(std::unique_ptr<udp_channel>, const io::endpoint &)> m_on_dialed_cb;
-    plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
 };
 
 }
