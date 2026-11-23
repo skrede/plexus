@@ -83,6 +83,25 @@ void replay_window(Send &send, const detail::history_ring &ring, std::size_t lim
         send(ring.oldest_to_newest(i));
 }
 
+template<typename Send>
+void replay_durable(Send &send, const detail::history_ring &ring, const subscriber_qos &sub)
+{
+    switch(sub.durability_mode)
+    {
+        case durability::none:
+            return;
+        case durability::latest:
+            send(ring.newest());
+            return;
+        case durability::all:
+            {
+                auto count = ring.count();
+                auto limit = sub.replay_depth ? std::min<std::size_t>(count, sub.replay_depth) : count;
+                replay_window(send, ring, limit);
+            }
+    }
+}
+
 // The replay the subscriber registered on channel asked for, handed to send.
 template<typename Forwarder, typename Channel, typename Send>
 void replay_latched(Forwarder &f, std::uint64_t hash, const Channel &channel, Send &&send)
@@ -94,21 +113,7 @@ void replay_latched(Forwarder &f, std::uint64_t hash, const Channel &channel, Se
     if(it == f.m_retained.end() || it->second.empty())
         return;
 
-    const subscriber_qos sub = f.m_endpoint.registry().qos_for_subscriber(hash, channel);
-    switch(sub.durability_mode)
-    {
-        case durability::none:
-            return;
-        case durability::latest:
-            send(it->second.newest());
-            return;
-        case durability::all:
-            {
-                auto count = it->second.count();
-                auto limit = sub.replay_depth ? std::min<std::size_t>(count, sub.replay_depth) : count;
-                replay_window(send, it->second, limit);
-            }
-    }
+    replay_durable(send, it->second, f.m_endpoint.registry().qos_for_subscriber(hash, channel));
 }
 
 template<typename Forwarder, typename Peer>
