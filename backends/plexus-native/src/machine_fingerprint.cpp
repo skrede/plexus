@@ -91,8 +91,8 @@ plexus::io::host_fingerprint read_machine_fingerprint()
     // Concatenate machine-id + hostname under a unit-separator (0x1f cannot occur
     // in either field) so two distinct (id, host) splits never alias, then hash
     // through the stable FNV-1a the wire identity already uses. A zero result is
-    // never produced for a non-empty input (FNV-1a's offset basis is non-zero and
-    // the multiply is invertible), so the fingerprint is non-null on a real host.
+    // practically never produced (about 2^-64: the multiply is invertible, so only a state
+    // equal to the next byte zeroes it), so a real host's fingerprint is non-null in practice.
     std::string keyed = read_machine_id();
     keyed.push_back('\x1f');
     keyed += read_host_name();
