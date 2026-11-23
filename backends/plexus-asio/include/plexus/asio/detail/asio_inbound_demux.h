@@ -21,6 +21,7 @@ namespace detail {
 // collisions exactly, so the hash need only spread well.
 struct asio_endpoint_hash
 {
+    // The classic boost::hash_combine mix with the 64-bit golden-ratio constant.
     std::size_t operator()(const ::asio::ip::udp::endpoint &ep) const noexcept
     {
         const auto addr = ep.address();

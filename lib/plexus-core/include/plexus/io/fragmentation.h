@@ -75,7 +75,7 @@ static_assert(max_fragment_count <= 0xFFFFFFFFu,
 // The per-fragment framing the datagram AEAD decorator prepends/appends around each
 // sealed fragment: an explicit 8-byte sequence + a 1-byte key-epoch on the wire (so the
 // receiver reconstructs the nonce on a reordered/dropped datagram) plus the 16-byte
-// Poly1305/GCM tag (RFC 8439). This mirrors datagram_authenticated_channel's wire shape
+// Poly1305/GCM tag (RFC 8439; SP 800-38D for GCM). This mirrors datagram_authenticated_channel's wire shape
 // (seq(8) || epoch(1) || header || ciphertext || tag(16)) WITHOUT a libcrypto include —
 // the core bridge stays OpenSSL-free, so the value is duplicated here, not imported. When
 // the channel is AEAD-decorated this is subtracted as a SECOND term so a sealed fragment

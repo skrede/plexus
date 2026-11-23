@@ -10,7 +10,7 @@
 
 namespace plexus::shm {
 
-// A per-waiter thread parker (the std/parking_lot EMPTY/PARKED/NOTIFIED word) per cursor slot: a waiter blocks on its
+// A per-waiter thread parker (the Rust standard library's EMPTY/PARKED/NOTIFIED futex parker word) per cursor slot: a waiter blocks on its
 // own word while it reads PARKED. The waiter's park store + generation load and the producer's generation bump +
 // park read are a Dekker store-buffering pair, so all four are seq_cst: either the waiter's recheck sees the bump or
 // the producer sees PARKED.

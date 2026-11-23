@@ -2,7 +2,7 @@
 // k_rekey_message_threshold. It sweeps a five-cell grid {2^18, 2^20, 2^22, 2^24, 2^26}
 // of candidate per-direction message counts and records, per cell: (a) no (key,nonce)
 // pair repeats up to the threshold under the deterministic per-epoch monotonic counter,
-// (b) the headroom margin to the NIST AES-GCM ~2^32 safety bound, and (c) that a rekey
+// (b) the headroom margin to the SP 800-38D §8.3 2^32 invocation bound, and (c) that a rekey
 // at the threshold re-derives a FRESH key (no counter reset under an already-used key).
 // The chosen cell (2^20) is asserted to keep a large margin (>= 2^6 floor, actually
 // 2^12) and the no-reuse property, so a regression that lowers the margin fails here.
@@ -118,7 +118,7 @@ TEST_CASE("crypto.rekey_threshold the chosen threshold is a swept cell with a la
 
     REQUIRE(no_nonce_reuse(k_rekey_message_threshold));
 
-    // The chosen cell sits at least ~2^6 below the NIST/GCM safety ballpark (the floor);
+    // The chosen cell sits at least ~2^6 below the SP 800-38D §8.3 invocation bound (the floor);
     // a regression that raised the threshold and shrank the margin fails here.
     REQUIRE(margin_log2(k_rekey_message_threshold) >= 6);
     REQUIRE(k_rekey_message_threshold < k_aead_safety_bound);

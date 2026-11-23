@@ -214,7 +214,7 @@ private:
                 });
     }
 
-    // Draw a per-session ISN (RFC 6528) DIRECTLY from std::random_device, the OS CSPRNG: a shared
+    // Draw a per-session ISN (RFC 6528 lineage) DIRECTLY from std::random_device, the OS CSPRNG: a shared
     // std::mt19937 stream is reconstructible from ISNs echoed in cleartext handshakes, letting an
     // attacker predict CONCURRENT sessions' ISNs; a per-session OS-entropy draw stores no
     // reconstructible state. The range omits 0 because 0 is the "no ISN negotiated" value.

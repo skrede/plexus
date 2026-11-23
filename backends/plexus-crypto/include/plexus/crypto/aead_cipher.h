@@ -12,7 +12,7 @@ namespace plexus::crypto {
 // 256-bit AEAD key (both ChaCha20-Poly1305 and AES-256-GCM take a 32-byte key).
 using aead_key = std::array<std::byte, 32>;
 
-// RFC 8439 nonce width (96-bit) and the Poly1305/GCM tag width (128-bit).
+// The 96-bit nonce and 128-bit tag of RFC 8439 (ChaCha20-Poly1305) and NIST SP 800-38D (AES-GCM).
 constexpr std::size_t k_aead_nonce_len = 12;
 constexpr std::size_t k_aead_tag_len   = 16;
 

@@ -10,7 +10,7 @@
 
 namespace plexus::testing {
 
-// A deterministic LCG (Numerical Recipes constants), copied verbatim from the anti-replay window
+// A deterministic LCG (Knuth's MMIX constants), copied verbatim from the anti-replay window
 // sweep so the loss schedule is byte-identical across runs and platforms.
 class shim_lcg
 {

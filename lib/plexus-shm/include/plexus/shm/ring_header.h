@@ -61,7 +61,7 @@ constexpr bool cursor_holds_position(std::uint64_t word) noexcept
 // PARKED, and a producer wakes it only on a PARKED -> NOTIFIED exchange, so a
 // spinning (EMPTY) waiter costs the producer no wake syscall. EMPTY is the
 // zero-init default so a freshly created header parks nobody without a store.
-// (Reference: the std/parking_lot 3-state thread-parking word.)
+// (Reference: the Rust standard library's futex thread parker, EMPTY/PARKED/NOTIFIED.)
 inline constexpr std::uint32_t k_park_empty    = 0;
 inline constexpr std::uint32_t k_park_parked   = 1;
 inline constexpr std::uint32_t k_park_notified = 2;

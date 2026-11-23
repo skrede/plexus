@@ -43,6 +43,7 @@ struct shm_topic_key_hash
 {
     std::size_t operator()(const shm_topic_key &k) const noexcept
     {
+        // 0x9e3779b9 is Knuth's multiplicative (Fibonacci) hashing constant, 2^32/phi.
         std::size_t h = std::hash<std::string>{}(k.fqn) ^ static_cast<std::size_t>(k.direction) * 0x9e3779b9u;
         for(const std::byte b : k.publisher)
             h = h * 31u + static_cast<std::size_t>(b);

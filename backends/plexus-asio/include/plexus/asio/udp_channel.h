@@ -147,7 +147,7 @@ public:
         return m_mode;
     }
 
-    // The negotiated per-session ISN (RFC 6528) the receiver expects as its first in-order seq;
+    // The negotiated per-session ISN (RFC 6528 lineage) the receiver expects as its first in-order seq;
     // 0 when no ISN was negotiated. A seq strictly below this is a provable duplicate.
     std::uint16_t initial_seq() const noexcept
     {
@@ -326,7 +326,7 @@ private:
     datagram::detail::udp_backpressure_queue m_backpressure;
     std::size_t m_dropped;
     datagram::detail::udp_channel_mode m_mode;
-    std::uint16_t m_initial_seq; // negotiated per-session ISN (RFC 6528); 0 = none
+    std::uint16_t m_initial_seq; // negotiated per-session ISN (RFC 6528 lineage); 0 = none
     std::uint64_t m_scheduler_key;
     std::uint16_t m_out_seq;
     std::uint16_t m_out_msg_id;

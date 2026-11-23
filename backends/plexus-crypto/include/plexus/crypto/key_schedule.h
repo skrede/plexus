@@ -10,19 +10,20 @@
 
 namespace plexus::crypto {
 
-// The per-direction message count at which the channel MUST rekey before the AEAD
-// usage approaches the safety bound (RFC 9147 "rekey prior to allowing the sequence
-// number to wrap"). The practical trigger is a usage threshold well below the NIST
-// AES-GCM ~2^32-invocation-per-key ballpark, NOT the astronomically-far 96-bit nonce
-// wrap. Set from a recorded grid sweep (the rekey-threshold test sweeps {2^18, 2^20,
-// 2^22, 2^24, 2^26}): every cell has zero (key,nonce) reuse under the deterministic
-// per-epoch monotonic counter; the margin to the 2^32 bound runs 2^14 (at 2^18) down
-// to 2^6 (at 2^26). 2^20 is the cell that keeps a large 2^12 margin to the safety
-// bound (far beyond the 2^6 floor) while giving a sane rekey cadence for a control-loop
-// workload (~17.5 min between rekeys at a 1 kHz per-direction message rate).
+// The per-direction message count at which the channel MUST rekey before the AEAD usage
+// approaches the safety bound (RFC 9147 "rekey prior to allowing the sequence number to
+// wrap"). The practical trigger is a usage threshold well below the NIST SP 800-38D §8.3
+// 2^32-invocation limit, which binds only random or non-96-bit IVs; the deterministic
+// 96-bit counter nonce here is held to it as a conservative ceiling, NOT to the
+// astronomically-far 96-bit nonce wrap. Set from a recorded grid sweep (the rekey-threshold
+// test sweeps {2^18, 2^20, 2^22, 2^24, 2^26}): every cell has zero (key,nonce) reuse under
+// the deterministic per-epoch monotonic counter; the margin to the 2^32 bound runs 2^14 (at
+// 2^18) down to 2^6 (at 2^26). 2^20 is the cell that keeps a large 2^12 margin to the
+// safety bound (far beyond the 2^6 floor) while giving a sane rekey cadence for a
+// control-loop workload (~17.5 min between rekeys at a 1 kHz per-direction message rate).
 constexpr std::uint64_t k_rekey_message_threshold = 1ull << 20;
 
-// The NIST AES-GCM per-key invocation ballpark the threshold sits below.
+// The SP 800-38D §8.3 invocation limit, the conservative ceiling the threshold sits below.
 constexpr std::uint64_t k_aead_safety_bound = 1ull << 32;
 
 // The per-direction keys derived once per session. Direction separation (k_send !=

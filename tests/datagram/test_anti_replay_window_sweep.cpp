@@ -33,7 +33,7 @@ using plexus::datagram::replay_verdict;
 
 namespace {
 
-// A deterministic LCG (Numerical Recipes constants) — no std::random, so the schedule
+// A deterministic LCG (Knuth's MMIX constants) — no std::random, so the schedule
 // is byte-identical across runs and platforms.
 class lcg
 {
