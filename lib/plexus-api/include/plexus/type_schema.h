@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_API_TYPE_SCHEMA_H
-#define HPP_GUARD_PLEXUS_API_TYPE_SCHEMA_H
+#ifndef HPP_GUARD_PLEXUS_TYPE_SCHEMA_H
+#define HPP_GUARD_PLEXUS_TYPE_SCHEMA_H
 
 #include <span>
 #include <cstddef>

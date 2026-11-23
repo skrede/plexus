@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_API_RECORDER_H
-#define HPP_GUARD_PLEXUS_API_RECORDER_H
+#ifndef HPP_GUARD_PLEXUS_RECORDER_H
+#define HPP_GUARD_PLEXUS_RECORDER_H
 
 #include "plexus/recorder_options.h"
 #include "plexus/wire_capture_qos.h"
