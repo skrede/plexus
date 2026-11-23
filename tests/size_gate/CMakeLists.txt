@@ -66,3 +66,24 @@ add_test(NAME function_size_gate.library_overage_rejected
 set_tests_properties(function_size_gate.library_overage_rejected PROPERTIES
     PASS_REGULAR_EXPRESSION "1 unsuppressed library function overage\\(s\\):[^/]*- /src/backends/plexus-asio/include/plexus/asio/long_body\\.h:20:5: warning: function 'long_body' exceeds"
     FAIL_REGULAR_EXPRESSION "dummyFunction1")
+
+# The function gate's compile-database coverage: a library source the database lacks is named, and a database
+# holding every one passes.
+add_test(NAME function_size_gate.coverage_missing_tu_rejected
+    COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON
+            -DFUNC_GATE_TIDY_LOG=${CMAKE_CURRENT_SOURCE_DIR}/function/bracket_noise.txt
+            -DFUNC_GATE_BUILD_DIR=${CMAKE_CURRENT_SOURCE_DIR}/function/database
+            -DFUNC_GATE_SOURCES_FILE=${CMAKE_CURRENT_SOURCE_DIR}/function/database/sources_missing.txt
+            -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+set_tests_properties(function_size_gate.coverage_missing_tu_rejected PROPERTIES
+    PASS_REGULAR_EXPRESSION "function size gate: /src/backends/plexus-demo/src/c\\.cpp is compiled by a library target but missing from the compile database"
+    FAIL_REGULAR_EXPRESSION "src/(a|b)\\.cpp is compiled")
+
+add_test(NAME function_size_gate.coverage_complete_accepted
+    COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON
+            -DFUNC_GATE_TIDY_LOG=${CMAKE_CURRENT_SOURCE_DIR}/function/bracket_noise.txt
+            -DFUNC_GATE_BUILD_DIR=${CMAKE_CURRENT_SOURCE_DIR}/function/database
+            -DFUNC_GATE_SOURCES_FILE=${CMAKE_CURRENT_SOURCE_DIR}/function/database/sources_complete.txt
+            -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+set_tests_properties(function_size_gate.coverage_complete_accepted PROPERTIES
+    PASS_REGULAR_EXPRESSION "function size gate: clean")

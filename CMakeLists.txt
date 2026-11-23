@@ -38,6 +38,12 @@ else()
     endif()
 endif()
 
+# The function-size gate runs clang-tidy against this tree's compile database and fails closed without it. Set before
+# the fragments, because a target takes its EXPORT_COMPILE_COMMANDS from this variable only when it is created.
+if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
+
 # Each fragment self-gates: an INTERFACE target is unconditional, a compiled backend defines its target only when its
 # option is ON. backends/ depends on lib/, never the reverse.
 file(GLOB PLEXUS_LIB_FRAGMENTS CONFIGURE_DEPENDS
@@ -70,8 +76,6 @@ install(FILES
 
 if(PLEXUS_BUILD_TESTS OR PLEXUS_BUILD_FUZZ_TESTS)
     enable_testing()
-    # The function-size gate runs clang-tidy against this tree's compile database and fails closed without it.
-    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
     add_subdirectory(tests)
 endif()
 
