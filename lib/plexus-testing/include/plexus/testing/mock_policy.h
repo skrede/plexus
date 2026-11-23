@@ -74,11 +74,13 @@ public:
     {
         m_on_data_cb = std::move(cb);
     }
+
     void on_closed(plexus::detail::move_only_function<void()> cb)
     {
         m_close_notification.install(std::move(cb));
         notify_closed();
     }
+
     void on_error(plexus::detail::move_only_function<void(io::io_error)> cb)
     {
         m_on_error_cb = std::move(cb);
@@ -120,10 +122,12 @@ public:
     {
         return m_sent;
     }
+
     [[nodiscard]] std::size_t sent_packets() const noexcept
     {
         return m_sent.size();
     }
+
     [[nodiscard]] bool closed() const noexcept
     {
         return m_ops.closing();
