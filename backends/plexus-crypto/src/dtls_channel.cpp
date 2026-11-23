@@ -286,7 +286,6 @@ void dtls_channel::drain_inbound()
     try_complete();
 }
 
-// NOLINTNEXTLINE(readability-function-size)
 void dtls_channel::try_complete()
 {
     if(m_complete_fired || !m_open || !m_ssl || !::SSL_is_init_finished(m_ssl))
