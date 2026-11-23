@@ -191,8 +191,9 @@ inline void vTaskNotifyGiveFromISR(void * /*task*/, BaseType_t *woken) noexcept
 #else
 
     #include "freertos/FreeRTOS.h"
-    #include "freertos/queue.h"
+    // task.h and queue.h require FreeRTOS.h to have been included before them.
     #include "freertos/task.h"
+    #include "freertos/queue.h"
 
 #endif
 

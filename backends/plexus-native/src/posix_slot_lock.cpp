@@ -1,9 +1,9 @@
 #include "plexus/native/detail/posix_slot_lock.h"
 
-#include <cerrno>
-
 #include <fcntl.h>
 #include <unistd.h>
+
+#include <cerrno>
 
 #if defined(__linux__) && !defined(F_OFD_SETLK)
     #error "the shared-memory slot locks need open-file-description locks (Linux 3.15)"

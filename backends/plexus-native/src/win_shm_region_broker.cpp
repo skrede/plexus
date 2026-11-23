@@ -1,13 +1,14 @@
-#include "plexus/native/win_shm_region_broker.h"
 #include "plexus/native/shm_error.h"
+#include "plexus/native/win_shm_region_broker.h"
+
 #include "plexus/native/detail/win_owner_only_security.h"
+
+#include <windows.h>
 
 #include <string>
 #include <cstdint>
 #include <utility>
 #include <string_view>
-
-#include <windows.h>
 
 namespace plexus::native {
 

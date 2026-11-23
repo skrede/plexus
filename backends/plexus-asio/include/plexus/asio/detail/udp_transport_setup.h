@@ -6,10 +6,13 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
+
 #include "plexus/io/detail/drop_event.h"
+
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 
 #include <asio/post.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>

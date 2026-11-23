@@ -1,10 +1,12 @@
 #include "plexus/native/region_handle.h"
+
 #include "plexus/native/detail/posix_slot_lock.h"
 
-#include <utility>
-
 #include <unistd.h>
+
 #include <sys/mman.h>
+
+#include <utility>
 
 namespace plexus::native {
 

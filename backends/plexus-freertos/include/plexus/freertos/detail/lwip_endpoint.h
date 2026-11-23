@@ -2,8 +2,8 @@
 #define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_LWIP_ENDPOINT_H
 
 #include <string>
-#include <utility>
 #include <cstdint>
+#include <utility>
 
 namespace plexus::freertos::detail {
 

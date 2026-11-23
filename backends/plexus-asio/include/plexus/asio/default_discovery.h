@@ -3,16 +3,20 @@
 
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/udp_multicast_socket.h"
+
 #include "plexus/asio/detail/interface_resolve.h"
 
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/discovery_health.h"
 #include "plexus/discovery/discovery_options.h"
 #include "plexus/discovery/multicast_discovery.h"
+
 #include "plexus/log/logger.h"
+
 #include "plexus/io/congestion.h"
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/address_v4.hpp>
 
 #include <chrono>

@@ -2,9 +2,9 @@
 #define HPP_GUARD_PLEXUS_FREERTOS_FREERTOS_POLICY_H
 
 #include "plexus/freertos/freertos_timer.h"
-#include "plexus/freertos/freertos_stub_channel.h"
-#include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/mcu_byte_owner.h"
+#include "plexus/freertos/freertos_executor.h"
+#include "plexus/freertos/freertos_stub_channel.h"
 
 #include "plexus/policy.h"
 #include "plexus/executor_verbs.h"

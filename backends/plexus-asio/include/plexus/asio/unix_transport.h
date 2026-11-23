@@ -5,6 +5,7 @@
 #include "plexus/asio/unix_channel.h"
 #include "plexus/asio/unix_listener.h"
 #include "plexus/asio/stream_transport.h"
+
 #include "plexus/asio/detail/asio_unix_endpoint_parse.h"
 
 #include "plexus/stream/stream_inbound.h"
@@ -15,14 +16,15 @@
 #include "plexus/io/egress_capacity.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/transport_selector.h"
+
 #include "plexus/io/security/peer_cred_policy.h"
 
 #include <asio/io_context.hpp>
 
 #include <array>
 #include <cstddef>
-#include <system_error>
 #include <string_view>
+#include <system_error>
 
 namespace plexus::asio {
 

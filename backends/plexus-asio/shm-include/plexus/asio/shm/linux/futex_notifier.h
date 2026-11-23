@@ -8,6 +8,7 @@
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/waiter_park.h"
+
 #include "plexus/shm/detail/notifier_bridge.h"
 
 #include "plexus/detail/compat.h"

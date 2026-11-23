@@ -9,8 +9,8 @@
 #include "plexus/asio/unix_transport.h"
 
 #include "plexus/tls/tls_channel.h"
-#include "plexus/tls/tls_transport.h"
 #include "plexus/tls/dtls_channel.h"
+#include "plexus/tls/tls_transport.h"
 #include "plexus/tls/dtls_transport.h"
 
 #include "plexus/io/transport_backend.h"

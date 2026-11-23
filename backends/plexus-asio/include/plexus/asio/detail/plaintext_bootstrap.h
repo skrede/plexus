@@ -4,8 +4,8 @@
 #include "plexus/wire_bytes.h"
 
 #include <span>
-#include <utility>
 #include <cstddef>
+#include <utility>
 
 namespace plexus::asio::detail {
 

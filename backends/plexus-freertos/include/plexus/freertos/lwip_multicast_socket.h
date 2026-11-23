@@ -5,19 +5,21 @@
 #include "plexus/freertos/detail/lwip_multicast_join.h"
 
 #include "plexus/stream/datagram_socket.h"
+
 #include "plexus/detail/compat.h"
 
 #include <span>
 #include <array>
 #include <string>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <system_error>
 
 #if defined(ESP_PLATFORM)
     #include "lwip/sockets.h"
     #include "lwip/ip4_addr.h"
+
     #include <cerrno>
 #endif
 

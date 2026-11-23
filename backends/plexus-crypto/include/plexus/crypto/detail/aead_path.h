@@ -1,9 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_CRYPTO_DETAIL_AEAD_PATH_H
 #define HPP_GUARD_PLEXUS_CRYPTO_DETAIL_AEAD_PATH_H
 
-#include "plexus/crypto/key_schedule.h"
-#include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/aead_epoch.h"
+#include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/close_cause.h"

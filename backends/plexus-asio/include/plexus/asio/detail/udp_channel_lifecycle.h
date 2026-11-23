@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_DETAIL_UDP_CHANNEL_LIFECYCLE_H
 
 #include "plexus/io/io_error.h"
+
 #include "plexus/io/detail/pending_ops.h"
 
 #include <asio/post.hpp>

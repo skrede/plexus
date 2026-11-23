@@ -9,7 +9,9 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_backend.h"
+
 #include "plexus/io/detail/retiring_table.h"
+
 #include "plexus/detail/compat.h"
 
 #include <chrono>

@@ -13,8 +13,8 @@
 
     #include "plexus/io/endpoint.h"
 
-    #include "lwip/sockets.h"
     #include "lwip/netdb.h"
+    #include "lwip/sockets.h"
 
     #include <span>
     #include <atomic>

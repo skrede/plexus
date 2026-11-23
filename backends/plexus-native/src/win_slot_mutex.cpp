@@ -1,9 +1,9 @@
 #include "plexus/native/detail/win_slot_mutex.h"
 #include "plexus/native/detail/win_owner_only_security.h"
 
-#include <string>
-
 #include <windows.h>
+
+#include <string>
 
 namespace plexus::native::detail {
 

@@ -1,12 +1,13 @@
 #ifndef HPP_GUARD_PLEXUS_FREERTOS_DETAIL_LWIP_RX_SLOT_POOL_H
 #define HPP_GUARD_PLEXUS_FREERTOS_DETAIL_LWIP_RX_SLOT_POOL_H
 
-#include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
+#include "plexus/freertos/freertos_executor.h"
+
 #include <array>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace plexus::freertos::detail {
 

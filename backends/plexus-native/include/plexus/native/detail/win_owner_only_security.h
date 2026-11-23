@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_NATIVE_DETAIL_WIN_OWNER_ONLY_SECURITY_H
 
 #include <windows.h>
+// sddl.h requires windows.h to have been included before it.
 #include <sddl.h>
 
 namespace plexus::native::detail {

@@ -1,18 +1,20 @@
 #ifndef HPP_GUARD_PLEXUS_CRYPTO_AUTHENTICATED_CHANNEL_H
 #define HPP_GUARD_PLEXUS_CRYPTO_AUTHENTICATED_CHANNEL_H
 
-#include "plexus/crypto/key_schedule.h"
-#include "plexus/crypto/aead_cipher.h"
 #include "plexus/crypto/aead_epoch.h"
+#include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
+
 #include "plexus/crypto/detail/aead_path.h"
 
+#include "plexus/wire/frame.h"
 #include "plexus/wire/close_cause.h"
 #include "plexus/wire/frame_codec.h"
-#include "plexus/wire/frame.h"
 
-#include "plexus/io/polymorphic_byte_channel.h"
-#include "plexus/io/byte_channel.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/byte_channel.h"
+#include "plexus/io/polymorphic_byte_channel.h"
+
 #include "plexus/detail/compat.h"
 
 #include <span>

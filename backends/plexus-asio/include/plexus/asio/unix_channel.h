@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_UNIX_CHANNEL_H
 
 #include "plexus/asio/stream_channel.h"
+
 #include "plexus/asio/detail/plaintext_bootstrap.h"
 
 #include "plexus/io/endpoint.h"
@@ -10,10 +11,11 @@
 #include "plexus/io/egress_capacity.h"
 
 #include <asio/io_context.hpp>
+
 #include <asio/local/stream_protocol.hpp>
 
-#include <utility>
 #include <cstddef>
+#include <utility>
 #include <system_error>
 
 namespace plexus::asio {

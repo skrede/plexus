@@ -2,24 +2,28 @@
 #define HPP_GUARD_PLEXUS_TLS_TLS_CHANNEL_H
 
 #include "plexus/tls/tls_credential.h"
+
 #include "plexus/tls/detail/tls_bootstrap.h"
 
-#include "plexus/asio/stream_channel.h"
 #include "plexus/asio/asio_channel.h"
+#include "plexus/asio/stream_channel.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/egress_capacity.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/ip/tcp.hpp>
+
 #include <asio/ssl/stream.hpp>
+
 #include <asio/io_context.hpp>
 
 #include <string>
-#include <utility>
 #include <cstddef>
+#include <utility>
 #include <system_error>
 
 namespace plexus::tls {

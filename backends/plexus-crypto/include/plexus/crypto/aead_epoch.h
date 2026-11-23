@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_CRYPTO_AEAD_EPOCH_H
 #define HPP_GUARD_PLEXUS_CRYPTO_AEAD_EPOCH_H
 
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
 
 #include <span>
 #include <array>

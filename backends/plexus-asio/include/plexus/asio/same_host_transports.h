@@ -1,10 +1,11 @@
 #ifndef HPP_GUARD_PLEXUS_ASIO_SAME_HOST_TRANSPORTS_H
 #define HPP_GUARD_PLEXUS_ASIO_SAME_HOST_TRANSPORTS_H
 
+#include "plexus/asio/asio_policy.h"
 #include "plexus/asio/transport_set.h"
 #include "plexus/asio/asio_transport.h"
-#include "plexus/asio/asio_policy.h"
 #include "plexus/asio/unix_transport.h"
+
 #include "plexus/asio/detail/same_host_shm_config.h"
 
 #include "plexus/node.h"
@@ -19,8 +20,8 @@
 
 #include <asio/io_context.hpp>
 
-#include <utility>
 #include <string>
+#include <utility>
 #include <string_view>
 
 namespace plexus::asio {

@@ -3,8 +3,8 @@
 
 #include "plexus/freertos/lwip_channel.h"
 #include "plexus/freertos/freertos_timer.h"
-#include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/mcu_byte_owner.h"
+#include "plexus/freertos/freertos_executor.h"
 
 #include "plexus/policy.h"
 #include "plexus/executor_verbs.h"

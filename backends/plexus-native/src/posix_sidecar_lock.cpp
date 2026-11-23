@@ -1,15 +1,14 @@
 #include "plexus/native/detail/posix_slot_lock.h"
 
-#include <array>
-#include <cstdio>
-#include <cstddef>
-
-#include <cerrno>
-
 #include <fcntl.h>
 #include <unistd.h>
 
 #include <sys/stat.h>
+
+#include <array>
+#include <cerrno>
+#include <cstdio>
+#include <cstddef>
 
 namespace plexus::native::detail {
 

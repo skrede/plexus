@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_ASIO_CHANNEL_H
 
 #include "plexus/asio/stream_channel.h"
+
 #include "plexus/asio/detail/plaintext_bootstrap.h"
 
 #include "plexus/io/endpoint.h"
@@ -9,14 +10,15 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/egress_capacity.h"
 
+#include <asio/io_context.hpp>
 #include <asio/socket_base.hpp>
 #include <asio/basic_socket.hpp>
+
 #include <asio/ip/tcp.hpp>
-#include <asio/io_context.hpp>
 
 #include <string>
-#include <utility>
 #include <cstddef>
+#include <utility>
 #include <system_error>
 
 #if defined(__linux__) || defined(__APPLE__)
@@ -24,6 +26,7 @@
     #include <netinet/tcp.h>
 #elif defined(_WIN32)
     #include <winsock2.h>
+    // mstcpip.h requires winsock2.h to have been included before it.
     #include <mstcpip.h>
 #endif
 

@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_FREERTOS_DEVICE_RUNTIME_H
 
 #include "plexus/freertos/freertos_executor.h"
+
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
 #include <span>

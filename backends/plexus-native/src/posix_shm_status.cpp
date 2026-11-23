@@ -1,9 +1,8 @@
 #include "plexus/native/detail/posix_shm_status.h"
 
+#include <cerrno>
 #include <string>
 #include <utility>
-
-#include <cerrno>
 
 namespace plexus::native::detail {
 

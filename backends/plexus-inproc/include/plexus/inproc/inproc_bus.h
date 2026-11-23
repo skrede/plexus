@@ -3,19 +3,21 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/object_carrier.h"
+
 #include "plexus/inproc/detail/inproc_dispatch.h"
 #include "plexus/inproc/detail/inproc_packet_ring.h"
 #include "plexus/inproc/detail/inproc_listener_set.h"
+
 #include "plexus/detail/compat.h"
 
 #include <span>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <algorithm>
 
 namespace plexus::inproc {

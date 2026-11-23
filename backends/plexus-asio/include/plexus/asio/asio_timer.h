@@ -2,10 +2,11 @@
 #define HPP_GUARD_PLEXUS_ASIO_ASIO_TIMER_H
 
 #include "plexus/policy.h"
+
 #include "plexus/detail/compat.h"
 
-#include <asio/steady_timer.hpp>
 #include <asio/io_context.hpp>
+#include <asio/steady_timer.hpp>
 
 #include <chrono>
 #include <utility>

@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_ASIO_SERIAL_CHANNEL_H
 
 #include "plexus/asio/stream_channel.h"
+
 #include "plexus/asio/detail/serial_bootstrap.h"
 #include "plexus/asio/detail/serial_channel_io.h"
 
@@ -16,6 +17,7 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/egress_capacity.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include <asio/io_context.hpp>

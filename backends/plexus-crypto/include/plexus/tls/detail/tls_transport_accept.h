@@ -1,8 +1,9 @@
 #ifndef HPP_GUARD_PLEXUS_TLS_DETAIL_TLS_TRANSPORT_ACCEPT_H
 #define HPP_GUARD_PLEXUS_TLS_DETAIL_TLS_TRANSPORT_ACCEPT_H
 
-#include "plexus/tls/tls_channel.h"
 #include "plexus/tls/detail/tls_context.h"
+
+#include "plexus/tls/tls_channel.h"
 
 #include "plexus/asio/detail/asio_error_map.h"
 

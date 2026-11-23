@@ -1,12 +1,13 @@
 #include "plexus/native/win_region_handle.h"
+
 #include "plexus/native/detail/win_slot_mutex.h"
+
+#include <windows.h>
 
 #include <array>
 #include <string>
 #include <cstdint>
 #include <utility>
-
-#include <windows.h>
 
 namespace plexus::native {
 

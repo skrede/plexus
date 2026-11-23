@@ -1,5 +1,5 @@
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
 
 #include <openssl/kdf.h>
 #include <openssl/params.h>
@@ -8,10 +8,10 @@
 #include <span>
 #include <array>
 #include <memory>
-#include <vector>
 #include <string>
-#include <cstring>
+#include <vector>
 #include <cstddef>
+#include <cstring>
 #include <string_view>
 
 namespace plexus::crypto {

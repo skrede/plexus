@@ -1,17 +1,17 @@
-#include "plexus/native/posix_shm_region_broker.h"
 #include "plexus/native/shm_error.h"
+#include "plexus/native/posix_shm_region_broker.h"
 
 #include "plexus/native/detail/posix_slot_lock.h"
 #include "plexus/native/detail/posix_shm_status.h"
 
-#include <utility>
-
-#include <cerrno>
-
 #include <fcntl.h>
 #include <unistd.h>
+
 #include <sys/mman.h>
 #include <sys/stat.h>
+
+#include <cerrno>
+#include <utility>
 
 namespace plexus::native {
 

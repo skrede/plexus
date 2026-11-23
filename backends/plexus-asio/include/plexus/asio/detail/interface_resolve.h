@@ -5,20 +5,24 @@
 
 #include <asio/ip/address_v4.hpp>
 
-#include <vector>
 #include <string>
-#include <variant>
+#include <vector>
 #include <cstdint>
+#include <variant>
 #include <system_error>
 
 #if defined(_WIN32)
     #include <winsock2.h>
-    #include <ws2tcpip.h>
+    // ws2tcpip.h and iphlpapi.h require winsock2.h to have been included before them.
     #include <iphlpapi.h>
+    #include <ws2tcpip.h>
 #elif defined(__unix__) || defined(__APPLE__)
     #include <ifaddrs.h>
+
     #include <net/if.h>
+
     #include <netinet/in.h>
+
     #include <arpa/inet.h>
 #endif
 

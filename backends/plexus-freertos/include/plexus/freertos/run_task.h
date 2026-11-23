@@ -2,6 +2,7 @@
 #define HPP_GUARD_PLEXUS_FREERTOS_RUN_TASK_H
 
 #include "plexus/freertos/device_runtime.h"
+
 #include "plexus/freertos/detail/freertos_host_shim.h"
 
 #include <array>

@@ -1,11 +1,14 @@
 #ifndef HPP_GUARD_PLEXUS_TLS_DETAIL_TLS_BOOTSTRAP_H
 #define HPP_GUARD_PLEXUS_TLS_DETAIL_TLS_BOOTSTRAP_H
 
-#include "plexus/tls/tls_credential.h"
 #include "plexus/tls/detail/tls_context.h"
 
+#include "plexus/tls/tls_credential.h"
+
 #include "plexus/io/detail/handshake_gate.h"
+
 #include "plexus/wire_bytes.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/ssl/stream.hpp>
@@ -15,8 +18,8 @@
 
 #include <span>
 #include <string>
-#include <utility>
 #include <cstddef>
+#include <utility>
 
 namespace plexus::tls::detail {
 

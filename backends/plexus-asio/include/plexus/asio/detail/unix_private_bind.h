@@ -7,6 +7,7 @@
 
 #if !defined(_WIN32)
     #include <unistd.h>
+
     #include <sys/un.h>
 #endif
 

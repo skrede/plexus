@@ -4,6 +4,7 @@
 #include "plexus/shm/detail/notifier_bridge.h"
 
 #include <asio/posix/stream_descriptor.hpp>
+
 #include <asio/io_context.hpp>
 
 #include <fcntl.h>

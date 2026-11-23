@@ -2,12 +2,14 @@
 #define HPP_GUARD_PLEXUS_ASIO_SHM_MACOS_SEM_NOTIFIER_H
 
 #include "plexus/asio/shm/macos/sem_doorbell.h"
+
 #include "plexus/asio/shm/detail/fd_doorbell.h"
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
 #include "plexus/shm/waiter_park.h"
 #include "plexus/shm/doorbell_naming.h"
+
 #include "plexus/shm/detail/notifier_bridge.h"
 
 #include "plexus/detail/compat.h"
