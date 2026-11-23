@@ -3,13 +3,12 @@
 // built-in file sink). The flat stream is written to a file; when the optional MCAP transcode
 // is built, it converts to an MCAP container Foxglove can open. Public API only; self-terminating.
 
+#include "reading_codec.h"
+
 #include "plexus/node.h"
-#include "plexus/expected.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/wire_bytes.h"
 #include "plexus/recorder.h"
-#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/recording_qos.h"
 
@@ -31,58 +30,15 @@
 #include <array>
 #include <vector>
 #include <chrono>
-#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <filesystem>
-#include <system_error>
 
 using plexus::inproc::inproc_policy;
 using transport_t = plexus::inproc::inproc_transport<>;
 using node_t      = plexus::node<inproc_policy, transport_t>;
-
-struct reading
-{
-    std::uint32_t sensor{};
-    std::uint32_t value{};
-};
-
-struct reading_codec
-{
-    using value_type = reading;
-
-    plexus::wire_bytes<> encode(const reading &r) const
-    {
-        auto owner = std::make_shared<std::vector<std::byte>>(8);
-        for(int i = 0; i < 4; ++i)
-        {
-            (*owner)[i]     = static_cast<std::byte>((r.sensor >> (8 * i)) & 0xff);
-            (*owner)[4 + i] = static_cast<std::byte>((r.value >> (8 * i)) & 0xff);
-        }
-        const std::span<const std::byte> view{owner->data(), owner->size()};
-        return {view, std::move(owner)};
-    }
-
-    plexus::expected<void, std::error_code> decode(std::span<const std::byte> b, reading &out) const
-    {
-        if(b.size() != 8)
-            return plexus::expected<void, std::error_code>{
-                plexus::unexpect, std::make_error_code(std::errc::invalid_argument)};
-        auto u32 = [&](int o)
-        {
-            std::uint32_t v = 0;
-            for(int i = 0; i < 4; ++i)
-                v |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(b[o + i])) << (8 * i);
-            return v;
-        };
-        out = {u32(0), u32(4)};
-        return {};
-    }
-
-    plexus::type_identity type_info() const { return {0x5E4501u, "reading"}; }
-};
 
 // A consumer-owned drain target over the public byte_sink seam: it accumulates the drained
 // flat stream in memory and exposes it for the file write / MCAP step.
