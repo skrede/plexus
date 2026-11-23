@@ -29,7 +29,6 @@ void emit_drop(Ch &c, io::detail::drop_cause cause, io::locality transport = io:
         c.m_on_drop_cb(io::detail::drop_event{.cause = cause, .transport = transport});
 }
 
-// The datagram on the wire: the sequence number, the epoch byte, the cleartext header, then the sealed payload.
 template<typename Ch>
 void write_sealed_frame(Ch &c, std::uint64_t seq, std::span<const std::byte> header)
 {
