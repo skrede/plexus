@@ -709,6 +709,9 @@ private:
     friend void detail::relay_propagate_demand(E &, std::string_view, demand_transition, demand_role);
 
     template<typename E>
+    friend void detail::install_originate(E &);
+
+    template<typename E>
     friend void detail::install_splice_refan(E &);
 
     template<typename E>
