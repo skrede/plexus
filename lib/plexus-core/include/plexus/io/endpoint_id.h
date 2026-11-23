@@ -5,7 +5,23 @@
 
 #include "plexus/node_id.h"
 
+#include <cstddef>
 #include <cstdint>
+
+namespace plexus::io::detail {
+
+inline node_id fold_digest_lanes(std::uint64_t lo, std::uint64_t hi) noexcept
+{
+    node_id id{};
+    for(std::size_t i = 0; i < 8; ++i)
+    {
+        id[i]     = static_cast<std::byte>((lo >> (8 * i)) & 0xff);
+        id[8 + i] = static_cast<std::byte>((hi >> (8 * i)) & 0xff);
+    }
+    return id;
+}
+
+}
 
 namespace plexus::io {
 
@@ -31,13 +47,7 @@ inline node_id endpoint_id(const endpoint &ep) noexcept
     mix(0u);
     for(char c : ep.address)
         mix(static_cast<unsigned char>(c));
-    node_id id{};
-    for(int i = 0; i < 8; ++i)
-    {
-        id[i]     = static_cast<std::byte>((lo >> (8 * i)) & 0xff);
-        id[8 + i] = static_cast<std::byte>((hi >> (8 * i)) & 0xff);
-    }
-    return id;
+    return detail::fold_digest_lanes(lo, hi);
 }
 
 }
