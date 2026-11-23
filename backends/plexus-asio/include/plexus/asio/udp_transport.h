@@ -142,9 +142,8 @@ public:
 
         const auto mode         = mode_of_scheme(ep.scheme);
         const std::uint16_t isn = next_isn();
-        auto ch   = std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg, m_congestion, m_backpressure_bytes, mode, isn, m_global_default, m_reassembly_budget,
-                                                  m_reassembly_timeout);
-        auto *raw = ch.get();
+        auto ch                 = make_channel(dest, mode, isn);
+        auto *raw               = ch.get();
         m_demux.insert(dest, raw);
         detail::wire_teardown(*this, *raw, dest);
 
@@ -175,6 +174,12 @@ private:
     static datagram::detail::udp_channel_mode mode_of_scheme(const std::string &scheme) noexcept
     {
         return scheme == "udpr" ? datagram::detail::udp_channel_mode::reliable_datagram : datagram::detail::udp_channel_mode::best_effort;
+    }
+
+    std::unique_ptr<udp_channel> make_channel(const endpoint_type &dest, datagram::detail::udp_channel_mode mode, std::uint16_t initial_seq)
+    {
+        return std::make_unique<udp_channel>(m_io, m_server, dest, m_max_payload, m_arq_cfg, m_congestion, m_backpressure_bytes, mode, initial_seq, m_global_default,
+                                             m_reassembly_budget, m_reassembly_timeout);
     }
 
     void wire_server_sinks()

@@ -85,8 +85,7 @@ void accept_new_peer(T &t, const typename T::endpoint_type &from, std::span<cons
     auto hs = datagram::detail::decode_handshake(bytes);
     if(!hs || hs->type != T::hs_type::request)
         return;
-    auto ch   = std::make_unique<udp_channel>(t.m_io, t.m_server, from, t.m_max_payload, t.m_arq_cfg, t.m_congestion, t.m_backpressure_bytes, hs->mode, hs->initial_seq,
-                                              t.m_global_default, t.m_reassembly_budget, t.m_reassembly_timeout);
+    auto ch   = t.make_channel(from, hs->mode, hs->initial_seq);
     auto *raw = ch.get();
     if(!t.m_demux.insert(from, raw))
     {
