@@ -1,0 +1,4 @@
+@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/unmeasurable_fixture.h:9:22: warning: function 'brace_on_signature_line' exceeds recommended size/complexity thresholds [readability-function-size]
+    9 | inline std::uint32_t brace_on_signature_line(std::uint32_t value) {
+      |                      ^
+@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/unmeasurable_fixture.h:9:22: note: 2 lines including whitespace and comments (threshold 0)

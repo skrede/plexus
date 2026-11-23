@@ -99,6 +99,25 @@ set_tests_properties(function_size_gate.screen_count_overage_rejected PROPERTIES
     PASS_REGULAR_EXPRESSION "1 unsuppressed library function overage\\(s\\):[^/]*- [^ ]*/screen_fixture\\.h:9:3: warning: function 'over_on_screen' exceeds [^\n]* -- 26 lines on screen"
     FAIL_REGULAR_EXPRESSION "within_on_screen")
 
+# A constructor's member init list counts on screen though clang-tidy measures only its body; the second constructor
+# fits at 25. A function laid out off the clang-format shape cannot be measured, and that fails the gate.
+configure_file(function/screen/init_list_tidy.txt.in ${CMAKE_CURRENT_BINARY_DIR}/function/init_list_tidy.txt @ONLY)
+add_test(NAME function_size_gate.init_list_overage_rejected
+    COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON
+            -DFUNC_GATE_TIDY_LOG=${CMAKE_CURRENT_BINARY_DIR}/function/init_list_tidy.txt
+            -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+set_tests_properties(function_size_gate.init_list_overage_rejected PROPERTIES
+    PASS_REGULAR_EXPRESSION "1 unsuppressed library function overage\\(s\\):[^/]*- [^ ]*/init_list_fixture\\.h:11:14: warning: function 'init_list_fixture' exceeds [^\n]* -- 26 lines on screen"
+    FAIL_REGULAR_EXPRESSION "init_list_fixture\\.h:38:")
+
+configure_file(function/screen/unmeasurable_tidy.txt.in ${CMAKE_CURRENT_BINARY_DIR}/function/unmeasurable_tidy.txt @ONLY)
+add_test(NAME function_size_gate.unmeasurable_rejected
+    COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON
+            -DFUNC_GATE_TIDY_LOG=${CMAKE_CURRENT_BINARY_DIR}/function/unmeasurable_tidy.txt
+            -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+set_tests_properties(function_size_gate.unmeasurable_rejected PROPERTIES
+    PASS_REGULAR_EXPRESSION "1 unsuppressed library function overage\\(s\\):[^/]*- [^ ]*/unmeasurable_fixture\\.h:9:22: warning: function 'brace_on_signature_line' exceeds [^\n]* -- not measurable from the source")
+
 # The function gate fails closed on a clang-tidy run that measured nothing: run-clang-tidy without a database, a
 # database without a source, and a library source clang-tidy cannot open. Each runs the real tool, so each needs it.
 find_program(RUN_CLANG_TIDY NAMES run-clang-tidy run-clang-tidy.py)
