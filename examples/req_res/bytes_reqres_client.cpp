@@ -14,13 +14,14 @@
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/udp_multicast_socket.h"
 
-#include <asio/steady_timer.hpp>
 #include <asio/io_context.hpp>
+#include <asio/steady_timer.hpp>
+
 #include <asio/ip/address_v4.hpp>
 
 #include <span>
-#include <string>
 #include <chrono>
+#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>

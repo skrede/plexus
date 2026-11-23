@@ -17,18 +17,20 @@
 #include "plexus/io/endpoint.h"
 
 #include "plexus/freertos/lwip_policy.h"
-#include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/device_runtime.h"
+#include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
+
 #include "plexus/freertos/detail/lwip_socket_io.h"
 
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
-#include <memory>
 #include <chrono>
-#include <cstdint>
+#include <memory>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 #include <system_error>
 

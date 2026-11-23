@@ -12,9 +12,8 @@
 // need not carry the engine. The composition runs in a task the example creates and drives through
 // the device facade; there is no background plexus thread.
 
-#include "uart_transport.h"
-
 #include "serial_link.h"
+#include "uart_transport.h"
 #include "topic_graph_types.h"
 
 #include "plexus/node.h"
@@ -35,6 +34,7 @@
 #include "plexus/freertos/freertos_executor.h"
 
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
 #include <span>

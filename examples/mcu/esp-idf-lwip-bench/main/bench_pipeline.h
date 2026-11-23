@@ -12,8 +12,8 @@
 
 #include <span>
 #include <array>
-#include <cstdio>
 #include <chrono>
+#include <cstdio>
 #include <cstddef>
 #include <cstdint>
 #include <system_error>

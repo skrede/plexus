@@ -1,16 +1,16 @@
 #ifndef HPP_GUARD_PLEXUS_EXAMPLE_WIFI_NETIF_H
 #define HPP_GUARD_PLEXUS_EXAMPLE_WIFI_NETIF_H
 
-#include "wifi_credentials.h"
-
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
+#include "wifi_credentials.h"
+
 #include "freertos/event_groups.h"
 
-#include <cstring>
 #include <cstdint>
+#include <cstring>
 
 namespace example {
 

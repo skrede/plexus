@@ -6,13 +6,14 @@
 #include "reading_codec.h"
 
 #include "plexus/node.h"
+#include "plexus/recorder.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/recorder.h"
 #include "plexus/node_options.h"
 #include "plexus/recording_qos.h"
 
 #include "plexus/io/message_info.h"
+
 #include "plexus/io/recording/byte_sink.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -28,8 +29,8 @@
 
 #include <span>
 #include <array>
-#include <vector>
 #include <chrono>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>

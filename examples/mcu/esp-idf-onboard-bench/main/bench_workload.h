@@ -1,8 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_EXAMPLES_MCU_ONBOARD_BENCH_WORKLOAD_H
 #define HPP_GUARD_PLEXUS_EXAMPLES_MCU_ONBOARD_BENCH_WORKLOAD_H
 
-#include "plexus/wire_bytes.h"
 #include "plexus/expected.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/typed_codec.h"
 
 #include "esp_timer.h"
@@ -10,8 +10,8 @@
 #include <span>
 #include <array>
 #include <atomic>
-#include <memory>
 #include <cstdio>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <system_error>

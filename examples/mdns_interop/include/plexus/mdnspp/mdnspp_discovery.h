@@ -5,8 +5,8 @@
 
 #include <asio/io_context.hpp>
 
-#include <string>
 #include <memory>
+#include <string>
 
 namespace plexus::mdnspp {
 

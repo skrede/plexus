@@ -13,13 +13,14 @@
 #include "plexus/node_id.h"
 
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
 #include "driver/uart.h"
 
+#include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
-#include "esp_log.h"
 
 #include <array>
 #include <cstdio>

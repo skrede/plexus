@@ -27,9 +27,9 @@
 #include <atomic>
 #include <memory>
 #include <vector>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <iostream>
 
 using plexus::inproc::inproc_bus;

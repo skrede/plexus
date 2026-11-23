@@ -17,13 +17,14 @@
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
-#include "plexus/publisher.h"
 #include "plexus/recorder.h"
-#include "plexus/wire_bytes.h"
+#include "plexus/publisher.h"
 #include "plexus/subscriber.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/recording_qos.h"
+
 #include "plexus/tools/flat_to_mcap.h"
 
 #include "plexus/io/recording/byte_sink.h"
@@ -36,9 +37,9 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include <span>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>

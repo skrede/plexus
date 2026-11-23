@@ -9,12 +9,13 @@
 #include "esp_timer.h"
 
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
 #include <span>
 #include <array>
-#include <cstdio>
 #include <chrono>
+#include <cstdio>
 #include <cstddef>
 #include <cstdint>
 

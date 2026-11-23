@@ -29,8 +29,9 @@
 #include <asio/steady_timer.hpp>
 
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
+
+#include <sys/ioctl.h>
 
 #include <span>
 #include <chrono>

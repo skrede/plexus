@@ -22,10 +22,10 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include <span>
-#include <vector>
+#include <atomic>
 #include <chrono>
 #include <memory>
-#include <atomic>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>

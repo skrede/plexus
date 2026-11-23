@@ -44,6 +44,7 @@
 // 0. It is not the delivery proof: a single node acquires no ring, so no value crosses shared memory here.
 
 #include "plexus/asio/shm/shm_member.h"
+
 #include "plexus/asio/transport_set.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"

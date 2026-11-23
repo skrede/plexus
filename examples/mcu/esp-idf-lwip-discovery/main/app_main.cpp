@@ -12,23 +12,25 @@
 
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/device_runtime.h"
-#include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_timer.h"
+#include "plexus/freertos/lwip_transport.h"
 #include "plexus/freertos/freertos_executor.h"
 #include "plexus/freertos/lwip_multicast_socket.h"
+
 #include "plexus/freertos/detail/lwip_socket_io.h"
 #include "plexus/freertos/detail/lwip_acceptor_io.h"
 
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
 #include "esp_system.h"
 
 #include <span>
 #include <array>
-#include <string>
 #include <chrono>
 #include <cstdio>
+#include <string>
 #include <cstdint>
 #include <utility>
 #include <functional>

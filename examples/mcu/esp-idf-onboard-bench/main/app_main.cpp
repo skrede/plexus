@@ -7,13 +7,13 @@
 // the zero-copy witness alongside the per-tier latency samples. This is the on-device counterpart to
 // the host intra-node loopback number.
 
-#include "onboard_policy.h"
 #include "bench_workload.h"
+#include "onboard_policy.h"
 
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/loopback_node.h"
 #include "plexus/node_options.h"
+#include "plexus/loopback_node.h"
 
 #include "plexus/discovery/static_discovery.h"
 
@@ -24,14 +24,15 @@
 #include "plexus/freertos/freertos_executor.h"
 
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 
 #include <span>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <system_error>

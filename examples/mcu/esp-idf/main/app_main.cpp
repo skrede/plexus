@@ -13,9 +13,8 @@
 // with no background plexus thread. plexus owns UART0 (console NONE); the magic-byte resync in
 // the framing layer absorbs the un-suppressable boot-ROM preamble.
 
-#include "uart_transport.h"
-
 #include "serial_link.h"
+#include "uart_transport.h"
 
 #include "plexus/node.h"
 #include "plexus/publisher.h"
@@ -31,6 +30,7 @@
 #include "plexus/freertos/freertos_executor.h"
 
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
 #include "driver/gpio.h"

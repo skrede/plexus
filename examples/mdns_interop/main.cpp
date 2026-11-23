@@ -16,16 +16,18 @@
 #include "plexus/wire/data_frame.h"
 
 #include "plexus/log/logger.h"
+
 #include "plexus/discovery/discovery.h"
 
 #include <asio/ip/tcp.hpp>
+
 #include <asio/io_context.hpp>
 
 #include <span>
 #include <chrono>
-#include <vector>
 #include <memory>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <iostream>
 #include <optional>

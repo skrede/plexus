@@ -15,35 +15,35 @@
 
 #include "onboard_policy.h"
 
+#include "plexus/expected.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/loopback_node.h"
+#include "plexus/wire_bytes.h"
+#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
+#include "plexus/loopback_node.h"
 
 #include "plexus/graph/participant_record.h"
 
 #include "plexus/discovery/static_discovery.h"
 
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/reconnect_config.h"
 
 #include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_timer.h"
 #include "plexus/freertos/freertos_executor.h"
 
-#include "plexus/expected.h"
-#include "plexus/wire_bytes.h"
-#include "plexus/typed_codec.h"
-
 #include "freertos/FreeRTOS.h"
+// task.h requires FreeRTOS.h to have been included before it.
 #include "freertos/task.h"
 
 #include "esp_log.h"
 
 #include <span>
 #include <array>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

@@ -25,8 +25,8 @@
 #include "plexus/subscriber.h"
 #include "plexus/node_options.h"
 
-#include "plexus/io/fragmentation.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/fragmentation.h"
 
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"
