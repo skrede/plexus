@@ -129,7 +129,7 @@ run_result one_run(std::uint16_t parent_port, std::uint16_t child_port)
     return r;
 }
 
-} // namespace
+}
 
 TEST_CASE("default_discovery_xproc two configless nodes in separate processes discover each other "
           "out of the box (same-host multicast loopback across processes)",
