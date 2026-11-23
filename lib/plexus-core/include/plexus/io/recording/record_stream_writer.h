@@ -183,6 +183,9 @@ public:
     }
 
 private:
+    std::vector<std::byte> m_aux;
+    std::vector<std::byte> m_scratch;
+
     static void write_schema(wire::writer &w, std::span<const type_schema_entry> schema)
     {
         w.varint(schema.size());
@@ -201,9 +204,6 @@ private:
     {
         return detail::seal_in(m_scratch, body_len);
     }
-
-    std::vector<std::byte> m_aux;
-    std::vector<std::byte> m_scratch;
 };
 
 }
