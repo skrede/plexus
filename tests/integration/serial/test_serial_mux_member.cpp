@@ -13,8 +13,8 @@
 #include "plexus/io/multiplexing_transport.h"
 
 #include "plexus/node.h"
-#include "plexus/policy.h"
 #include "plexus/muxify.h"
+#include "plexus/policy.h"
 #include "plexus/node_options.h"
 #include "plexus/target_profile.h"
 

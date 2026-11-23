@@ -16,16 +16,16 @@
 // Each leg loops in-body; the ctest invocation is re-run across process runs (a transport
 // claim is never made from one run). A position ramp catches a reorder/corruption.
 
+#include "plexus/asio/udp_transport.h"
 #include "plexus/asio/asio_transport.h"
 #include "plexus/asio/unix_transport.h"
-#include "plexus/asio/udp_transport.h"
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/fragmentation.h"
 
 #include "plexus/wire/frame.h"
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/close_cause.h"
+#include "plexus/wire/frame_codec.h"
 
 #ifdef PLEXUS_HAVE_TLS_OUTOFBOX
     #include "plexus/tls/tls_channel.h"
@@ -45,6 +45,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/tcp.hpp>
 
 #include <unistd.h>
@@ -52,10 +53,10 @@
 #include <span>
 #include <array>
 #include <chrono>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
-#include <cstdio>
 #include <cstddef>
 #include <cstdint>
 #include <utility>

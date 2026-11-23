@@ -5,8 +5,8 @@
 // subscriber_qos field that NEVER crosses the wire (an inproc-local stamp demand), so it
 // stays at its default in every swept value — the region cannot carry it back.
 
-#include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/subscriber_qos.h"
+#include "plexus/io/subscribe_qos_wire.h"
 
 #include <catch2/catch_test_macros.hpp>
 

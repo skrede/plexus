@@ -17,8 +17,8 @@
 #include "plexus/asio/serial_channel.h"
 
 #include "plexus/io/frame_router.h"
-#include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 
@@ -40,8 +40,8 @@
 #include <asio/io_context.hpp>
 #include <asio/serial_port.hpp>
 
-#include <termios.h>
 #include <unistd.h>
+#include <termios.h>
 
 #include <span>
 #include <chrono>

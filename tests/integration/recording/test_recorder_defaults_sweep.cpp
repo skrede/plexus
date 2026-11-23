@@ -16,9 +16,9 @@
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
+#include "plexus/recorder.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/recorder.h"
 #include "plexus/wire_bytes.h"
 #include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
@@ -33,6 +33,7 @@
 
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
+
 #include "plexus/io/recording/record_envelope.h"
 #include "plexus/io/recording/record_stream_reader.h"
 
@@ -42,9 +43,9 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

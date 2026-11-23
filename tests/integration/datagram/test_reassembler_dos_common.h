@@ -20,6 +20,7 @@
 
 #include "plexus/datagram/detail/reassembler.h"
 #include "plexus/datagram/detail/inbound_demux.h"
+
 #include "plexus/io/fragmentation.h"
 
 #include "plexus/testing/harness.h"
@@ -27,11 +28,11 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <chrono>
 
 using namespace std::chrono_literals;
 

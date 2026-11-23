@@ -13,6 +13,7 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/observation_events.h"
+
 #include "plexus/io/recording/flat_recorder.h"
 #include "plexus/io/recording/record_format.h"
 #include "plexus/io/recording/recording_sink.h"
@@ -28,9 +29,9 @@
 
 #include <span>
 #include <array>
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>

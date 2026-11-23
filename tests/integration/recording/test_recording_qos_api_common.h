@@ -28,10 +28,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <memory>
-#include <vector>
 #include <atomic>
 #include <chrono>
+#include <memory>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <system_error>

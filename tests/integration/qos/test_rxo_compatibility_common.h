@@ -13,29 +13,28 @@
 // guarantee); requires_source_identity refuses against a non-offering producer under
 // BOTH modes (the always-hard floor). Each behavioral leg looped for reproducibility.
 
-#include "plexus/io/peer_session.h"
-#include "plexus/io/peer_context.h"
 #include "plexus/io/qos_rxo.h"
+#include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/subscriber_qos.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/handshake_fsm.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
-
 #include "plexus/topic_qos.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstddef>

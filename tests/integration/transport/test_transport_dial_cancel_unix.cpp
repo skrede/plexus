@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/local/stream_protocol.hpp>
 
 #include <string>

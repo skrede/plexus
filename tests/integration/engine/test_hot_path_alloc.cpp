@@ -1,10 +1,11 @@
-#include "plexus/io/message_forwarder.h"
-#include "plexus/io/message_info.h"
-
-#include "plexus/policy.h"
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
+#include "plexus/io/message_info.h"
 #include "plexus/io/peer_liveliness.h"
+#include "plexus/io/message_forwarder.h"
+
+#include "plexus/policy.h"
+
 #include "plexus/detail/compat.h"
 
 #include "plexus/wire/data_frame.h"
@@ -20,20 +21,22 @@
 // ambiguously between ::asio and plexus::asio inside the asio headers.
 #ifdef PLEXUS_HAVE_ASIO_MUX
     #include "plexus/asio/udp_server.h"
+
     #include "plexus/datagram/detail/send_queue.h"
 
     #include <asio/io_context.hpp>
+
     #include <asio/ip/udp.hpp>
 #endif
 
 #ifdef PLEXUS_HAVE_CRYPTO_DATAGRAM
-    #include "plexus/crypto/datagram_authenticated_channel.h"
-    #include "plexus/crypto/key_schedule.h"
     #include "plexus/crypto/aead_epoch.h"
     #include "plexus/crypto/aead_cipher.h"
+    #include "plexus/crypto/key_schedule.h"
+    #include "plexus/crypto/datagram_authenticated_channel.h"
 
-    #include "plexus/wire/frame_codec.h"
     #include "plexus/wire/frame.h"
+    #include "plexus/wire/frame_codec.h"
 #endif
 
 #include <catch2/catch_test_macros.hpp>

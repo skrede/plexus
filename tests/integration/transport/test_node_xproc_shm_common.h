@@ -3,6 +3,7 @@
 
 #include "plexus/asio/same_host_transports.h"
 
+#include "plexus/topic_qos.h"
 #include "plexus/node_options.h"
 
 #include "plexus/io/host_fingerprint.h"
@@ -11,9 +12,12 @@
 
 #include "plexus/discovery/contact_card.h"
 
-#include "plexus/topic_qos.h"
-
 #include "plexus/testing/platform.h"
+
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
 
 #include <span>
 #include <atomic>
@@ -24,10 +28,6 @@
 #include <cstdint>
 #include <utility>
 #include <optional>
-
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 // Nested directives, not one `defined(__has_feature) && __has_feature(...)` expression: a
 // compiler without __has_feature (gcc < 14) replaces the identifier with 0 in a single #if and

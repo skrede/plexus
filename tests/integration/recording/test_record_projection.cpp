@@ -10,6 +10,7 @@
 
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
+
 #include "plexus/io/recording/byte_ring.h"
 #include "plexus/io/recording/record_decode.h"
 #include "plexus/io/recording/record_projection.h"

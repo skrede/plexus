@@ -20,9 +20,9 @@
 #include "plexus/wire/frame.h"
 #include "plexus/wire/rpc_frame.h"
 #include "plexus/wire/data_frame.h"
-#include "plexus/wire/frame_codec.h"
-#include "plexus/wire/topic_hash.h"
 #include "plexus/wire/rpc_status.h"
+#include "plexus/wire/topic_hash.h"
+#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/forwarded_frame.h"
 
 #include "plexus/inproc/inproc_channel.h"

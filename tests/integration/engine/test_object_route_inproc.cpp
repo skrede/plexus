@@ -8,10 +8,10 @@
 // socket.
 
 #include "plexus/io/known_peers.h"
-#include "plexus/io/routing_engine.h"
-#include "plexus/io/object_carrier.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/object_carrier.h"
+#include "plexus/io/routing_engine.h"
+#include "plexus/io/reconnect_config.h"
 #include "plexus/io/peer_session_registry.h"
 
 #include "plexus/inproc/inproc_bus.h"

@@ -13,8 +13,8 @@
 // This is the live cross-class proof; the numeric-default sweep
 // (test_udp_arq_sweep) substantiates the constants the reliable class rests on.
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
 
 #include "plexus/wire/udp_ack.h"
@@ -26,6 +26,7 @@
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <array>

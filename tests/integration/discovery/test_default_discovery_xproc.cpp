@@ -1,11 +1,10 @@
-#include "plexus/asio/default_discovery.h"
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"
+#include "plexus/asio/default_discovery.h"
 
 #include "plexus/node.h"
-#include "plexus/node_options.h"
-
 #include "plexus/node_id.h"
+#include "plexus/node_options.h"
 
 #include "plexus/testing/platform.h"
 
@@ -13,18 +12,19 @@
 
 #include <asio/io_context.hpp>
 
-#include <string>
-#include <chrono>
-#include <vector>
+#include <unistd.h>
+
+#include <sys/mman.h>
+#include <sys/wait.h>
+
 #include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
-
-#include <cerrno>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
 
 // Two nodes in SEPARATE PROCESSES on one host discover each other out of the box, with NO discovery
 // configuration. Same-host cross-process multicast loopback (already enabled) is exactly what makes

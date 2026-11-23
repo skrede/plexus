@@ -4,8 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <string>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>

@@ -10,7 +10,9 @@
 #include "plexus/wire/data_frame.h"
 
 #include "plexus/log/logger.h"
+
 #include "plexus/node_id.h"
+
 #include "plexus/discovery/discovery.h"
 #include "plexus/discovery/contact_card.h"
 #include "plexus/discovery/multicast_discovery.h"
@@ -18,13 +20,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/ip/tcp.hpp>
+
 #include <asio/io_context.hpp>
 
 #include <span>
 #include <chrono>
-#include <vector>
 #include <memory>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <utility>
 #include <optional>

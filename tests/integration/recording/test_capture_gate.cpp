@@ -18,11 +18,11 @@
 #include "recording_observer.h"
 
 #include "plexus/io/known_peers.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/peer_session_registry.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -39,8 +39,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <string>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>

@@ -6,14 +6,14 @@
 
 #include "support/stall_policy.h"
 
-#include "plexus/io/message_forwarder.h"
-#include "plexus/io/detail/drop_event.h"
-#include "plexus/io/detail/forward_splice.h"
-#include "plexus/io/detail/priority_band_queue.h"
-
 #include "plexus/io/priority.h"
 #include "plexus/io/congestion.h"
 #include "plexus/io/null_logger.h"
+#include "plexus/io/message_forwarder.h"
+
+#include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/forward_splice.h"
+#include "plexus/io/detail/priority_band_queue.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
@@ -21,8 +21,8 @@
 #include "plexus/inproc/inproc_executor.h"
 
 #include "plexus/wire/frame.h"
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/forwarded_frame.h"
 
 #include "plexus/node_id.h"

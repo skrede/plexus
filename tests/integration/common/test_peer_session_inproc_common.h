@@ -1,28 +1,28 @@
 #ifndef HPP_GUARD_TESTS_INTEGRATION_PEER_SESSION_INPROC_COMMON_H
 #define HPP_GUARD_TESTS_INTEGRATION_PEER_SESSION_INPROC_COMMON_H
 
-#include "plexus/io/peer_session.h"
-#include "plexus/io/peer_context.h"
 #include "plexus/io/message_info.h"
+#include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/handshake_fsm.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
 
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <span>
 #include <array>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstddef>

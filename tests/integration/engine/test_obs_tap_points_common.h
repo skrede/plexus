@@ -12,9 +12,9 @@
 #include "recording_observer.h"
 
 #include "plexus/io/known_peers.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
@@ -31,10 +31,10 @@
 
 #include <span>
 #include <array>
-#include <memory>
-#include <vector>
 #include <chrono>
+#include <memory>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>

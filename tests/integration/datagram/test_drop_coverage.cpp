@@ -20,51 +20,53 @@
 
 #include "support/stall_policy.h"
 
-#include "plexus/crypto/datagram_authenticated_channel.h"
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
+#include "plexus/crypto/datagram_authenticated_channel.h"
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
 
 #include "plexus/io/observer.h"
+#include "plexus/io/priority.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_forwarder.h"
-#include "plexus/io/priority.h"
+
 #include "plexus/io/detail/drop_event.h"
-#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/io/detail/egress_scheduler.h"
 #include "plexus/io/detail/priority_band_queue.h"
+
+#include "plexus/datagram/detail/reassembler.h"
 #include "plexus/datagram/detail/udp_handshake_frame.h"
 
-#include "plexus/topic_qos.h"
-
-#include "plexus/inproc/inproc_timer.h"
-#include "plexus/inproc/inproc_transport.h"
-#include "plexus/inproc/inproc_channel.h"
-#include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
-
 #include "plexus/policy.h"
+#include "plexus/topic_qos.h"
 #include "plexus/executor_verbs.h"
 
-#include "plexus/wire/frame_codec.h"
+#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_timer.h"
+#include "plexus/inproc/inproc_channel.h"
+#include "plexus/inproc/inproc_executor.h"
+#include "plexus/inproc/inproc_transport.h"
+
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <span>
 #include <array>
-#include <string>
-#include <vector>
 #include <chrono>
 #include <memory>
+#include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>

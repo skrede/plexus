@@ -17,8 +17,8 @@
 
 #include "test_serial_common.h"
 
-#include "plexus/io/detail/forward_splice.h"
 #include "plexus/io/detail/drop_event.h"
+#include "plexus/io/detail/forward_splice.h"
 
 #include "plexus/asio/udp_transport.h"
 
@@ -29,8 +29,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <limits>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>

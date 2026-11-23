@@ -2,6 +2,7 @@
 #define HPP_GUARD_TESTS_INTEGRATION_SERIAL_ATOMIC_ADMISSION_COMMON_H
 
 #include "plexus/stream/detail/send_queue.h"
+
 #include "plexus/stream/crc_serial.h"
 
 #include "plexus/wire_bytes.h"
@@ -11,8 +12,8 @@
 #include "plexus/wire/frame_codec.h"
 
 #include <span>
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 #include <cstddef>
 #include <cstdint>

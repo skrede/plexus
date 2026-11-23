@@ -11,8 +11,8 @@
 #include "test_serial_common.h"
 
 #include "plexus/asio/asio_policy.h"
-#include "plexus/asio/asio_transport.h"
 #include "plexus/asio/serial_policy.h"
+#include "plexus/asio/asio_transport.h"
 #include "plexus/asio/serial_transport.h"
 
 #include "plexus/node.h"
@@ -27,13 +27,12 @@
 
 #include <asio/io_context.hpp>
 
-#include <cstdlib>
-
 #include <span>
 #include <array>
 #include <string>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <utility>
 #include <optional>
 #include <algorithm>

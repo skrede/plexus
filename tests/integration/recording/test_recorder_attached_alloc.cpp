@@ -14,6 +14,7 @@
 
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
+
 #include "plexus/io/recording/byte_sink.h"
 #include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/flat_recorder.h"

@@ -7,10 +7,10 @@
 // verdict and arbitration scenario files build their two-engine nets over this scaffold and advance
 // the clock by hand — never a wall-clock sleep.
 
-#include "plexus/io/endpoint_id.h"
 #include "plexus/io/observer.h"
-#include "plexus/io/routing_engine.h"
+#include "plexus/io/endpoint_id.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/peer_liveliness_event.h"
@@ -24,9 +24,9 @@
 #include "plexus/policy.h"
 #include "plexus/executor_verbs.h"
 
-#include <vector>
-#include <memory>
 #include <chrono>
+#include <memory>
+#include <vector>
 #include <cstdint>
 
 namespace liveliness_inproc {

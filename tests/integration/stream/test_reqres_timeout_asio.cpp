@@ -2,8 +2,8 @@
 #include "plexus/asio/asio_channel.h"
 #include "plexus/asio/asio_listener.h"
 
-#include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/frame_router.h"
+#include "plexus/io/procedure_forwarder.h"
 
 #include "plexus/wire/rpc_status.h"
 
@@ -12,6 +12,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/tcp.hpp>
 
 #include <span>

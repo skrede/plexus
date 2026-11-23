@@ -13,20 +13,19 @@
 // recommended backoff config. This TU owns the TU-local alloc counter.
 
 #include "plexus/io/reconnect.h"
-#include "plexus/io/reconnect_config.h"
-
-#include "plexus/io/peer_session.h"
-#include "plexus/io/peer_context.h"
 #include "plexus/io/epoch_source.h"
-#include "plexus/io/transport_backend.h"
+#include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
+#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/transport_backend.h"
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
 #include "plexus/executor_verbs.h"
@@ -38,8 +37,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstdint>

@@ -13,10 +13,10 @@
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
-#include "plexus/publisher.h"
 #include "plexus/recorder.h"
-#include "plexus/wire_bytes.h"
+#include "plexus/publisher.h"
 #include "plexus/subscriber.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/recording_qos.h"
@@ -35,9 +35,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>

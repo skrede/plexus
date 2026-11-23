@@ -23,12 +23,12 @@
 // made from one run).
 
 #include "plexus/asio/asio_policy.h"
-#include "plexus/asio/asio_transport.h"
 #include "plexus/asio/asio_channel.h"
+#include "plexus/asio/asio_transport.h"
 
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
 
 #include "plexus/policy.h"
 

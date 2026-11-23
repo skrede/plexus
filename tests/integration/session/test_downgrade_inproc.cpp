@@ -6,20 +6,21 @@
 // tampered offer changes the digest, so the policy refuses), keeping the bridge logic in the
 // plexus::plexus-only core.
 
-#include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/security_seam.h"
 #include "plexus/io/security_event.h"
-#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
+
 #include "plexus/io/security/attach_policy.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
 
@@ -27,8 +28,8 @@
 
 #include <span>
 #include <array>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <vector>
 #include <cstddef>
 #include <cstdint>

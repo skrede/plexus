@@ -11,17 +11,18 @@
 // for the forged datagram). The verify-before-commit (probe -> open -> commit) order in
 // the decorator is preserved (the nonce/window are untouched here).
 
-#include "plexus/crypto/datagram_authenticated_channel.h"
-#include "plexus/crypto/key_schedule.h"
 #include "plexus/crypto/aead_cipher.h"
+#include "plexus/crypto/key_schedule.h"
+#include "plexus/crypto/datagram_authenticated_channel.h"
 
 #include "plexus/datagram/detail/reassembler.h"
-#include "plexus/io/fragmentation.h"
-#include "plexus/io/byte_channel.h"
 
-#include "plexus/wire/udp_envelope.h"
-#include "plexus/wire/frame_codec.h"
+#include "plexus/io/byte_channel.h"
+#include "plexus/io/fragmentation.h"
+
 #include "plexus/wire/frame.h"
+#include "plexus/wire/frame_codec.h"
+#include "plexus/wire/udp_envelope.h"
 
 #include "plexus/testing/harness.h"
 

@@ -11,8 +11,8 @@
 #include <vector>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <algorithm>
+#include <functional>
 
 using namespace discovery_noalloc_fixture;
 

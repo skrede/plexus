@@ -11,7 +11,6 @@
 
 #include "plexus/node.h"
 #include "plexus/node_options.h"
-
 #include "plexus/target_profile.h"
 
 #include "plexus/io/detail/forward_splice.h"

@@ -2,16 +2,18 @@
 #define HPP_GUARD_TESTS_INTEGRATION_NATIVE_SHARED_EXECUTOR_COMMON_H
 
 #include "plexus/stream/datagram_socket.h"
+
 #include "plexus/detail/compat.h"
 
 #include <asio/post.hpp>
-#include <asio/ip/udp.hpp>
 #include <asio/io_context.hpp>
+
+#include <asio/ip/udp.hpp>
 #include <asio/ip/address_v4.hpp>
 
 #include <span>
-#include <vector>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <utility>
 #include <optional>

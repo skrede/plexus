@@ -15,14 +15,14 @@
 
 #include "in_memory_byte_sink.h"
 
-#include "plexus/io/recording_channel.h"
+#include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/capture_policy.h"
+#include "plexus/io/recording_channel.h"
+
 #include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/flat_recorder.h"
 #include "plexus/io/recording/record_stream_reader.h"
-
-#include "plexus/io/endpoint.h"
-#include "plexus/io/io_error.h"
 
 #include "plexus/node_id.h"
 
@@ -31,8 +31,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
-#include <vector>
 #include <memory>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

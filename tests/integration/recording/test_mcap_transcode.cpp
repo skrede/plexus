@@ -13,22 +13,22 @@
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
-#include "plexus/publisher.h"
 #include "plexus/recorder.h"
-#include "plexus/wire_bytes.h"
+#include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/typed_codec.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/type_schema.h"
+#include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/recording_qos.h"
 #include "plexus/recorder_options.h"
 #include "plexus/wire_capture_qos.h"
 
 #include "plexus/io/capture_policy.h"
-#include "plexus/wire/topic_hash.h"
-
 #include "plexus/io/recording_channel.h"
 #include "plexus/io/wire_capturing_transport.h"
+
+#include "plexus/wire/topic_hash.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
@@ -47,14 +47,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <cctype>
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
-#include <cctype>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <utility>
 #include <iterator>
 #include <algorithm>
 #include <filesystem>

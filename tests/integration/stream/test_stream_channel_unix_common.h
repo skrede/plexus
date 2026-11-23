@@ -17,15 +17,16 @@
 // claim is never made from one run). This is the dialer->acceptor frame-desync
 // defense at the channel layer for the local-stream transport.
 
+#include "plexus/asio/unix_policy.h"
 #include "plexus/asio/unix_channel.h"
 #include "plexus/asio/unix_listener.h"
-#include "plexus/asio/unix_policy.h"
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/congestion.h"
 
 #include "plexus/wire/frame.h"
 #include "plexus/wire/frame_codec.h"
+
 #include "plexus/stream/stream_inbound.h"
 
 #include "plexus/testing/pump.h"
@@ -35,18 +36,19 @@
 
 #include <asio/write.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/local/stream_protocol.hpp>
 
 #include <unistd.h>
 
 #include <span>
 #include <array>
-#include <vector>
-#include <string>
 #include <chrono>
 #include <memory>
-#include <cstdint>
+#include <string>
+#include <vector>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <optional>
 #include <algorithm>

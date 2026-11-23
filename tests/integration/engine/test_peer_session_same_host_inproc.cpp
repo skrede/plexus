@@ -10,21 +10,21 @@
 // the handshake frame as the appended field; no separate exchange. Looped for the
 // inproc determinism the suite expects.
 
-#include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
+#include "plexus/io/dispatch_hint.h"
+#include "plexus/io/handshake_fsm.h"
+#include "plexus/io/host_fingerprint.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/handshake_fsm.h"
 
-#include "plexus/io/host_fingerprint.h"
 #include "plexus/shm/shm_selection.h"
-#include "plexus/io/dispatch_hint.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
 
@@ -32,8 +32,8 @@
 
 #include <chrono>
 #include <memory>
-#include <optional>
 #include <cstdint>
+#include <optional>
 
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_executor;

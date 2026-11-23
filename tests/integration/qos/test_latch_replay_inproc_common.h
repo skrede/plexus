@@ -1,13 +1,13 @@
 #ifndef HPP_GUARD_TESTS_INTEGRATION_LATCH_REPLAY_INPROC_COMMON_H
 #define HPP_GUARD_TESTS_INTEGRATION_LATCH_REPLAY_INPROC_COMMON_H
 
-#include "plexus/io/message_forwarder.h"
 #include "plexus/io/frame_router.h"
+#include "plexus/io/message_forwarder.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/policy.h"
 

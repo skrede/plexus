@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/ip/tcp.hpp>
+
 #include <asio/io_context.hpp>
 
 #include <string>

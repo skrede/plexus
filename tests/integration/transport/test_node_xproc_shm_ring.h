@@ -1,9 +1,8 @@
 #ifndef HPP_GUARD_PLEXUS_TESTS_INTEGRATION_TEST_NODE_XPROC_SHM_RING_H
 #define HPP_GUARD_PLEXUS_TESTS_INTEGRATION_TEST_NODE_XPROC_SHM_RING_H
 
-#include "test_node_xproc_shm_common.h"
-
 #include "region_names.h"
+#include "test_node_xproc_shm_common.h"
 
 #include "plexus/native/region_handle.h"
 #include "plexus/native/posix_shm_region_broker.h"

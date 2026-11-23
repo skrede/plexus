@@ -1,6 +1,7 @@
 #include "test_serial_common.h"
 
 #include "plexus/io/io_error.h"
+
 #include "plexus/io/detail/drop_event.h"
 
 #include "plexus/wire/frame.h"

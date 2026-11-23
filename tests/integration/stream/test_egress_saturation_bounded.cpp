@@ -28,12 +28,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/ip/tcp.hpp>
+
 #include <asio/local/stream_protocol.hpp>
 
 #include <span>
-#include <vector>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <utility>
 

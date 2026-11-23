@@ -25,9 +25,9 @@
 #include "in_memory_byte_sink.h"
 
 #include "plexus/node.h"
+#include "plexus/recorder.h"
 #include "plexus/publisher.h"
 #include "plexus/subscriber.h"
-#include "plexus/recorder.h"
 #include "plexus/node_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -41,7 +41,9 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/observation_events.h"
+
 #include "plexus/io/detail/drop_event.h"
+
 #include "plexus/io/recording/record_envelope.h"
 #include "plexus/io/recording/record_stream_reader.h"
 #include "plexus/io/recording/pre_buffer_controller.h"

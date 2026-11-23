@@ -2,8 +2,9 @@
 
 #include "in_memory_byte_sink.h"
 
-#include "plexus/io/recording/dropout_record.h"
 #include "plexus/io/recording/byte_ring.h"
+#include "plexus/io/recording/dropout_record.h"
+
 #include "plexus/io/capture_policy.h"
 
 #include "plexus/wire/varint.h"

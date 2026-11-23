@@ -16,14 +16,14 @@
 // Links plexus::inproc for the forwarder framing path the peers reuse.
 
 #include "plexus/asio/asio_policy.h"
-#include "plexus/asio/asio_transport.h"
 #include "plexus/asio/asio_channel.h"
+#include "plexus/asio/asio_transport.h"
 
-#include "plexus/io/routing_engine.h"
-#include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/peer_session.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/routing_engine.h"
+#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
 

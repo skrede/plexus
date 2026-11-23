@@ -6,8 +6,8 @@
 #include "plexus/io/transport_selector.h"
 #include "plexus/io/multiplexing_transport.h"
 
-#include "plexus/policy.h"
 #include "plexus/muxify.h"
+#include "plexus/policy.h"
 
 #include <catch2/catch_test_macros.hpp>
 

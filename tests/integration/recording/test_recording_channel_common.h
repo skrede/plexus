@@ -15,6 +15,7 @@
 #include "plexus/io/byte_channel.h"
 #include "plexus/io/recording_channel.h"
 #include "plexus/io/polymorphic_byte_channel.h"
+
 #include "plexus/io/recording/byte_ring.h"
 #include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/flat_recorder.h"
@@ -28,8 +29,8 @@
 
 #include <span>
 #include <tuple>
-#include <vector>
 #include <memory>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>

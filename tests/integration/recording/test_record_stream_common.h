@@ -16,7 +16,9 @@
 #include "plexus/io/message_info.h"
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/observation_events.h"
+
 #include "plexus/io/detail/drop_event.h"
+
 #include "plexus/io/recording/byte_ring.h"
 #include "plexus/io/recording/wire_record.h"
 #include "plexus/io/recording/flat_recorder.h"

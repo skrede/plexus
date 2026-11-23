@@ -13,6 +13,7 @@
 #include "plexus/asio/unix_listener.h"
 
 #include "plexus/io/endpoint.h"
+
 #include "plexus/io/security/peer_cred_policy.h"
 
 #include "plexus/testing/pump.h"
@@ -20,14 +21,16 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/io_context.hpp>
+
 #include <asio/local/stream_protocol.hpp>
 
 #include <sys/stat.h>
+
 #include <unistd.h>
 
-#include <string>
 #include <chrono>
 #include <memory>
+#include <string>
 #include <cstdint>
 #include <cstdlib>
 #include <utility>

@@ -11,6 +11,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <sys/ioctl.h>
+
 #include <unistd.h>
 
 #include <span>

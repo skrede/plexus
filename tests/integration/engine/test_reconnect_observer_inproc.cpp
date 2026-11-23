@@ -13,15 +13,15 @@
 
 #include "recording_observer.h"
 
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/handshake_fsm.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
 #include "plexus/executor_verbs.h"

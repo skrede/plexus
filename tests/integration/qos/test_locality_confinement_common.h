@@ -15,10 +15,12 @@
 // routing_engine: a local-confined subscribe toward a tcp peer establishes NO remote
 // path (no dial, no slot, is_connected stays false) — the symmetric demand-side half.
 
+#include "plexus/io/endpoint.h"
+#include "plexus/io/io_error.h"
 #include "plexus/io/locality.h"
 #include "plexus/io/known_peers.h"
-#include "plexus/io/routing_engine.h"
 #include "plexus/io/handshake_fsm.h"
+#include "plexus/io/routing_engine.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
 
@@ -29,8 +31,7 @@
 #include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
-#include "plexus/io/endpoint.h"
-#include "plexus/io/io_error.h"
+
 #include "plexus/detail/compat.h"
 
 #include "plexus/testing/inline_verbs.h"
@@ -39,14 +40,14 @@
 
 #ifdef PLEXUS_HAVE_ASIO_MUX
     #include "plexus/asio/asio_policy.h"
-    #include "plexus/asio/asio_transport.h"
-    #include "plexus/asio/asio_channel.h"
     #include "plexus/asio/unix_policy.h"
-    #include "plexus/asio/unix_transport.h"
+    #include "plexus/asio/asio_channel.h"
     #include "plexus/asio/unix_channel.h"
+    #include "plexus/asio/asio_transport.h"
+    #include "plexus/asio/unix_transport.h"
 
-    #include "plexus/io/peer_session.h"
     #include "plexus/io/peer_context.h"
+    #include "plexus/io/peer_session.h"
 
     #include <asio/io_context.hpp>
 
@@ -55,8 +56,8 @@
 
 #include <span>
 #include <array>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstddef>

@@ -15,16 +15,17 @@
 
 #include "plexus/node.h"
 #include "plexus/expected.h"
-#include "plexus/publisher.h"
-#include "plexus/wire_bytes.h"
 #include "plexus/recorder.h"
+#include "plexus/publisher.h"
 #include "plexus/subscriber.h"
+#include "plexus/wire_bytes.h"
 #include "plexus/type_schema.h"
 #include "plexus/typed_codec.h"
 #include "plexus/node_options.h"
 #include "plexus/recorder_options.h"
 
 #include "plexus/io/capture_policy.h"
+
 #include "plexus/io/recording/record_decode.h"
 #include "plexus/io/recording/record_format.h"
 #include "plexus/io/recording/record_stream_reader.h"
@@ -39,12 +40,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <string_view>
 
 namespace self_describing_fixture {

@@ -9,22 +9,23 @@
 // when no security posture is engaged), so a forged external identity claim cannot
 // substitute for it.
 
-#include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
+#include "plexus/io/peer_session.h"
+#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/host_identity.h"
 #include "plexus/io/security_seam.h"
-#include "plexus/io/handshake_fsm.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/security/attach_policy.h"
-#include "plexus/io/security/attach_facts.h"
-#include "plexus/io/security/cert_facts.h"
 
+#include "plexus/io/security/cert_facts.h"
+#include "plexus/io/security/attach_facts.h"
+#include "plexus/io/security/attach_policy.h"
+
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
-#include "plexus/inproc/inproc_transport.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
+#include "plexus/inproc/inproc_transport.h"
 
 #include "plexus/policy.h"
 
@@ -32,8 +33,8 @@
 
 #include <span>
 #include <array>
-#include <memory>
 #include <chrono>
+#include <memory>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

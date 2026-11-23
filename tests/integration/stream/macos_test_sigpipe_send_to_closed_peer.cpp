@@ -19,8 +19,10 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <asio/ip/tcp.hpp>
+
 #include <asio/io_context.hpp>
 #include <asio/socket_base.hpp>
+
 #include <asio/local/stream_protocol.hpp>
 
 #include <span>

@@ -14,8 +14,8 @@
 //
 // No plexus source is touched by this test; the loss is injected at the wire boundary.
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
 
 #include "plexus/io/fragmentation.h"
@@ -30,6 +30,7 @@
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <array>

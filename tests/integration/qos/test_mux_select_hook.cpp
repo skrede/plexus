@@ -1,15 +1,15 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/transport_selector.h"
-#include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/io/multiplexing_transport.h"
+#include "plexus/io/polymorphic_byte_channel.h"
 
 #include "plexus/detail/compat.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <array>
 #include <span>
+#include <array>
 #include <memory>
 #include <string>
 #include <cstddef>

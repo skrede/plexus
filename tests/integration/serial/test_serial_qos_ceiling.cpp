@@ -6,6 +6,7 @@
 #include "plexus/io/observation_events.h"
 #include "plexus/io/polymorphic_byte_channel.h"
 #include "plexus/io/reference_channel_adapter.h"
+
 #include "plexus/io/detail/egress_channel_traits.h"
 
 #include "plexus/stream/serial_frame.h"

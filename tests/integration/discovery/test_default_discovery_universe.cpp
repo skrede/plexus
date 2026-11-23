@@ -1,14 +1,14 @@
 #include "test_default_discovery_lan_common.h"
 
-#include "plexus/discovery/discovery_options.h"
 #include "plexus/discovery/universe.h"
+#include "plexus/discovery/discovery_options.h"
 
 #include "plexus/testing/platform.h"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <string>
 #include <chrono>
+#include <string>
 #include <vector>
 #include <cstdint>
 #include <string_view>

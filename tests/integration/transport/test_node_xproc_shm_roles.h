@@ -16,15 +16,16 @@
 
 #include <asio/io_context.hpp>
 
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <sys/mman.h>
+
 #include <span>
 #include <chrono>
 #include <string>
 #include <cstddef>
 #include <cstdint>
-
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
 
 namespace node_xproc_shm_fixture {
 

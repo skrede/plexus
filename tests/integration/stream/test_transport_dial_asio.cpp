@@ -1,17 +1,17 @@
 #include "plexus/asio/asio_policy.h"
-#include "plexus/asio/asio_transport.h"
 #include "plexus/asio/asio_channel.h"
+#include "plexus/asio/asio_transport.h"
 
-#include "plexus/io/peer_session.h"
 #include "plexus/io/peer_context.h"
-#include "plexus/io/transport_backend.h"
+#include "plexus/io/peer_session.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/transport_backend.h"
 #include "plexus/io/procedure_forwarder.h"
 
+#include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
-#include "plexus/inproc/inproc_bus.h"
 
 #include "plexus/policy.h"
 

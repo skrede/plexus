@@ -1,17 +1,16 @@
 #ifndef HPP_GUARD_TESTS_INTEGRATION_DEFAULT_DISCOVERY_LAN_COMMON_H
 #define HPP_GUARD_TESTS_INTEGRATION_DEFAULT_DISCOVERY_LAN_COMMON_H
 
-#include "plexus/asio/default_discovery.h"
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"
+#include "plexus/asio/default_discovery.h"
 
 #include "plexus/node.h"
+#include "plexus/node_id.h"
 #include "plexus/node_options.h"
 
 #include "plexus/discovery/discovery_health.h"
 #include "plexus/discovery/discovery_options.h"
-
-#include "plexus/node_id.h"
 
 #include "plexus/testing/pump.h"
 

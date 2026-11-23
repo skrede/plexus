@@ -17,8 +17,8 @@
 // Looped 100x in-body; the ctest invocation is re-run across >=3 process runs (a
 // transport/timing claim is never made from a single run).
 
-#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_server.h"
+#include "plexus/asio/udp_channel.h"
 #include "plexus/asio/udp_transport.h"
 
 #include "plexus/wire/udp_ack.h"
@@ -30,6 +30,7 @@
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>
+
 #include <asio/ip/udp.hpp>
 
 #include <array>

@@ -4,7 +4,9 @@
 // legs (the fan machinery, not a two-transport node), so the interest scoping and arrival exclusion are
 // observable on the wire the destination receives.
 
+#include "plexus/io/null_logger.h"
 #include "plexus/io/message_forwarder.h"
+
 #include "plexus/io/detail/forward_splice.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -12,11 +14,9 @@
 #include "plexus/inproc/inproc_channel.h"
 #include "plexus/inproc/inproc_executor.h"
 
-#include "plexus/io/null_logger.h"
-
 #include "plexus/wire/frame.h"
-#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/topic_hash.h"
+#include "plexus/wire/frame_codec.h"
 #include "plexus/wire/forwarded_frame.h"
 #include "plexus/wire/frame_reassembler.h"
 

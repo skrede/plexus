@@ -2,12 +2,14 @@
 #define HPP_GUARD_TESTS_INTEGRATION_DISCOVERY_NOALLOC_COMMON_H
 
 #include "plexus/discovery/detail/announcement_card.h"
-#include "plexus/discovery/contact_card.h"
+
 #include "plexus/discovery/discovery.h"
+#include "plexus/discovery/contact_card.h"
 
 #include "plexus/wire/announcement.h"
 
 #include "plexus/node_id.h"
+
 #include "plexus/stream/datagram_socket.h"
 
 #include "plexus/detail/compat.h"
@@ -17,8 +19,8 @@
 #include <span>
 #include <chrono>
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
