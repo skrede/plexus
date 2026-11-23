@@ -29,6 +29,17 @@ void emit_drop(Ch &c, io::detail::drop_cause cause, io::locality transport = io:
         c.m_on_drop_cb(io::detail::drop_event{.cause = cause, .transport = transport});
 }
 
+// The datagram on the wire: the sequence number, the epoch byte, the cleartext header, then the sealed payload.
+template<typename Ch>
+void write_sealed_frame(Ch &c, std::uint64_t seq, std::span<const std::byte> header)
+{
+    c.m_send_frame.resize(Ch::k_seq_len + 1 + wire::header_size + c.m_seal_scratch.size());
+    Ch::write_seq(c.m_send_frame.data(), seq);
+    c.m_send_frame[Ch::k_seq_len] = static_cast<std::byte>(c.m_send_epoch & 0xffu);
+    std::copy(header.begin(), header.end(), c.m_send_frame.begin() + Ch::k_seq_len + 1);
+    std::copy(c.m_seal_scratch.begin(), c.m_seal_scratch.end(), c.m_send_frame.begin() + Ch::k_seq_len + 1 + wire::header_size);
+}
+
 template<typename Ch>
 void datagram_send(Ch &c, std::span<const std::byte> data)
 {
@@ -49,11 +60,7 @@ void datagram_send(Ch &c, std::span<const std::byte> data)
     if(!seal(c.m_cipher, c.m_send_key, nonce, header, payload, c.m_seal_scratch))
         return;
 
-    c.m_send_frame.resize(Ch::k_seq_len + 1 + wire::header_size + c.m_seal_scratch.size());
-    Ch::write_seq(c.m_send_frame.data(), seq);
-    c.m_send_frame[Ch::k_seq_len] = static_cast<std::byte>(c.m_send_epoch & 0xffu);
-    std::copy(header.begin(), header.end(), c.m_send_frame.begin() + Ch::k_seq_len + 1);
-    std::copy(c.m_seal_scratch.begin(), c.m_seal_scratch.end(), c.m_send_frame.begin() + Ch::k_seq_len + 1 + wire::header_size);
+    write_sealed_frame(c, seq, header);
     c.m_lower.send(c.m_send_frame);
 }
 

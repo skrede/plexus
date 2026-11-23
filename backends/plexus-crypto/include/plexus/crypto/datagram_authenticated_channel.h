@@ -131,6 +131,8 @@ private:
     template<typename C>
     friend void detail::emit_drop(C &, io::detail::drop_cause, io::locality);
     template<typename C>
+    friend void detail::write_sealed_frame(C &, std::uint64_t, std::span<const std::byte>);
+    template<typename C>
     friend void detail::datagram_send(C &, std::span<const std::byte>);
     template<typename C>
     friend bool detail::candidate_key_for(C &, std::uint8_t, aead_key &, bool &) noexcept;
