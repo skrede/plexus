@@ -34,7 +34,7 @@ bool deliver_to_target(Channels &channels, Packet &pkt)
 template<typename Bus, typename Packet>
 void dispatch_packet(Bus &bus, Packet &pkt)
 {
-    using packet_kind    = typename Bus::packet_kind;
+    using packet_kind    = decltype(Packet::kind);
     const bool delivered = deliver_to_target(bus.m_channels, pkt);
     if(pkt.kind == packet_kind::object && !delivered)
         io::release(pkt.carrier);
