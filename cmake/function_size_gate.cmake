@@ -39,6 +39,22 @@ if(FUNC_GATE_SOURCES_FILE)
     function_size_gate_check_coverage()
 endif()
 
+# clang-tidy exits nonzero on a TU that fails to compile, as the compile-fail tests' TUs do by design, so the exit
+# status alone cannot tell a broken run: one is broken when run-clang-tidy itself fails, a clang-tidy dies, a library
+# TU cannot be processed, or no function was measured at all.
+function(function_size_gate_check_run log rc err)
+    file(STRINGS "${log}" _failures REGEX "terminated by signal|^Error while processing .*${FUNC_GATE_SCOPE}")
+    file(STRINGS "${log}" _measured REGEX ": note: [0-9]+ lines including" LIMIT_COUNT 1)
+    if(NOT rc EQUAL 0 AND NOT err STREQUAL "")
+        message(FATAL_ERROR "function size gate: run-clang-tidy failed (exit ${rc}):\n${err}")
+    elseif(_failures)
+        list(JOIN _failures "\n  " _failures)
+        message(FATAL_ERROR "function size gate: clang-tidy could not check a library source:\n  ${_failures}")
+    elseif(NOT _measured)
+        message(FATAL_ERROR "function size gate: clang-tidy measured no function")
+    endif()
+endfunction()
+
 # FUNC_GATE_TIDY_LOG replays a recorded clang-tidy output so the gate's parsing can be tested against fixed
 # diagnostics.
 set(_tidy_log "${FUNC_GATE_TIDY_LOG}")
@@ -69,6 +85,7 @@ if(NOT FUNC_GATE_TIDY_LOG)
         OUTPUT_FILE ${_tidy_log}
         ERROR_VARIABLE _tidy_err
         RESULT_VARIABLE _tidy_rc)
+    function_size_gate_check_run("${_tidy_log}" "${_tidy_rc}" "${_tidy_err}")
 endif()
 
 # Read line by line, so a quoted source line's unbalanced bracket cannot fold neighboring diagnostics together.
