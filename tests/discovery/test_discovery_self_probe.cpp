@@ -59,7 +59,7 @@ plexus::discovery::service_info card_for(const plexus::node_id &id)
     return {"node", plexus::io::endpoint{"", "host"}, plexus::discovery::assemble_contact_card(id, sample_listens())};
 }
 
-} // namespace
+}
 
 TEST_CASE("discovery_self_probe: a node never notes its own echo and reads healthy on seeing it", "[multicast_discovery][discovery_self_probe]")
 {

@@ -74,7 +74,7 @@ plexus::discovery::service_info card_for(std::uint8_t seed)
     return {"node", plexus::io::endpoint{"", "host"}, plexus::discovery::assemble_contact_card(make_id(seed), sample_listens())};
 }
 
-} // namespace
+}
 
 TEST_CASE("multicast_discovery: a foreign-universe announcement fires no on_resolved", "[multicast_discovery][universe]")
 {

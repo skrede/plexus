@@ -25,7 +25,7 @@ plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-} // namespace
+}
 
 // The deterministic two-node equivalent of the live multicast test: two real nodes, each with a multicast_discovery
 // over a paired wiring socket. It exercises the full advertise -> announcement -> decode ->

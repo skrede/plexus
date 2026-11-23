@@ -51,7 +51,7 @@ plexus::discovery::discovery_options capped_options(std::size_t max_peers, std::
     return opts;
 }
 
-} // namespace
+}
 
 TEST_CASE("multicast_discovery: a flood of distinct sources admits at most the cap", "[multicast_discovery]")
 {
