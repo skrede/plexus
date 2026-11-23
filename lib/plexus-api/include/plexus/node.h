@@ -217,6 +217,7 @@ public:
     static_assert(detail::shm_member_count<Transports...> <= 1, "a node composes at most one shared-memory member");
 
     // The node_id is taken verbatim: plexus compares the identity, never mints or interprets it.
+    // NOLINTNEXTLINE(readability-function-size)
     basic_node(executor_type executor, discovery::discovery &disc, const plexus::node_id &id, Transports &...transports, const node_options &opts)
             : m_id(id)
             , m_executor(executor)

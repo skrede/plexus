@@ -50,6 +50,7 @@ inline io::fallback_reason allocator_fallback(shm::region_status status) noexcep
 }
 
 // The transport-neutral reason a failed acquire hands the coordinator, which never sees an acquire_bound.
+// NOLINTNEXTLINE(readability-function-size)
 inline io::fallback_reason fallback_of(const shm::acquire_failure &failure) noexcept
 {
     switch(failure.bound)

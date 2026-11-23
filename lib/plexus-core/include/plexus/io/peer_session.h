@@ -68,6 +68,7 @@ public:
     using timer_type    = typename Policy::timer_type;
     using clock_type    = plexus::timer_clock_t<timer_type>;
 
+    // NOLINTNEXTLINE(readability-function-size)
     peer_session(peer_context<Policy> &ctx, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, message_forwarder<Policy> &messages,
                  procedure_forwarder<Policy> &procedures, bool is_inbound_bootstrap, log::logger &logger)
             : m_torn_down(false)

@@ -73,6 +73,7 @@ public:
 
     // max_message_bytes is the per-MESSAGE size ceiling (send-side oversize-reject AND the receive
     // reassembler's per-message ceiling), distinct from max_payload (the per-FRAGMENT MTU budget).
+    // NOLINTNEXTLINE(readability-function-size)
     udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest, std::size_t max_payload = default_max_payload, datagram::detail::udp_arq_config arq_cfg = {},
                 io::congestion congestion = io::congestion::block, std::size_t backpressure_bytes = default_backpressure_bytes,
                 datagram::detail::udp_channel_mode mode = datagram::detail::udp_channel_mode::best_effort, std::uint16_t initial_seq = 0,

@@ -122,6 +122,7 @@ private:
     }
 
     // Reached through dispatch's default, so an unknown type is dropped here.
+    // NOLINTNEXTLINE(readability-function-size)
     void dispatch_control(wire::msg_type type, std::span<const std::byte> inner)
     {
         switch(type)

@@ -132,6 +132,7 @@ void release_identity(Engine &e, peer_announcements &announced, const node_id &i
 // An observer sees an id go up when its first live session completes and down when its last one ends, so a handover
 // between two sessions of one id posts nothing; the engine's own handlers still see every session's edge.
 template<typename Engine>
+// NOLINTNEXTLINE(readability-function-size)
 void post_identity_edge(Engine &e, peer_announcements &announced, const lifecycle_event &ev)
 {
     switch(ev.edge)
