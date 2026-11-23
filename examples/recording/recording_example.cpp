@@ -28,7 +28,6 @@
 #endif
 
 #include <span>
-#include <array>
 #include <chrono>
 #include <vector>
 #include <cstddef>
