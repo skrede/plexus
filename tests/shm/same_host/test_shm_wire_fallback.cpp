@@ -373,7 +373,7 @@ TEST_CASE("shm.wire_fallback small rides the SHM ring, large rides the wire - me
     // ctest invocation — the no-success-from-a-single-run discipline.
     const std::string base = "topic.wfb." + std::to_string(plexus::testing::process_id());
 
-    for(int run = 0; run < 2; ++run)
+    for(std::int32_t run = 0; run < 2; ++run)
     {
         const route_result r = drive_round_trip(base + ".run." + std::to_string(run),
                                                 /*declared_payload=*/2 * k_kib, /*capacity=*/2u,

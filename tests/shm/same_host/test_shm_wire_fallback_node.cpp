@@ -234,6 +234,6 @@ TEST_CASE("shm.wire_fallback_node an over-cap message crosses the same-host wire
     // The rescue / never-dropped guarantee: a wire_fallback message larger than the cap
     // rides the wire and arrives byte-exact across a real process boundary. Repeated >=2
     // times in one ctest invocation (the no-success-from-a-single-run discipline).
-    for(int run = 0; run < 2; ++run)
+    for(std::int32_t run = 0; run < 2; ++run)
         REQUIRE(wire_leg_roundtrip(/*over_cap_bytes=*/64 * k_kib));
 }

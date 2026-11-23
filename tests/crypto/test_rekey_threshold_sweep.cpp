@@ -37,7 +37,7 @@ std::vector<std::byte> bytes_of(std::string_view s)
     std::vector<std::byte> v;
     v.reserve(s.size());
     for(char c : s)
-        v.push_back(static_cast<std::byte>(static_cast<unsigned char>(c)));
+        v.push_back(static_cast<std::byte>(static_cast<std::uint8_t>(c)));
     return v;
 }
 
@@ -60,9 +60,9 @@ bool no_nonce_reuse(std::uint64_t threshold)
 }
 
 // log2 of the integer headroom margin between the safety bound and the threshold.
-unsigned margin_log2(std::uint64_t threshold)
+std::uint32_t margin_log2(std::uint64_t threshold)
 {
-    unsigned m = 0;
+    std::uint32_t m = 0;
     for(std::uint64_t r = k_aead_safety_bound / threshold; r > 1; r >>= 1)
         ++m;
     return m;
