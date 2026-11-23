@@ -38,6 +38,7 @@ target_link_libraries(plexus-crypto PUBLIC
     plexus_asio_dep
     OpenSSL::SSL
     OpenSSL::Crypto)
+target_link_libraries(plexus-crypto PRIVATE $<BUILD_INTERFACE:plexus_warnings>)
 
 target_compile_features(plexus-crypto PUBLIC cxx_std_20)
 

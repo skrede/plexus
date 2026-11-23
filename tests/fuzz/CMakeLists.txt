@@ -1,3 +1,5 @@
+link_libraries(plexus_warnings)
+
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(WARNING
         "plexus fuzz: PLEXUS_BUILD_FUZZ_TESTS is ON but the compiler is "

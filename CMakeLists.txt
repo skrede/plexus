@@ -21,20 +21,25 @@ option(PLEXUS_WARNINGS_AS_ERRORS "Promote warnings to errors (the enforced gate)
 # detect it.
 option(PLEXUS_AFFINITY_CHECKS "Force the single-executor check on in every configuration" OFF)
 
-# Set before the fragment glob so every discovered target inherits the warnings.
 if(MSVC)
     # The conformant preprocessor, because the deliberate empty-argument trait-macro expansions trip the legacy one's
     # C4003.
-    add_compile_options(/W4 /permissive- /Zc:__cplusplus /Zc:preprocessor)
+    add_compile_options(/permissive- /Zc:__cplusplus /Zc:preprocessor)
+endif()
+
+# Defined before the fragments so the compiled backends can link it. Only first-party targets link it, so fetched
+# dependencies build with their own flags; it is never installed or exported.
+add_library(plexus_warnings INTERFACE)
+if(MSVC)
     # An enumerator missing from a default-less switch is an error, as -Wswitch is under -Werror on GCC and Clang.
-    add_compile_options(/we4062)
     # No /WX yet: the MSVC build is not warning-clean under /W4.
+    target_compile_options(plexus_warnings INTERFACE /W4 /we4062)
 else()
-    add_compile_options(-Wall -Wextra)
+    target_compile_options(plexus_warnings INTERFACE -Wall -Wextra)
     # -Werror can be turned off only because a ThreadSanitizer tree emits an inherent -Wtsan diagnostic on asio's
     # atomic_thread_fence; that tree configures with the gate OFF.
     if(PLEXUS_WARNINGS_AS_ERRORS)
-        add_compile_options(-Werror)
+        target_compile_options(plexus_warnings INTERFACE -Werror)
     endif()
 endif()
 

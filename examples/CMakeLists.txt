@@ -1,3 +1,5 @@
+link_libraries(plexus_warnings)
+
 # Each subdirectory guards itself on the backends it needs, so the tree builds with whatever backends are enabled.
 
 function(plexus_example name)

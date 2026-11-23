@@ -20,9 +20,10 @@ if(PLEXUS_BUILD_TESTS)
     include(${PROJECT_SOURCE_DIR}/cmake/plexus-tests.cmake)
     message(STATUS "plexus tests: Catch2 ${Catch2_VERSION} resolved")
 
-    # A directory-scope usage requirement so every area can include the portable test-support header without each
-    # target restating it; the target is INTERFACE, so this adds include paths, never a compiled artifact.
-    link_libraries(plexus::testing)
+    # Directory-scope usage requirements, so every area can include the portable test-support header and builds with
+    # the project warnings without each target restating them; both targets are INTERFACE, so this adds include paths
+    # and flags, never a compiled artifact. Set after the Catch2 fetch, so Catch2's own targets inherit neither.
+    link_libraries(plexus::testing plexus_warnings)
 
     # The leak gate runs as an ALL target in every configured tree: the allowlisted backend dirs are excluded either
     # way, so its result does not depend on PLEXUS_ENABLE_SHM_BACKEND.

@@ -39,6 +39,7 @@ target_link_libraries(plexus-native PUBLIC
     plexus::shm
     plexus::wire
     plexus::stream)
+target_link_libraries(plexus-native PRIVATE $<BUILD_INTERFACE:plexus_warnings>)
 
 target_compile_definitions(plexus-native PRIVATE PLEXUS_PROJECT_VERSION="${PROJECT_VERSION}")
 

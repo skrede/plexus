@@ -1,3 +1,5 @@
+link_libraries(plexus_warnings)
+
 # Each subdirectory builds one standalone probe binary; none is a ctest.
 
 add_subdirectory(scalability)

@@ -22,6 +22,10 @@ set(MDNSPP_CMAKE_FETCH_DEPS ON CACHE BOOL "" FORCE)
 set(MDNSPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MDNSPP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
+# Cleared before the fetch so mdnspp's targets build with their own flags; the example's targets link the project
+# warnings themselves.
+set_property(DIRECTORY PROPERTY LINK_LIBRARIES "")
+
 include(FetchContent)
 if(PLEXUS_MDNSPP_SOURCE_DIR)
     FetchContent_Declare(mdnspp SOURCE_DIR ${PLEXUS_MDNSPP_SOURCE_DIR})
@@ -40,6 +44,7 @@ target_link_libraries(mdns_interop_adapter PUBLIC
     plexus::core
     mdnspp::asio
     plexus_asio_dep)
+target_link_libraries(mdns_interop_adapter PRIVATE plexus_warnings)
 set_target_properties(mdns_interop_adapter PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON
@@ -49,7 +54,8 @@ add_executable(mdns_interop main.cpp)
 target_link_libraries(mdns_interop PRIVATE
     mdns_interop_adapter
     plexus::wire
-    plexus::asio)
+    plexus::asio
+    plexus_warnings)
 set_target_properties(mdns_interop PROPERTIES
     CXX_STANDARD 23
     CXX_STANDARD_REQUIRED ON

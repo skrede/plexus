@@ -1,3 +1,5 @@
+link_libraries(plexus_warnings)
+
 if(PLEXUS_BUILD_MCAP_TRANSCODE)
     add_subdirectory(mcap_transcode)
 endif()
