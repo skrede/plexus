@@ -1,7 +1,6 @@
 #include "plexus/asio/unix_policy.h"
 #include "plexus/asio/unix_channel.h"
 #include "plexus/asio/unix_listener.h"
-#include "plexus/asio/detail/asio_unix_endpoint_parse.h"
 
 #include "plexus/io/io_error.h"
 #include "plexus/io/frame_router.h"
@@ -182,19 +181,4 @@ TEST_CASE("a unix-domain listener fails closed under a no-credential peer policy
         REQUIRE(reported.has_value());
     else
         REQUIRE_FALSE(reported.has_value());
-}
-
-TEST_CASE("parse_unix fails closed on empty and oversized unix socket paths", "[integration][unix][afunix][security]")
-{
-    std::error_code ec;
-    (void)pasio::detail::parse_unix("", ec);
-    REQUIRE(ec);
-    ec.clear();
-    const std::string oversized(4096, 'a');
-    (void)pasio::detail::parse_unix(oversized, ec);
-    REQUIRE(ec);
-
-    ec.clear();
-    (void)pasio::detail::parse_unix("pxs", ec);
-    REQUIRE_FALSE(ec);
 }

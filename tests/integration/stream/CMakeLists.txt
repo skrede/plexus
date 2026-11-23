@@ -76,7 +76,7 @@ if(PLEXUS_ENABLE_ASIO_BACKEND)
 
     # Unlike the other AF_UNIX legs it reaches no raw POSIX, so it also builds and runs on Windows.
     plexus_add_catch_test(test_af_unix_capability
-        SOURCES test_af_unix_capability.cpp
+        SOURCES test_af_unix_capability.cpp test_af_unix_capability_parse.cpp
         LINKS plexus::core plexus::wire plexus::asio)
 
     plexus_add_catch_test(test_reconnect_unix
