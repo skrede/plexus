@@ -4,6 +4,8 @@
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_executor.h"
 
+#include "plexus/inproc/detail/inproc_channel_hooks.h"
+
 #include "plexus/wire/close_cause.h"
 
 #include "plexus/io/endpoint.h"
@@ -23,7 +25,7 @@ namespace plexus::inproc {
 // In-process byte_channel over the inproc_bus. send()/close() enqueue to the partner and return immediately: the
 // partner's handlers fire only once the executor's step-loop delivers the packet, so a handler may call back in.
 template<typename Clock = std::chrono::steady_clock>
-class inproc_channel
+class inproc_channel : public detail::inproc_channel_hooks
 {
 public:
     explicit inproc_channel(inproc_executor<Clock> &ex)
@@ -91,30 +93,10 @@ public:
         return m_partner;
     }
 
-    void on_data(detail::move_only_function<void(std::span<const std::byte>)> cb)
-    {
-        m_on_data_cb = std::move(cb);
-    }
-    void on_object(detail::move_only_function<void(const io::object_carrier &)> cb)
-    {
-        m_on_object_cb = std::move(cb);
-    }
     void on_closed(detail::move_only_function<void()> cb)
     {
         m_close_notification.install(std::move(cb));
         notify_closed();
-    }
-    void on_error(detail::move_only_function<void(io::io_error)> cb)
-    {
-        m_on_error_cb = std::move(cb);
-    }
-    void on_drop(detail::move_only_function<void(const io::detail::drop_event &)> cb)
-    {
-        m_on_drop_cb = std::move(cb);
-    }
-    void on_protocol_close(detail::move_only_function<void(wire::close_cause)> cb)
-    {
-        m_on_protocol_close_cb = std::move(cb);
     }
 
     // Reached only from inproc_bus::deliver_one() inside step(), never synchronously from a peer's send()/close().
@@ -170,20 +152,11 @@ private:
     std::uint64_t m_partner_key;
     inproc_executor<Clock> &m_exec;
     io::detail::close_notification m_close_notification;
-    detail::move_only_function<void(io::io_error)> m_on_error_cb;
-    detail::move_only_function<void(const io::object_carrier &)> m_on_object_cb;
-    detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
-    detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
-    detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
 
     void enter_closed()
     {
-        m_closed               = true;
-        m_on_error_cb          = nullptr;
-        m_on_object_cb         = nullptr;
-        m_on_data_cb           = nullptr;
-        m_on_drop_cb           = nullptr;
-        m_on_protocol_close_cb = nullptr;
+        m_closed = true;
+        clear_hooks();
         notify_closed();
     }
 
