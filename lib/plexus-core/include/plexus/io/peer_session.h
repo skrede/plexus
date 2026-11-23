@@ -304,6 +304,8 @@ private:
     template<typename S>
     friend void detail::deliver_forwarded_frame(S &, const node_id &, std::span<const std::byte>);
     template<typename S>
+    friend bool detail::deliver_forwarded_here(S &, const wire::forwarded_frame &, const wire::frame_header &);
+    template<typename S>
     friend bool detail::dispatch_forwarded_inner(S &, const wire::forwarded_frame &, const wire::frame_header &);
     template<typename S>
     friend void detail::refan_if_pubsub(S &, const wire::forwarded_frame &, const wire::frame_header &);
