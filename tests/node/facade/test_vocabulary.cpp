@@ -113,7 +113,7 @@ TEST_CASE("from_rpc_status maps every failure status", "[vocabulary][call_errc]"
     REQUIRE(from_rpc_status(rpc_status::canceled) == call_errc::canceled);
     REQUIRE(from_rpc_status(rpc_status::no_handler) == call_errc::no_handler);
     REQUIRE(from_rpc_status(rpc_status::deserialize_failed) == call_errc::deserialize_failed);
-    REQUIRE(from_rpc_status(rpc_status::topic_not_found) == call_errc::topic_not_found);
+    REQUIRE(from_rpc_status(rpc_status::fqn_not_found) == call_errc::fqn_not_found);
     REQUIRE(from_rpc_status(rpc_status::peer_disconnected) == call_errc::peer_disconnected);
     REQUIRE(from_rpc_status(rpc_status::rpc_response_orphan) == call_errc::rpc_response_orphan);
 }

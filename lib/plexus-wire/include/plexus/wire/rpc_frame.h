@@ -40,7 +40,7 @@ inline bool is_defined_rpc_status(std::uint8_t byte) noexcept
         case rpc_status::canceled:
         case rpc_status::no_handler:
         case rpc_status::deserialize_failed:
-        case rpc_status::topic_not_found:
+        case rpc_status::fqn_not_found:
         case rpc_status::peer_disconnected:
         case rpc_status::rpc_response_orphan:
             return true;

@@ -19,7 +19,7 @@ enum class rpc_status : std::uint8_t
     canceled            = 3,
     no_handler          = 4,
     deserialize_failed  = 5,
-    topic_not_found     = 8,
+    fqn_not_found       = 8,
     peer_disconnected   = 18,
     rpc_response_orphan = 20,
 };
@@ -31,7 +31,7 @@ static_assert(static_cast<std::uint8_t>(rpc_status::timeout) == 2);
 static_assert(static_cast<std::uint8_t>(rpc_status::canceled) == 3);
 static_assert(static_cast<std::uint8_t>(rpc_status::no_handler) == 4);
 static_assert(static_cast<std::uint8_t>(rpc_status::deserialize_failed) == 5);
-static_assert(static_cast<std::uint8_t>(rpc_status::topic_not_found) == 8);
+static_assert(static_cast<std::uint8_t>(rpc_status::fqn_not_found) == 8);
 static_assert(static_cast<std::uint8_t>(rpc_status::peer_disconnected) == 18);
 static_assert(static_cast<std::uint8_t>(rpc_status::rpc_response_orphan) == 20);
 
@@ -40,7 +40,7 @@ static_assert(static_cast<std::uint8_t>(rpc_status::rpc_response_orphan) == 20);
 struct rpc_error_context
 {
     std::optional<std::string> peer;
-    std::optional<std::string> topic;
+    std::optional<std::string> fqn;
 };
 
 }

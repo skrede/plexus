@@ -30,7 +30,7 @@ bool deliver_request(Forwarder &f, const Peer &p, std::span<const std::byte> inn
     auto hash_it = f.m_hash_to_fqn.find(ctx.req_hdr.topic_hash);
     if(hash_it == f.m_hash_to_fqn.end())
     {
-        auto status = f.m_endpoint.registry().fqn_for(ctx.req_hdr.topic_hash).empty() ? wire::rpc_status::no_handler : wire::rpc_status::topic_not_found;
+        auto status = f.m_endpoint.registry().fqn_for(ctx.req_hdr.topic_hash).empty() ? wire::rpc_status::no_handler : wire::rpc_status::fqn_not_found;
         f.emit_reply(ctx, status, {});
         return true;
     }

@@ -211,7 +211,7 @@ public:
 
     // Resolve a local provider by topic_hash and dispatch to it over the opaque param bytes. An
     // unserved hash replies no_handler, unless the subscriber registry knows the fqn from a prior
-    // attach (a known topic whose provider is gone), which replies topic_not_found instead.
+    // attach (a known topic whose provider is gone), which replies fqn_not_found instead.
     bool deliver_request(const peer &p, std::span<const std::byte> inner, std::uint64_t session_id = 0, const node_id *reply_origin = nullptr)
     {
         return detail::deliver_request(*this, p, inner, session_id, reply_origin);

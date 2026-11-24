@@ -18,7 +18,7 @@ enum class call_errc : std::uint8_t
     canceled            = 3,
     no_handler          = 4,
     deserialize_failed  = 5,
-    topic_not_found     = 8,
+    fqn_not_found       = 8,
     peer_disconnected   = 18,
     rpc_response_orphan = 20,
     no_provider         = 240,
@@ -48,8 +48,8 @@ inline call_errc from_rpc_status(wire::rpc_status status) noexcept
             return call_errc::no_handler;
         case wire::rpc_status::deserialize_failed:
             return call_errc::deserialize_failed;
-        case wire::rpc_status::topic_not_found:
-            return call_errc::topic_not_found;
+        case wire::rpc_status::fqn_not_found:
+            return call_errc::fqn_not_found;
         case wire::rpc_status::peer_disconnected:
             return call_errc::peer_disconnected;
         case wire::rpc_status::rpc_response_orphan:
@@ -84,8 +84,8 @@ public:
                 return "no handler for call";
             case call_errc::deserialize_failed:
                 return "call payload deserialization failed";
-            case call_errc::topic_not_found:
-                return "call topic not found";
+            case call_errc::fqn_not_found:
+                return "call fqn not found";
             case call_errc::peer_disconnected:
                 return "peer disconnected during call";
             case call_errc::rpc_response_orphan:
