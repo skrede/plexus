@@ -65,7 +65,7 @@ public:
         m_partner_key = m_bus.key_for(partner);
     }
 
-    const io::endpoint &local_endpoint() const noexcept
+    io::endpoint local_endpoint() const
     {
         return m_local;
     }
