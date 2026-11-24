@@ -476,10 +476,10 @@ public:
     }
 
     template<typename Sig, template<typename> class Family>
-    plexus::caller<Sig, Family> caller(std::string_view fqn)
+    caller<Sig, Family> make_caller(std::string_view fqn)
     {
-        affine("caller");
-        return plexus::caller<Sig, Family>{*this, fqn};
+        affine("make_caller");
+        return caller<Sig, Family>{*this, fqn};
     }
 
     template<template<typename> class Family, typename Cb>

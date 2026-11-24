@@ -170,7 +170,7 @@ TEST_CASE("serve deduction: the deduced serve/caller pair round-trips", "[node][
     n.connect();
 
     auto proc = n.b.serve<echo_codec>("rpc", [](const request_t &req) -> plexus::expected<response_t, std::error_code> { return response_t{req.value + 1}; });
-    auto call = n.a.caller<response_t(request_t), echo_codec>("rpc");
+    auto call = n.a.make_caller<response_t(request_t), echo_codec>("rpc");
     n.drive();
 
     std::optional<std::uint32_t> got;
