@@ -44,7 +44,7 @@ class std_map_topic_storage
 public:
     upsert_result upsert(const topic_edge &edge, bool clipped)
     {
-        entry &e              = at(edge.topic);
+        entry &e              = at(edge.fqn);
         e.truncated           = e.truncated || clipped;
         const bool new_edge   = note_edge(e, edge);
         const upsert_result t = note_type(e, edge);

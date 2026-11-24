@@ -384,7 +384,7 @@ public:
     graph::snapshot_result topics(std::span<graph::topic_record> out, const std::optional<match::key_pattern> &filter = std::nullopt) const
     {
         affine("topics");
-        return detail::sweep_topics(m_engine.topic_table(), out, [&](const graph::topic_record &rec) { return detail::topic_in(rec.name, filter); });
+        return detail::sweep_topics(m_engine.topic_table(), out, [&](const graph::topic_record &rec) { return detail::topic_in(rec.fqn, filter); });
     }
 
     // Registers a graph-change observer over the engine's add_observer seam and returns a move-only

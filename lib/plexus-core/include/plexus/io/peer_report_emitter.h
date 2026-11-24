@@ -228,9 +228,9 @@ private:
     static wire::topic_declaration one_topic(const graph::topic_record &rec)
     {
         wire::topic_declaration td;
-        td.topic_hash = wire::fqn_topic_hash(rec.name);
+        td.topic_hash = wire::fqn_topic_hash(rec.fqn);
         td.type_id    = 0;
-        td.fqn        = std::string{rec.name};
+        td.fqn        = std::string{rec.fqn};
         td.state      = rec.types.count == 0 ? wire::type_state::undeclared : wire::type_state::declared;
         td.type_name  = rec.types.count == 0 ? std::string{} : std::string{rec.types.names[0]};
         return td;

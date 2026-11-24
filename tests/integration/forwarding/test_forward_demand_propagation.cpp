@@ -84,7 +84,7 @@ struct relay_link
     bool relay_knows_publisher(std::string_view fqn) const
     {
         bool found = false;
-        relay.topic_table().for_each([&](const graph::topic_record &r) { found = found || (r.node == origin_id && r.role == graph::topic_role::publisher && r.name == fqn); });
+        relay.topic_table().for_each([&](const graph::topic_record &r) { found = found || (r.node == origin_id && r.role == graph::topic_role::publisher && r.fqn == fqn); });
         return found;
     }
 

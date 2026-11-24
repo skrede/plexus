@@ -87,7 +87,7 @@ inline std::vector<edge_view> edges_of(const inproc_node &node)
     node.router().topic_table().for_each(
             [&](const topic_record &rec)
             {
-                edge_view e{rec.node, std::string{rec.name}, {}, rec.role};
+                edge_view e{rec.node, std::string{rec.fqn}, {}, rec.role};
                 for(std::size_t i = 0; i < rec.types.count; ++i)
                     e.types.emplace_back(rec.types.names[i]);
                 out.push_back(std::move(e));

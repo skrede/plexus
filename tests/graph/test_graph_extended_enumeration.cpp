@@ -109,7 +109,7 @@ TEST_CASE("topics folds a reported origin's topics-with-types under the origin's
 
     const auto *topic = topic_for(filled, id_origin);
     REQUIRE(topic != nullptr);
-    REQUIRE(topic->name == "sensor/temp");
+    REQUIRE(topic->fqn == "sensor/temp");
     REQUIRE(topic->role == plexus::graph::topic_role::publisher);
     REQUIRE(topic->types.count == 1);
     REQUIRE(topic->types.names[0] == "Temp");

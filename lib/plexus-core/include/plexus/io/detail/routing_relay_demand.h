@@ -26,7 +26,7 @@ bool publishes_topic(const Engine &e, const node_id &node, std::string_view fqn)
     e.m_topics.for_each(
             [&](const graph::topic_record &r)
             {
-                if(!found && r.node == node && r.role == graph::topic_role::publisher && r.name == fqn)
+                if(!found && r.node == node && r.role == graph::topic_role::publisher && r.fqn == fqn)
                     found = true;
             });
     return found;

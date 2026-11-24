@@ -34,7 +34,7 @@ public:
 
     upsert_result upsert(const topic_edge &edge)
     {
-        if(edge.topic.size() > wire::detail::k_max_fqn)
+        if(edge.fqn.size() > wire::detail::k_max_fqn)
             return drop();
         const bool clipped = edge.type_id.has_value() && edge.type_name.size() > wire::detail::k_max_type_name;
         topic_edge bounded = edge;

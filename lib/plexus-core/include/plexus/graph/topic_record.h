@@ -40,7 +40,7 @@ struct type_name_list
 struct topic_record
 {
     plexus::node_id node;
-    std::string_view name;
+    std::string_view fqn;
     type_name_list types;
     topic_role role;
     // The type list is not the whole truth for this topic: a name was clipped to its bound, or a
@@ -54,7 +54,7 @@ struct topic_record
 struct topic_edge
 {
     plexus::node_id node;
-    std::string_view topic;
+    std::string_view fqn;
     std::string_view type_name;
     std::optional<std::uint64_t> type_id;
     topic_role role;

@@ -80,7 +80,7 @@ struct retry_link
         req_messages.declare(k_other, plexus::topic_qos{});
         req_messages.declare(k_latched, plexus::topic_qos{.latch = true, .depth = 1});
         req_messages.publish(k_latched, as_bytes("latched"));
-        req_messages.on_topic_edge([this](const plexus::graph::topic_edge &e) { req_declared.emplace_back(e.topic); });
+        req_messages.on_topic_edge([this](const plexus::graph::topic_edge &e) { req_declared.emplace_back(e.fqn); });
         build(req_ctx, near, requester, req_messages, req_procedures, false);
         build(resp_ctx, far, responder, resp_messages, resp_procedures, true);
         requester->on_frame_dropped([this](const drop_event &e) { req_drops.push_back(e); });

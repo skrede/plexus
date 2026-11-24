@@ -65,7 +65,7 @@ inline std::vector<std::string> sorted(std::vector<std::string> names)
 inline const topic_record *find_record(std::span<const topic_record> buffer, std::size_t filled, std::string_view topic, const plexus::node_id &node)
 {
     const auto view = buffer.first(filled);
-    const auto it   = std::find_if(view.begin(), view.end(), [&](const topic_record &rec) { return rec.name == topic && rec.node == node; });
+    const auto it   = std::find_if(view.begin(), view.end(), [&](const topic_record &rec) { return rec.fqn == topic && rec.node == node; });
     return it == view.end() ? nullptr : &*it;
 }
 

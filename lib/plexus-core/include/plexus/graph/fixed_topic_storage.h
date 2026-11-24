@@ -61,9 +61,9 @@ public:
 
     upsert_result upsert(const topic_edge &edge, bool clipped)
     {
-        entry *slot = find(edge.topic);
+        entry *slot = find(edge.fqn);
         if(slot == nullptr)
-            slot = claim(edge.topic);
+            slot = claim(edge.fqn);
         if(slot == nullptr)
             return upsert_result{upsert_outcome::dropped, false};
         slot->truncated = slot->truncated || clipped;

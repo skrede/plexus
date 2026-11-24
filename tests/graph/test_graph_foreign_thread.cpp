@@ -169,7 +169,7 @@ TEST_CASE("foreign_thread: topics_blocking reads a churning topic table race-fre
                     // the table grows between two calls, so no relation ACROSS snapshots holds.
                     const auto sensed = topics_blocking(node, out, *sensors);
                     for(std::size_t j = 0; j < sensed.count; ++j)
-                        REQUIRE(buffer[j].name.starts_with("sensor/"));
+                        REQUIRE(buffer[j].fqn.starts_with("sensor/"));
                 }
                 foreign_done.store(true, std::memory_order_release);
             });

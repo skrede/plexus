@@ -76,7 +76,7 @@ std::size_t count_topic_role(const Table &table, std::string_view fqn, graph::to
     table.for_each(
             [&](const graph::topic_record &rec)
             {
-                if(rec.name == fqn && rec.role == role)
+                if(rec.fqn == fqn && rec.role == role)
                     ++found;
             });
     return found;

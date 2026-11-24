@@ -92,7 +92,7 @@ bool snapshot_sees_topic(asio_node &node, std::string_view topic)
 {
     std::array<plexus::graph::topic_record, 32> buffer{};
     const auto result = node.topics(buffer);
-    return std::any_of(buffer.begin(), buffer.begin() + result.count, [&](const auto &rec) { return rec.name == topic; });
+    return std::any_of(buffer.begin(), buffer.begin() + result.count, [&](const auto &rec) { return rec.fqn == topic; });
 }
 
 std::size_t published_count(asio_node &node, const plexus::node_id &id)

@@ -125,9 +125,9 @@ bool folds_and_answers(Table &table)
 
     std::array<topic_record, 4> out{};
     const auto matched = plexus::detail::sweep_topics(table, std::span<topic_record>{out},
-                                                      [filter = pattern_of("telemetry")](const topic_record &rec) { return plexus::detail::topic_in(rec.name, filter); });
+                                                      [filter = pattern_of("telemetry")](const topic_record &rec) { return plexus::detail::topic_in(rec.fqn, filter); });
     const auto missed  = plexus::detail::sweep_topics(table, std::span<topic_record>{out},
-                                                      [filter = pattern_of("command")](const topic_record &rec) { return plexus::detail::topic_in(rec.name, filter); });
+                                                      [filter = pattern_of("command")](const topic_record &rec) { return plexus::detail::topic_in(rec.fqn, filter); });
 
     return matched.count == 2 && !matched.truncated && missed.count == 0 && out[0].types.count == 1 && out[0].types.names[0] == "reading" &&
             plexus::detail::count_topic_role(table, "telemetry", topic_role::publisher) == 1 && plexus::detail::count_topic_role(table, "telemetry", topic_role::subscriber) == 1 &&

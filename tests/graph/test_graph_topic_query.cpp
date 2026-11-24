@@ -56,7 +56,7 @@ TEST_CASE("graph.topic_query: a wildcard filter admits only the topics it inters
     const auto sensors = n.b.topics(buffer, pattern("sensor/*"));
     REQUIRE(sensors.count == 3);
     for(std::size_t i = 0; i < sensors.count; ++i)
-        REQUIRE(buffer[i].name == k_imu_topic);
+        REQUIRE(buffer[i].fqn == k_imu_topic);
 
     // An absent filter is not an empty one: it admits the topics the pattern excluded.
     REQUIRE(n.b.topics(buffer).count == 4);

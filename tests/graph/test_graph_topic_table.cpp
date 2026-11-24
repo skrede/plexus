@@ -102,7 +102,7 @@ TEST_CASE("topic_table: reject-and-counts a topic past capacity without evicting
             [&](const topic_record &r)
             {
                 ++records;
-                REQUIRE(r.name != "sensor/lidar");
+                REQUIRE(r.fqn != "sensor/lidar");
             });
     REQUIRE(records == k_topics);
 }
@@ -121,7 +121,7 @@ TEST_CASE("topic_table: flags a topic whose distinct types outrun the cap and ke
             {
                 ++records;
                 REQUIRE(r.truncated);
-                REQUIRE(r.name == "sensor/imu");
+                REQUIRE(r.fqn == "sensor/imu");
                 REQUIRE(r.role == topic_role::publisher);
                 REQUIRE(r.types.count == k_topic_type_list_cap);
             });
