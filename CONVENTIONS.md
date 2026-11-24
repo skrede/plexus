@@ -160,6 +160,7 @@ for a real reason.
   `make_work_guard`). A static named constructor is `T::make` (`key_pattern::make`).
   `create`/`open`/`attach` stay only where they mirror an OS or shared-memory verb pair
   (`broadcast_ring::create`/`attach`, `create_own_event`).
+- Every `send()` on a byte channel takes `std::span<const std::byte> bytes`.
 
 ## Construction
 
