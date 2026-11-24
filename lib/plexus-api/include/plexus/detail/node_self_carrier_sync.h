@@ -42,7 +42,7 @@ void self_carrier_bytes(Node &n, std::string_view fqn, std::span<const std::byte
         info.from_intra_process = true;
         typename io::message_forwarder<typename Node::engine_policy>::peer self{*lane, n.m_service_name};
         n.m_engine.messages().deliver(self, inner, info, n.m_id, has_source_identity,
-                                      [&n](std::string_view topic, std::span<const std::byte> data, const io::message_info &mi) { n.dispatch_message(topic, data, mi); });
+                                      [&n](std::string_view fqn, std::span<const std::byte> data, const io::message_info &mi) { n.dispatch_message(fqn, data, mi); });
     }
 }
 

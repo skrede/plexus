@@ -17,11 +17,11 @@ namespace plexus::detail {
 
 // A topic name past the pattern's own length bound belongs to no pattern's keyset, so it fails a
 // filtered query rather than aborting the sweep. An absent filter admits every topic.
-inline bool topic_in(std::string_view topic, const std::optional<match::key_pattern> &filter)
+inline bool topic_in(std::string_view fqn, const std::optional<match::key_pattern> &filter)
 {
     if(!filter)
         return true;
-    const auto key = match::key_pattern::make(topic);
+    const auto key = match::key_pattern::make(fqn);
     return key.has_value() && filter->intersects(*key);
 }
 
@@ -70,13 +70,13 @@ graph::snapshot_result sweep_participants(const Known &known, std::span<graph::p
 // participant per role, so counting the matching edges counts the distinct participants on that
 // side — the reduction, not a counter kept beside the table.
 template<typename Table>
-std::size_t count_topic_role(const Table &table, std::string_view topic, graph::topic_role role)
+std::size_t count_topic_role(const Table &table, std::string_view fqn, graph::topic_role role)
 {
     std::size_t found = 0;
     table.for_each(
             [&](const graph::topic_record &rec)
             {
-                if(rec.name == topic && rec.role == role)
+                if(rec.name == fqn && rec.role == role)
                     ++found;
             });
     return found;

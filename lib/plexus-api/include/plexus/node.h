@@ -407,16 +407,16 @@ public:
 
     // Counted over the same edges topics() enumerates: a maintained counter would be a second truth to keep coherent
     // with the table.
-    std::size_t count_publishers(std::string_view topic) const
+    std::size_t count_publishers(std::string_view fqn) const
     {
         affine("count_publishers");
-        return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::publisher);
+        return detail::count_topic_role(m_engine.topic_table(), fqn, graph::topic_role::publisher);
     }
 
-    std::size_t count_subscribers(std::string_view topic) const
+    std::size_t count_subscribers(std::string_view fqn) const
     {
         affine("count_subscribers");
-        return detail::count_topic_role(m_engine.topic_table(), topic, graph::topic_role::subscriber);
+        return detail::count_topic_role(m_engine.topic_table(), fqn, graph::topic_role::subscriber);
     }
 
     // The same edges keyed by participant rather than by topic.
@@ -483,7 +483,7 @@ public:
     }
 
     template<template<typename> class Family, typename Cb>
-    subscriber<Family<detail::subscriber_value_t<Cb>>> subscribe(std::string_view topic, Cb cb)
+    subscriber<Family<detail::subscriber_value_t<Cb>>> subscribe(std::string_view fqn, Cb cb)
     {
         affine("subscribe");
         static_assert(detail::deducible_handler<Cb>,
@@ -491,21 +491,21 @@ public:
                       "overloaded call operator has no single deducible signature; name the "
                       "type on the endpoint");
         using T = detail::subscriber_value_t<Cb>;
-        return subscriber<Family<T>>{*this, topic, std::move(cb)};
+        return subscriber<Family<T>>{*this, fqn, std::move(cb)};
     }
 
     template<typename Codec>
-    publisher<Codec> advertise(std::string_view topic, const typed_publisher_options &opts = {}, Codec codec = {})
+    publisher<Codec> advertise(std::string_view fqn, const typed_publisher_options &opts = {}, Codec codec = {})
     {
         affine("advertise");
-        return publisher<Codec>{*this, topic, opts, std::move(codec)};
+        return publisher<Codec>{*this, fqn, opts, std::move(codec)};
     }
 
     template<typename Codec, typename Projection = no_projection>
-    value_logger<Codec, Projection> log(std::string_view topic, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
+    value_logger<Codec, Projection> log(std::string_view fqn, const value_logger_options &opts, Codec codec = {}, Projection projection = {})
     {
         affine("log");
-        return value_logger<Codec, Projection>(*this, topic, opts, std::move(codec), std::move(projection));
+        return value_logger<Codec, Projection>(*this, fqn, opts, std::move(codec), std::move(projection));
     }
 
     // An RAII recorder handle that registers its tap on the engine and deregisters before
