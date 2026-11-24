@@ -88,11 +88,11 @@ public:
         start_read();
     }
 
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
-        if(data.size() > max_frame_bytes())
+        if(bytes.size() > max_frame_bytes())
             return detail::serial_refuse_oversize(*this);
-        base::send(data);
+        base::send(bytes);
     }
 
     void send(wire_bytes<> data)

@@ -70,10 +70,10 @@ public:
         return m_local;
     }
 
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
         if(!m_closed)
-            m_bus.enqueue(m_partner_key, data, m_local_key);
+            m_bus.enqueue(m_partner_key, bytes, m_local_key);
     }
 
     void send_object(const io::object_carrier &carrier)

@@ -71,9 +71,9 @@ public:
     authenticated_channel(authenticated_channel &&)                 = delete;
     authenticated_channel &operator=(authenticated_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
-        detail::stream_aead_send(*this, data);
+        detail::stream_aead_send(*this, bytes);
     }
 
     void close()

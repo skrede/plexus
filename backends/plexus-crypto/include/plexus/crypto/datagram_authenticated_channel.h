@@ -58,9 +58,9 @@ public:
     datagram_authenticated_channel(datagram_authenticated_channel &&)                 = delete;
     datagram_authenticated_channel &operator=(datagram_authenticated_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
-        detail::datagram_send(*this, data);
+        detail::datagram_send(*this, bytes);
     }
 
     void close()

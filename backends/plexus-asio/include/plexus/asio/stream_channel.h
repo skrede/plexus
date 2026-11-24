@@ -114,11 +114,11 @@ public:
     stream_channel(stream_channel &&)                 = delete;
     stream_channel &operator=(stream_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
         if(!m_open)
             return;
-        m_bootstrap.submit(*this, data);
+        m_bootstrap.submit(*this, bytes);
     }
 
     // Owner-carry: hold the wire_bytes owner across the async write so the egress writes its view

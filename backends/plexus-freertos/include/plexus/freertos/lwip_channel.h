@@ -69,10 +69,10 @@ public:
         return m_rx;
     }
 
-    void send(std::span<const std::byte> framed)
+    void send(std::span<const std::byte> bytes)
     {
         if(!m_close.closed())
-            m_egress.send(framed);
+            m_egress.send(bytes);
     }
 
     void close()

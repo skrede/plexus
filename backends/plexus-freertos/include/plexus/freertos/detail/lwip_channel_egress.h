@@ -50,9 +50,9 @@ public:
     // A frame the bounded queue refuses (egress cap exceeded) is local congestion, not a drop: under
     // drop_newest shed it and count; under block backpressure the producer via would_block. The
     // channel stays open either way — this never re-dials.
-    void send(std::span<const std::byte> framed)
+    void send(std::span<const std::byte> bytes)
     {
-        if(m_send_queue.enqueue(framed))
+        if(m_send_queue.enqueue(bytes))
             return;
         if(m_congestion == plexus::io::congestion::drop_newest)
         {

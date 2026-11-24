@@ -41,14 +41,14 @@ public:
         wire_decorator();
     }
 
-    void send(std::span<const std::byte> framed)
+    void send(std::span<const std::byte> bytes)
     {
         if(m_close.closed())
             return;
-        if(framed.size() > max_frame_bytes())
+        if(bytes.size() > max_frame_bytes())
             return refuse_oversize();
-        const auto header  = plexus::stream::encode_serial_header(framed.first<plexus::wire::header_size>());
-        const auto payload = framed.subspan(plexus::wire::header_size);
+        const auto header  = plexus::stream::encode_serial_header(bytes.first<plexus::wire::header_size>());
+        const auto payload = bytes.subspan(plexus::wire::header_size);
         const auto trailer = plexus::stream::crc_trailer(header, payload);
         detail::uart_write_all(m_port, std::span<const std::byte>{header});
         detail::uart_write_all(m_port, payload);

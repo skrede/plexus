@@ -115,19 +115,19 @@ public:
     // A reliable_datagram-mode channel dispatches to the in-order ARQ; a best_effort-mode channel
     // is fire-and-forget. This is how the erased polymorphic_byte_channel (which exposes only
     // send()) engages the ARQ on the "udpr" route without a separate reliable verb.
-    void send(std::span<const std::byte> frame)
+    void send(std::span<const std::byte> bytes)
     {
         if(m_mode == datagram::detail::udp_channel_mode::reliable_datagram)
         {
-            send_reliable(frame);
+            send_reliable(bytes);
             return;
         }
         if(!m_open)
             return;
-        if(frame.size() + wire::udp_envelope_overhead > m_max_payload)
-            return detail::send_best_effort_large(*this, frame);
+        if(bytes.size() + wire::udp_envelope_overhead > m_max_payload)
+            return detail::send_best_effort_large(*this, bytes);
         // A whole single datagram: idle fast-path eligible.
-        wire::wrap_udp_into(m_send_scratch, wire::udp_envelope_kind::best_effort, m_out_seq++, frame);
+        wire::wrap_udp_into(m_send_scratch, wire::udp_envelope_kind::best_effort, m_out_seq++, bytes);
         m_server.send_standalone_to(m_send_scratch, m_dest);
     }
 
