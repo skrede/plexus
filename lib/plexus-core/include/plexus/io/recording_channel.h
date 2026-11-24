@@ -58,11 +58,11 @@ public:
     // and the udp_envelope seq carry the same information at the transport layer, but the
     // cleartext stream wire has no per-direction publication sequence, so this counter is the
     // single key spanning every transport — never a new field on the actual wire.
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
         if(m_on_wire)
-            m_on_wire(recording::wire_direction::out, m_send_seq++, data);
-        m_lower->send(data);
+            m_on_wire(recording::wire_direction::out, m_send_seq++, bytes);
+        m_lower->send(bytes);
     }
 
     void close()

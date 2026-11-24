@@ -75,11 +75,11 @@ public:
 
     // An oversize payload surfaces message_too_large, a stalled reliable path would_block; the
     // channel stays open either way so the publisher learns the send failed rather than a silent drop.
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
         if(m_released)
             return;
-        const loan_status st = m_channel.send(data);
+        const loan_status st = m_channel.send(bytes);
         if(st == loan_status::rejected)
         {
             if(m_on_error)

@@ -54,9 +54,9 @@ public:
     mock_channel(mock_channel &&)                 = delete;
     mock_channel &operator=(mock_channel &&)      = delete;
 
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
-        m_sent.emplace_back(data.begin(), data.end());
+        m_sent.emplace_back(bytes.begin(), bytes.end());
     }
 
     void close()

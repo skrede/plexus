@@ -29,7 +29,7 @@ class concrete_channel_base
 public:
     virtual ~concrete_channel_base() = default;
 
-    virtual void send(std::span<const std::byte> data)                                             = 0;
+    virtual void send(std::span<const std::byte> bytes)                                            = 0;
     virtual void close()                                                                           = 0;
     virtual endpoint remote_endpoint() const                                                       = 0;
     virtual void on_data(plexus::detail::move_only_function<void(std::span<const std::byte>)> cb)  = 0;
@@ -58,9 +58,9 @@ public:
     {
     }
 
-    void send(std::span<const std::byte> data) override
+    void send(std::span<const std::byte> bytes) override
     {
-        m_c->send(data);
+        m_c->send(bytes);
     }
     void close() override
     {
@@ -133,9 +133,9 @@ public:
     polymorphic_byte_channel(polymorphic_byte_channel &&)                 = default;
     polymorphic_byte_channel &operator=(polymorphic_byte_channel &&)      = default;
 
-    void send(std::span<const std::byte> data)
+    void send(std::span<const std::byte> bytes)
     {
-        m_impl->send(data);
+        m_impl->send(bytes);
     }
     void close()
     {

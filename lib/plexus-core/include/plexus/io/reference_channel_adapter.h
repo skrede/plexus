@@ -33,9 +33,9 @@ public:
     {
     }
 
-    void send(std::span<const std::byte> data) override
+    void send(std::span<const std::byte> bytes) override
     {
-        m_c.send(data);
+        m_c.send(bytes);
     }
     void close() override
     {
