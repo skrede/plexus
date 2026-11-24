@@ -10,7 +10,7 @@
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/subscribe_retry_config.h"
+#include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/io/detail/drop_event.h"
 
@@ -35,7 +35,7 @@ namespace subscribe_retry_fixture {
 
 using namespace routing_inproc_fixture;
 namespace wire = plexus::wire;
-using plexus::io::subscribe_retry_config;
+using plexus::io::subscribe_retry_options;
 using plexus::io::detail::drop_event;
 using retry_channel    = inproc_channel<manual_clock>;
 using retry_session    = plexus::io::peer_session<manual_policy>;
@@ -93,7 +93,7 @@ struct retry_link
         far.on_data([this](std::span<const std::byte> f) { carry(to_requester, near, f); });
     }
 
-    void enable_retry(retry_session &s, const subscribe_retry_config &cfg = {})
+    void enable_retry(retry_session &s, const subscribe_retry_options &cfg = {})
     {
         s.set_subscribe_retry(cfg);
     }

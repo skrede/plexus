@@ -17,7 +17,7 @@
 #include "plexus/io/handshake_protocol.h"
 #include "plexus/io/subscribe_qos_wire.h"
 #include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/subscribe_retry_config.h"
+#include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/io/detail/warn_line.h"
 #include "plexus/io/detail/pending_ops.h"
@@ -168,7 +168,7 @@ public:
     }
 
     // Set before start(): a subscribe already outstanding is untracked, so its response would be ignored.
-    void set_subscribe_retry(const subscribe_retry_config &cfg)
+    void set_subscribe_retry(const subscribe_retry_options &cfg)
     {
         m_retry.config = cfg;
     }

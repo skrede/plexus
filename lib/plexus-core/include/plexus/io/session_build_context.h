@@ -10,7 +10,7 @@
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
 #include "plexus/io/procedure_forwarder.h"
-#include "plexus/io/subscribe_retry_config.h"
+#include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/policy.h"
 
@@ -54,7 +54,7 @@ struct session_build_context
     plexus::detail::move_only_function<void(typename Policy::byte_channel_type &, const security_negotiation &)> install_security_factory;
     plexus::detail::move_only_function<void(const detail::drop_event &)> on_frame_dropped{};
     plexus::detail::move_only_function<void(const node_id &, std::string_view, std::string_view)> on_session_superseded{};
-    subscribe_retry_config subscribe_retry{};
+    subscribe_retry_options subscribe_retry{};
     plexus::detail::move_only_function<void(typename Policy::byte_channel_type &, const node_id &)> on_relabel{};
 };
 

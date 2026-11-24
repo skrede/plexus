@@ -7,7 +7,7 @@
 #include "plexus/io/detail/peer_session_complete.h"
 
 #include "plexus/io/remembered_demand.h"
-#include "plexus/io/subscribe_retry_config.h"
+#include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/wire/subscribe.h"
 #include "plexus/wire/topic_hash.h"
@@ -33,7 +33,7 @@ struct subscribe_retry_state
     bool armed{false};
     bool redeclared{false};
     std::vector<unacked_subscribe> unacked;
-    std::optional<subscribe_retry_config> config;
+    std::optional<subscribe_retry_options> config;
 };
 
 inline bool retries(const subscribe_retry_state &r) noexcept

@@ -10,7 +10,7 @@
 #include "plexus/io/host_fingerprint.h"
 #include "plexus/io/reconnect_config.h"
 #include "plexus/io/liveliness_options.h"
-#include "plexus/io/subscribe_retry_config.h"
+#include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/io/security/attach_policy.h"
 
@@ -56,7 +56,7 @@ struct node_options
     io::reconnect_config reconnect{};
 
     // Applied only on best-effort datagram legs; ordered and reliable legs never re-send a subscribe.
-    io::subscribe_retry_config subscribe_retry{};
+    io::subscribe_retry_options subscribe_retry{};
 
     // Empty derives the seed from the node id, so co-started nodes do not phase-lock their redial jitter.
     std::optional<std::uint64_t> redial_seed{};

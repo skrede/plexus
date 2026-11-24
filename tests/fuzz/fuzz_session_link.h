@@ -9,7 +9,7 @@
 #include "plexus/io/peer_session.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/handshake_protocol.h"
-#include "plexus/io/subscribe_retry_config.h"
+#include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/log/logger.h"
 
@@ -180,7 +180,7 @@ private:
         end.ctx.node_name = inbound ? "requester-node" : "responder-node";
         end.ctx.peer_id   = make_cfg(peer).self_id;
         end.live.emplace(end.ctx, m_ex, make_cfg(self), k_handshake_timeout, end.messages, end.procedures, inbound, m_sink);
-        end.live->set_subscribe_retry(plexus::io::subscribe_retry_config{});
+        end.live->set_subscribe_retry(plexus::io::subscribe_retry_options{});
         observe(end);
         end.live->start();
     }

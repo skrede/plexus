@@ -9,7 +9,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/reconnect_config.h"
-#include "plexus/io/subscribe_retry_config.h"
+#include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/io/detail/drop_event.h"
 
@@ -36,7 +36,7 @@
 namespace {
 
 using namespace std::chrono_literals;
-using plexus::io::subscribe_retry_config;
+using plexus::io::subscribe_retry_options;
 using plexus::testing::loss_reorder_config;
 using udp_node = plexus::node<plexus::asio::udp_policy, plexus::asio::udp_transport>;
 
@@ -68,7 +68,7 @@ plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-plexus::node_options options(std::uint64_t seed, const subscribe_retry_config &retry)
+plexus::node_options options(std::uint64_t seed, const subscribe_retry_options &retry)
 {
     plexus::node_options opts;
     opts.reconnect       = plexus::io::reconnect_config{20ms, 40ms, std::nullopt, std::nullopt};
@@ -81,7 +81,7 @@ plexus::node_options options(std::uint64_t seed, const subscribe_retry_config &r
 class relay_pair
 {
 public:
-    relay_pair(const loss_reorder_config &front, const loss_reorder_config &back, const subscribe_retry_config &retry_at_s = {})
+    relay_pair(const loss_reorder_config &front, const loss_reorder_config &back, const subscribe_retry_options &retry_at_s = {})
             : m_at_s(0)
             , m_at_c(0)
             , m_io()
@@ -167,7 +167,7 @@ TEST_CASE("subscribe retry udp: a subscribe that overtakes the handshake respons
 
 TEST_CASE("subscribe retry udp: with the retry disabled the overtaken subscribe never takes effect", "[integration][subscribe_retry]")
 {
-    relay_pair pair{loss_reorder_config{}, k_overtake, subscribe_retry_config{.max_attempts = 0}};
+    relay_pair pair{loss_reorder_config{}, k_overtake, subscribe_retry_options{.max_attempts = 0}};
 
     pair.pump_for(5s, [] { return false; });
     CHECK(pair.unestablished_drops() >= 1);
