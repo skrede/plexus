@@ -4,7 +4,7 @@
 // The construction-time per-transport wire-capture public-API oracle: using ONLY the public
 // node facade + node_options (no internal recording include in the opt-in path), a node
 // composed over the wire-capturing policy + transport mints the recording_channel decorator
-// at the single channel-mint point, so a recorder attached through node.make_recorder()
+// at the single channel-mint point, so a recorder attached through node.record()
 // captures wire_frame records off the live session. A node composed over the bare inproc
 // policy mints bare channels — the decorator is STRUCTURALLY ABSENT (a compile-time type
 // witness proves it), and a recorder on it records no wire_frame. The opt-in is a designated-

@@ -155,7 +155,7 @@ std::vector<std::byte> capture_session(int count)
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto recorder = producer.record(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
@@ -405,7 +405,7 @@ std::vector<std::byte> capture_declared_and_opaque(int count)
     bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto recorder = producer.record(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
@@ -560,7 +560,7 @@ void run_pose_session(plexus::io::recording::byte_sink &sink, int count)
     bare_node consumer{ex, disc, make_id(0x0A), consumer_tp, base_opts()};
     bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
 
-    auto recorder = producer.make_recorder(sink);
+    auto recorder = producer.record(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});
@@ -622,7 +622,7 @@ std::vector<std::filesystem::path> capture_pose_rotating(const std::filesystem::
     ropts.basename  = "pose";
     plexus::recording::host::rotating_sink rot{ropts};
 
-    auto recorder = producer.make_recorder(rot);
+    auto recorder = producer.record(rot);
     rot.prime_preamble(recorder.preamble());
 
     consumer.listen({"inproc", "host-a:5000"});

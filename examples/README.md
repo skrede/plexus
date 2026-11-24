@@ -45,7 +45,7 @@ columns and emits field values per sample; a type without a projection logs thro
 ```
 
 Recording a multi-endpoint session to a flat record stream (a recording QoS +
-`node.make_recorder` over a consumer-owned `byte_sink`). It captures the session, prints the
+`node.record` over a consumer-owned `byte_sink`). It captures the session, prints the
 captured byte count, and writes the flat stream to `recording_example_capture.plxr`:
 
 ```sh

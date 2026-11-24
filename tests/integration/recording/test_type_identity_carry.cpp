@@ -118,7 +118,7 @@ plexus::io::recording::decoded_record capture_endpoint()
     ex.drain();
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto recorder = producer.record(sink);
 
     plexus::subscriber<Codec> sub{consumer, "telemetry", [](const std::uint32_t &) {}};
     plexus::publisher<Codec> pub{producer, "telemetry", {}, Codec{}};

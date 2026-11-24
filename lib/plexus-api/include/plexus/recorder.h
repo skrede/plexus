@@ -35,7 +35,7 @@
 
 namespace plexus {
 
-// The RAII recording handle node.make_recorder returns. It owns the recording machinery
+// The RAII recording handle node.record returns. It owns the recording machinery
 // (continuous flat_recorder or pre_buffer FDR controller over one ring) and the observer-adapter
 // sink that feeds it.
 //

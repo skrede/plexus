@@ -96,7 +96,7 @@ void capture_session(buffer_sink &sink)
         pub_node.listen({"inproc", "host-a:5000"});
         ex.drain();
 
-        auto rec = pub_node.make_recorder(sink);
+        auto rec = pub_node.record(sink);
 
         {
             plexus::publisher<reading_codec> temp{pub_node, "telemetry.temperature",

@@ -10,15 +10,15 @@
 // anomaly predicate on a drop edge, a deadline-miss edge), and captured_span equals
 // newest_ts - oldest_ts under a manual clock.
 //
-// (2) The public-API end-to-end capture (the make_recorder attach + the RAII handle): a
-// live multi-endpoint inproc node attaches a recorder through node.make_recorder(sink,
+// (2) The public-API end-to-end capture (the node.record attach + the RAII handle): a
+// live multi-endpoint inproc node attaches a recorder through node.record(sink,
 // opts) — PUBLIC API ONLY, no router(), no internal recording include in the attach path —
 // runs a multi-topic session, drains on the node's own executor turns, recovers the flat
 // stream offline with record_stream_reader, decodes the payload with a separately-supplied
 // codec (no codec in the tap), and closes the dropout accounting
 // sum(dropout.count) + delivered == produced. A teardown section destroys the recorder and
 // pumps the executor post-dtor — this section exercises the runtime behavior of
-// make_recorder + the recorder RAII handle (the deregister-before-teardown discipline); the
+// node.record + the recorder RAII handle (the deregister-before-teardown discipline); the
 // asan tree is the load-bearing UAF gate. The capture/dropout legs loop >=3x (medians). No
 // tuned byte-budget constant is asserted as a default.
 

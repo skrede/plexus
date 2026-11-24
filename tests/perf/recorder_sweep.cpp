@@ -1,5 +1,5 @@
 // A standalone measurement rig for the recorder's two numeric byte/rate knobs. It drives a
-// saturating producer through the PUBLIC node.make_recorder over an in-memory byte_sink and
+// saturating producer through the PUBLIC node.record over an in-memory byte_sink and
 // reports medians over >=3 runs (it REPORTS numbers, it is NOT a ctest — the parity suite
 // count is untouched, mirroring typed_inproc_rig).
 //
@@ -183,7 +183,7 @@ recall_point run_ring_cell(std::size_t ring_bytes, std::size_t payload_bytes, in
 
         plexus::recorder_options ro;
         ro.ring_bytes = ring_bytes;
-        auto rec      = n_node.make_recorder(sink, std::move(ro));
+        auto rec      = n_node.record(sink, std::move(ro));
 
         {
             // latch admits the published tap (a non-latched topic with no remote subscriber
@@ -245,7 +245,7 @@ decim_point run_decim_cell(plexus::recording_qos capture, std::size_t payload_by
 
         plexus::recorder_options ro;
         ro.ring_bytes = 1u << 24; // roomy: isolate the decimation effect from ring overflow
-        auto rec      = n_node.make_recorder(sink, std::move(ro));
+        auto rec      = n_node.record(sink, std::move(ro));
 
         {
             plexus::typed_publisher_options popts;

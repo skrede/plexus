@@ -138,7 +138,7 @@ int main()
         pub_node.listen({"inproc", "host-a:5000"});
         ex.drain();
 
-        auto rec = pub_node.make_recorder(sink);
+        auto rec = pub_node.record(sink);
 
         plexus::typed_publisher_options pub_opts;
         pub_opts.capture = plexus::recording_qos{.fidelity = plexus::io::capture_fidelity::payload};

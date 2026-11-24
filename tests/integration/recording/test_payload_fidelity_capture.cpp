@@ -121,7 +121,7 @@ TEST_CASE("a payload-fidelity sample records the bare codec bytes, not the frame
     bare_node producer{ex, disc, make_id(0x0B), producer_tp, base_opts()};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto recorder = producer.record(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});

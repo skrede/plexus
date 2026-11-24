@@ -50,7 +50,7 @@ struct recorder_options
 
     // Per-type self-descriptions laid into the stream preamble so an offline projector
     // resolves a codec/schema by a sample's type_id. The aliased schema bytes must outlive
-    // make_recorder (they are copied into the preamble synchronously in the recorder ctor).
+    // node.record (they are copied into the preamble synchronously in the recorder ctor).
     std::vector<type_schema> schemas{};
 
     // Per-topic record-rate rules keyed by topic_hash, applied before the ring push: max-Hz

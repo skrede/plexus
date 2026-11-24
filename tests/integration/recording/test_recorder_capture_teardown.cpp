@@ -22,7 +22,7 @@ TEST_CASE("a recorder destroyed mid-session deregisters before teardown and surv
         inproc_node n{fx.ex, fx.disc, id, fx.ta, opts};
 
         {
-            auto rec = n.make_recorder(sink);
+            auto rec = n.record(sink);
 
             // The endpoints live in their own inner scope so their drop edges drain while
             // the node is alive (the facade teardown contract); the recorder captures them.

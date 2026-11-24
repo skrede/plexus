@@ -510,9 +510,9 @@ public:
 
     // An RAII recorder handle that registers its tap on the engine and deregisters before
     // teardown. The sink MUST outlive the handle; the drain rides this node's executor turns.
-    recorder<engine_type, policy_type> make_recorder(io::recording::byte_sink &sink, recorder_options opts = {})
+    recorder<engine_type, policy_type> record(io::recording::byte_sink &sink, recorder_options opts = {})
     {
-        affine("make_recorder");
+        affine("record");
         return recorder<engine_type, policy_type>{m_engine, m_executor, m_id, sink, std::move(opts), m_wire_crypto_position};
     }
 

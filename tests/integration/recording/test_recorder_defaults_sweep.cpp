@@ -159,7 +159,7 @@ std::uint64_t recovered_samples(std::size_t ring_bytes, std::size_t payload_byte
 
         plexus::recorder_options ro;
         ro.ring_bytes = ring_bytes;
-        auto rec      = n_node.make_recorder(sink, std::move(ro));
+        auto rec      = n_node.record(sink, std::move(ro));
 
         {
             plexus::topic_qos qos;
@@ -218,7 +218,7 @@ decim_counts count_n_run(std::uint32_t n_keep, std::size_t payload_bytes, int bu
 
         plexus::recorder_options ro;
         ro.ring_bytes = 1u << 24; // roomy: isolate the decimation effect from ring overflow
-        auto rec      = n_node.make_recorder(sink, std::move(ro));
+        auto rec      = n_node.record(sink, std::move(ro));
 
         {
             plexus::typed_publisher_options popts;

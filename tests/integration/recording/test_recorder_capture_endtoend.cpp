@@ -6,7 +6,7 @@ using namespace recorder_capture_fixture;
 
 TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session and recovers it", "[recorder_capture][e2e]")
 {
-    // This section exercises the runtime behavior of node.make_recorder + the recorder RAII
+    // This section exercises the runtime behavior of node.record + the recorder RAII
     // handle: public-API attach -> live multi-topic capture -> cooperative drain on the
     // node's own turns -> offline recovery -> dropout accounting closed.
     for(int run = 0; run < 3; ++run)
@@ -27,7 +27,7 @@ TEST_CASE("a public-API recorder captures a live multi-endpoint inproc session a
             // produced, no dropouts) this run.
             plexus::recorder_options ro;
             ro.ring_bytes = 1u << 20;
-            auto rec      = n.make_recorder(sink, std::move(ro));
+            auto rec      = n.record(sink, std::move(ro));
 
             // The endpoints live in an INNER scope so their declaration-drop edges (posted
             // capturing the engine `this`) are drained while the node is still alive — the

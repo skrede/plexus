@@ -14,7 +14,7 @@ namespace plexus {
 // beside a non-empty schema_encoding.
 //
 // The string_views and span alias the caller's bytes and are copied into the preamble
-// synchronously inside the recorder ctor make_recorder returns, so the referenced bytes must
+// synchronously inside the recorder ctor node.record returns, so the referenced bytes must
 // outlive that call (they need not outlive the recorder).
 struct type_schema
 {

@@ -29,7 +29,7 @@ TEST_CASE("a declared schema larger than the writer's default scratch round-trip
             plexus::type_schema{.type_id = k_reading_type_id, .message_encoding = "json", .schema_name = "reading", .schema_encoding = "jsonschema", .schema_data = as_bytes(big_blob)});
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink, std::move(ropts));
+    auto recorder = producer.record(sink, std::move(ropts));
 
     capture_one(producer, consumer, ex, recorder, 0xBEEFu);
 

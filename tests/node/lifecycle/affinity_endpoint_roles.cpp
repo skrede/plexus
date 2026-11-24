@@ -82,7 +82,7 @@ void foreign_recorder(plexus::recording_mode mode, Use use)
     asio_rig rig;
     in_memory_byte_sink sink;
     std::optional<asio_recorder> rec;
-    on_driver(rig.node, [&] { rec.emplace(rig.node.make_recorder(sink, plexus::recorder_options{.mode = mode})); });
+    on_driver(rig.node, [&] { rec.emplace(rig.node.record(sink, plexus::recorder_options{.mode = mode})); });
     use(*rec);
 }
 

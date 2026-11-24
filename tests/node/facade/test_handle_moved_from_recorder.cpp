@@ -49,7 +49,7 @@ void with_moved_from_recorder(Use use)
 {
     fixture f;
     null_sink sink;
-    auto source = f.node().make_recorder(sink);
+    auto source = f.node().record(sink);
     auto target{std::move(source)};
     use(source);
     target.flush();
@@ -91,7 +91,7 @@ TEST_CASE("handles: moved-from subscriber, procedure, graph_change_handle and re
     std::optional<plexus::subscriber<>> sub_source{std::in_place, f.node(), "topic", [&](std::span<const std::byte>) { ++got; }};
     std::optional<bytes_procedure> proc_source{std::in_place, f.node(), "rpc", &reply_ok};
     std::optional<plexus::graph_change_handle> graph_source{f.node().on_graph_change([&](std::uint64_t) { ++changed; })};
-    std::optional<decltype(f.node().make_recorder(sink))> rec_source{f.node().make_recorder(sink)};
+    std::optional<decltype(f.node().record(sink))> rec_source{f.node().record(sink)};
     plexus::subscriber<> sub{std::move(*sub_source)};
     bytes_procedure proc{std::move(*proc_source)};
     plexus::graph_change_handle graph{std::move(*graph_source)};

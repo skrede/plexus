@@ -65,13 +65,13 @@ TEST_CASE("recorder_move: a recorder relocated by a vector reallocation still dr
     memory_sink filler_sink;
 
     {
-        using rec_t = decltype(f.node().make_recorder(sink));
+        using rec_t = decltype(f.node().record(sink));
         std::vector<rec_t> recs;
         recs.reserve(1);
 
         plexus::recorder_options ro;
         ro.ring_bytes = 1u << 20;
-        recs.push_back(f.node().make_recorder(sink, std::move(ro)));
+        recs.push_back(f.node().record(sink, std::move(ro)));
 
         std::vector<std::vector<std::byte>> seen;
         plexus::subscriber<> s{f.node(), "topic", [&](std::span<const std::byte> b) { seen.emplace_back(b.begin(), b.end()); }};
@@ -82,7 +82,7 @@ TEST_CASE("recorder_move: a recorder relocated by a vector reallocation still dr
         // grown buffer and its old storage destroyed. The surviving handle must still drain.
         plexus::recorder_options ro2;
         ro2.ring_bytes = 1u << 20;
-        recs.push_back(f.node().make_recorder(filler_sink, std::move(ro2)));
+        recs.push_back(f.node().record(filler_sink, std::move(ro2)));
         f.drive();
 
         const std::array<std::byte, 4> mk{std::byte{0xA0}, std::byte{0x01}, std::byte{0xBE}, std::byte{0xEF}};

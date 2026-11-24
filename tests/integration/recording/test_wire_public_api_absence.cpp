@@ -24,7 +24,7 @@ TEST_CASE("public API: a default node records no wire frames (structural absence
     bare_node producer{ex, disc, make_id(0x1B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto recorder = producer.record(sink);
 
     consumer.listen({"inproc", "host-c:5000"});
     producer.listen({"inproc", "host-d:6000"});

@@ -71,7 +71,7 @@ TEST_CASE("self_loopback_recorder: the bytes lane self-delivery is captured", "[
     {
         plexus::recorder_options ro;
         ro.ring_bytes = 1u << 20;
-        auto rec      = f.node().make_recorder(sink, std::move(ro));
+        auto rec      = f.node().record(sink, std::move(ro));
 
         std::vector<std::vector<std::byte>> seen;
         plexus::subscriber<> s{f.node(), "topic", [&](std::span<const std::byte> b) { seen.emplace_back(b.begin(), b.end()); }};
@@ -123,7 +123,7 @@ TEST_CASE("self_loopback_recorder: the typed lane self-delivery is recorded as a
     {
         plexus::recorder_options ro;
         ro.ring_bytes = 1u << 20;
-        auto rec      = f.node().make_recorder(sink, std::move(ro));
+        auto rec      = f.node().record(sink, std::move(ro));
 
         std::vector<std::uint32_t> seen;
         plexus::subscriber<counting_codec> s{f.node(), "topic", [&](const sample &v) { seen.push_back(v.value); }};

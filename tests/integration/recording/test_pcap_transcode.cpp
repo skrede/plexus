@@ -140,7 +140,7 @@ std::vector<std::byte> capture_session(int count, plexus::wire_crypto_position p
     wire_node producer{ex, disc, make_id(0x0B), producer_tp, producer_opts};
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink);
+    auto recorder = producer.record(sink);
 
     consumer.listen({"inproc", "host-a:5000"});
     producer.listen({"inproc", "host-b:6000"});

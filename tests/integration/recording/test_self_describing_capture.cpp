@@ -30,7 +30,7 @@ TEST_CASE("a declared schema + crypto position + producer type_id round-trip thr
             .type_id = k_reading_type_id, .message_encoding = "json", .schema_name = "reading", .schema_encoding = "jsonschema", .schema_data = as_bytes(schema_blob)});
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink, std::move(ropts));
+    auto recorder = producer.record(sink, std::move(ropts));
 
     const std::uint32_t published = 0xCAFEu;
     capture_one(producer, consumer, ex, recorder, published);
@@ -93,7 +93,7 @@ TEST_CASE("a recorder that declares nothing still writes a valid opaque stream",
     ex.drain();
 
     in_memory_byte_sink sink;
-    auto recorder = producer.make_recorder(sink); // default options: empty schemas
+    auto recorder = producer.record(sink); // default options: empty schemas
 
     capture_one(producer, consumer, ex, recorder, 0x1234u);
 
