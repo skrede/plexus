@@ -112,7 +112,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options make_opts(plexus::recording_qos capture)
 {
     plexus::node_options opts;
-    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed = 0x9163u;
     opts.capture     = capture;
     return opts;

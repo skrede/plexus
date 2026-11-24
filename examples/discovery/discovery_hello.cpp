@@ -33,7 +33,7 @@ plexus::node_options role_options(bool second)
 {
     plexus::node_options opts;
     opts.name        = second ? "hello-second" : "hello-first";
-    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = second ? 0xB2F00Du : 0xA1F00Du;
     return opts;
 }

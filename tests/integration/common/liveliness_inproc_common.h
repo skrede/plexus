@@ -11,7 +11,7 @@
 #include "plexus/io/endpoint_id.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/peer_liveliness_event.h"
 
@@ -39,7 +39,7 @@ using plexus::io::liveliness_options;
 using plexus::io::peer_liveliness_event;
 using plexus::io::k_tick_granularity;
 using plexus::io::handshake_fsm_config;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_timer;
 using plexus::inproc::inproc_channel;
@@ -106,9 +106,9 @@ inline plexus::node_id inbound_slot(std::uint8_t n)
     return id;
 }
 
-inline reconnect_config forever_cfg()
+inline reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 inline std::uint64_t clock_now_ns()

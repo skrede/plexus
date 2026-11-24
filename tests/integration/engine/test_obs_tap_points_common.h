@@ -14,7 +14,7 @@
 #include "plexus/io/known_peers.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
@@ -46,7 +46,7 @@ using plexus::inproc::inproc_channel;
 using plexus::inproc::inproc_transport;
 using plexus::io::endpoint;
 using plexus::io::handshake_fsm_config;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 
 namespace obs_tap_fixture {
 
@@ -107,9 +107,9 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline reconnect_config forever_cfg()
+inline reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // One publisher and N subscriber engines on a single inproc bus and executor: every

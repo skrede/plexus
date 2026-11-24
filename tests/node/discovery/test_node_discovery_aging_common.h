@@ -9,7 +9,7 @@
 #include "plexus/io/known_peers.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/liveliness_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -36,7 +36,7 @@ using plexus::io::endpoint_id;
 using plexus::io::handshake_fsm_config;
 using plexus::io::k_tick_granularity;
 using plexus::io::known_peers;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 using plexus::testing::test_clock;
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_timer;
@@ -124,9 +124,9 @@ inline handshake_fsm_config make_cfg(std::uint8_t id_seed)
     return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
-inline reconnect_config forever_cfg()
+inline reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 inline std::uint64_t ttl_ns()

@@ -44,7 +44,7 @@ plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-void check_documented_defaults(const plexus::io::reconnect_config &cfg)
+void check_documented_defaults(const plexus::io::reconnect_options &cfg)
 {
     CHECK(cfg.min_delay == 100ms);
     CHECK(cfg.max_delay == 10000ms);
@@ -56,7 +56,7 @@ void require_refused(std::chrono::milliseconds min_delay, std::chrono::milliseco
 {
     host h;
     plexus::node_options opts;
-    opts.reconnect   = plexus::io::reconnect_config{min_delay, max_delay, std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{min_delay, max_delay, std::nullopt, std::nullopt};
     opts.redial_seed = 0xC0FFEEu;
     const auto build = [&] { inproc_node n{h.ex, h.disc, make_id(0x51), h.transport, opts}; };
     REQUIRE_THROWS_AS(build(), std::runtime_error);

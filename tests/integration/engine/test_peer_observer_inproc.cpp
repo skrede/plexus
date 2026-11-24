@@ -17,7 +17,7 @@
 #include "plexus/io/known_peers.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/peer_session_registry.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -51,7 +51,7 @@ using plexus::inproc::inproc_channel;
 using plexus::inproc::inproc_transport;
 using plexus::io::endpoint;
 using plexus::io::handshake_fsm_config;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 using plexus::io::peer_kind;
 using plexus::io::handshake_outcome;
 
@@ -123,14 +123,14 @@ plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-reconnect_config forever_cfg()
+reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
-reconnect_config bounded_cfg(std::uint32_t max_attempts)
+reconnect_options bounded_cfg(std::uint32_t max_attempts)
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), max_attempts, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), max_attempts, std::nullopt};
 }
 
 // Frame a subscribe_response exactly as the wire codec does, carrying the chosen
@@ -162,7 +162,7 @@ struct two_node
     endpoint ep_a;
     endpoint ep_b;
 
-    explicit two_node(const reconnect_config &a_redial = forever_cfg(), std::uint8_t a_compatible = 1)
+    explicit two_node(const reconnect_options &a_redial = forever_cfg(), std::uint8_t a_compatible = 1)
             : ex{bus}
             , transport_a{ex, bus}
             , transport_b{ex, bus}

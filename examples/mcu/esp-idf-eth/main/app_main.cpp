@@ -7,7 +7,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/lwip_rx_task.h"
@@ -120,7 +120,7 @@ plexus::node_options telemetry_node_options()
     plexus::node_options opts;
     opts.name              = "esp32-eth-telemetry";
     opts.max_message_bytes = k_max_payload_bytes;
-    opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect         = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0xE74C0DE;
     return opts;
 }

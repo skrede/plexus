@@ -6,7 +6,7 @@
 #include "plexus/io/endpoint_id.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_policy.h"
@@ -23,7 +23,7 @@
 using plexus::io::endpoint;
 using plexus::io::endpoint_id;
 using plexus::io::handshake_fsm_config;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_policy;
@@ -42,9 +42,9 @@ handshake_fsm_config make_cfg(std::uint8_t id_seed)
     return handshake_fsm_config{.self_id = id, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
-reconnect_config forever_cfg()
+reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(200), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(5), std::chrono::milliseconds(200), std::nullopt, std::nullopt};
 }
 
 // Two engines on ONE shared inproc bus/executor: B listens, A dials B's endpoint. Member ORDER:

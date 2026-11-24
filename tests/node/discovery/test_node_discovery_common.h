@@ -40,9 +40,9 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline plexus::io::reconnect_config forever_cfg()
+inline plexus::io::reconnect_options forever_cfg()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    return plexus::io::reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 inline plexus::node_options make_opts()

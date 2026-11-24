@@ -3,8 +3,8 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/reconnect_backoff.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/io/detail/pending_ops.h"
 
@@ -27,7 +27,7 @@ class reconnect
 public:
     using timer_type = typename Policy::timer_type;
 
-    reconnect(Transport &transport, typename Policy::executor_type executor, const reconnect_config &cfg, io::endpoint endpoint, std::uint64_t seed = 0)
+    reconnect(Transport &transport, typename Policy::executor_type executor, const reconnect_options &cfg, io::endpoint endpoint, std::uint64_t seed = 0)
             : m_transport(transport)
             , m_cfg(cfg)
             , m_endpoint(std::move(endpoint))
@@ -178,7 +178,7 @@ private:
     }
 
     Transport &m_transport;
-    reconnect_config m_cfg;
+    reconnect_options m_cfg;
     io::endpoint m_endpoint;
     io::detail::pending_ops m_ops;
     timer_type m_backoff_timer;

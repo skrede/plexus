@@ -60,7 +60,7 @@ inline plexus::node_options pair_options(std::uint64_t seed, plexus::io::combine
     // The default policy reads a silent peer lost only once its session is torn down, so the teardown follows the miss window for lost_bound().
     opts.liveliness.policy                   = policy;
     opts.liveliness.session_teardown_timeout = opts.liveliness.heartbeat_interval * opts.liveliness.heartbeat_miss_limit;
-    opts.reconnect                           = plexus::io::reconnect_config{20ms, 40ms, std::nullopt, std::nullopt};
+    opts.reconnect                           = plexus::io::reconnect_options{20ms, 40ms, std::nullopt, std::nullopt};
     opts.redial_seed                         = seed;
     return opts;
 }

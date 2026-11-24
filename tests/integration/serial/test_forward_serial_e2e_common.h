@@ -199,7 +199,7 @@ struct cold_cluster
         using namespace std::chrono_literals;
         plexus::node_options opts;
         opts.name          = std::string{n};
-        opts.reconnect     = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+        opts.reconnect     = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
         std::uint64_t seed = 0x9E3779B97F4A7C15ull;
         for(char c : n)
             seed = (seed ^ static_cast<std::uint8_t>(c)) * 1099511628211ull;

@@ -18,7 +18,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/message_info.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_executor.h"
@@ -155,7 +155,7 @@ void plexus_task(void *)
     plexus::node_options opts;
     opts.name              = "esp32-onboard-bench";
     opts.max_message_bytes = example::k_max_tier_bytes;
-    opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect         = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x0B0AB0DEu;
 
     auto host  = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard-bench"), opts);

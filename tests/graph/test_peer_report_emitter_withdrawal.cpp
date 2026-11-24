@@ -25,9 +25,9 @@ namespace {
 using relay_engine = plexus::io::routing_engine<manual_policy, transport_t, manual_clock, plexus::io::std_map_peer_storage, plexus::graph::std_map_topic_storage,
                                                 plexus::io::default_liveliness_storage, plexus::graph::vector_graph_change_log, plexus::io::peer_report_emitter>;
 
-plexus::io::reconnect_config slow_redial()
+plexus::io::reconnect_options slow_redial()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(10000), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    return plexus::io::reconnect_options{std::chrono::milliseconds(10000), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // A relay R dialing an origin O and a downstream D on one bus. R carries the real emitter; O and D are
@@ -50,7 +50,7 @@ struct relay_net
     plexus::io::endpoint ep_o;
     plexus::io::endpoint ep_d;
 
-    explicit relay_net(plexus::io::liveliness_options live = {}, plexus::io::reconnect_config r_redial = forever_cfg())
+    explicit relay_net(plexus::io::liveliness_options live = {}, plexus::io::reconnect_options r_redial = forever_cfg())
             : ex{bus}
             , tr_r{ex, bus}
             , tr_o{ex, bus}

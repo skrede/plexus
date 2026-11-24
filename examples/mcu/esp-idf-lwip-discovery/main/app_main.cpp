@@ -8,7 +8,7 @@
 #include "plexus/discovery/multicast_discovery.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/freertos/lwip_policy.h"
 #include "plexus/freertos/device_runtime.h"
@@ -155,7 +155,7 @@ void plexus_task(void *)
 
     plexus::node_options opts;
     opts.name      = "esp32-lwip-discovery";
-    opts.reconnect = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
 
     plexus::node<lwip_policy, lwip_transport> node{ex, disc, "esp32-lwip-discovery", transport, opts};
     node.listen({"tcp", "0.0.0.0:7447"});

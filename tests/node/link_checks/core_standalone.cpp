@@ -5,7 +5,7 @@
 
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/node_id.h"
 
@@ -32,7 +32,7 @@ int main()
     plexus::node_id self{};
     self[0] = std::byte{0x01};
     const plexus::io::handshake_fsm_config fsm_cfg{.self_id = self, .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
-    const plexus::io::reconnect_config redial{
+    const plexus::io::reconnect_options redial{
             .min_delay = std::chrono::milliseconds{10}, .max_delay = std::chrono::milliseconds{100}, .max_attempts = std::nullopt, .max_elapsed = std::nullopt};
 
     plexus::log::null_logger sink;

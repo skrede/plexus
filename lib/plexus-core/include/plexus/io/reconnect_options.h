@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_IO_RECONNECT_CONFIG_H
-#define HPP_GUARD_PLEXUS_IO_RECONNECT_CONFIG_H
+#ifndef HPP_GUARD_PLEXUS_IO_RECONNECT_OPTIONS_H
+#define HPP_GUARD_PLEXUS_IO_RECONNECT_OPTIONS_H
 
 #include <chrono>
 #include <cstdint>
@@ -9,7 +9,7 @@ namespace plexus::io {
 
 // Each attempt jitters in [0, min(max_delay, min_delay * 2^attempt)]. An absent
 // surrender bound does not apply; with neither set the driver retries forever.
-struct reconnect_config
+struct reconnect_options
 {
     std::chrono::milliseconds min_delay{100};
     std::chrono::milliseconds max_delay{10000};

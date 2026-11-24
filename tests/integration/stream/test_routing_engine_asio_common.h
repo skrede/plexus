@@ -28,7 +28,7 @@
 
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/policy.h"
 
@@ -50,7 +50,7 @@ namespace pio   = plexus::io;
 
 using pio::endpoint;
 using pio::handshake_fsm_config;
-using pio::reconnect_config;
+using pio::reconnect_options;
 using engine = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
 
 namespace routing_asio_fixture {
@@ -82,9 +82,9 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline reconnect_config forever_cfg()
+inline reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 // One asio engine on a shared io_context, listening on an ephemeral port. Member

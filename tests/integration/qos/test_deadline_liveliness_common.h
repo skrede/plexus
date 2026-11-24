@@ -16,7 +16,7 @@
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/liveliness_monitor.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -48,7 +48,7 @@ using plexus::io::liveness_event;
 using plexus::io::liveness_kind;
 using plexus::io::k_tick_granularity;
 using plexus::io::handshake_fsm_config;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 
 namespace deadline_fixture {
 
@@ -121,9 +121,9 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline reconnect_config forever_cfg()
+inline reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // A subscriber A and a publisher B over one bus. A demands B's topic with its chosen

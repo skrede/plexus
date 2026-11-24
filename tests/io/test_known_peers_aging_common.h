@@ -11,7 +11,7 @@
 #include "plexus/io/known_peers.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/liveliness_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -36,7 +36,7 @@ using plexus::io::endpoint;
 using plexus::io::endpoint_id;
 using plexus::io::handshake_fsm_config;
 using plexus::io::k_tick_granularity;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 using plexus::testing::test_clock;
 using plexus::inproc::inproc_bus;
 using plexus::inproc::inproc_timer;
@@ -92,9 +92,9 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline reconnect_config forever_cfg()
+inline reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
 // Two engines over one bus, each with the short test TTL. B listens; A may dial it.

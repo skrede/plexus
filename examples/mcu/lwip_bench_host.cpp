@@ -22,7 +22,7 @@
 #include "plexus/asio/asio_transport.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include <asio/io_context.hpp>
 #include <asio/steady_timer.hpp>
@@ -67,7 +67,7 @@ int main(int argc, char **argv)
 
     plexus::node_options opts;
     opts.name      = "lwip-bench-host";
-    opts.reconnect = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
 
     plexus::node<pasio::asio_policy, pasio::asio_transport> node{io, disc, "lwip-bench-host", transport, opts};
 

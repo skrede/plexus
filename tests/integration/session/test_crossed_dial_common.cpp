@@ -1,7 +1,7 @@
 #include "test_crossed_dial_common.h"
 
 #include "plexus/io/message_info.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include <span>
 #include <chrono>
@@ -101,7 +101,7 @@ crossed_net::crossed_net(const liveliness_options &live)
 incarnation::incarnation(crossed_net &net)
         : transport(net.ex, net.bus)
         , log()
-        , e(transport, net.ex, make_cfg(k_restarted), k_window, reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), 1, std::nullopt}, k_seed, log)
+        , e(transport, net.ex, make_cfg(k_restarted), k_window, reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), 1, std::nullopt}, k_seed, log)
 {
 }
 

@@ -23,8 +23,8 @@
 #include "plexus/io/peer_session.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/procedure_forwarder.h"
 
 #include "plexus/policy.h"
@@ -49,7 +49,7 @@ namespace pio   = plexus::io;
 
 using pio::endpoint;
 using pio::handshake_fsm_config;
-using pio::reconnect_config;
+using pio::reconnect_options;
 using engine        = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
 using session       = pio::peer_session<pasio::asio_policy>;
 using msg_forwarder = pio::message_forwarder<pasio::asio_policy>;
@@ -74,14 +74,14 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline reconnect_config fast_cfg()
+inline reconnect_options fast_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(5), std::chrono::milliseconds(50), std::nullopt, std::nullopt};
 }
 
-inline reconnect_config bounded_cfg(std::uint32_t max_attempts)
+inline reconnect_options bounded_cfg(std::uint32_t max_attempts)
 {
-    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50), max_attempts, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(5), std::chrono::milliseconds(50), max_attempts, std::nullopt};
 }
 
 // One peer node on the shared io_context: its OWN asio_transport listening on an
@@ -143,7 +143,7 @@ struct multipeer_net
     engine a;
     std::vector<std::unique_ptr<peer_node>> peers;
 
-    multipeer_net(std::size_t n, const reconnect_config &a_redial = fast_cfg())
+    multipeer_net(std::size_t n, const reconnect_options &a_redial = fast_cfg())
             : transport(io)
             , a(transport, io, make_cfg(0xA1), k_long_timeout, a_redial, k_seed, sink, false)
     {

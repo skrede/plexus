@@ -68,7 +68,7 @@ plexus::node_options make_opts()
     // Dial a discovered same-universe peer eagerly so a session forms and topic edges propagate without
     // a matching local subscription. A foreign-universe peer is dropped at discovery, so never dialed.
     opts.dial_eagerly = true;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_options{std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     return opts;
 }
 

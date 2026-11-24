@@ -22,7 +22,7 @@
 #include "plexus/asio/udp_multicast_socket.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include <asio/io_context.hpp>
 #include <asio/steady_timer.hpp>
@@ -115,7 +115,7 @@ int main()
 
     plexus::node_options opts;
     opts.name      = "lwip-discovery-dial-host";
-    opts.reconnect = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
 
     plexus::node<pasio::asio_policy, pasio::asio_transport> node{io, disc, "lwip-discovery-dial-host", transport, opts};
 

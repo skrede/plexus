@@ -21,8 +21,8 @@
 #include "plexus/io/epoch_source.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/peer_session.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/procedure_forwarder.h"
 
@@ -46,7 +46,7 @@ namespace pasio = plexus::asio;
 namespace pio   = plexus::io;
 
 using pio::handshake_fsm_config;
-using pio::reconnect_config;
+using pio::reconnect_options;
 using session       = pio::peer_session<pasio::asio_policy>;
 using msg_forwarder = pio::message_forwarder<pasio::asio_policy>;
 using rpc_forwarder = pio::procedure_forwarder<pasio::asio_policy>;
@@ -99,7 +99,7 @@ struct tcp_reconnect
     // listen_first: bind the listener on an ephemeral port BEFORE the driver so the
     // driver dials the real port. When false the caller supplies a (closed) port to
     // exercise the initial-refused path and brings the listener up later.
-    tcp_reconnect(const reconnect_config &cfg, bool listen_first, std::uint16_t closed_port = 0)
+    tcp_reconnect(const reconnect_options &cfg, bool listen_first, std::uint16_t closed_port = 0)
             : transport(io)
             , req_messages{sink}
             , resp_messages{sink}
@@ -176,9 +176,9 @@ struct tcp_reconnect
     }
 };
 
-inline reconnect_config fast_cfg()
+inline reconnect_options fast_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(5), std::chrono::milliseconds(50), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(5), std::chrono::milliseconds(50), std::nullopt, std::nullopt};
 }
 
 }

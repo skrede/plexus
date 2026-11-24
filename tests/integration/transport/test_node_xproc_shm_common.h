@@ -7,7 +7,7 @@
 #include "plexus/node_options.h"
 
 #include "plexus/io/host_fingerprint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/same_host_geometry.h"
 
 #include "plexus/discovery/contact_card.h"
@@ -68,7 +68,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 inline plexus::node_options dial_opts(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(20), std::chrono::milliseconds(500), std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_options{std::chrono::milliseconds(20), std::chrono::milliseconds(500), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xC0FFEEu;
     opts.dial_eagerly = eager;
     return opts;

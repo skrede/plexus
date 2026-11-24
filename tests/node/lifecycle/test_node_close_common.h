@@ -86,7 +86,7 @@ inline plexus::node_id make_id(std::uint8_t seed)
 inline plexus::node_options make_opts()
 {
     plexus::node_options opts;
-    opts.reconnect   = plexus::io::reconnect_config{k_backoff, k_backoff * 2, std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{k_backoff, k_backoff * 2, std::nullopt, std::nullopt};
     opts.redial_seed = 0xC0FFEEu;
     return opts;
 }

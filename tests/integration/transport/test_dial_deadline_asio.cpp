@@ -10,7 +10,7 @@
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"
 #include "plexus/io/endpoint_id.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/discovery/static_discovery.h"
 
@@ -53,7 +53,7 @@ TEST_CASE("dial deadline: a node dialing a host that never answers counts a fail
     plexus::discovery::static_discovery disc{{}};
     pasio::asio_transport transport{io};
     plexus::node_options opts;
-    opts.reconnect   = pio::reconnect_config{20ms, 40ms, std::nullopt, std::nullopt};
+    opts.reconnect   = pio::reconnect_options{20ms, 40ms, std::nullopt, std::nullopt};
     opts.redial_seed = 0xD1A1u;
     tcp_node node{io, disc, "dialer", transport, opts};
     const pio::endpoint ep{"tcp", peer.address()};

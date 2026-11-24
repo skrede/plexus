@@ -8,7 +8,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/observer.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/subscribe_retry_options.h"
 
 #include "plexus/io/detail/drop_event.h"
@@ -71,7 +71,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options options(std::uint64_t seed, const subscribe_retry_options &retry)
 {
     plexus::node_options opts;
-    opts.reconnect       = plexus::io::reconnect_config{20ms, 40ms, std::nullopt, std::nullopt};
+    opts.reconnect       = plexus::io::reconnect_options{20ms, 40ms, std::nullopt, std::nullopt};
     opts.redial_seed     = seed;
     opts.subscribe_retry = retry;
     return opts;

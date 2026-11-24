@@ -4,7 +4,7 @@
 #include "test_routing_engine_inproc_common.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/node_id.h"
 
@@ -20,9 +20,9 @@ using namespace routing_inproc_fixture;
 constexpr auto k_ceiling = std::chrono::milliseconds(10001);
 constexpr auto k_tick    = std::chrono::milliseconds(100);
 
-inline reconnect_config bounded_cfg(std::optional<std::uint32_t> attempts, std::optional<std::chrono::milliseconds> elapsed)
+inline reconnect_options bounded_cfg(std::optional<std::uint32_t> attempts, std::optional<std::chrono::milliseconds> elapsed)
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), attempts, elapsed};
+    return reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), attempts, elapsed};
 }
 
 struct guarded_pair
@@ -39,7 +39,7 @@ struct guarded_pair
     endpoint ep_a;
     endpoint ep_b;
 
-    explicit guarded_pair(const reconnect_config &redial = forever_cfg(), bool eager = false)
+    explicit guarded_pair(const reconnect_options &redial = forever_cfg(), bool eager = false)
             : ex{bus}
             , transport_a{ex, bus}
             , transport_b{ex, bus}

@@ -6,7 +6,7 @@
 #include "plexus/node_id.h"
 #include "plexus/node_options.h"
 
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include <chrono>
 #include <cstddef>
@@ -14,9 +14,9 @@
 
 namespace plexus::detail {
 
-inline const io::reconnect_config &checked_reconnect(const node_options &opts)
+inline const io::reconnect_options &checked_reconnect(const node_options &opts)
 {
-    const io::reconnect_config &cfg = opts.reconnect;
+    const io::reconnect_options &cfg = opts.reconnect;
     if(cfg.min_delay <= std::chrono::milliseconds::zero() || cfg.max_delay < cfg.min_delay)
         fail_closed("node_options: reconnect min_delay must be positive and max_delay at least min_delay");
     return cfg;

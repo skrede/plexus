@@ -13,8 +13,8 @@
 #include "plexus/io/report_options.h"
 #include "plexus/io/lifecycle_event.h"
 #include "plexus/io/peer_liveliness.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/liveliness_monitor.h"
 #include "plexus/io/liveliness_options.h"
@@ -111,7 +111,7 @@ public:
     using registry_type            = peer_session_registry<Policy, Transport, Clock>;
 
     // NOLINTNEXTLINE(readability-function-size)
-    routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_config &redial,
+    routing_engine(Transport &transport, executor_type executor, const handshake_fsm_config &fsm_cfg, std::chrono::nanoseconds handshake_timeout, const reconnect_options &redial,
                    std::uint64_t redial_seed, log::logger &logger, bool dial_eagerly = false, std::size_t global_default = io::global_default_max_message_bytes,
                    io::liveliness_options live = {}, io::route_options routes = {}, const io::report_options &report = {}, const io::forward_options &forward = {},
                    const io::subscribe_retry_options &subscribe_retry = {})

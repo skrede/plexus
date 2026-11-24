@@ -7,8 +7,8 @@
 #include "plexus/io/io_error.h"
 #include "plexus/io/observer.h"
 #include "plexus/io/handshake_fsm.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/peer_session_registry.h"
 #include "plexus/io/session_build_context.h"
@@ -90,7 +90,7 @@ struct slot_rebuild_fixture
                     .handshake_timeout        = std::chrono::seconds(1),
                     .messages                 = messages,
                     .procedures               = procedures,
-                    .redial                   = io::reconnect_config{std::chrono::milliseconds(10), std::chrono::milliseconds(100), std::nullopt, std::nullopt},
+                    .redial                   = io::reconnect_options{std::chrono::milliseconds(10), std::chrono::milliseconds(100), std::nullopt, std::nullopt},
                     .redial_seed              = 1,
                     .logger                   = logger,
                     .on_message               = {},

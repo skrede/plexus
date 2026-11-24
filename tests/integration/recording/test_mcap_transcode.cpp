@@ -129,7 +129,7 @@ plexus::node_id make_id(std::uint8_t seed)
 plexus::node_options base_opts()
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0xD00Du;
     opts.dial_eagerly = true;
     return opts;

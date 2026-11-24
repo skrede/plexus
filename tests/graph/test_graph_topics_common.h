@@ -112,7 +112,7 @@ inline bool holds_id(const inproc_node &node, const plexus::node_id &id)
 inline plexus::node_options opts_for(bool eager)
 {
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
     opts.redial_seed  = 0x70B1C5u;
     opts.dial_eagerly = eager;
     return opts;

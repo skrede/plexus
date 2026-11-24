@@ -92,7 +92,7 @@ service_info card_of(const plexus::node_id &id)
 plexus::node_options make_opts()
 {
     plexus::node_options opts;
-    opts.reconnect                = plexus::io::reconnect_config{50ms, 2000ms, std::nullopt, std::nullopt};
+    opts.reconnect                = plexus::io::reconnect_options{50ms, 2000ms, std::nullopt, std::nullopt};
     opts.redial_seed              = 0xC0FFEEu;
     opts.liveliness.awareness_ttl = 300ms;
     return opts;

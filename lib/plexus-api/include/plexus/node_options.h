@@ -8,7 +8,7 @@
 #include "plexus/io/route_options.h"
 #include "plexus/io/report_options.h"
 #include "plexus/io/host_fingerprint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/subscribe_retry_options.h"
 
@@ -53,7 +53,7 @@ struct node_options
     // directly-dialed point-to-point host (no card to redial off) needs it set; it is node-WIDE.
     std::uint32_t handshake_retry{0};
 
-    io::reconnect_config reconnect{};
+    io::reconnect_options reconnect{};
 
     // Applied only on best-effort datagram legs; ordered and reliable legs never re-send a subscribe.
     io::subscribe_retry_options subscribe_retry{};

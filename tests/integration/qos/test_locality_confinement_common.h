@@ -21,8 +21,8 @@
 #include "plexus/io/known_peers.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/inproc/inproc_bus.h"
 #include "plexus/inproc/inproc_timer.h"
@@ -160,9 +160,9 @@ inline plexus::io::handshake_fsm_config make_cfg(std::uint8_t seed)
     return plexus::io::handshake_fsm_config{.self_id = make_id(seed), .version_major = 1, .version_minor = 0, .compatible_version_major = 1, .compatible_version_minor = 0};
 }
 
-inline plexus::io::reconnect_config forever_cfg()
+inline plexus::io::reconnect_options forever_cfg()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    return plexus::io::reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 }

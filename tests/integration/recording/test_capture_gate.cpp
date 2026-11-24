@@ -22,7 +22,7 @@
 #include "plexus/io/capture_policy.h"
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/peer_session_registry.h"
 
 #include "plexus/inproc/inproc_bus.h"
@@ -58,7 +58,7 @@ using plexus::io::capture_fidelity;
 using plexus::io::decimation_mode;
 using plexus::io::topic_capture_rule;
 using plexus::io::handshake_fsm_config;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 
 namespace {
 
@@ -116,9 +116,9 @@ plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-reconnect_config forever_cfg()
+reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 struct counted_payload

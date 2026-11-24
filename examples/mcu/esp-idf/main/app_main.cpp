@@ -23,7 +23,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_timer.h"
@@ -118,7 +118,7 @@ void plexus_task(void *)
     plexus::node_options opts;
     opts.name              = "esp32-telemetry";
     opts.max_message_bytes = example::k_gate_link_max_payload;
-    opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect         = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x32C0DE;
 
     auto node = std::make_unique<plexus::node<example::uart_policy, example::uart_transport>>(ex, disc, "esp32-telemetry", transport, opts);

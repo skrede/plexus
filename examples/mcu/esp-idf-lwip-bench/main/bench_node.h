@@ -9,7 +9,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/endpoint.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/freertos/freertos_executor.h"
 
@@ -28,7 +28,7 @@ std::unique_ptr<plexus::node<Policy, Transport>> dial_bench_node(plexus::discove
     plexus::node_options opts;
     opts.name              = "esp32-lwip-bench";
     opts.max_message_bytes = k_max_tier_bytes;
-    opts.reconnect         = plexus::io::reconnect_config{std::chrono::milliseconds{200}, std::chrono::seconds{5}, std::nullopt, std::nullopt};
+    opts.reconnect         = plexus::io::reconnect_options{std::chrono::milliseconds{200}, std::chrono::seconds{5}, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x1F1C0DE;
     auto node              = std::make_unique<plexus::node<Policy, Transport>>(ex, disc, opts.name, transport, opts);
     node->dial({scheme, endpoint});

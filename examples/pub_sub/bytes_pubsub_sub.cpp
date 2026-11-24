@@ -40,7 +40,7 @@ int main()
     plexus::node_options opts;
     opts.name         = "demo-subscriber";
     opts.dial_eagerly = true;
-    opts.reconnect    = plexus::io::reconnect_config{
+    opts.reconnect    = plexus::io::reconnect_options{
         std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = 0x5DB5C;
 

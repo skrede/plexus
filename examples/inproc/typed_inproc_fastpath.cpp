@@ -84,9 +84,9 @@ struct reading_codec
 plexus::node_options opts(std::uint64_t seed, bool eager)
 {
     plexus::node_options o;
-    o.reconnect    = plexus::io::reconnect_config{std::chrono::milliseconds(50),
-                                                  std::chrono::milliseconds(2000), std::nullopt,
-                                                  std::nullopt};
+    o.reconnect    = plexus::io::reconnect_options{std::chrono::milliseconds(50),
+                                                   std::chrono::milliseconds(2000), std::nullopt,
+                                                   std::nullopt};
     o.redial_seed  = seed;
     o.dial_eagerly = eager;
     return o;

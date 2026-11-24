@@ -6,8 +6,8 @@
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/security_seam.h"
 #include "plexus/io/security_event.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/peer_session_registry.h"
 #include "plexus/io/session_build_context.h"
@@ -570,7 +570,7 @@ TEST_CASE("io.security_attach the registry threads the install hook in productio
                         k_long_timeout,
                         messages,
                         procedures,
-                        plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt},
+                        plexus::io::reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt},
                         /*redial_seed=*/1,
                         sink,
                         {},

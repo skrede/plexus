@@ -12,7 +12,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/subscriber_qos.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/same_host_geometry.h"
 
 #include <chrono>
@@ -63,7 +63,7 @@ inline plexus::node_options dial_opts()
 {
     using namespace std::chrono_literals;
     plexus::node_options opts;
-    opts.reconnect    = plexus::io::reconnect_config{20ms, 500ms, std::nullopt, std::nullopt};
+    opts.reconnect    = plexus::io::reconnect_options{20ms, 500ms, std::nullopt, std::nullopt};
     opts.redial_seed  = 0xC0FFEEu;
     opts.dial_eagerly = true;
     return opts;

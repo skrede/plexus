@@ -32,8 +32,8 @@
 #include "plexus/io/priority.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/io/detail/drop_event.h"
 #include "plexus/io/detail/egress_scheduler.h"
@@ -160,7 +160,7 @@ struct drop_fixture
                      ex,
                      make_cfg(0xA1),
                      std::chrono::hours(1),
-                     plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt},
+                     plexus::io::reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt},
                      0xC0FFEEu,
                      log_sink,
                      false}

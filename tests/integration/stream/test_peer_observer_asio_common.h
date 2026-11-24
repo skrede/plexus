@@ -22,7 +22,7 @@
 
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/policy.h"
 
@@ -44,7 +44,7 @@ namespace pio   = plexus::io;
 
 using pio::endpoint;
 using pio::handshake_fsm_config;
-using pio::reconnect_config;
+using pio::reconnect_options;
 using pio::peer_kind;
 using pio::handshake_outcome;
 using engine = pio::routing_engine<pasio::asio_policy, pasio::asio_transport, std::chrono::steady_clock>;
@@ -78,14 +78,14 @@ inline plexus::node_id make_id(std::uint8_t seed)
     return id;
 }
 
-inline reconnect_config forever_cfg()
+inline reconnect_options forever_cfg()
 {
-    return reconnect_config{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(50), std::chrono::milliseconds(2000), std::nullopt, std::nullopt};
 }
 
-inline reconnect_config bounded_cfg(std::uint32_t max_attempts)
+inline reconnect_options bounded_cfg(std::uint32_t max_attempts)
 {
-    return reconnect_config{std::chrono::milliseconds(20), std::chrono::milliseconds(80), max_attempts, std::nullopt};
+    return reconnect_options{std::chrono::milliseconds(20), std::chrono::milliseconds(80), max_attempts, std::nullopt};
 }
 
 struct asio_node
@@ -95,7 +95,7 @@ struct asio_node
     plexus::log::null_logger sink;
     engine eng;
 
-    asio_node(::asio::io_context &shared, std::uint8_t id_seed, bool eager, const reconnect_config &redial = forever_cfg(), std::uint8_t compatible = 1)
+    asio_node(::asio::io_context &shared, std::uint8_t id_seed, bool eager, const reconnect_options &redial = forever_cfg(), std::uint8_t compatible = 1)
             : io(shared)
             , transport(shared)
             , eng(transport, shared, make_cfg(id_seed, 1, compatible), k_long_timeout, redial, k_seed, sink, eager)

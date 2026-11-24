@@ -128,7 +128,7 @@ struct host
 plexus::node_options make_opts(std::chrono::milliseconds min_delay, std::chrono::milliseconds max_delay)
 {
     plexus::node_options opts;
-    opts.reconnect   = plexus::io::reconnect_config{min_delay, max_delay, std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{min_delay, max_delay, std::nullopt, std::nullopt};
     opts.redial_seed = 0xC0FFEEu;
     return opts;
 }

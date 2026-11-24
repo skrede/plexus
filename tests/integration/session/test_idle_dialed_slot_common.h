@@ -5,7 +5,7 @@
 
 #include "plexus/io/observer.h"
 #include "plexus/io/peer_kind.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/node_id.h"
 
@@ -74,7 +74,7 @@ struct idle_pair : guarded_pair
 {
     edge_log log;
 
-    explicit idle_pair(const reconnect_config &redial = forever_cfg())
+    explicit idle_pair(const reconnect_options &redial = forever_cfg())
             : guarded_pair(redial)
             , log(id_b)
     {

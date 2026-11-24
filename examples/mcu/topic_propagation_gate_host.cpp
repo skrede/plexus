@@ -26,7 +26,7 @@
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/message_info.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include <asio/io_context.hpp>
 #include <asio/steady_timer.hpp>
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
     opts.name              = "topic-gate-host";
     opts.handshake_timeout = k_handshake_window;
     opts.handshake_retry   = k_handshake_retry;
-    opts.reconnect         = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect         = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed       = 0x6A7E5;
 
     plexus::node<pasio::serial_policy, pasio::serial_transport> node{io, disc, "topic-gate-host", transport, opts};

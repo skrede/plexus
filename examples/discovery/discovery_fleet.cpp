@@ -46,7 +46,7 @@ plexus::node_options fleet_options(bool second)
 {
     plexus::node_options opts;
     opts.name        = second ? "fleet-second" : "fleet-first";
-    opts.reconnect   = plexus::io::reconnect_config{std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{std::chrono::milliseconds(200), std::chrono::seconds(5), std::nullopt, std::nullopt};
     opts.redial_seed = second ? 0xF1EE72u : 0xF1EE71u;
     // Shortened from the 15s default so a killed peer's lost verdict lands within the demo's patience.
     opts.liveliness.awareness_ttl = std::chrono::seconds(3);

@@ -16,8 +16,8 @@
 #include "plexus/io/epoch_source.h"
 #include "plexus/io/peer_context.h"
 #include "plexus/io/peer_session.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/transport_backend.h"
 #include "plexus/io/procedure_forwarder.h"
 
@@ -51,7 +51,7 @@ using plexus::inproc::inproc_executor;
 using plexus::inproc::inproc_channel;
 using plexus::inproc::inproc_transport;
 using plexus::io::handshake_fsm_config;
-using plexus::io::reconnect_config;
+using plexus::io::reconnect_options;
 
 namespace {
 
@@ -254,7 +254,7 @@ struct harness
     bool listening;
     int dead;
 
-    explicit harness(const reconnect_config &cfg)
+    explicit harness(const reconnect_options &cfg)
             : ex{bus}
             , transport{ex, bus}
             , req_messages{sink}
@@ -330,7 +330,7 @@ TEST_CASE("inproc reconnect: an initial refused dial backs off and re-dials, com
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+        reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness h(cfg);
 
         // No listener yet: the initial dial is refused, the driver schedules a re-dial.
@@ -362,7 +362,7 @@ TEST_CASE("inproc reconnect: an established session whose channel drops re-dials
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+        reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness h(cfg);
         h.listen();
         h.driver.start();
@@ -400,7 +400,7 @@ TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed report
     SECTION("max_attempts surrender")
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::uint32_t{3}, std::nullopt};
+        reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::uint32_t{3}, std::nullopt};
         harness h(cfg); // never listening → every dial is refused
         h.driver.start();
         // Drain repeatedly across ceilings: each refused dial schedules the next until
@@ -419,7 +419,7 @@ TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed report
     SECTION("max_elapsed surrender")
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::chrono::milliseconds(25000)};
+        reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::chrono::milliseconds(25000)};
         harness h(cfg);
         h.driver.start();
         for(int i = 0; i < 20 && !h.driver.is_surrendered(); ++i)
@@ -431,7 +431,7 @@ TEST_CASE("inproc reconnect: surrender on max_attempts and on max_elapsed report
     SECTION("neither bound set retries forever at the ceiling cadence")
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+        reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness h(cfg);
         h.driver.start();
         for(int i = 0; i < 50; ++i)
@@ -446,7 +446,7 @@ TEST_CASE("inproc reconnect: backoff grows full-jitter to the ceiling then holds
           "with a fixed seed",
           "[integration][reconnect][inproc]")
 {
-    reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
     // Two independent RNGs with the SAME seed produce the identical sequence
     // (reproducibility), and every sample stays within the growing full-jitter
     // ceiling [0, min(max_delay, min_delay*2^attempt)] (growth then hold).
@@ -478,7 +478,7 @@ TEST_CASE("inproc reconnect: each reconnect mints a fresh epoch and the stalenes
     for(int iter = 0; iter < k_iterations; ++iter)
     {
         manual_clock::reset();
-        reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+        reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
         harness h(cfg);
         h.listen();
         h.driver.start();
@@ -518,7 +518,7 @@ TEST_CASE("inproc reconnect: the POST-RECONNECT publish loop stays frame-once (p
           "[integration][reconnect][inproc]")
 {
     manual_clock::reset();
-    reconnect_config cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    reconnect_options cfg{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
     harness h(cfg);
     h.listen();
     h.driver.start();

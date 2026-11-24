@@ -39,7 +39,7 @@ using tcp_node = plexus::node<plexus::asio::asio_policy, plexus::asio::asio_tran
 plexus::node_options tcp_opts()
 {
     plexus::node_options opts;
-    opts.reconnect   = plexus::io::reconnect_config{20ms, 40ms, std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{20ms, 40ms, std::nullopt, std::nullopt};
     opts.redial_seed = 0xC0FFEEu;
     return opts;
 }

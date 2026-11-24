@@ -28,7 +28,7 @@
 #include "plexus/discovery/static_discovery.h"
 
 #include "plexus/io/message_info.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 
 #include "plexus/freertos/device_runtime.h"
 #include "plexus/freertos/freertos_timer.h"
@@ -156,7 +156,7 @@ void plexus_task(void *)
     // counter; a PC-sized default would over-provision the loan pools the engine carries.
     opts.max_message_bytes = 64;
     // The self-route never dials, so this cadence and seed are inert; they stay to show the knobs.
-    opts.reconnect   = plexus::io::reconnect_config{200ms, 5s, std::nullopt, std::nullopt};
+    opts.reconnect   = plexus::io::reconnect_options{200ms, 5s, std::nullopt, std::nullopt};
     opts.redial_seed = 0x0B0AC0DEu;
 
     auto host  = std::make_unique<plexus::loopback_host<example::onboard_policy>>(ex, disc, plexus::node_id_from_name("esp32-onboard"), opts);

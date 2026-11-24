@@ -8,7 +8,7 @@
 #include "plexus/io/fragmentation.h"
 #include "plexus/io/handshake_fsm.h"
 #include "plexus/io/routing_engine.h"
-#include "plexus/io/reconnect_config.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/fixed_peer_storage.h"
 #include "plexus/io/liveliness_options.h"
 #include "plexus/io/peer_session_registry.h"
@@ -66,9 +66,9 @@ inline plexus::io::endpoint ep_for(const char *address)
     return plexus::io::endpoint{"inproc", address};
 }
 
-inline plexus::io::reconnect_config forever_cfg()
+inline plexus::io::reconnect_options forever_cfg()
 {
-    return plexus::io::reconnect_config{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
+    return plexus::io::reconnect_options{std::chrono::milliseconds(100), std::chrono::milliseconds(10000), std::nullopt, std::nullopt};
 }
 
 // Counts each graph edge the engine posts, so mutations coalesced into one wakeup count once.

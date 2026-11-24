@@ -7,8 +7,8 @@
 #include "plexus/io/security_seam.h"
 #include "plexus/io/security_event.h"
 #include "plexus/io/lifecycle_event.h"
-#include "plexus/io/reconnect_config.h"
 #include "plexus/io/message_forwarder.h"
+#include "plexus/io/reconnect_options.h"
 #include "plexus/io/procedure_forwarder.h"
 #include "plexus/io/subscribe_retry_options.h"
 
@@ -37,7 +37,7 @@ struct session_build_context
     std::chrono::nanoseconds handshake_timeout;
     message_forwarder<Policy> &messages;
     procedure_forwarder<Policy> &procedures;
-    reconnect_config redial;
+    reconnect_options redial;
     std::uint64_t redial_seed;
     log::logger &logger;
     plexus::detail::move_only_function<void(std::string_view, std::span<const std::byte>, const message_info &)> on_message;
