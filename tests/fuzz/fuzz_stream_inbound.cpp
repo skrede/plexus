@@ -29,12 +29,12 @@ using fuzz_timer    = inproc::inproc_timer<fuzz_clock>;
 using fuzz_executor = inproc::inproc_executor<fuzz_clock>;
 using fuzz_stream   = stream::stream_inbound<fuzz_timer, fuzz_executor &>;
 
-stream::stream_inbound_config read_config(fuzz_input &in)
+stream::stream_inbound_options read_config(fuzz_input &in)
 {
-    return stream::stream_inbound_config{.no_progress_floor            = std::chrono::milliseconds{1 + in.u8()},
-                                         .min_throughput_bytes_per_sec = static_cast<std::size_t>(in.uint(2)),
-                                         .max_payload_size             = static_cast<std::size_t>(in.uint(2) % 4096),
-                                         .buffered_bytes_cap           = wire::header_size + static_cast<std::size_t>(in.uint(2) % 8192)};
+    return stream::stream_inbound_options{.no_progress_floor            = std::chrono::milliseconds{1 + in.u8()},
+                                          .min_throughput_bytes_per_sec = static_cast<std::size_t>(in.uint(2)),
+                                          .max_payload_size             = static_cast<std::size_t>(in.uint(2) % 4096),
+                                          .buffered_bytes_cap           = wire::header_size + static_cast<std::size_t>(in.uint(2) % 8192)};
 }
 
 class stream_rig

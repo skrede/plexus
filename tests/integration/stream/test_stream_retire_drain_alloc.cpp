@@ -27,7 +27,7 @@ constexpr std::size_t k_inflight_bytes = 262147;
 
 std::unique_ptr<pasio::asio_channel> stalled_channel(tcp_pair &h, std::size_t read_bytes = pasio::k_stream_read_buffer_bytes)
 {
-    return std::make_unique<pasio::asio_channel>(h.io, std::move(h.client), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(1u << 20u),
+    return std::make_unique<pasio::asio_channel>(h.io, std::move(h.client), stream::stream_inbound_options{}, pio::congestion::block, pio::egress_capacity::of_bytes(1u << 20u),
                                                  pasio::stream_socket_options{}, read_bytes);
 }
 

@@ -56,7 +56,7 @@ public:
     // Dial/executor-alone: unconnected, not reading yet — the transport arms the open path
     // (start_read for plaintext, the handshake for TLS).
     template<typename... BootstrapArgs>
-    explicit stream_channel(::asio::io_context &io, stream::stream_inbound_config cfg, io::congestion congestion, io::egress_capacity egress, stream_socket_options socket_options,
+    explicit stream_channel(::asio::io_context &io, stream::stream_inbound_options cfg, io::congestion congestion, io::egress_capacity egress, stream_socket_options socket_options,
                             std::size_t read_buffer_bytes = k_stream_read_buffer_bytes, BootstrapArgs &&...bargs)
             : m_io(io)
             , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)
@@ -79,7 +79,7 @@ public:
     // Accept-mode: adopt an already-connected socket. Plaintext starts reading immediately; TLS
     // defers the read loop to its server handshake (arm_on_accept).
     template<typename Connected, typename... BootstrapArgs>
-    stream_channel(::asio::io_context &io, Connected connected, stream::stream_inbound_config cfg, io::congestion congestion, io::egress_capacity egress,
+    stream_channel(::asio::io_context &io, Connected connected, stream::stream_inbound_options cfg, io::congestion congestion, io::egress_capacity egress,
                    stream_socket_options socket_options, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes, BootstrapArgs &&...bargs)
             : m_io(io)
             , m_bootstrap(std::forward<BootstrapArgs>(bargs)...)

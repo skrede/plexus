@@ -35,7 +35,7 @@ namespace plexus::asio {
 class asio_listener
 {
 public:
-    explicit asio_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
+    explicit asio_listener(::asio::io_context &io, stream::stream_inbound_options cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
             : m_io(io)
             , m_retiring()
@@ -140,7 +140,7 @@ private:
     io::detail::retiring_table<asio_channel> m_retiring;
     ::asio::ip::tcp::acceptor m_acceptor;
     detail::accept_backoff m_backoff;
-    stream::stream_inbound_config m_cfg;
+    stream::stream_inbound_options m_cfg;
     bool m_no_delay;
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;

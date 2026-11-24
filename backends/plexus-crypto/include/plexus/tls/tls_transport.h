@@ -53,7 +53,7 @@ public:
     // true). global_default is the per-MESSAGE receive ceiling and reassembly_budget the aggregate
     // reassembly-memory cap (the two operator-facing message-size node options, stamped onto every
     // minted channel's inbound config). All required-WITH-default.
-    tls_transport(::asio::io_context &io, const tls_credential &cred, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
+    tls_transport(::asio::io_context &io, const tls_credential &cred, stream::stream_inbound_options cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
                   io::egress_capacity egress = io::egress_capacity::bounded_default(), plexus::asio::stream_socket_options socket_options = {},
                   std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget)
             : m_io(io)
@@ -158,7 +158,7 @@ private:
     ::asio::io_context &m_io;
     const tls_credential &m_cred;
     tls_listener m_listener;
-    stream::stream_inbound_config m_cfg;
+    stream::stream_inbound_options m_cfg;
     bool m_no_delay;
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;

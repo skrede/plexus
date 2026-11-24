@@ -45,7 +45,7 @@ class tls_listener
 public:
     // no_delay disables Nagle on every accepted peer's lowest (TCP) layer (required-WITH-
     // default true — the latency-MW default), set BEFORE the channel adopts the socket.
-    tls_listener(::asio::io_context &io, const tls_credential &cred, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
+    tls_listener(::asio::io_context &io, const tls_credential &cred, stream::stream_inbound_options cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
                  io::egress_capacity egress = io::egress_capacity::bounded_default(), plexus::asio::stream_socket_options socket_options = {})
             : m_io(io)
             , m_acceptor(io)
@@ -174,7 +174,7 @@ private:
     ::asio::ip::tcp::acceptor m_acceptor;
     plexus::asio::detail::accept_backoff m_backoff;
     const tls_credential &m_cred;
-    stream::stream_inbound_config m_cfg;
+    stream::stream_inbound_options m_cfg;
     bool m_no_delay;
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;

@@ -41,7 +41,7 @@ using plexus::wire::frame_header;
 using plexus::wire::msg_type;
 using plexus::wire::header_size;
 using plexus::stream::stream_inbound;
-using plexus::stream::stream_inbound_config;
+using plexus::stream::stream_inbound_options;
 using plexus::wire::complete_frame;
 using plexus::wire::encode_frame;
 using plexus::wire::encode_header;
@@ -86,9 +86,9 @@ using stream_t   = stream_inbound<timer_t, executor_t &>;
 constexpr auto k_floor             = std::chrono::milliseconds(500);
 constexpr std::size_t k_throughput = 1024; // bytes/sec -> 1 ns per byte * 1e6
 
-inline stream_inbound_config test_config()
+inline stream_inbound_options test_config()
 {
-    return stream_inbound_config{.no_progress_floor = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor), .min_throughput_bytes_per_sec = k_throughput};
+    return stream_inbound_options{.no_progress_floor = std::chrono::duration_cast<std::chrono::nanoseconds>(k_floor), .min_throughput_bytes_per_sec = k_throughput};
 }
 
 // payload_deadline(N) = N / throughput, in nanoseconds (mirrors the component).

@@ -45,7 +45,7 @@ class unix_transport : public stream_transport<unix_channel, unix_listener, unix
     using base = stream_transport<unix_channel, unix_listener, unix_transport_traits>;
 
 public:
-    explicit unix_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+    explicit unix_transport(::asio::io_context &io, stream::stream_inbound_options cfg = {}, io::congestion congestion = io::congestion::block,
                             io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {},
                             std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget)
             : base(io, stream::with_message_limits(cfg, global_default, reassembly_budget), false, congestion, egress, socket_options, io,

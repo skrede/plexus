@@ -79,7 +79,7 @@ class tls_channel : public plexus::asio::stream_channel<::asio::ssl::stream<::as
 public:
     // Dial mode: unconnected ssl::stream. The transport async_connects the lowest layer, then
     // calls start_client_handshake(host). The credential is REQUIRED (first after io).
-    tls_channel(::asio::io_context &io, const tls_credential &cred, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+    tls_channel(::asio::io_context &io, const tls_credential &cred, stream::stream_inbound_options cfg = {}, io::congestion congestion = io::congestion::block,
                 io::egress_capacity egress = io::egress_capacity::bounded_default(), plexus::asio::stream_socket_options opts = {},
                 std::size_t read_buffer_bytes = plexus::asio::k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes, cred)
@@ -91,7 +91,7 @@ public:
     // calls start_server_handshake(), so the accepted channel is delivered POST-handshake (a
     // verify-rejected peer never yields a live accepted channel — fail-closed, symmetric with
     // the dial side).
-    tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected, const tls_credential &cred, stream::stream_inbound_config cfg = {},
+    tls_channel(::asio::io_context &io, ::asio::ip::tcp::socket connected, const tls_credential &cred, stream::stream_inbound_options cfg = {},
                 io::congestion congestion = io::congestion::block, io::egress_capacity egress = io::egress_capacity::bounded_default(), plexus::asio::stream_socket_options opts = {},
                 std::size_t read_buffer_bytes = plexus::asio::k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes, cred)

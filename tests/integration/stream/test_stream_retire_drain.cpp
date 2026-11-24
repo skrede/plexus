@@ -104,7 +104,7 @@ TEST_CASE("stream_retire_drain a no-progress expiry queued in the closing pass d
     for(std::int32_t iter = 0; iter < k_iterations; ++iter)
     {
         tcp_pair h;
-        const stream::stream_inbound_config cfg{.no_progress_floor = 40ms, .min_throughput_bytes_per_sec = 0};
+        const stream::stream_inbound_options cfg{.no_progress_floor = 40ms, .min_throughput_bytes_per_sec = 0};
         auto ch              = std::make_unique<pasio::asio_channel>(h.io, std::move(h.client), cfg);
         bool protocol_closed = false;
         ch->on_protocol_close([&](plexus::wire::close_cause) { protocol_closed = true; });

@@ -113,7 +113,7 @@ int main()
     // authority) and the aggregate reassembly budget (the receive-side memory backstop). The
     // send-side write-queue cap is a back-pressure backlog knob, NOT a message-size bound, so
     // it stays at its default — a within-ceiling message always sends regardless of the cap.
-    stream::stream_inbound_config cfg{};
+    stream::stream_inbound_options cfg{};
 
     auto make_transport = [&]
     {

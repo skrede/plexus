@@ -50,7 +50,7 @@ class asio_transport : public stream_transport<asio_channel, asio_listener, tcp_
     using base = stream_transport<asio_channel, asio_listener, tcp_transport_traits>;
 
 public:
-    explicit asio_transport(::asio::io_context &io, stream::stream_inbound_config cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
+    explicit asio_transport(::asio::io_context &io, stream::stream_inbound_options cfg = {}, bool no_delay = true, io::congestion congestion = io::congestion::block,
                             io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {},
                             std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget)
             : base(io, stream::with_message_limits(cfg, global_default, reassembly_budget), no_delay, congestion, egress, socket_options, io,

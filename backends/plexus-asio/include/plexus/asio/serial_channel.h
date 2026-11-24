@@ -148,7 +148,7 @@ private:
     plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
 
     // The base's stream inbound is never fed on this leg, so its limits only have to agree with the deframer's.
-    static stream::stream_inbound_config inbound_config(std::size_t max_payload) noexcept
+    static stream::stream_inbound_options inbound_config(std::size_t max_payload) noexcept
     {
         return stream::with_message_limits({}, max_payload, io::reassembly_memory_budget);
     }

@@ -54,7 +54,7 @@ public:
     // informed choice, never a default.
     static constexpr auto default_socket_mode = plexus::detail::default_socket_mode;
 
-    explicit unix_listener(::asio::io_context &io, stream::stream_inbound_config cfg = {}, plexus::detail::socket_mode mode = default_socket_mode,
+    explicit unix_listener(::asio::io_context &io, stream::stream_inbound_options cfg = {}, plexus::detail::socket_mode mode = default_socket_mode,
                            const io::security::peer_cred_policy &policy = io::security::shared_accept_any_peer_cred(), io::congestion congestion = io::congestion::block,
                            io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options socket_options = {})
             : m_io(io)
@@ -146,7 +146,7 @@ private:
     io::detail::retiring_table<unix_channel> m_retiring;
     ::asio::local::stream_protocol::acceptor m_acceptor;
     detail::accept_backoff m_backoff;
-    stream::stream_inbound_config m_cfg;
+    stream::stream_inbound_options m_cfg;
     plexus::detail::socket_mode m_mode;
     const io::security::peer_cred_policy *m_peer_policy; // borrowed; never owned
     io::congestion m_congestion;

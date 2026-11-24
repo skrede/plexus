@@ -45,7 +45,7 @@ TEST_CASE("asio stream channel: retiring a channel after a read-EOF fail with a 
         stalled_pair h;
 
         constexpr std::size_t cap = 1u * 1024u * 1024u;
-        auto ch = std::make_unique<pasio::asio_channel>(h.io, std::move(h.client), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap));
+        auto ch = std::make_unique<pasio::asio_channel>(h.io, std::move(h.client), stream::stream_inbound_options{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap));
 
         bool errored = false;
         ch->on_error([&](pio::io_error) { errored = true; });
@@ -92,7 +92,7 @@ TEST_CASE("asio stream channel: on_closed is posted (never inline) and fires exa
     client.connect(acc.local_endpoint());
     acc.accept(peer);
 
-    pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{}, pio::congestion::block};
+    pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_options{}, pio::congestion::block};
 
     int closed          = 0;
     bool later_turn     = false;
@@ -129,7 +129,7 @@ TEST_CASE("asio stream channel: on_closed is posted (never inline) and fires exa
     client.connect(acc.local_endpoint());
     acc.accept(peer);
 
-    pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{}, pio::congestion::block};
+    pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_options{}, pio::congestion::block};
 
     int closed   = 0;
     bool errored = false;
@@ -161,7 +161,7 @@ TEST_CASE("asio stream channel: retiring the channel between a stream_fail and t
     client.connect(acc.local_endpoint());
     acc.accept(peer);
 
-    auto ch      = std::make_unique<pasio::asio_channel>(io, std::move(client), stream::stream_inbound_config{}, pio::congestion::block);
+    auto ch      = std::make_unique<pasio::asio_channel>(io, std::move(client), stream::stream_inbound_options{}, pio::congestion::block);
     bool errored = false;
     ch->on_error([&](pio::io_error) { errored = true; });
 

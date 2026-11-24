@@ -34,7 +34,7 @@ TEST_CASE("asio stream channel: the bounded write queue sheds under congestion=d
 
         constexpr std::size_t cap = 4096;
         // Adopt the connected client end into an accept-mode channel with the small cap.
-        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_config{}, mode, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel ch{io, std::move(client), stream::stream_inbound_options{}, mode, pio::egress_capacity::of_bytes(cap)};
 
         std::optional<pio::io_error> err;
         ch.on_error([&](pio::io_error e) { err = e; });
@@ -98,8 +98,8 @@ TEST_CASE("asio stream channel: a sustained multi-frame burst gathers into coale
         // A generous cap so the burst backlog accumulates (the gather has frames to coalesce)
         // without the cap shedding; congestion=block surfaces nothing while the peer reads.
         constexpr std::size_t cap = 64u * 1024u * 1024u;
-        pasio::asio_channel server{io, std::move(raw_server), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
-        pasio::asio_channel client{io, std::move(raw_client), stream::stream_inbound_config{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel server{io, std::move(raw_server), stream::stream_inbound_options{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
+        pasio::asio_channel client{io, std::move(raw_client), stream::stream_inbound_options{}, pio::congestion::block, pio::egress_capacity::of_bytes(cap)};
 
         std::vector<std::vector<std::byte>> received;
         server.on_data([&](std::span<const std::byte> d) { received.emplace_back(d.begin(), d.end()); });

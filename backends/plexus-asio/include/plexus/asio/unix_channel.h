@@ -57,14 +57,14 @@ class unix_channel : public stream_channel<::asio::local::stream_protocol::socke
     using base = stream_channel<::asio::local::stream_protocol::socket, unix_traits, detail::plaintext_bootstrap<::asio::local::stream_protocol::socket>>;
 
 public:
-    explicit unix_channel(::asio::io_context &io, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+    explicit unix_channel(::asio::io_context &io, stream::stream_inbound_options cfg = {}, io::congestion congestion = io::congestion::block,
                           io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {},
                           std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, cfg, congestion, egress, opts, read_buffer_bytes)
     {
     }
 
-    unix_channel(::asio::io_context &io, ::asio::local::stream_protocol::socket connected, stream::stream_inbound_config cfg = {}, io::congestion congestion = io::congestion::block,
+    unix_channel(::asio::io_context &io, ::asio::local::stream_protocol::socket connected, stream::stream_inbound_options cfg = {}, io::congestion congestion = io::congestion::block,
                  io::egress_capacity egress = io::egress_capacity::bounded_default(), stream_socket_options opts = {}, std::size_t read_buffer_bytes = k_stream_read_buffer_bytes)
             : base(io, std::move(connected), cfg, congestion, egress, opts, read_buffer_bytes)
     {

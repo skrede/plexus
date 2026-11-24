@@ -3,7 +3,7 @@
 
 // Gated real-AF_UNIX stream-channel hardening leg over a local socket. A raw client
 // socket writes hostile bytes into a live unix_channel (the accepted server end,
-// stamped with a SHORT-floor stream::stream_inbound_config) and the channel's
+// stamped with a SHORT-floor stream::stream_inbound_options) and the channel's
 // on_protocol_close fires with the matching close_cause — the byte-stream framing
 // defense proven end-to-end over a real local socket, not a virtual-clock oracle:
 //   * garbage  : a bad-magic byte run -> close_cause::invalid_magic.
@@ -62,9 +62,9 @@ namespace stream_channel_unix_fixture {
 // A short-floor config so the slowloris leg trips fast: a few hundred ms floor and
 // a tiny throughput so even a small withheld payload's size-proportional deadline
 // stays short. Passed EXPLICITLY — the 30s default would make the leg glacial.
-inline stream::stream_inbound_config short_cfg()
+inline stream::stream_inbound_options short_cfg()
 {
-    return stream::stream_inbound_config{.no_progress_floor = std::chrono::milliseconds(200), .min_throughput_bytes_per_sec = 64};
+    return stream::stream_inbound_options{.no_progress_floor = std::chrono::milliseconds(200), .min_throughput_bytes_per_sec = 64};
 }
 
 // A per-instance owner-only temp directory + a SHORT socket path within it.

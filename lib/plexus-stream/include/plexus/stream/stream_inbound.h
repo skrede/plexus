@@ -19,7 +19,7 @@
 
 namespace plexus::stream {
 
-struct stream_inbound_config
+struct stream_inbound_options
 {
     std::chrono::nanoseconds no_progress_floor{std::chrono::seconds{30}};
     // 64 KiB/s sits below any real broadband/WAN/LAN link, so legitimate transfers pass while the
@@ -29,7 +29,7 @@ struct stream_inbound_config
     std::size_t buffered_bytes_cap{wire::k_max_reassembler_payload_bytes + wire::header_size};
 };
 
-inline stream_inbound_config with_message_limits(stream_inbound_config cfg, std::size_t max_payload_size, std::size_t reassembly_budget) noexcept
+inline stream_inbound_options with_message_limits(stream_inbound_options cfg, std::size_t max_payload_size, std::size_t reassembly_budget) noexcept
 {
     cfg.max_payload_size   = max_payload_size;
     cfg.buffered_bytes_cap = std::max(reassembly_budget, max_payload_size + wire::header_size);
@@ -46,7 +46,7 @@ template<typename Timer, typename Executor>
 class stream_inbound
 {
 public:
-    stream_inbound(Executor ex, stream_inbound_config cfg)
+    stream_inbound(Executor ex, stream_inbound_options cfg)
             : m_timer(ex)
             , m_shut_down(false)
             , m_cfg(cfg)
@@ -104,7 +104,7 @@ public:
 private:
     Timer m_timer;
     bool m_shut_down;
-    stream_inbound_config m_cfg;
+    stream_inbound_options m_cfg;
     io::detail::pending_ops m_pending;
     wire::frame_reassembler m_reassembler;
     std::chrono::nanoseconds m_armed_deadline;

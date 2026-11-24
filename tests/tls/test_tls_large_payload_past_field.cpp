@@ -32,8 +32,8 @@ TEST_CASE("tls.large_past_field: a 32 MB single frame round-trips byte-identical
         ::asio::io_context io;
         auto server_cred = make_cred(server_id, client_id.digest);
         auto client_cred = make_cred(client_id, server_id.digest);
-        ptls::tls_transport server{io, server_cred, stream::stream_inbound_config{}, true, pio::congestion::block, pio::egress_capacity::of_bytes(k_outbox), {}, k_ceiling, k_budget};
-        ptls::tls_transport client{io, client_cred, stream::stream_inbound_config{}, true, pio::congestion::block, pio::egress_capacity::of_bytes(k_outbox), {}, k_ceiling, k_budget};
+        ptls::tls_transport server{io, server_cred, stream::stream_inbound_options{}, true, pio::congestion::block, pio::egress_capacity::of_bytes(k_outbox), {}, k_ceiling, k_budget};
+        ptls::tls_transport client{io, client_cred, stream::stream_inbound_options{}, true, pio::congestion::block, pio::egress_capacity::of_bytes(k_outbox), {}, k_ceiling, k_budget};
 
         std::unique_ptr<ptls::tls_channel> accepted, dialed;
         std::vector<std::byte> got;

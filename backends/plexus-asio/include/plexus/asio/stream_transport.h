@@ -104,7 +104,7 @@ public:
 
 protected:
     template<typename... ListenerArgs>
-    stream_transport(::asio::io_context &io, stream::stream_inbound_config cfg, bool no_delay, io::congestion congestion, io::egress_capacity egress,
+    stream_transport(::asio::io_context &io, stream::stream_inbound_options cfg, bool no_delay, io::congestion congestion, io::egress_capacity egress,
                      stream_socket_options socket_options, ListenerArgs &&...largs)
             : m_io(io)
             , m_listener(std::forward<ListenerArgs>(largs)...)
@@ -163,7 +163,7 @@ private:
 
     ::asio::io_context &m_io;
     Listener m_listener;
-    stream::stream_inbound_config m_cfg;
+    stream::stream_inbound_options m_cfg;
     bool m_no_delay;
     io::congestion m_congestion;
     io::egress_capacity m_egress_capacity;
