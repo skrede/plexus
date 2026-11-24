@@ -150,6 +150,9 @@ for a real reason.
 
 - A member holding a callback or hook (a `move_only_function`) takes a `_cb` suffix and groups with
   the other callbacks in the member list — the suffix marks it as an injected behavior, not state.
+- A topic or procedure is identified by its fully-qualified name. Spell the key `fqn` everywhere:
+  parameters, fields, enumerators. "topic" and "procedure" remain the nouns for the entities
+  (`topics()`, `topic_role`, `topic_qos`, `topic_hash`).
 
 ## Construction
 
