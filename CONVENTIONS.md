@@ -153,6 +153,13 @@ for a real reason.
 - A topic or procedure is identified by its fully-qualified name. Spell the key `fqn` everywhere:
   parameters, fields, enumerators. "topic" and "procedure" remain the nouns for the entities
   (`topics()`, `topic_role`, `topic_qos`, `topic_hash`).
+- A node member that registers something with the node and returns the RAII handle owning that
+  registration is named for the act: `advertise`, `subscribe`, `serve`, `log`, `record`. A function
+  that only builds a value and registers nothing is `make_<type>` (`make_caller`, `make_node`,
+  `make_shm_member`), as in the standard library and asio (`make_shared`, `make_strand`,
+  `make_work_guard`). A static named constructor is `T::make` (`key_pattern::make`).
+  `create`/`open`/`attach` stay only where they mirror an OS or shared-memory verb pair
+  (`broadcast_ring::create`/`attach`, `create_own_event`).
 
 ## Construction
 
