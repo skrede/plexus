@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_EXAMPLE_TOPIC_GRAPH_TYPES_H
-#define HPP_GUARD_PLEXUS_EXAMPLE_TOPIC_GRAPH_TYPES_H
+#ifndef HPP_GUARD_EXAMPLES_MCU_TOPIC_GRAPH_TYPES_H
+#define HPP_GUARD_EXAMPLES_MCU_TOPIC_GRAPH_TYPES_H
 
 // The contract both ends of the topic-propagation example share: the topics they produce, the type
 // identities they declare, and the lookup each runs against its own enumeration surface. It is one

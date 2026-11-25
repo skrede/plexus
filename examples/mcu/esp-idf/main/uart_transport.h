@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_EXAMPLE_UART_TRANSPORT_H
-#define HPP_GUARD_PLEXUS_EXAMPLE_UART_TRANSPORT_H
+#ifndef HPP_GUARD_EXAMPLES_MCU_ESP_IDF_MAIN_UART_TRANSPORT_H
+#define HPP_GUARD_EXAMPLES_MCU_ESP_IDF_MAIN_UART_TRANSPORT_H
 
 // Example-side glue for the on-device serial link. Two pieces live here, both in the
 // EXAMPLE component (never in lib/): the Policy binding that swaps the stub channel for
