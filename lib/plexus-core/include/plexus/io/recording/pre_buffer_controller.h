@@ -151,6 +151,19 @@ public:
     }
 
 private:
+    byte_sink &m_sink;
+    record_stream_writer m_writer;
+    byte_ring m_ring;
+    clock_fn m_clock;
+    freeze_when m_pred;
+    std::size_t m_drain_batch;
+    std::uint64_t m_newest_ts{0};
+    std::uint64_t m_oldest_ts{0};
+    std::uint64_t m_span{0};
+    std::uint64_t m_frozen_tail{0};
+    std::uint64_t m_frozen_head{0};
+    bool m_frozen{false};
+
     void admit(std::span<const std::byte> record, std::uint64_t ts, const record_envelope &env)
     {
         m_newest_ts = ts;
@@ -178,19 +191,6 @@ private:
         wire::reader r{std::span<const std::byte>{head.data() + off + 1u, sizeof(std::uint64_t)}};
         return r.u64();
     }
-
-    byte_sink &m_sink;
-    record_stream_writer m_writer;
-    byte_ring m_ring;
-    clock_fn m_clock;
-    freeze_when m_pred;
-    std::size_t m_drain_batch;
-    std::uint64_t m_newest_ts{0};
-    std::uint64_t m_oldest_ts{0};
-    std::uint64_t m_span{0};
-    std::uint64_t m_frozen_tail{0};
-    std::uint64_t m_frozen_head{0};
-    bool m_frozen{false};
 };
 
 }

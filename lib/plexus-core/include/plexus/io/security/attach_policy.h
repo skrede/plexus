@@ -69,6 +69,13 @@ public:
     }
 
 private:
+    std::vector<keyed_psk> m_keys;
+
+    // The injected MAC is invoked from the const decide() path; the C++20 fallback
+    // move_only_function has a non-const call operator, so the seam holds it mutable
+    // (mirroring cookie_secret).
+    mutable hmac_fn m_hmac;
+
     const keyed_psk *lookup(const std::array<std::byte, k_key_id_len> &id) const noexcept
     {
         for(const auto &k : m_keys)
@@ -83,13 +90,6 @@ private:
     {
         return m_hmac(key.material, attach_proof_input(f), out);
     }
-
-    std::vector<keyed_psk> m_keys;
-
-    // The injected MAC is invoked from the const decide() path; the C++20 fallback
-    // move_only_function has a non-const call operator, so the seam holds it mutable
-    // (mirroring cookie_secret).
-    mutable hmac_fn m_hmac;
 };
 
 // The explicit no-PSK default: admit every peer. The mechanism/policy split — a node

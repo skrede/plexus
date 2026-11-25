@@ -129,6 +129,12 @@ public:
     }
 
 private:
+    std::unique_ptr<Lower> m_lower;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
+    wire_tap m_on_wire;
+    std::uint64_t m_send_seq{0};
+    std::uint64_t m_recv_seq{0};
+
     void wire_lower()
     {
         m_lower->on_data(
@@ -140,12 +146,6 @@ private:
                         m_on_data(bytes);
                 });
     }
-
-    std::unique_ptr<Lower> m_lower;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data;
-    wire_tap m_on_wire;
-    std::uint64_t m_send_seq{0};
-    std::uint64_t m_recv_seq{0};
 };
 
 // A compile-time witness of structural presence: false for any bare channel type, true

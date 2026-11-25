@@ -103,6 +103,14 @@ public:
     }
 
 private:
+    executor_type m_executor;
+    timer_type m_tick;
+    std::chrono::nanoseconds m_granularity;
+    io::detail::pending_ops m_ops;
+    Storage m_storage;
+    plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
+    plexus::detail::move_only_function<void()> m_on_tick_action;
+
     std::uint64_t now_ns() const
     {
         return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count());
@@ -136,14 +144,6 @@ private:
         if(m_on_liveness)
             m_on_liveness(ev);
     }
-
-    executor_type m_executor;
-    timer_type m_tick;
-    std::chrono::nanoseconds m_granularity;
-    io::detail::pending_ops m_ops;
-    Storage m_storage;
-    plexus::detail::move_only_function<void(const liveness_event &)> m_on_liveness;
-    plexus::detail::move_only_function<void()> m_on_tick_action;
 };
 
 }

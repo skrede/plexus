@@ -608,6 +608,38 @@ private:
     template<typename F, typename C>
     friend void detail::forwarder_forget_channel(F &, C &);
 
+    log::logger &m_logger;
+    std::size_t m_global_default;
+    forward_ctx m_forward_ctx;
+    bool m_consume_relayed{true};
+    std::set<node_id> m_relayed_suppressed;
+    detail::forward_dedup_table m_forward_dedup;
+    endpoint_type m_endpoint;
+    std::vector<remembered_demand> m_empty;
+    std::vector<wire::topic_declaration> m_local_declarations;
+    detail::egress_scheduler<channel_type, Policy> m_egress;
+    std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
+    std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
+    // Self-route channel pointers recorded at attach_local, refcounted per fqn: the origination gate
+    // excludes them from non-local demand so a same-node self-route never receives a forwarded envelope.
+    std::unordered_map<const void *, std::size_t> m_self_route_channels;
+    detail::companion_hooks<channel_type> m_companion_hooks;
+    plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)>
+            m_on_forward_refan_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> m_on_originate_cb;
+    plexus::detail::move_only_function<bool(const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>)> m_on_forward_rpc_cb;
+    plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
+    plexus::detail::move_only_function<void(const node_id &, const wire::peer_report &)> m_on_peer_report_cb;
+    plexus::detail::move_only_function<void(const wire::topic_declaration &)> m_on_declaration_cb;
+    plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload_cb;
+    plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change_cb;
+    plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)> m_on_published_cb;
+    plexus::detail::move_only_function<lane_route<channel_type>(std::string_view, std::string_view, std::size_t)> m_companion_route_cb;
+    plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition, demand_role)> m_on_demand_transition_cb;
+    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_info &, const message_view &)> m_on_delivered_cb;
+
     void send_control(channel_type &channel, wire::msg_type type, std::span<const std::byte> inner)
     {
         m_endpoint.send_control(channel, type, inner);
@@ -675,38 +707,6 @@ private:
         if(m_on_qos_change_cb)
             m_on_qos_change_cb(qos_change_event{.edge = edge, .topic_hash = hash, .peer = node_id{}, .requested = requested, .verdict = verdict, .type_id = type_id});
     }
-
-    log::logger &m_logger;
-    std::size_t m_global_default;
-    forward_ctx m_forward_ctx;
-    bool m_consume_relayed{true};
-    std::set<node_id> m_relayed_suppressed;
-    detail::forward_dedup_table m_forward_dedup;
-    endpoint_type m_endpoint;
-    std::vector<remembered_demand> m_empty;
-    std::vector<wire::topic_declaration> m_local_declarations;
-    detail::egress_scheduler<channel_type, Policy> m_egress;
-    std::unordered_map<std::uint64_t, detail::history_ring> m_retained;
-    std::unordered_map<std::string, std::vector<remembered_demand>> m_remote_topics;
-    // Self-route channel pointers recorded at attach_local, refcounted per fqn: the origination gate
-    // excludes them from non-local demand so a same-node self-route never receives a forwarded envelope.
-    std::unordered_map<const void *, std::size_t> m_self_route_channels;
-    detail::companion_hooks<channel_type> m_companion_hooks;
-    plexus::detail::move_only_function<void(const detail::drop_event &)> m_on_drop_cb;
-    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::uint8_t, std::span<const std::byte>, const channel_type *, const wire::shared_bytes *)>
-            m_on_forward_refan_cb;
-    plexus::detail::move_only_function<void(std::uint64_t, const node_id &, std::span<const std::byte>, const channel_type *)> m_on_originate_cb;
-    plexus::detail::move_only_function<bool(const node_id &, const node_id &, std::uint8_t, std::span<const std::byte>)> m_on_forward_rpc_cb;
-    plexus::detail::move_only_function<void(const graph::topic_edge &)> m_on_topic_edge_cb;
-    plexus::detail::move_only_function<void(const node_id &, const wire::peer_report &)> m_on_peer_report_cb;
-    plexus::detail::move_only_function<void(const wire::topic_declaration &)> m_on_declaration_cb;
-    plexus::detail::move_only_function<bool(std::uint64_t)> m_capture_wants_payload_cb;
-    plexus::detail::move_only_function<void(const qos_change_event &)> m_on_qos_change_cb;
-    plexus::detail::move_only_function<void(const node_id &, std::uint64_t)> m_on_data_stamp_cb;
-    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_view &)> m_on_published_cb;
-    plexus::detail::move_only_function<lane_route<channel_type>(std::string_view, std::string_view, std::size_t)> m_companion_route_cb;
-    plexus::detail::move_only_function<void(std::string_view, std::string_view, demand_transition, demand_role)> m_on_demand_transition_cb;
-    plexus::detail::move_only_function<void(std::uint64_t, std::string_view, const message_info &, const message_view &)> m_on_delivered_cb;
 };
 
 }

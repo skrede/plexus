@@ -80,6 +80,9 @@ public:
 
 private:
     static constexpr std::size_t npos = std::numeric_limits<std::size_t>::max();
+    std::vector<std::shared_ptr<std::vector<std::byte>>> m_slots;
+    std::size_t m_slot_bytes;
+    std::uint64_t m_exhaustion_drops{0};
 
     // A slot is free when the pool holds its sole reference; a live checkout (and any downstream
     // addref-share) keeps the use_count above one until the send completes.
@@ -90,10 +93,6 @@ private:
                 return i;
         return npos;
     }
-
-    std::vector<std::shared_ptr<std::vector<std::byte>>> m_slots;
-    std::size_t m_slot_bytes;
-    std::uint64_t m_exhaustion_drops{0};
 };
 
 }

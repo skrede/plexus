@@ -100,6 +100,22 @@ public:
     }
 
 private:
+    log::logger &m_logger;
+    data_consumer m_unidirectional;
+    consumer m_subscribe;
+    consumer m_fetch_latched;
+    consumer m_unsubscribe;
+    consumer m_subscribe_response;
+    consumer m_rpc_request;
+    consumer m_rpc_response;
+    consumer m_handshake_req;
+    consumer m_handshake_resp;
+    consumer m_heartbeat;
+    consumer m_declare;
+    consumer m_peer_report;
+    consumer m_forwarded;
+    companion_consumer m_companion;
+
     void dispatch(const wire::frame_header &hdr, std::span<const std::byte> inner)
     {
         switch(hdr.type)
@@ -176,22 +192,6 @@ private:
     {
         m_logger.warn(message);
     }
-
-    log::logger &m_logger;
-    data_consumer m_unidirectional;
-    consumer m_subscribe;
-    consumer m_fetch_latched;
-    consumer m_unsubscribe;
-    consumer m_subscribe_response;
-    consumer m_rpc_request;
-    consumer m_rpc_response;
-    consumer m_handshake_req;
-    consumer m_handshake_resp;
-    consumer m_heartbeat;
-    consumer m_declare;
-    consumer m_peer_report;
-    consumer m_forwarded;
-    companion_consumer m_companion;
 };
 
 }

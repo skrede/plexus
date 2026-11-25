@@ -133,6 +133,20 @@ public:
     }
 
 private:
+    Transport &m_transport;
+    reconnect_options m_cfg;
+    io::endpoint m_endpoint;
+    io::detail::pending_ops m_ops;
+    timer_type m_backoff_timer;
+    std::mt19937_64 m_rng;
+    typename Clock::time_point m_first_attempt{};
+    std::uint32_t m_attempt{0};
+    bool m_surrendered{false};
+    bool m_dialing{false};
+    bool m_denied{false};
+    plexus::detail::move_only_function<void()> m_on_redial;
+    plexus::detail::move_only_function<void()> m_on_dead;
+
     void schedule_redial()
     {
         if(m_denied)
@@ -176,20 +190,6 @@ private:
         if(m_on_dead)
             m_on_dead();
     }
-
-    Transport &m_transport;
-    reconnect_options m_cfg;
-    io::endpoint m_endpoint;
-    io::detail::pending_ops m_ops;
-    timer_type m_backoff_timer;
-    std::mt19937_64 m_rng;
-    typename Clock::time_point m_first_attempt{};
-    std::uint32_t m_attempt{0};
-    bool m_surrendered{false};
-    bool m_dialing{false};
-    bool m_denied{false};
-    plexus::detail::move_only_function<void()> m_on_redial;
-    plexus::detail::move_only_function<void()> m_on_dead;
 };
 
 }

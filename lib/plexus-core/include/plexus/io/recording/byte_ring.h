@@ -148,6 +148,12 @@ public:
     }
 
 private:
+    std::vector<std::byte> m_owned;
+    std::span<std::byte> m_store;
+    ring_policy m_policy;
+    std::atomic<std::uint64_t> m_head{0};
+    std::atomic<std::uint64_t> m_tail{0};
+
     std::byte &slot(std::uint64_t pos) noexcept
     {
         return m_store[static_cast<std::size_t>(pos % capacity())];
@@ -197,12 +203,6 @@ private:
         if(run < n)
             sink.write({m_store.data(), static_cast<std::size_t>(n) - run});
     }
-
-    std::vector<std::byte> m_owned;
-    std::span<std::byte> m_store;
-    ring_policy m_policy;
-    std::atomic<std::uint64_t> m_head{0};
-    std::atomic<std::uint64_t> m_tail{0};
 };
 
 }

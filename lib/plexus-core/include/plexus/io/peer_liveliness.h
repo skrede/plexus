@@ -122,6 +122,12 @@ public:
     }
 
 private:
+    std::uint64_t m_miss_window_ns;
+    combine m_policy;
+    std::size_t m_subscribers;
+    Storage m_storage;
+    plexus::detail::move_only_function<void(const peer_liveliness_event &)> m_on_verdict;
+
     static std::uint64_t miss_window(const liveliness_options &opts)
     {
         const std::uint64_t interval = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(opts.heartbeat_interval).count());
@@ -164,12 +170,6 @@ private:
         const detail::signal_view sv = derive(state, now_ns);
         return state.verdict_seen && !state.alive_latched && !sv.session_up && !sv.aware && !sv.hb_fresh;
     }
-
-    std::uint64_t m_miss_window_ns;
-    combine m_policy;
-    std::size_t m_subscribers;
-    Storage m_storage;
-    plexus::detail::move_only_function<void(const peer_liveliness_event &)> m_on_verdict;
 };
 
 }

@@ -157,6 +157,12 @@ public:
     }
 
 private:
+    splice_pool m_pool;
+    splice_ownership m_mode;
+    bool m_scope_all;
+    std::optional<match::key_pattern> m_scope;
+    std::uint16_t m_seq{0};
+
     // Gate the encoded envelope against the slot capacity BEFORE encoding: an envelope too large for a
     // slot drops-with-count (splice_oversize) rather than overrunning it; an exhausted pool drops-with-count
     // (splice_exhausted). The zero-copy path retains the inbound owner with no slot and cannot overrun.
@@ -173,12 +179,6 @@ private:
             return {wire_bytes<>{}, detail::drop_cause::splice_exhausted};
         return {std::move(bytes), detail::drop_cause::none};
     }
-
-    splice_pool m_pool;
-    splice_ownership m_mode;
-    bool m_scope_all;
-    std::optional<match::key_pattern> m_scope;
-    std::uint16_t m_seq{0};
 };
 
 }

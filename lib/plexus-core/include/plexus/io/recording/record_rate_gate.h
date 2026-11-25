@@ -75,6 +75,10 @@ private:
         bool has_last{false};
     };
 
+    std::unordered_map<std::uint64_t, record_rate_rule> m_rules;
+    std::unordered_map<std::uint64_t, topic_state> m_state;
+    bool m_needs_clock;
+
     static bool nth_elapsed(topic_state &st, std::uint32_t every_nth)
     {
         const bool take = every_nth == 0 || (st.seen % every_nth) == 0;
@@ -93,10 +97,6 @@ private:
         st.has_last = true;
         return true;
     }
-
-    std::unordered_map<std::uint64_t, record_rate_rule> m_rules;
-    std::unordered_map<std::uint64_t, topic_state> m_state;
-    bool m_needs_clock;
 };
 
 }

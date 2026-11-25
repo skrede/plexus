@@ -194,6 +194,9 @@ private:
         bool binding_invalid{false};
     };
 
+    std::array<entry, N> m_slots{};
+    std::size_t m_dropped{0};
+
     entry *find(const node_id &id)
     {
         for(entry &e : m_slots)
@@ -209,9 +212,6 @@ private:
                 return &e;
         return nullptr;
     }
-
-    std::array<entry, N> m_slots{};
-    std::size_t m_dropped{0};
 
     template<typename S>
     friend bool detail::admit_identity_candidate(S &, const node_id &, const route_candidate &, std::uint64_t, const route_options &);

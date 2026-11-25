@@ -109,14 +109,6 @@ public:
     }
 
 private:
-    // HMAC over the packed [peer_addr || nonce]: assemble the message once, MAC it.
-    bool mac(std::span<const std::byte> peer_addr, const std::array<std::byte, 16> &nonce, std::span<std::byte> out) const
-    {
-        std::vector<std::byte> msg(peer_addr.begin(), peer_addr.end());
-        msg.insert(msg.end(), nonce.begin(), nonce.end());
-        return m_hmac(m_key, msg, out);
-    }
-
     std::array<std::byte, 32> m_key{}; // process-random HMAC key
     std::array<std::byte, 16> m_cur{};
     std::array<std::byte, 16> m_prev{};
@@ -128,6 +120,14 @@ private:
     // is an implementation detail of a logically-const cookie query, not observable state.
     mutable hmac_fn m_hmac;
     mutable rand_fn m_rand;
+
+    // HMAC over the packed [peer_addr || nonce]: assemble the message once, MAC it.
+    bool mac(std::span<const std::byte> peer_addr, const std::array<std::byte, 16> &nonce, std::span<std::byte> out) const
+    {
+        std::vector<std::byte> msg(peer_addr.begin(), peer_addr.end());
+        msg.insert(msg.end(), nonce.begin(), nonce.end());
+        return m_hmac(m_key, msg, out);
+    }
 };
 
 }

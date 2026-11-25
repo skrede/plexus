@@ -67,12 +67,12 @@ public:
     }
 
 private:
+    selector m_selector;
+
     explicit network_interface(selector which)
             : m_selector(std::move(which))
     {
     }
-
-    selector m_selector;
 };
 
 }

@@ -77,6 +77,8 @@ private:
         bool occupied{false};
     };
 
+    std::array<slot, N> m_slots{};
+
     slot *locate(const Key &key)
     {
         for(slot &s : m_slots)
@@ -92,8 +94,6 @@ private:
                 return &s;
         return nullptr;
     }
-
-    std::array<slot, N> m_slots{};
 };
 
 }

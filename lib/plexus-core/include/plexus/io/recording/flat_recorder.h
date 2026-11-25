@@ -101,6 +101,15 @@ public:
     }
 
 private:
+    byte_sink &m_sink;
+    record_stream_writer m_writer;
+    std::vector<std::byte> m_preamble;
+    byte_ring m_ring;
+    dropout_run m_dropouts;
+    clock_fn m_clock;
+    std::size_t m_drain_batch;
+    std::uint32_t m_records;
+
     void admit(std::span<const std::byte> record, std::uint64_t would_be_bytes, capture_fidelity fidelity)
     {
         maybe_sync();
@@ -131,15 +140,6 @@ private:
         const dropout_record dr = m_dropouts.harvest(m_clock());
         m_ring.try_push(m_writer.dropout(dr));
     }
-
-    byte_sink &m_sink;
-    record_stream_writer m_writer;
-    std::vector<std::byte> m_preamble;
-    byte_ring m_ring;
-    dropout_run m_dropouts;
-    clock_fn m_clock;
-    std::size_t m_drain_batch;
-    std::uint32_t m_records;
 };
 
 }

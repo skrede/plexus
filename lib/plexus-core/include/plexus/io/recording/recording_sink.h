@@ -104,6 +104,13 @@ public:
     }
 
 private:
+    Recorder &m_recorder;
+    const message_info m_empty_info;
+    record_rate_gate m_rate_gate;
+    plexus::detail::move_only_function<std::uint64_t()> m_clock;
+    plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> m_fidelity_resolver;
+    plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> m_type_id_resolver;
+
     void record_message(std::string_view fqn, const message_info &info, const message_view &v)
     {
         const std::uint64_t hash = wire::fqn_topic_hash(fqn);
@@ -114,13 +121,6 @@ private:
         const std::optional<std::uint64_t> id  = m_type_id_resolver ? m_type_id_resolver(hash) : std::nullopt;
         m_recorder.record_sample(hash, info, id.value_or(0), id.has_value(), fidelity, bytes);
     }
-
-    Recorder &m_recorder;
-    const message_info m_empty_info;
-    record_rate_gate m_rate_gate;
-    plexus::detail::move_only_function<std::uint64_t()> m_clock;
-    plexus::detail::move_only_function<capture_fidelity(std::uint64_t)> m_fidelity_resolver;
-    plexus::detail::move_only_function<std::optional<std::uint64_t>(std::uint64_t)> m_type_id_resolver;
 };
 
 template<typename Recorder>
