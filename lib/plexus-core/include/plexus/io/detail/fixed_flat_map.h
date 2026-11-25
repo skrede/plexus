@@ -84,6 +84,7 @@ private:
                 return &s;
         return nullptr;
     }
+
     const slot *locate(const Key &key) const
     {
         for(const slot &s : m_slots)

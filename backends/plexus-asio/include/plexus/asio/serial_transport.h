@@ -139,6 +139,7 @@ private:
         if(m_on_dial_failed_cb)
             m_on_dial_failed_cb(ep, e);
     }
+
     void report_error(io::io_error e)
     {
         if(m_on_error_cb)

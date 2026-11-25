@@ -201,6 +201,7 @@ private:
                 return &e;
         return nullptr;
     }
+
     const entry *find(const node_id &id) const
     {
         for(const entry &e : m_slots)

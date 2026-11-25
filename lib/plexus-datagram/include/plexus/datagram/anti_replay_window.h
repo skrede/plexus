@@ -106,6 +106,7 @@ private:
     {
         m_bitmap[b / k_word_bits] |= (1ull << (b % k_word_bits));
     }
+
     bool test_bit(std::size_t b) const noexcept
     {
         return (m_bitmap[b / k_word_bits] & (1ull << (b % k_word_bits))) != 0u;
