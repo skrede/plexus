@@ -218,7 +218,15 @@ initialization-order constraint in **Construction**.
 
 ## Header guards and namespaces
 
-- Use header guards, not `#pragma once`. Format: `HPP_GUARD_<NAMESPACE>_<FOLDER>_FILENAME_H`.
+- Use header guards, not `#pragma once`. Format: `HPP_GUARD_<NAMESPACE>_<FOLDER>_FILENAME_H`, spelled from the
+  header's path: below its `include/` (or `shm-include/`) directory for a library or tool header
+  (`plexus/io/peer_session.h` is `HPP_GUARD_PLEXUS_IO_PEER_SESSION_H`) and for an example header under such a
+  directory, and from the repository root for every other test, example or benchmark header
+  (`tests/integration/engine/foo.h` is `HPP_GUARD_TESTS_INTEGRATION_ENGINE_FOO_H`, `examples/mcu/esp-idf/main/foo.h`
+  is `HPP_GUARD_EXAMPLES_MCU_ESP_IDF_MAIN_FOO_H`, `benchmarks/relay/foo.h` is `HPP_GUARD_BENCHMARKS_RELAY_FOO_H`).
+  Every character that is not a letter or digit becomes `_`, and a `.h.example` template carries the guard its copy
+  will. The header-guard gate checks every tracked library, tool, test, example and benchmark header and template,
+  and fails the build on a violation or on two headers deriving one guard.
 - Do not write a `// namespace X` comment after a closing namespace brace.
 - Do not write a comment after `#endif` restating the guard macro.
 
