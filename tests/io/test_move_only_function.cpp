@@ -97,7 +97,7 @@ TEST_CASE("move_only_function move-construct transfers the target and empties th
     move_only_function<int(int)> dst{std::move(src)};
 
     REQUIRE(static_cast<bool>(dst));
-    REQUIRE_FALSE(static_cast<bool>(src)); // NOLINT(bugprone-use-after-move)
+    REQUIRE_FALSE(static_cast<bool>(src));
     REQUIRE(dst(1) == 101);
 }
 
@@ -109,7 +109,7 @@ TEST_CASE("move_only_function move-assign transfers the target and empties the s
     dst = std::move(src);
 
     REQUIRE(static_cast<bool>(dst));
-    REQUIRE_FALSE(static_cast<bool>(src)); // NOLINT(bugprone-use-after-move)
+    REQUIRE_FALSE(static_cast<bool>(src));
     REQUIRE(dst(2) == 202);
 }
 
@@ -119,6 +119,6 @@ TEST_CASE("move_only_function move transfers a heap-spilled target", "[io][move_
     move_only_function<int(int)> dst{std::move(src)};
 
     REQUIRE(static_cast<bool>(dst));
-    REQUIRE_FALSE(static_cast<bool>(src)); // NOLINT(bugprone-use-after-move)
+    REQUIRE_FALSE(static_cast<bool>(src));
     REQUIRE(dst(3) == 10);
 }
