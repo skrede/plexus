@@ -75,7 +75,11 @@ jobs:
 
       - name: install linux dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y liburing-dev ccache clang-tidy
+        run: sudo apt-get update && sudo apt-get install -y liburing-dev ccache
+
+      - name: install clang-tidy for the function-size gate
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/clang-tidy
 
       # Ubuntu 24.04 ships liburing 2.5, which lacks io_uring_prep_futex_wait (added in 2.6). The
       # stock legs above exercise ring_notifier's threaded floor; this leg builds a newer liburing
@@ -225,6 +229,9 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y liburing-dev gcc-14 g++-14
           pip install gcovr
+
+      - name: install clang-tidy for the function-size gate
+        uses: ./.github/actions/clang-tidy
 
       # Threaded tests race gcov's plain counters into negative hit counts, which gcovr refuses
       # (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68080); atomic profile updates keep them exact.

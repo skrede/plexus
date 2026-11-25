@@ -1,0 +1,37 @@
+name: clang-tidy for the function-size gate
+description: >-
+  Installs clang-tidy from LLVM's apt repository and puts its bin directory first on PATH. The function-size gate needs
+  clang-tidy 21 or newer: an older one reports no length for a one-line `{}` body, so a sanctioned constructor reads as
+  a stale row, and Ubuntu 24.04 ships 18. run-clang-tidy runs whichever clang-tidy PATH finds first, so both names must
+  resolve to the pinned version.
+
+inputs:
+  llvm-major:
+    description: The LLVM major release to install, LLVM's stable branch.
+    default: "23"
+
+runs:
+  using: composite
+  steps:
+    - name: install clang-tidy ${{ inputs.llvm-major }}
+      shell: bash
+      env:
+        LLVM_MAJOR: ${{ inputs.llvm-major }}
+      run: |
+        set -euo pipefail
+        sudo install -d -m 0755 /etc/apt/keyrings
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null
+        echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-${LLVM_MAJOR} main" \
+          | sudo tee /etc/apt/sources.list.d/apt.llvm.org.list
+        sudo apt-get update && sudo apt-get install -y "clang-tidy-${LLVM_MAJOR}"
+        echo "/usr/lib/llvm-${LLVM_MAJOR}/bin" >> "$GITHUB_PATH"
+
+    - name: check the gate's clang-tidy
+      shell: bash
+      env:
+        LLVM_MAJOR: ${{ inputs.llvm-major }}
+      run: |
+        set -euo pipefail
+        test "$(command -v run-clang-tidy)" = "/usr/lib/llvm-${LLVM_MAJOR}/bin/run-clang-tidy"
+        test "$(command -v clang-tidy)" = "/usr/lib/llvm-${LLVM_MAJOR}/bin/clang-tidy"
+        clang-tidy --version
