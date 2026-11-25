@@ -89,6 +89,16 @@ public:
     }
 
 private:
+    static constexpr std::size_t k_index_width = 6;
+
+    options m_opts;
+    std::vector<std::filesystem::path> m_segments;
+    std::unique_ptr<file_sink> m_active;
+    std::vector<std::byte> m_preamble;
+    std::size_t m_segment_bytes;
+    std::size_t m_index;
+    std::chrono::steady_clock::time_point m_opened_at;
+
     bool should_rotate(std::size_t incoming) const
     {
         if(m_segment_bytes == 0)
@@ -128,16 +138,6 @@ private:
             m_segments.erase(m_segments.begin());
         }
     }
-
-    static constexpr std::size_t k_index_width = 6;
-
-    options m_opts;
-    std::vector<std::filesystem::path> m_segments;
-    std::unique_ptr<file_sink> m_active;
-    std::vector<std::byte> m_preamble;
-    std::size_t m_segment_bytes;
-    std::size_t m_index;
-    std::chrono::steady_clock::time_point m_opened_at;
 };
 
 }

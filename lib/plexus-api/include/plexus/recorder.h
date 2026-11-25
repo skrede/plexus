@@ -166,6 +166,14 @@ public:
     }
 
 private:
+    // The block-held rearm closure owns the executor, so a move of the recorder cannot leave it aliasing a destroyed member.
+    using held_executor = detail::held_executor<typename Engine::executor_type>;
+
+    Engine *m_engine;
+    typename Engine::executor_type m_executor;
+    std::shared_ptr<block> m_block;
+    std::unique_ptr<io::observer> m_sink;
+
     // Deregister the sink FIRST, then drain the ring out to it and flush.
     void drain_to_sink()
     {
@@ -209,14 +217,6 @@ private:
             need += wire::varint_size(s.type_id) + blob(0) + blob(s.message_encoding.size()) + blob(s.schema_name.size()) + blob(s.schema_encoding.size()) + blob(s.schema_data.size());
         return std::max(k_default_scratch, need);
     }
-
-    // The block-held rearm closure owns the executor, so a move of the recorder cannot leave it aliasing a destroyed member.
-    using held_executor = detail::held_executor<typename Engine::executor_type>;
-
-    Engine *m_engine;
-    typename Engine::executor_type m_executor;
-    std::shared_ptr<block> m_block;
-    std::unique_ptr<io::observer> m_sink;
 };
 
 }

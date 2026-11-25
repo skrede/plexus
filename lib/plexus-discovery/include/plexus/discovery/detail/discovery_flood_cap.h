@@ -51,6 +51,9 @@ public:
     }
 
 private:
+    flood_cap_options m_options;
+    std::unordered_map<std::string, source_state> m_peers;
+
     bool rate_limited() const noexcept
     {
         return m_options.per_source_max != 0;
@@ -119,9 +122,6 @@ private:
                 oldest = it;
         m_peers.erase(oldest);
     }
-
-    flood_cap_options m_options;
-    std::unordered_map<std::string, source_state> m_peers;
 };
 
 }

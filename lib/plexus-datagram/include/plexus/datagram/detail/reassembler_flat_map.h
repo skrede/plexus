@@ -65,13 +65,13 @@ public:
     }
 
 private:
+    std::size_t m_max_entries;
+    container m_entries;
+
     iterator lower_bound(key_type key) noexcept
     {
         return std::lower_bound(m_entries.begin(), m_entries.end(), key, [](const value_type &e, key_type k) { return e.first < k; });
     }
-
-    std::size_t m_max_entries;
-    container m_entries;
 };
 
 // The cheapest admissible open charges at least min_entry_cost, so the byte cap admits at most this

@@ -83,6 +83,11 @@ public:
 private:
     friend class slot_publisher;
 
+    std::size_t m_filled;
+    std::uint64_t m_position;
+    std::span<std::byte> m_slot;
+    std::optional<std::reference_wrapper<broadcast_ring>> m_ring;
+
     loaned_buffer(broadcast_ring &ring, std::span<std::byte> slot, std::uint64_t position) noexcept
             : m_filled(0)
             , m_position(position)
@@ -104,11 +109,6 @@ private:
         m_slot   = {};
         m_ring.reset();
     }
-
-    std::size_t m_filled;
-    std::uint64_t m_position;
-    std::span<std::byte> m_slot;
-    std::optional<std::reference_wrapper<broadcast_ring>> m_ring;
 };
 
 }

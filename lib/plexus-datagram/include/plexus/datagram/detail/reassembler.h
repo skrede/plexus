@@ -121,6 +121,15 @@ private:
         std::unique_ptr<Timer> timer;
     };
 
+    Executor m_executor;
+    config m_cfg;
+    plexus::io::detail::pending_ops m_pending;
+    reassembler_flat_map<entry> m_table;
+    std::size_t m_held{0};
+    bool m_dead{false};
+    deliver_sink m_on_deliver;
+    drop_sink m_on_drop;
+
     outcome admit_fragment(std::uint16_t msg_id, std::uint32_t frag_idx, std::uint32_t frag_cnt, std::span<const std::byte> bytes)
     {
         auto it = m_table.find(msg_id);
@@ -209,15 +218,6 @@ private:
         m_held -= it->second.size + it->second.overhead;
         m_table.erase(it);
     }
-
-    Executor m_executor;
-    config m_cfg;
-    plexus::io::detail::pending_ops m_pending;
-    reassembler_flat_map<entry> m_table;
-    std::size_t m_held{0};
-    bool m_dead{false};
-    deliver_sink m_on_deliver;
-    drop_sink m_on_drop;
 };
 
 }

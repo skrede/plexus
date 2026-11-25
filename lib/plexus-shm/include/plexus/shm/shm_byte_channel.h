@@ -166,18 +166,6 @@ public:
     }
 
 private:
-    void notify_closed()
-    {
-        m_close_notification.notify([this](plexus::detail::move_only_function<void()> notify) { m_post(std::move(notify)); });
-    }
-
-    // The engine binds m_on_drop to its posted drop_sink, so the emit reaches the fan-out POSTED.
-    void emit_drop()
-    {
-        if(m_on_drop)
-            m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::blocked, .transport = io::locality::local});
-    }
-
     registry_type &m_registry;
     post_fn &m_post;
     shm_channel<Notifier> &m_channel;
@@ -193,6 +181,18 @@ private:
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
     plexus::detail::move_only_function<void(const io::detail::drop_event &)> m_on_drop;
     plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close;
+
+    void notify_closed()
+    {
+        m_close_notification.notify([this](plexus::detail::move_only_function<void()> notify) { m_post(std::move(notify)); });
+    }
+
+    // The engine binds m_on_drop to its posted drop_sink, so the emit reaches the fan-out POSTED.
+    void emit_drop()
+    {
+        if(m_on_drop)
+            m_on_drop(io::detail::drop_event{.cause = io::detail::drop_cause::blocked, .transport = io::locality::local});
+    }
 };
 
 }

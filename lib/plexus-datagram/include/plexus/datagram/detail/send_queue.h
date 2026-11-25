@@ -88,6 +88,18 @@ private:
         Endpoint dest;
     };
 
+    // The spare-buffer pool's node-count ceiling: the byte cap bounds the live queue, this
+    // independently bounds the idle pool so a momentary deep burst cannot leave an unbounded pool.
+    static constexpr std::size_t k_max_free_buffers = 64;
+
+    send_sink m_sink;
+    std::size_t m_byte_cap;
+    std::deque<node> m_queue;
+    std::vector<std::vector<std::byte>> m_free_buffers;
+    std::size_t m_bytes{0};
+    bool m_open{true};
+    bool m_sending{false};
+
     // Compare-before-add: a frame fits only when the cap is not already met AND its size is within
     // the remaining budget (cap - bytes, with bytes < cap by the first clause, cannot overflow).
     bool admits(std::size_t size) const noexcept
@@ -139,18 +151,6 @@ private:
                    drive();
                });
     }
-
-    // The spare-buffer pool's node-count ceiling: the byte cap bounds the live queue, this
-    // independently bounds the idle pool so a momentary deep burst cannot leave an unbounded pool.
-    static constexpr std::size_t k_max_free_buffers = 64;
-
-    send_sink m_sink;
-    std::size_t m_byte_cap;
-    std::deque<node> m_queue;
-    std::vector<std::vector<std::byte>> m_free_buffers;
-    std::size_t m_bytes{0};
-    bool m_open{true};
-    bool m_sending{false};
 };
 
 }

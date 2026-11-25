@@ -227,12 +227,6 @@ private:
     template<typename M>
     friend detail::shm_resolved_geometry detail::mux_resolve(const M &, const std::string &, shm::ring_direction);
 
-    void report_dial_fail(const io::endpoint &ep, io::io_error e)
-    {
-        if(m_on_dial_failed)
-            m_on_dial_failed(ep, e);
-    }
-
     registry_type m_registry;
     post_fn m_post;
     node_id m_self;
@@ -244,6 +238,12 @@ private:
     plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const io::endpoint &)> m_on_dialed;
     plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed;
     plexus::detail::move_only_function<void(io::io_error)> m_on_error;
+
+    void report_dial_fail(const io::endpoint &ep, io::io_error e)
+    {
+        if(m_on_dial_failed)
+            m_on_dial_failed(ep, e);
+    }
 };
 
 }

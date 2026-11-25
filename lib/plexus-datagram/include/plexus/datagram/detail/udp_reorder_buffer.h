@@ -98,6 +98,12 @@ private:
         bool fragmented{false};
     };
 
+    std::size_t m_window;
+    std::vector<slot> m_slots;
+    std::size_t m_base{0}; // ring index of `expected`
+    std::uint16_t m_expected{0};
+    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver;
+
     // Release the run of contiguous present slots from the base until the next gap, advancing
     // expected and the ring base past each; the vacated slot's capacity is retained for reuse.
     void drain_contiguous()
@@ -112,12 +118,6 @@ private:
             m_base = (m_base + 1) % m_window;
         }
     }
-
-    std::size_t m_window;
-    std::vector<slot> m_slots;
-    std::size_t m_base{0}; // ring index of `expected`
-    std::uint16_t m_expected{0};
-    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver;
 };
 
 }

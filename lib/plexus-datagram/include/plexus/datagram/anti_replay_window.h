@@ -99,6 +99,9 @@ public:
 private:
     static constexpr std::size_t k_word_bits = 64;
     static constexpr std::size_t k_words     = (Width + k_word_bits - 1) / k_word_bits;
+    std::array<std::uint64_t, k_words> m_bitmap{};
+    std::uint64_t m_highest{0};
+    bool m_seen_any{false};
 
     // Bit b counts slots BELOW m_highest: bit 0 is m_highest itself, bit k is the
     // sequence m_highest - k.
@@ -146,10 +149,6 @@ private:
         if constexpr(top_bits != 0)
             m_bitmap[k_words - 1] &= (1ull << top_bits) - 1u;
     }
-
-    std::array<std::uint64_t, k_words> m_bitmap{};
-    std::uint64_t m_highest{0};
-    bool m_seen_any{false};
 };
 
 }

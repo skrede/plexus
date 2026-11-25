@@ -144,6 +144,14 @@ public:
     }
 
 private:
+    broadcast_ring &m_ring;
+    std::uint32_t m_spin_budget;
+    std::uint32_t m_cursor_index;
+    std::uint32_t m_generation;
+    std::uint64_t m_cursor;
+    bool m_registered;
+    detail::mapping_pin m_mapping;
+
     // Spin (relaxing the core) within the budget so a back-to-back arrival is caught before
     // reporting empty; true past the budget hands off to the backend futex park (~0% CPU idle).
     bool spin_or_give_up(std::uint32_t &spun) noexcept
@@ -181,14 +189,6 @@ private:
         ++m_cursor;
         m_ring.publish_cursor(m_cursor_index, m_cursor);
     }
-
-    broadcast_ring &m_ring;
-    std::uint32_t m_spin_budget;
-    std::uint32_t m_cursor_index;
-    std::uint32_t m_generation;
-    std::uint64_t m_cursor;
-    bool m_registered;
-    detail::mapping_pin m_mapping;
 };
 
 }

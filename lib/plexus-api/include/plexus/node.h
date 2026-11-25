@@ -523,6 +523,58 @@ private:
 
     using registration_id = std::uint64_t;
 
+    plexus::node_id m_id;
+    executor_type m_executor;
+    discovery::discovery &m_disc;
+    // Declared immediately ABOVE m_logger so it is fully constructed before resolve_logger binds
+    // either reference in the init list when no logger is supplied.
+    log::null_logger m_default_logger;
+    log::logger &m_logger;
+    mutable bool m_relay_posture_warned{false};
+    std::string m_service_name;
+    std::string m_host;
+    std::vector<discovery::listening_transport> m_listens;
+    std::size_t m_max_message_bytes;
+    wire_crypto_position m_wire_crypto_position;
+    io::detail::pending_ops m_ops;
+    io::detail::close_notification m_close_notification;
+
+    // The non-movable mux is never a prvalue, so the empty single-transport glue keeps its
+    // zero-size overlap under [[no_unique_address]].
+    [[no_unique_address]] detail::node_mux_glue<Transports...> m_glue;
+
+    engine_transport &m_leaf;
+
+    // Declared BEFORE the engine (which captures &m_peer_watch and a `this`-bound route) so the
+    // engine is destroyed FIRST, leaving no dangling observer/route reference during teardown.
+    peer_watch m_peer_watch{*this};
+    detail::subscription_table m_subscriptions;
+
+    std::vector<std::string> m_served_fqns;
+    std::size_t m_object_dispatch_mismatch{};
+
+    // The node-owned self-route, attached to its OWN forwarder so a publish reaches a same-node
+    // subscriber. Declared BEFORE m_engine so it outlives the registry references that hold it.
+    // It is only wired when the pack carries an intra-node transport; on any other node it is idle.
+    io::process_loopback_channel<policy_type> m_self_channel;
+
+    // On a multi-transport node the registry holds reference_wrapper<polymorphic_byte_channel>, so the
+    // concrete self-channel is erased through a non-owning reference adapter (the node keeps owning
+    // m_self_channel). [[no_unique_address]] on the single-transport monostate keeps it zero-size.
+    using self_route_holder = std::conditional_t<k_self_route_erased, io::polymorphic_byte_channel, detail::no_self_route_wrapper>;
+    [[no_unique_address]] self_route_holder m_self_route{detail::make_self_route<self_route_holder>(m_self_channel)};
+
+    // Live local-publisher count per fqn. It settles two questions: the node's own publisher edge
+    // retires on the last handle rather than the first, and the shm self-ring mints only when a
+    // same-node publisher and subscriber coexist (so a node that only talks remote mints no region).
+    std::unordered_map<std::string, std::size_t> m_local_publishers;
+
+    // The read half of each topic's shm self-carrier (the fallback self-route when no intra-node transport serves self);
+    // its write half is the coordinator's lane for the topic.
+    std::unordered_map<std::string, std::shared_ptr<void>> m_self_carriers;
+
+    engine_type m_engine;
+
     void affine(const char *member) const noexcept
     {
         detail::check_affinity<policy_type>(m_executor, member);
@@ -734,58 +786,6 @@ private:
         else
             return m_glue;
     }
-
-    plexus::node_id m_id;
-    executor_type m_executor;
-    discovery::discovery &m_disc;
-    // Declared immediately ABOVE m_logger so it is fully constructed before resolve_logger binds
-    // either reference in the init list when no logger is supplied.
-    log::null_logger m_default_logger;
-    log::logger &m_logger;
-    mutable bool m_relay_posture_warned{false};
-    std::string m_service_name;
-    std::string m_host;
-    std::vector<discovery::listening_transport> m_listens;
-    std::size_t m_max_message_bytes;
-    wire_crypto_position m_wire_crypto_position;
-    io::detail::pending_ops m_ops;
-    io::detail::close_notification m_close_notification;
-
-    // The non-movable mux is never a prvalue, so the empty single-transport glue keeps its
-    // zero-size overlap under [[no_unique_address]].
-    [[no_unique_address]] detail::node_mux_glue<Transports...> m_glue;
-
-    engine_transport &m_leaf;
-
-    // Declared BEFORE the engine (which captures &m_peer_watch and a `this`-bound route) so the
-    // engine is destroyed FIRST, leaving no dangling observer/route reference during teardown.
-    peer_watch m_peer_watch{*this};
-    detail::subscription_table m_subscriptions;
-
-    std::vector<std::string> m_served_fqns;
-    std::size_t m_object_dispatch_mismatch{};
-
-    // The node-owned self-route, attached to its OWN forwarder so a publish reaches a same-node
-    // subscriber. Declared BEFORE m_engine so it outlives the registry references that hold it.
-    // It is only wired when the pack carries an intra-node transport; on any other node it is idle.
-    io::process_loopback_channel<policy_type> m_self_channel;
-
-    // On a multi-transport node the registry holds reference_wrapper<polymorphic_byte_channel>, so the
-    // concrete self-channel is erased through a non-owning reference adapter (the node keeps owning
-    // m_self_channel). [[no_unique_address]] on the single-transport monostate keeps it zero-size.
-    using self_route_holder = std::conditional_t<k_self_route_erased, io::polymorphic_byte_channel, detail::no_self_route_wrapper>;
-    [[no_unique_address]] self_route_holder m_self_route{detail::make_self_route<self_route_holder>(m_self_channel)};
-
-    // Live local-publisher count per fqn. It settles two questions: the node's own publisher edge
-    // retires on the last handle rather than the first, and the shm self-ring mints only when a
-    // same-node publisher and subscriber coexist (so a node that only talks remote mints no region).
-    std::unordered_map<std::string, std::size_t> m_local_publishers;
-
-    // The read half of each topic's shm self-carrier (the fallback self-route when no intra-node transport serves self);
-    // its write half is the coordinator's lane for the topic.
-    std::unordered_map<std::string, std::shared_ptr<void>> m_self_carriers;
-
-    engine_type m_engine;
 
     template<typename N, typename F>
     friend void detail::for_each_demand_target(N &, F &&);

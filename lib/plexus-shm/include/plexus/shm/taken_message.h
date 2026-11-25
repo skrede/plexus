@@ -96,6 +96,11 @@ private:
     friend class slot_subscriber;
     friend struct ::plexus::shm::test::handle_test_access;
 
+    const std::byte *m_payload;
+    std::size_t m_length;
+    std::atomic<std::uint32_t> *m_refcount;
+    detail::mapping_pin m_mapping;
+
     taken_message(const std::byte *payload, std::size_t length, std::atomic<std::uint32_t> *refcount) noexcept
             : m_payload(payload)
             , m_length(length)
@@ -126,11 +131,6 @@ private:
         m_refcount = nullptr;
         m_mapping.reset();
     }
-
-    const std::byte *m_payload;
-    std::size_t m_length;
-    std::atomic<std::uint32_t> *m_refcount;
-    detail::mapping_pin m_mapping;
 };
 
 }

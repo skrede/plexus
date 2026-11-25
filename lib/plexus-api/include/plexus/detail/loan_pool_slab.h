@@ -113,6 +113,8 @@ public:
     }
 
 private:
+    slab_control<T> *m_control;
+
     // The node is recovered from its control member's offset, its control block from the back-pointer —
     // T is known statically here, never a cast across an erased boundary.
     static void release_slot(io::loan_slot *control) noexcept
@@ -144,8 +146,6 @@ private:
             destroy_control(m_control);
         m_control = nullptr;
     }
-
-    slab_control<T> *m_control;
 };
 
 }

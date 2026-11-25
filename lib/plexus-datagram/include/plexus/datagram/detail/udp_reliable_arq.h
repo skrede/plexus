@@ -185,6 +185,20 @@ private:
         bool fragmented{false};
     };
 
+    Executor m_executor;
+    udp_arq_options m_cfg;
+    seq_ring<slot> m_slots;
+    udp_reorder_buffer m_recv;
+    std::uint16_t m_next{0};
+    udp_rto_estimator m_rto;
+    plexus::io::detail::pending_ops m_pending;
+    bool m_dead{false};
+    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> m_on_transmit;
+    plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;
+    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver_seq;
+    plexus::detail::move_only_function<void()> m_on_exhausted;
+    plexus::detail::move_only_function<void()> m_on_window_advance;
+
     void transmit(std::uint16_t seq, slot &s)
     {
         if(m_on_transmit)
@@ -274,20 +288,6 @@ private:
         if(m_on_exhausted)
             m_on_exhausted();
     }
-
-    Executor m_executor;
-    udp_arq_options m_cfg;
-    seq_ring<slot> m_slots;
-    udp_reorder_buffer m_recv;
-    std::uint16_t m_next{0};
-    udp_rto_estimator m_rto;
-    plexus::io::detail::pending_ops m_pending;
-    bool m_dead{false};
-    plexus::detail::move_only_function<void(std::uint16_t, std::span<const std::byte>, bool)> m_on_transmit;
-    plexus::detail::move_only_function<void(const wire::udp_ack &)> m_on_send_ack;
-    plexus::detail::move_only_function<void(std::uint16_t, bool, std::span<const std::byte>)> m_on_deliver_seq;
-    plexus::detail::move_only_function<void()> m_on_exhausted;
-    plexus::detail::move_only_function<void()> m_on_window_advance;
 };
 
 }

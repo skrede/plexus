@@ -69,6 +69,8 @@ public:
 private:
     friend class loan_pool<T>;
 
+    io::loan_slot *m_slot{};
+
     explicit loan(io::loan_slot *slot) noexcept
             : m_slot(slot)
     {
@@ -93,8 +95,6 @@ private:
             io::release(carrier);
         }
     }
-
-    io::loan_slot *m_slot{};
 };
 
 // A fixed-capacity, alloc-free object pool for T over a loan_slab. Each slot carries an

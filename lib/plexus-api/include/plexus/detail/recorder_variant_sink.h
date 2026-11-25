@@ -96,6 +96,13 @@ public:
     }
 
 private:
+    recorder_block &m_block;
+    const io::message_info m_empty_info;
+    io::recording::record_rate_gate m_rate_gate;
+    plexus::detail::move_only_function<std::uint64_t()> m_clock;
+    plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> m_fidelity_resolver;
+    type_id_resolver m_type_id_resolver;
+
     void sample(std::string_view fqn, const io::message_info &info, const io::message_view &v)
     {
         const std::uint64_t hash = wire::fqn_topic_hash(fqn);
@@ -113,13 +120,6 @@ private:
         std::visit(std::forward<Fn>(fn), m_block.machinery);
         m_block.kick();
     }
-
-    recorder_block &m_block;
-    const io::message_info m_empty_info;
-    io::recording::record_rate_gate m_rate_gate;
-    plexus::detail::move_only_function<std::uint64_t()> m_clock;
-    plexus::detail::move_only_function<io::capture_fidelity(std::uint64_t)> m_fidelity_resolver;
-    type_id_resolver m_type_id_resolver;
 };
 
 }

@@ -207,6 +207,13 @@ public:
     }
 
 private:
+    state m_state{state::reading_header};
+    std::size_t m_max_payload_size;
+    std::size_t m_buffered_bytes_cap;
+    std::size_t m_consumed{0};
+    frame_header m_pending_header{};
+    std::vector<std::byte> m_buffer;
+
     std::size_t live_bytes() const
     {
         return m_buffer.size() - m_consumed;
@@ -222,13 +229,6 @@ private:
             m_consumed = 0;
         }
     }
-
-    state m_state{state::reading_header};
-    std::size_t m_max_payload_size;
-    std::size_t m_buffered_bytes_cap;
-    std::size_t m_consumed{0};
-    frame_header m_pending_header{};
-    std::vector<std::byte> m_buffer;
 };
 
 }
