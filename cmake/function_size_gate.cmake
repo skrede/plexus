@@ -61,6 +61,7 @@ elseif(NOT FUNC_GATE_TIDY_LOG)
     endif()
 
     function_size_gate_tidy(function_size_gate_tidy _tidy_rc)
+    function_size_gate_rerun_crashed(_tidy_rc _tidy_log _tidy_err)
     function_size_gate_check_run("${_tidy_log}" "${_tidy_rc}" "${_tidy_err}")
 endif()
 
