@@ -80,7 +80,7 @@ struct silent_peer
     ::asio::ip::udp::socket peer;
     std::unique_ptr<plexus::asio::udp_channel> channel;
 
-    silent_peer(plexus::datagram::detail::udp_channel_mode mode, plexus::datagram::detail::udp_arq_config arq, std::chrono::milliseconds reassembly_timeout)
+    silent_peer(plexus::datagram::detail::udp_channel_mode mode, plexus::datagram::detail::udp_arq_options arq, std::chrono::milliseconds reassembly_timeout)
             : io()
             , server(io)
             , peer(io, ::asio::ip::udp::endpoint(::asio::ip::make_address("127.0.0.1"), 0))

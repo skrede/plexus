@@ -46,15 +46,15 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 
 // A compressed ARQ config so the loss legs run fast while exercising the same selective-repeat/RTO/exhaustion
 // mechanics as the swept production defaults, bound at construction through the seam production uses.
-inline plexus::datagram::detail::udp_arq_config fast_arq()
+inline plexus::datagram::detail::udp_arq_options fast_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 10};
+    return plexus::datagram::detail::udp_arq_options{.window = 64, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{80}, .max_retransmit = 10};
 }
 
 // The exhaustion leg wants a LOW cap (and fast RTO) so the budget runs out sub-second.
-inline plexus::datagram::detail::udp_arq_config exhaust_arq()
+inline plexus::datagram::detail::udp_arq_options exhaust_arq()
 {
-    return plexus::datagram::detail::udp_arq_config{.window = 64, .initial_rto = ms{15}, .min_rto = ms{5}, .max_rto = ms{40}, .max_retransmit = 4};
+    return plexus::datagram::detail::udp_arq_options{.window = 64, .initial_rto = ms{15}, .min_rto = ms{5}, .max_rto = ms{40}, .max_retransmit = 4};
 }
 
 std::vector<std::byte> bytes_of(const std::string &s)
@@ -228,7 +228,7 @@ struct fixture
     std::vector<std::string> delivered;
     std::optional<plexus::io::io_error> dialed_error;
 
-    explicit fixture(plexus::datagram::detail::udp_arq_config cfg = fast_arq())
+    explicit fixture(plexus::datagram::detail::udp_arq_options cfg = fast_arq())
             : server(io, pasio::udp_channel::default_max_payload, pasio::udp_transport::arq_type::default_ladder, cfg)
             , client(io, pasio::udp_channel::default_max_payload, fast_hs, cfg)
     {
@@ -380,7 +380,7 @@ TEST_CASE("udp reliable_arq: the bounded send window admits up to W then reports
     // A pure engine unit: the W+1th submit reports window_full, a non-blocking backpressure signal.
     ::asio::io_context io;
     using engine = plexus::datagram::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
-    engine arq{io, plexus::datagram::detail::udp_arq_config{.window = 4}};
+    engine arq{io, plexus::datagram::detail::udp_arq_options{.window = 4}};
     int transmits = 0;
     arq.on_transmit([&](std::uint16_t, std::span<const std::byte>, bool) { ++transmits; });
 
@@ -402,7 +402,7 @@ TEST_CASE("udp reliable_arq: an ack cumulative ahead of the highest-sent seq mus
     // underflowing in_flight() to ~65535 and wedging submit() at window_full forever.
     ::asio::io_context io;
     using engine = plexus::datagram::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
-    engine arq{io, plexus::datagram::detail::udp_arq_config{.window = 4}};
+    engine arq{io, plexus::datagram::detail::udp_arq_options{.window = 4}};
 
     wire::udp_ack ack{};
     ack.cumulative = 0; // on_ack -> slide_to(1), one past m_next with nothing sent
@@ -423,7 +423,7 @@ TEST_CASE("udp reliable_arq: cancel settles the wait count once, after the last 
 {
     ::asio::io_context io;
     using engine = plexus::datagram::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
-    engine arq{io, plexus::datagram::detail::udp_arq_config{.window = 4}};
+    engine arq{io, plexus::datagram::detail::udp_arq_options{.window = 4}};
     std::int32_t settled = 0;
     arq.pending().on_settled([&settled] { ++settled; });
     auto one = bytes_of("x");

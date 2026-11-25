@@ -140,7 +140,7 @@ void arq_leg(fuzz_input &in)
     auto next_delivery       = static_cast<std::uint16_t>(in.uint(2));
     fuzz_bus bus;
     fuzz_executor ex{bus};
-    fuzz_arq arq{ex, datagram::detail::udp_arq_config{.window = window}, next_delivery};
+    fuzz_arq arq{ex, datagram::detail::udp_arq_options{.window = window}, next_delivery};
     arq.on_deliver_seq([&next_delivery](std::uint16_t seq, bool, bytes_view) { fuzz_require(seq == next_delivery++, "the receiver delivers in sequence order"); });
     while(!in.exhausted())
         arq_step(in, arq, ex, window);

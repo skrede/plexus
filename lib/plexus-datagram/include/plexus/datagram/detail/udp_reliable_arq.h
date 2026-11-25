@@ -27,7 +27,7 @@ namespace plexus::datagram::detail {
 
 // A selective-repeat sliding-window sender + a head-of-line reorder receiver + an adaptive RFC 6298 RTO (Karn's
 // algorithm): every reliable datagram is delivered in publish order, retransmitting only the lost segment.
-struct udp_arq_config
+struct udp_arq_options
 {
     // The selective-ack bitmap names only bitmap_bits holes above the cumulative edge; holes beyond a larger window
     // fall back to per-segment RTO-driven retransmit (idempotent at the receiver).
@@ -38,7 +38,7 @@ struct udp_arq_config
     std::uint8_t max_retransmit{6}; // cap -> connection-fatal on exhaustion
 };
 
-static_assert(udp_arq_config{}.window <= wire::udp_ack::bitmap_bits * 2,
+static_assert(udp_arq_options{}.window <= wire::udp_ack::bitmap_bits * 2,
               "default ARQ window outruns the selective-ack bitmap by more than the "
               "RTO-fallback design budget — widen wire::udp_ack::bitmap_bits with it");
 
@@ -58,7 +58,7 @@ public:
     };
 
     // CONTRACT: both ends start at the same initial_seq, so the cumulative-ack edge holds from the first segment.
-    explicit udp_reliable_arq(Executor executor, udp_arq_config cfg = {}, std::uint16_t initial_seq = 0)
+    explicit udp_reliable_arq(Executor executor, udp_arq_options cfg = {}, std::uint16_t initial_seq = 0)
             : m_executor(executor)
             , m_cfg(cfg)
             , m_slots(cfg.window == 0 ? std::size_t{512} : std::min(cfg.window, std::size_t{udp_reorder_buffer::half_space} - 1), initial_seq)
@@ -276,7 +276,7 @@ private:
     }
 
     Executor m_executor;
-    udp_arq_config m_cfg;
+    udp_arq_options m_cfg;
     seq_ring<slot> m_slots;
     udp_reorder_buffer m_recv;
     std::uint16_t m_next{0};

@@ -193,7 +193,7 @@ TEST_CASE("envelope gate: a multi-fragment UDP message reassembles on the wide i
     constexpr std::size_t payload_sz = 32u * 1024;
 
     const pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80}};
-    const auto arq = plexus::datagram::detail::udp_arq_config{.window = 1024, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{160}, .max_retransmit = 40};
+    const auto arq = plexus::datagram::detail::udp_arq_options{.window = 1024, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{160}, .max_retransmit = 40};
 
     int proven = 0;
     for(int run = 0; run < k_runs; ++run)

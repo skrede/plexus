@@ -58,9 +58,9 @@ constexpr pasio::udp_transport::arq_type::schedule fast_hs{ms{20}, ms{40}, ms{80
 // A compressed ARQ config with a SMALL window so a modest publish burst overruns it and
 // exercises the congestion path quickly. Bound at construction (the same structural seam
 // production uses) — not a mutable setter.
-inline plexus::datagram::detail::udp_arq_config small_window_arq(std::size_t window)
+inline plexus::datagram::detail::udp_arq_options small_window_arq(std::size_t window)
 {
-    return plexus::datagram::detail::udp_arq_config{.window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 12};
+    return plexus::datagram::detail::udp_arq_options{.window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 12};
 }
 
 std::vector<std::byte> bytes_of(const std::string &s)

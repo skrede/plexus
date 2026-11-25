@@ -8,7 +8,7 @@ namespace {
 
 // Stand up a loopback udp_transport pair (no interposed relay) and round-trip one payload
 // over the given scheme, looping in-body. Returns the count of byte-equal deliveries.
-int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_size, plexus::datagram::detail::udp_arq_config arq, int iterations)
+int roundtrip_clean(const char *scheme, std::size_t budget, std::size_t payload_size, plexus::datagram::detail::udp_arq_options arq, int iterations)
 {
     int proven = 0;
     for(int iter = 0; iter < iterations; ++iter)

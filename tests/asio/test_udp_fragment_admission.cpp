@@ -27,7 +27,7 @@ constexpr std::size_t k_payload = 6 * k_slice;
 // encoded fragments) is one message; the configured backpressure bytes sit below it.
 pasio::udp_transport make_transport(::asio::io_context &io, pio::congestion cong, std::size_t window, pasio::udp_transport::arq_type::schedule hs)
 {
-    const plexus::datagram::detail::udp_arq_config arq{.window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 20};
+    const plexus::datagram::detail::udp_arq_options arq{.window = window, .initial_rto = ms{20}, .min_rto = ms{10}, .max_rto = ms{120}, .max_retransmit = 20};
     return pasio::udp_transport{io,
                                 k_budget,
                                 hs,

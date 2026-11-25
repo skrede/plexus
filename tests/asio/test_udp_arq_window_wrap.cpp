@@ -26,7 +26,7 @@ namespace pasio = plexus::asio;
 namespace wire  = plexus::wire;
 
 using engine = plexus::datagram::detail::udp_reliable_arq<::asio::io_context &, pasio::asio_timer>;
-using config = plexus::datagram::detail::udp_arq_config;
+using config = plexus::datagram::detail::udp_arq_options;
 using bytes  = std::vector<std::byte>;
 
 bytes bytes_of(const std::string &s)

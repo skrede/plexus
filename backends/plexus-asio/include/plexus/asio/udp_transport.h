@@ -60,7 +60,7 @@ public:
     using hs_type       = datagram::detail::udp_hs_type;
 
     explicit udp_transport(::asio::io_context &io, std::size_t max_payload = udp_channel::default_max_payload, arq_type::schedule hs_ladder = arq_type::default_ladder,
-                           datagram::detail::udp_arq_config arq_cfg = {}, io::congestion congestion = io::congestion::block,
+                           datagram::detail::udp_arq_options arq_cfg = {}, io::congestion congestion = io::congestion::block,
                            std::size_t max_peers = detail::udp_inbound_demux::default_max_peers, std::size_t so_sndbuf = udp_server::default_so_sndbuf,
                            std::size_t so_rcvbuf = udp_server::default_so_rcvbuf, std::size_t send_queue_bytes = udp_server::default_send_queue_bytes,
                            std::size_t global_default = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget,
@@ -181,7 +181,7 @@ private:
     std::size_t m_backpressure_bytes;               // per-channel bounded send queue for windowed fragments
     std::chrono::milliseconds m_reassembly_timeout; // per-message reassembly reclaim window
     arq_type::schedule m_hs_ladder;
-    datagram::detail::udp_arq_config m_arq_cfg;
+    datagram::detail::udp_arq_options m_arq_cfg;
     io::congestion m_congestion;
     std::random_device m_isn_rng;
     std::vector<std::byte> m_hs_scratch;

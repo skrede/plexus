@@ -74,8 +74,8 @@ public:
     // max_message_bytes is the per-MESSAGE size ceiling (send-side oversize-reject AND the receive
     // reassembler's per-message ceiling), distinct from max_payload (the per-FRAGMENT MTU budget).
     // NOLINTNEXTLINE(readability-function-size)
-    udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest, std::size_t max_payload = default_max_payload, datagram::detail::udp_arq_config arq_cfg = {},
-                io::congestion congestion = io::congestion::block, std::size_t backpressure_bytes = default_backpressure_bytes,
+    udp_channel(::asio::io_context &io, udp_server &server, ::asio::ip::udp::endpoint dest, std::size_t max_payload = default_max_payload,
+                datagram::detail::udp_arq_options arq_cfg = {}, io::congestion congestion = io::congestion::block, std::size_t backpressure_bytes = default_backpressure_bytes,
                 datagram::detail::udp_channel_mode mode = datagram::detail::udp_channel_mode::best_effort, std::uint16_t initial_seq = 0,
                 std::size_t max_message_bytes = io::global_default_max_message_bytes, std::size_t reassembly_budget = io::reassembly_memory_budget,
                 std::chrono::milliseconds reassembly_timeout = reassembler_type::config{}.per_message_timeout)
@@ -321,7 +321,7 @@ private:
     std::size_t m_max_message_bytes;                // per-MESSAGE size ceiling (send + receive)
     std::size_t m_reassembly_budget;                // aggregate reassembly-memory cap (always-on)
     std::chrono::milliseconds m_reassembly_timeout; // per-message reassembly reclaim window
-    datagram::detail::udp_arq_config m_arq_cfg;
+    datagram::detail::udp_arq_options m_arq_cfg;
     io::congestion m_congestion;
     datagram::detail::udp_backpressure_queue m_backpressure;
     std::size_t m_dropped;
