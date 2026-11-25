@@ -66,6 +66,31 @@ add_test(NAME function_size_gate.unmeasurable_rejected
 set_tests_properties(function_size_gate.unmeasurable_rejected PROPERTIES
     PASS_REGULAR_EXPRESSION "1 unsuppressed library function overage\\(s\\):[^/]*- [^ ]*/unmeasurable_fixture\\.h:9:22: warning: function 'brace_on_signature_line' exceeds [^\n]* -- not measurable from the source")
 
+# An overage passes only through the EXCEPTIONS.md function row naming its file and function, up to the row's ceiling.
+# A row whose function outgrew it, fits, is absent from its file, or is listed twice fails, and so does a row whose name
+# two functions of its file over the ceiling share: it covers neither.
+configure_file(screen/exception_tidy.txt.in ${CMAKE_CURRENT_BINARY_DIR}/exception_tidy.txt @ONLY)
+set(_row_cases registered_accepted grown_rejected stale_rejected unmatched_rejected file_rejected duplicate_rejected ambiguous_rejected)
+set(_row_logs screen exception screen screen screen screen exception)
+set(_row_overage "exceeds [^\n]* -- 26 lines on screen")
+set(_row_verdicts "function size gate: clean"
+    "backends/plexus-demo/exception_fixture\\.h `grown_on_screen`: 27 lines on screen over its registered ceiling 26"
+    "stale function exception: backends/plexus-demo/screen_fixture\\.h `within_on_screen` \\(measured at 25 or fewer lines on screen\\)"
+    "stale function exception: backends/plexus-demo/screen_fixture\\.h `absent_on_screen` \\(not measured\\)"
+    "screen_fixture\\.h:9:3: warning: function 'over_on_screen' ${_row_overage}.*stale function exception: backends/plexus-demo/exception_fixture\\.h `over_on_screen` \\(not measured\\)"
+    "backends/plexus-demo/screen_fixture\\.h `over_on_screen`: duplicate function row"
+    "exception_fixture\\.h:35:3: warning: function 'overloaded_on_screen' ${_row_overage}.*exception_fixture\\.h:62:3: warning: function 'overloaded_on_screen' ${_row_overage}.*backends/plexus-demo/exception_fixture\\.h `overloaded_on_screen`: 2 functions of this name over the ceiling")
+foreach(_case _log _verdict IN ZIP_LISTS _row_cases _row_logs _row_verdicts)
+    string(REGEX REPLACE "_(accepted|rejected)$" "" _row_dir ${_case})
+    add_test(NAME function_size_gate.exception_${_case}
+        COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON
+                -DFUNC_GATE_TIDY_LOG=${CMAKE_CURRENT_BINARY_DIR}/${_log}_tidy.txt -DFUNC_GATE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/screen
+                -DFUNC_GATE_EXCEPTIONS=${CMAKE_CURRENT_SOURCE_DIR}/exceptions/${_row_dir}/EXCEPTIONS.md
+                -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+    set_tests_properties(function_size_gate.exception_${_case} PROPERTIES PASS_REGULAR_EXPRESSION "${_verdict}")
+endforeach()
+set_tests_properties(function_size_gate.exception_duplicate_rejected PROPERTIES FAIL_REGULAR_EXPRESSION "unsuppressed")
+
 # The run check over a recorded run that exits nonzero with clang-tidy's per-TU lines in its error output, where an
 # older run-clang-tidy writes them: those lines pass and are never echoed, while a library source left unprocessed,
 # a clang-tidy that died, or any other error output fails the gate.
