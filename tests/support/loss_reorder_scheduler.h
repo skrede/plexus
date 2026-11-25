@@ -100,6 +100,11 @@ public:
     }
 
 private:
+    loss_reorder_config m_cfg;
+    shim_lcg m_rng;
+    std::deque<std::vector<std::byte>> m_hold;
+    std::size_t m_dropped;
+
     // Pull one held datagram at a seed-chosen position so the re-emission order is shuffled
     // within the bounded window (not strictly FIFO) yet deterministic.
     std::vector<std::byte> take_held()
@@ -109,11 +114,6 @@ private:
         m_hold.erase(m_hold.begin() + static_cast<std::ptrdiff_t>(idx));
         return dg;
     }
-
-    loss_reorder_config m_cfg;
-    shim_lcg m_rng;
-    std::deque<std::vector<std::byte>> m_hold;
-    std::size_t m_dropped;
 };
 
 }

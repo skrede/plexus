@@ -171,6 +171,12 @@ public:
     }
 
 private:
+    int m_fd;
+    bool m_blocking;
+    host_socket_hooks m_hooks;
+    std::atomic<bool> m_closed;
+    std::optional<std::error_code> m_connect_outcome;
+
     std::size_t classify_io(int n)
     {
         if(n > 0)
@@ -179,12 +185,6 @@ private:
             m_closed.store(true);
         return 0;
     }
-
-    int m_fd;
-    bool m_blocking;
-    host_socket_hooks m_hooks;
-    std::atomic<bool> m_closed;
-    std::optional<std::error_code> m_connect_outcome;
 };
 
 }

@@ -57,6 +57,18 @@ public:
     }
 
 private:
+    [[maybe_unused]] ::asio::io_context &m_io;
+    ::asio::ip::udp::socket m_front;
+    ::asio::ip::udp::socket m_back;
+    ::asio::ip::udp::endpoint m_server_ep;
+    ::asio::ip::udp::endpoint m_client_ep;
+    ::asio::ip::udp::endpoint m_from;
+    std::array<std::byte, 65536> m_front_buf;
+    std::array<std::byte, 65536> m_back_buf;
+    loss_reorder_scheduler m_sched;
+    std::optional<loss_reorder_scheduler> m_back_sched;
+    std::size_t m_forwarded;
+
     void emit_to_server(std::vector<std::byte> dg)
     {
         ++m_forwarded;
@@ -99,18 +111,6 @@ private:
                                       recv_back();
                                   });
     }
-
-    [[maybe_unused]] ::asio::io_context &m_io;
-    ::asio::ip::udp::socket m_front;
-    ::asio::ip::udp::socket m_back;
-    ::asio::ip::udp::endpoint m_server_ep;
-    ::asio::ip::udp::endpoint m_client_ep;
-    ::asio::ip::udp::endpoint m_from;
-    std::array<std::byte, 65536> m_front_buf;
-    std::array<std::byte, 65536> m_back_buf;
-    loss_reorder_scheduler m_sched;
-    std::optional<loss_reorder_scheduler> m_back_sched;
-    std::size_t m_forwarded;
 };
 
 }

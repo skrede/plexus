@@ -114,12 +114,12 @@ public:
     }
 
 private:
+    std::string m_name;
+
     void remove() noexcept
     {
         plexus::native::shm_region_broker{}.unlink(m_name);
     }
-
-    std::string m_name;
 };
 
 }

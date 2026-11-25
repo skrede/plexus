@@ -99,15 +99,15 @@ public:
     }
 
 private:
+    region_store *m_store;
+    std::string m_name;
+    std::shared_ptr<region_store::region> m_region;
+
     void reclaim() noexcept
     {
         m_store = nullptr;
         m_region.reset();
     }
-
-    region_store *m_store;
-    std::string m_name;
-    std::shared_ptr<region_store::region> m_region;
 };
 
 // The stub broker satisfying the core region_broker concept over the store. create

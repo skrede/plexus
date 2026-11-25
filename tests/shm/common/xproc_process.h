@@ -176,14 +176,14 @@ public:
     }
 
 private:
+    mutable std::optional<std::int32_t> m_status;
+    std::optional<detail::xproc_child_handle> m_child;
+
     explicit xproc_process(detail::xproc_child_handle child)
             : m_status()
             , m_child(child)
     {
     }
-
-    mutable std::optional<std::int32_t> m_status;
-    std::optional<detail::xproc_child_handle> m_child;
 };
 
 }

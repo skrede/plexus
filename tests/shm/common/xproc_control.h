@@ -69,14 +69,14 @@ public:
     }
 
 private:
+    bool m_created;
+    plexus::native::shm_region_handle m_region;
+
     xproc_shared(plexus::native::shm_region_handle region, bool created)
             : m_created(created)
             , m_region(std::move(region))
     {
     }
-
-    bool m_created;
-    plexus::native::shm_region_handle m_region;
 };
 
 }

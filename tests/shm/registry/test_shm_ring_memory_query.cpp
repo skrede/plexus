@@ -94,6 +94,10 @@ public:
     }
 
 private:
+    recording_store *m_store;
+    std::string m_name;
+    std::shared_ptr<recording_store::region> m_region;
+
     void reclaim() noexcept
     {
         if(m_store != nullptr)
@@ -105,10 +109,6 @@ private:
         m_store = nullptr;
         m_region.reset();
     }
-
-    recording_store *m_store;
-    std::string m_name;
-    std::shared_ptr<recording_store::region> m_region;
 };
 
 class recording_broker
