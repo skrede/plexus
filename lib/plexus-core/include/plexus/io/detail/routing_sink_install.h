@@ -103,7 +103,6 @@ void install_heartbeat_hooks(Engine &e)
 }
 
 template<typename Engine>
-// NOLINTNEXTLINE(readability-function-size)
 void install_routing_sinks(Engine &e)
 {
     using channel_type = typename Engine::channel_type;

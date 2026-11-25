@@ -41,7 +41,6 @@ std::size_t record_size(const unsigned char *header) noexcept
 
 }
 
-// NOLINTNEXTLINE(readability-function-size)
 dtls_channel::dtls_channel(::asio::io_context &io, plexus::asio::udp_server &server, ::asio::ip::udp::endpoint dest, const tls_credential &cred,
                            io::security::cookie_secret &cookie_state, role r, std::size_t max_payload, std::size_t record_mtu, std::size_t max_message_bytes,
                            std::size_t reassembly_budget, std::chrono::milliseconds reassembly_timeout, std::chrono::microseconds retransmit_ceiling)
@@ -246,7 +245,6 @@ std::size_t dtls_channel::send_datagram(std::size_t length)
     return 0;
 }
 
-// NOLINTNEXTLINE(readability-function-size)
 void dtls_channel::drain_inbound()
 {
     if(!m_ssl)

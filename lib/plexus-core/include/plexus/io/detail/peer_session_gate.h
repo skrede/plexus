@@ -20,7 +20,6 @@ enum class gate_verdict : std::uint8_t
 
 // decode_header casts the type byte unchecked, so a byte outside the enumeration reaches this switch. It has no
 // default arm so that a new msg_type fails the build under -Wswitch until it is given a verdict here.
-// NOLINTNEXTLINE(readability-function-size)
 constexpr gate_verdict classify(bool complete, wire::msg_type type) noexcept
 {
     switch(type)

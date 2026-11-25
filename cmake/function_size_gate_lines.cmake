@@ -22,7 +22,7 @@ function(function_size_gate_source_lines file out)
 endfunction()
 
 # Walks up from the name line while the line above continues the declaration (a template header, a return type, an
-# attribute); comment lines are passed over, so a NOLINT between a template header and its name stays inside.
+# attribute); comment lines are passed over, so a comment between a template header and its name stays inside.
 function(function_size_gate_signature_start lines name out)
     string(ASCII 1 _semicolon)
     set(_first ${name})
@@ -85,15 +85,17 @@ function(function_size_gate_screen_lines file name_line body out)
 endfunction()
 
 # A cognitive-complexity warning is an overage as it stands; a function-size warning is one when its screen count
-# exceeds the ceiling or cannot be taken from the source. Reads the caller's _body_<key> lengths.
+# cannot be taken from the source, or exceeds the ceiling and no function row sanctions it. Reads the caller's
+# _body_<key> lengths.
 function(function_size_gate_judge warning out)
     set(${out} "" PARENT_SCOPE)
-    if(NOT warning MATCHES "^((.*):([0-9]+):[0-9]+): warning: .*readability-function-size")
+    if(NOT warning MATCHES "^((.*):([0-9]+):[0-9]+): warning: function '([^']+)' exceeds .*readability-function-size")
         set(${out} "${warning}" PARENT_SCOPE)
         return()
     endif()
     set(_file "${CMAKE_MATCH_2}")
     set(_name_line ${CMAKE_MATCH_3})
+    set(_name "${CMAKE_MATCH_4}")
     string(MD5 _key "${CMAKE_MATCH_1}")
     set(_body 0)
     if(DEFINED _body_${_key})
@@ -102,8 +104,9 @@ function(function_size_gate_judge warning out)
     function_size_gate_screen_lines("${_file}" ${_name_line} ${_body} _screen)
     if(_screen STREQUAL "")
         set(${out} "${warning} -- not measurable from the source" PARENT_SCOPE)
-    elseif(_screen GREATER FUNC_GATE_CEILING)
-        set(${out} "${warning} -- ${_screen} lines on screen" PARENT_SCOPE)
+    else()
+        function_size_gate_sanction("${_file}" "${_name}" ${_screen} "${warning}" _verdict)
+        set(${out} "${_verdict}" PARENT_SCOPE)
     endif()
 endfunction()
 

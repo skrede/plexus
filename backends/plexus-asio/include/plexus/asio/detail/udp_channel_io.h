@@ -210,7 +210,6 @@ void drain_backpressure(Ch &c)
 }
 
 template<typename Ch>
-// NOLINTNEXTLINE(readability-function-size)
 void ensure_arq(Ch &c)
 {
     if(c.m_arq)

@@ -51,7 +51,6 @@ inline std::optional<wire::subscribe_status> type_refusal(bool type_mismatch, bo
 // Each refusal replies a status, registers no fan-out entry, and returns false — a per-topic
 // refusal, never a peer teardown.
 template<typename Forwarder, typename Peer>
-// NOLINTNEXTLINE(readability-function-size)
 bool attach_for_fanout(Forwarder &f, const Peer &p, std::string_view fqn, std::optional<std::uint64_t> subscriber_type_id, const subscriber_qos &sub_qos)
 {
     auto hash             = wire::fqn_topic_hash(fqn);

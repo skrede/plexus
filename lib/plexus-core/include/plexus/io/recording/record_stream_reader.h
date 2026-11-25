@@ -63,7 +63,6 @@ public:
     {
     }
 
-    // NOLINTNEXTLINE(readability-function-size)
     bool read_definitions(stream_definitions &out)
     {
         wire::reader r{m_stream};
@@ -99,7 +98,6 @@ public:
     }
 
     // Call read_definitions first.
-    // NOLINTNEXTLINE(readability-function-size)
     recovery_result recover(std::vector<decoded_record> &out)
     {
         recovery_result res;

@@ -184,7 +184,6 @@ int allocate_ex_data_index() noexcept
 // ONCE, and returns the core decision's accept/reject. Core never sees an X509* and
 // never parses DER. Fail-closed at every missing link: no SSL / no credential / no
 // policy / no peer cert / extraction failure all REJECT.
-// NOLINTNEXTLINE(readability-function-size)
 extern "C" int plexus_tls_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
 {
     const int ssl_idx = SSL_get_ex_data_X509_STORE_CTX_idx();

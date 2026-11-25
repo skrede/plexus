@@ -179,7 +179,6 @@ public:
     // the first eligible destination and addref-shared into every band (frame-once-fan-to-N); a build that
     // could not fit a slot (oversize) or found no free slot (exhaustion) drops-with-count per destination.
     template<typename BuildOnce>
-    // NOLINTNEXTLINE(readability-function-size)
     void fan_forwarded_buffer(std::uint64_t hash, const void *arrival, BuildOnce &&build_once)
     {
         const auto *topic = m_endpoint.registry().entry_for(hash);
@@ -301,7 +300,6 @@ public:
     }
 
     template<typename EncodeFn>
-    // NOLINTNEXTLINE(readability-function-size)
     void publish_object(std::string_view fqn, object_carrier carrier, EncodeFn &&encode, std::uint64_t session_id = 0)
     {
         auto hash           = wire::fqn_topic_hash(fqn);
