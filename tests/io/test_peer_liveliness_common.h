@@ -57,6 +57,6 @@ public:
     std::vector<peer_liveliness_event> log;
 };
 
-} // namespace
+}
 
 #endif
