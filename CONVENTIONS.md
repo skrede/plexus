@@ -161,6 +161,9 @@ for a real reason.
   `create`/`open`/`attach` stay only where they mirror an OS or shared-memory verb pair
   (`broadcast_ring::create`/`attach`, `create_own_event`).
 - Every `send()` on a byte channel takes `std::span<const std::byte> bytes`.
+- `_options` names an aggregate of tunables that a caller supplies to a public constructor, factory or verb
+  (in-declaration defaults, designated-initialized). `_config` names a resolved configuration that the library derives
+  internally and that callers never spell (`handshake_fsm_config`, built by `make_fsm_cfg`; `reassembler::config`).
 
 ## Construction
 
