@@ -80,6 +80,21 @@ public:
     }
 
 private:
+    mcap::McapWriter &m_writer;
+    transcode_result &m_result;
+    const std::unordered_map<std::uint64_t, std::string> &m_names;
+    const std::unordered_map<std::uint64_t, declared_label> &m_labels;
+    const std::unordered_map<std::uint64_t, std::uint64_t> &m_hints;
+    schema_provider &m_provider;
+    hint_translator &m_translate;
+
+    std::unordered_map<std::uint64_t, mcap::ChannelId> m_sample_channels;
+    std::map<rec::record_category, mcap::ChannelId> m_event_channels;
+    std::vector<std::byte> m_scratch;
+    mcap::ChannelId m_wire_channel{0};
+    mcap::ChannelId m_wire_meta_channel{0};
+    bool m_wire_open{false};
+
     // Resolve the sample's type_id to a schema; a resolved schema opens its channel with that
     // message_encoding + schema, an unresolved type falls back to the opaque path
     // (plexus/opaque, schemaId 0).
@@ -144,21 +159,6 @@ private:
         if(m_writer.write(msg).ok())
             ++m_result.messages;
     }
-
-    mcap::McapWriter &m_writer;
-    transcode_result &m_result;
-    const std::unordered_map<std::uint64_t, std::string> &m_names;
-    const std::unordered_map<std::uint64_t, declared_label> &m_labels;
-    const std::unordered_map<std::uint64_t, std::uint64_t> &m_hints;
-    schema_provider &m_provider;
-    hint_translator &m_translate;
-
-    std::unordered_map<std::uint64_t, mcap::ChannelId> m_sample_channels;
-    std::map<rec::record_category, mcap::ChannelId> m_event_channels;
-    std::vector<std::byte> m_scratch;
-    mcap::ChannelId m_wire_channel{0};
-    mcap::ChannelId m_wire_meta_channel{0};
-    bool m_wire_open{false};
 };
 
 inline void emit_record(mcap_emitter &emitter, const rec::decoded_record &r)

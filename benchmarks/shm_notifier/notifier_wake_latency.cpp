@@ -100,6 +100,12 @@ public:
     }
 
 private:
+    ::asio::io_context m_io;
+    ::plexus::shm::control_header_t m_header;
+    Notifier m_notifier;
+    std::uint64_t m_drained;
+    clock_type::time_point m_drain_time;
+
     bool pump_to(std::uint64_t target)
     {
         while(m_drained < target)
@@ -107,12 +113,6 @@ private:
                 return false; // the notifier never woke -- report rather than hang
         return true;
     }
-
-    ::asio::io_context m_io;
-    ::plexus::shm::control_header_t m_header;
-    Notifier m_notifier;
-    std::uint64_t m_drained;
-    clock_type::time_point m_drain_time;
 };
 
 struct run_stats
