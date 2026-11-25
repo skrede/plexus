@@ -1,8 +1,8 @@
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/screen_fixture.h:9:3: warning: function 'over_on_screen' exceeds recommended size/complexity thresholds [readability-function-size]
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/screen_fixture.h:9:3: warning: function 'over_on_screen' exceeds recommended size/complexity thresholds [readability-function-size]
     9 | T over_on_screen(T value)
       |   ^
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/screen_fixture.h:9:3: note: 23 lines including whitespace and comments (threshold 0)
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/screen_fixture.h:35:22: warning: function 'within_on_screen' exceeds recommended size/complexity thresholds [readability-function-size]
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/screen_fixture.h:9:3: note: 23 lines including whitespace and comments (threshold 0)
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/screen_fixture.h:35:22: warning: function 'within_on_screen' exceeds recommended size/complexity thresholds [readability-function-size]
    35 | inline std::uint32_t within_on_screen(std::uint32_t value)
       |                      ^
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/screen_fixture.h:35:22: note: 23 lines including whitespace and comments (threshold 0)
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/screen_fixture.h:35:22: note: 23 lines including whitespace and comments (threshold 0)

@@ -1,8 +1,8 @@
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/init_list_fixture.h:11:14: warning: function 'init_list_fixture' exceeds recommended size/complexity thresholds [readability-function-size]
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/init_list_fixture.h:11:14: warning: function 'init_list_fixture' exceeds recommended size/complexity thresholds [readability-function-size]
    11 |     explicit init_list_fixture(std::uint32_t seed)
       |              ^
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/init_list_fixture.h:11:14: note: 3 lines including whitespace and comments (threshold 0)
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/init_list_fixture.h:38:5: warning: function 'init_list_fixture' exceeds recommended size/complexity thresholds [readability-function-size]
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/init_list_fixture.h:11:14: note: 3 lines including whitespace and comments (threshold 0)
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/init_list_fixture.h:38:5: warning: function 'init_list_fixture' exceeds recommended size/complexity thresholds [readability-function-size]
    38 |     init_list_fixture(std::uint32_t seed, std::uint32_t step)
       |     ^
-@CMAKE_CURRENT_SOURCE_DIR@/function/screen/backends/plexus-demo/init_list_fixture.h:38:5: note: 2 lines including whitespace and comments (threshold 0)
+@CMAKE_CURRENT_SOURCE_DIR@/screen/backends/plexus-demo/init_list_fixture.h:38:5: note: 2 lines including whitespace and comments (threshold 0)
