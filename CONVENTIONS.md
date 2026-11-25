@@ -63,8 +63,9 @@ Keep public headers lean by moving internal helpers into a `detail/` directory a
 `detail::` namespace. Make `detail/` files and `detail::` types as needed — but a `detail/`
 file is still a real file and obeys these same rules.
 
-Enforcement: the size gate **fails the build** on any code file over the file ceiling, and
-`.clang-tidy` fails it on a function in `lib/` or `backends/` over the function ceiling or the
+Enforcement: the size gate **fails the build** on any code file over the file ceiling, and the
+function-size gate (clang-tidy's size and cognitive-complexity checks, a function counted as it sits
+on screen) fails it on a function in `lib/` or `backends/` over the function ceiling or the
 cognitive-complexity limit. Everywhere else — C++ in tests, examples, tools and benchmarks, and
 all CMake, shell, Python and Lua — the function ceiling holds by review. A change is not done
 until it is within budget or its overage is a registered exception.
@@ -77,10 +78,13 @@ layer. An exception is a considered decision, not a fallback; prefer decompositi
 for an exception only when decomposition would make the code worse.
 
 Every exception is registered in **`EXCEPTIONS.md`** — the single, complete list of every
-sanctioned over-limit unit, each with its justification. There is **no in-code marker**: the
-justification is bookkeeping, and bookkeeping never belongs in the code. The size gate sanctions
-exactly the files `EXCEPTIONS.md` lists and fails on any unlisted overage, or on a stale row whose
-file has since dropped under the ceiling. There are no silent exceptions.
+sanctioned over-limit unit, each with its justification. There is **no in-code marker** and no
+suppression comment of any kind, `NOLINT` included: the justification is bookkeeping, and bookkeeping
+never belongs in the code. The size gate sanctions exactly the files `EXCEPTIONS.md` lists and fails
+on any unlisted overage, or on a stale row whose file has since dropped under the ceiling. The
+function-size gate sanctions exactly the functions its function table lists, by file and name, up to
+each row's ceiling, and fails on any unlisted overage or on a stale row in the same way. There are no
+silent exceptions.
 
 ## Comments
 
@@ -269,7 +273,8 @@ initialization-order constraint in **Construction**.
   185-column lines, comments never reflowed to fit the column, short functions never auto-collapsed
   onto one line (the author decides), and includes left unsorted so the hand-ordering below holds.
   Run it.
-- `.clang-tidy` is the linter and the size/complexity gate. It fails the build.
+- `.clang-tidy` is the linter. The function-size gate runs clang-tidy's size and complexity checks
+  over `lib/` and `backends/` with its own configuration, and fails the build.
 - Apply both across the whole tree. A change is not done until both are clean — or its overage is a
   registered exception.
 
