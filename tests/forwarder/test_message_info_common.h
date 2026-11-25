@@ -8,8 +8,8 @@
 // publication_sequence it alone decodes from the inner payload. from_intra_process is
 // derived honestly from the delivering channel's locality tier. source_identity stays
 // absent until the gid rides the wire.
-#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_MESSAGE_INFO_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_MESSAGE_INFO_COMMON_H
+#ifndef HPP_GUARD_TESTS_FORWARDER_TEST_MESSAGE_INFO_COMMON_H
+#define HPP_GUARD_TESTS_FORWARDER_TEST_MESSAGE_INFO_COMMON_H
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/locality.h"

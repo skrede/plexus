@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_RELAY_LINK_H
-#define HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_RELAY_LINK_H
+#ifndef HPP_GUARD_TESTS_DTLS_DTLS_RELAY_LINK_H
+#define HPP_GUARD_TESTS_DTLS_DTLS_RELAY_LINK_H
 
 #include "dtls_relay.h"
 #include "dtls_identity_fixture.h"

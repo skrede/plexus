@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_CONGESTED_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_CONGESTED_COMMON_H
+#ifndef HPP_GUARD_TESTS_SHM_RING_TEST_SHM_CONGESTED_COMMON_H
+#define HPP_GUARD_TESTS_SHM_RING_TEST_SHM_CONGESTED_COMMON_H
 
 // Backpressure + observable congestion: a best_effort ring with every slot pinned
 // returns congested off send() (OBSERVABLE, never a silent drop). A reliable

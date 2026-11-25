@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_IO_TEST_ATTACH_POLICY_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_IO_TEST_ATTACH_POLICY_COMMON_H
+#ifndef HPP_GUARD_TESTS_IO_TEST_ATTACH_POLICY_COMMON_H
+#define HPP_GUARD_TESTS_IO_TEST_ATTACH_POLICY_COMMON_H
 
 // The attach_policy oracle: a pure sans-OpenSSL drive of the PSK attach-admission
 // decision over INJECTED fake hmac_fn (no OpenSSL, no backend link — plexus::plexus

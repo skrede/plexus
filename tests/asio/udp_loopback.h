@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_UDP_LOOPBACK_H
-#define HPP_GUARD_PLEXUS_TESTS_ASIO_UDP_LOOPBACK_H
+#ifndef HPP_GUARD_TESTS_ASIO_UDP_LOOPBACK_H
+#define HPP_GUARD_TESTS_ASIO_UDP_LOOPBACK_H
 
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_channel.h"

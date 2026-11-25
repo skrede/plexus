@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HEAP_RING_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_HEAP_RING_H
+#ifndef HPP_GUARD_TESTS_SHM_COMMON_HEAP_RING_H
+#define HPP_GUARD_TESTS_SHM_COMMON_HEAP_RING_H
 
 #include "plexus/native/futex_notifier_primitive.h"
 

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_HOST_IDENTITY_INPROC_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_HOST_IDENTITY_INPROC_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_SESSION_TEST_HOST_IDENTITY_INPROC_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_SESSION_TEST_HOST_IDENTITY_INPROC_COMMON_H
 
 // The host-identity accessor oracle: the authenticated peer's host identity is
 // read from the security step that admitted it — the SPKI-derived node_id for a TLS

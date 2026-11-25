@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_QUEUED_TEARDOWN_H
-#define HPP_GUARD_PLEXUS_TESTS_ASIO_QUEUED_TEARDOWN_H
+#ifndef HPP_GUARD_TESTS_ASIO_QUEUED_TEARDOWN_H
+#define HPP_GUARD_TESTS_ASIO_QUEUED_TEARDOWN_H
 
 #include <asio/io_context.hpp>
 #include <asio/steady_timer.hpp>

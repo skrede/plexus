@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_CHANNEL_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_CHANNEL_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORDING_CHANNEL_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORDING_CHANNEL_COMMON_H
 
 // The lossless recording_channel decorator proof: send() taps the OUT frame then forwards
 // the bytes VERBATIM to the lower channel (forwarded == input), the lower channel's on_data

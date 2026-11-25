@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_SOCKET_H
-#define HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_SOCKET_H
+#ifndef HPP_GUARD_TESTS_SEAM_HOST_TCP_SOCKET_H
+#define HPP_GUARD_TESTS_SEAM_HOST_TCP_SOCKET_H
 
 // A real POSIX TCP socket over loopback for the host seams; on target lwip_socket in detail/lwip_socket_io.h plays this
 // role.

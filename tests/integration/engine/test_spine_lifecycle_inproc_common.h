@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_SPINE_LIFECYCLE_INPROC_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_SPINE_LIFECYCLE_INPROC_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_ENGINE_TEST_SPINE_LIFECYCLE_INPROC_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_ENGINE_TEST_SPINE_LIFECYCLE_INPROC_COMMON_H
 
 // The declaration-lifecycle timeline oracle: a custom observer reconstructs the ordered
 // per-node session timeline over a single-node inproc composition — the node's own

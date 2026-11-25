@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_CHANNEL_ASIO_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_STREAM_CHANNEL_ASIO_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_STREAM_CHANNEL_ASIO_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_STREAM_CHANNEL_ASIO_COMMON_H
 
 // Gated real-TCP stream-channel hardening leg over asio loopback. A raw client
 // socket writes hostile bytes into a live asio_channel (the accepted server end,

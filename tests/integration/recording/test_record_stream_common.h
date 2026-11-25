@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORD_STREAM_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_RECORD_STREAM_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORD_STREAM_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORD_STREAM_COMMON_H
 
 // The flat record-stream format oracle. It proves the canonical encoding round-trips
 // through the reader (mixed categories, a payload sample byte-identical with no codec in

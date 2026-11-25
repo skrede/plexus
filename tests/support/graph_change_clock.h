@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SUPPORT_GRAPH_CHANGE_CLOCK_H
-#define HPP_GUARD_PLEXUS_TESTS_SUPPORT_GRAPH_CHANGE_CLOCK_H
+#ifndef HPP_GUARD_TESTS_SUPPORT_GRAPH_CHANGE_CLOCK_H
+#define HPP_GUARD_TESTS_SUPPORT_GRAPH_CHANGE_CLOCK_H
 
 #include "plexus/inproc/inproc_timer.h"
 #include "plexus/inproc/inproc_channel.h"

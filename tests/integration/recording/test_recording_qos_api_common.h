@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_QOS_API_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_QOS_API_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORDING_QOS_API_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORDING_QOS_API_COMMON_H
 
 // The public recording-QoS declaration oracle: it drives the capture gate through the
 // PUBLIC node facade alone (node / node_options / publisher / subscriber), touching no

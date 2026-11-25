@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_UDP_REPRODUCIBILITY_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_UDP_REPRODUCIBILITY_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_UDP_REPRODUCIBILITY_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_UDP_REPRODUCIBILITY_COMMON_H
 
 // The cross-class UDP reproducibility test: BOTH UDP delivery classes proven over 100
 // in-body iterations each, with the ctest invocation re-run across >=3 process runs (a

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_TLS_TEST_TLS_LARGE_PAYLOAD_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_TLS_TEST_TLS_LARGE_PAYLOAD_COMMON_H
+#ifndef HPP_GUARD_TESTS_TLS_TEST_TLS_LARGE_PAYLOAD_COMMON_H
+#define HPP_GUARD_TESTS_TLS_TEST_TLS_LARGE_PAYLOAD_COMMON_H
 
 // The lifted single-message size envelope on the secure TLS stream. A large frame
 // round-trips byte-equal over a live mutual-TLS loopback pair: the node per-MESSAGE

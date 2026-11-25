@@ -1,8 +1,8 @@
 // Backpressure proofs over an anonymous mapped span: best_effort overwrite skips
 // a pinned slot (a held take is not stomped); a full-lap-pinned ring returns
 // congested; reliable claim gates on the slowest registered cursor (lossless).
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_BACKPRESSURE_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_TEST_SHM_RING_BACKPRESSURE_COMMON_H
+#ifndef HPP_GUARD_TESTS_SHM_RING_TEST_SHM_RING_BACKPRESSURE_COMMON_H
+#define HPP_GUARD_TESTS_SHM_RING_TEST_SHM_RING_BACKPRESSURE_COMMON_H
 
 #include "plexus/shm/loan_status.h"
 #include "plexus/shm/ring_layout.h"

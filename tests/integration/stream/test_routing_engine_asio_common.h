@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_ROUTING_ENGINE_ASIO_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_ROUTING_ENGINE_ASIO_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_ROUTING_ENGINE_ASIO_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_ROUTING_ENGINE_ASIO_COMMON_H
 
 // Gated real-TCP routing oracle over asio loopback. It drives the routing_engine
 // over asio_transport with NO hand-dial — the engine itself opens the connection,

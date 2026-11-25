@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_INPROC_STAMP_DEMAND_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_INPROC_STAMP_DEMAND_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_QOS_TEST_INPROC_STAMP_DEMAND_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_QOS_TEST_INPROC_STAMP_DEMAND_COMMON_H
 
 // The inproc stamp-demand behavioral gate. The receive-side message_info timestamps are
 // demand-driven: a 3-arg subscriber that wants them sees the populated stamps exactly as

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_UDP_SEND_BURST_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_UDP_SEND_BURST_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_UDP_SEND_BURST_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_UDP_SEND_BURST_COMMON_H
 
 // The outbound-send-lifetime gate: the shared udp_server owns each in-flight datagram
 // across its async_send_to (a serial owned queue), so a BURST of sends issued in ONE

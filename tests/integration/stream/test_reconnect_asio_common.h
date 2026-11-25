@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_RECONNECT_ASIO_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_RECONNECT_ASIO_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_RECONNECT_ASIO_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_RECONNECT_ASIO_COMMON_H
 
 // Gated real-TCP reconnect oracle over asio loopback. The reconnect driver drives
 // the dial-retry cycle on a real steady_timer: an established session whose channel

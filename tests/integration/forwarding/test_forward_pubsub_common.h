@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_FORWARD_PUBSUB_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_FORWARD_PUBSUB_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_FORWARDING_TEST_FORWARD_PUBSUB_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_FORWARDING_TEST_FORWARD_PUBSUB_COMMON_H
 
 // A deterministic publisher -> relay -> subscriber pub/sub substrate over one inproc bus: a publisher
 // leaf, a relay carrying the REAL forward splice, and a subscriber leaf with NO direct publisher<->

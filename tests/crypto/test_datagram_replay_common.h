@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_CRYPTO_TEST_DATAGRAM_REPLAY_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_CRYPTO_TEST_DATAGRAM_REPLAY_COMMON_H
+#ifndef HPP_GUARD_TESTS_CRYPTO_TEST_DATAGRAM_REPLAY_COMMON_H
+#define HPP_GUARD_TESTS_CRYPTO_TEST_DATAGRAM_REPLAY_COMMON_H
 
 // The datagram_authenticated_channel proof: an out-of-order but fresh datagram
 // within the window opens and is delivered (the explicit sequence reconstructs the

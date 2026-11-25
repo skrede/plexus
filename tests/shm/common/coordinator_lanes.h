@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_COORDINATOR_LANES_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_COORDINATOR_LANES_H
+#ifndef HPP_GUARD_TESTS_SHM_COMMON_COORDINATOR_LANES_H
+#define HPP_GUARD_TESTS_SHM_COMMON_COORDINATOR_LANES_H
 
 #include "plexus/io/dispatch_hint.h"
 #include "plexus/io/companion_event.h"

@@ -8,8 +8,8 @@
 // DROPPING the first `drop_count` datagrams it sees in each direction-agnostic stream.
 // This relay is the SAME reusable loss-injection seam a later reliable-data-ARQ leg
 // composes — a wrapping forwarder, not a one-off.
-#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_HANDSHAKE_ARQ_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_HANDSHAKE_ARQ_COMMON_H
+#ifndef HPP_GUARD_TESTS_ASIO_TEST_UDP_HANDSHAKE_ARQ_COMMON_H
+#define HPP_GUARD_TESTS_ASIO_TEST_UDP_HANDSHAKE_ARQ_COMMON_H
 
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_transport.h"

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_RXO_COMPATIBILITY_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_RXO_COMPATIBILITY_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_QOS_TEST_RXO_COMPATIBILITY_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_QOS_TEST_RXO_COMPATIBILITY_COMMON_H
 
 // The end-to-end request-vs-offered compatibility hard gate over the inproc
 // rendezvous: a subscriber (the dialer/requester) demands a producer's (the accepted

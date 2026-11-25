@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_CRYPTO_TEST_NONCE_UNIQUENESS_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_CRYPTO_TEST_NONCE_UNIQUENESS_COMMON_H
+#ifndef HPP_GUARD_TESTS_CRYPTO_TEST_NONCE_UNIQUENESS_COMMON_H
+#define HPP_GUARD_TESTS_CRYPTO_TEST_NONCE_UNIQUENESS_COMMON_H
 
 // The named nonce-uniqueness gate (looped, reproducible). Across normal steady-state
 // flow, a reconnect (a fresh session minting new keys + a fresh epoch axis), and a

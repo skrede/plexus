@@ -4,8 +4,8 @@
 // are covered sans-IO elsewhere; these prove the live composition. The ctest invocation
 // is re-run across >=3 process runs for cross-process reproducibility (a live-networking
 // claim is never made from one run).
-#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_FRAGMENTATION_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_FRAGMENTATION_COMMON_H
+#ifndef HPP_GUARD_TESTS_ASIO_TEST_UDP_FRAGMENTATION_COMMON_H
+#define HPP_GUARD_TESTS_ASIO_TEST_UDP_FRAGMENTATION_COMMON_H
 
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_channel.h"

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_ROUTING_ENGINE_INPROC_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_ROUTING_ENGINE_INPROC_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_COMMON_TEST_ROUTING_ENGINE_INPROC_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_COMMON_TEST_ROUTING_ENGINE_INPROC_COMMON_H
 
 // The deterministic two-node routing oracle on the manual virtual clock: two
 // engines (node A, node B) over one inproc bus, each owning its forwarders, its

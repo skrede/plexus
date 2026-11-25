@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_CRYPTO_TEST_AUTHENTICATED_CHANNEL_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_CRYPTO_TEST_AUTHENTICATED_CHANNEL_COMMON_H
+#ifndef HPP_GUARD_TESTS_CRYPTO_TEST_AUTHENTICATED_CHANNEL_COMMON_H
+#define HPP_GUARD_TESTS_CRYPTO_TEST_AUTHENTICATED_CHANNEL_COMMON_H
 
 // The authenticated_channel proof: a header-on frame sealed by the send-side
 // decorator is delivered as the original plaintext header-on frame by the

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_IO_TEST_PEER_LIVELINESS_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_IO_TEST_PEER_LIVELINESS_COMMON_H
+#ifndef HPP_GUARD_TESTS_IO_TEST_PEER_LIVELINESS_COMMON_H
+#define HPP_GUARD_TESTS_IO_TEST_PEER_LIVELINESS_COMMON_H
 
 // Shared harness for the peer-liveliness arbiter oracle: the fusion-matrix cases and the
 // precedence/hysteresis cases compile into one target, so the driver, the node_id maker, the

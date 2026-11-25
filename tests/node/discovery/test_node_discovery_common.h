@@ -1,8 +1,8 @@
 // The node discovery-wiring oracle, over the live static_discovery: advertise-at-birth,
 // listen() port-key append + live re-advertise, browse-to-awareness into router().known(),
 // and the malformed-card reject table (untrusted multicast input).
-#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_NODE_DISCOVERY_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_NODE_DISCOVERY_COMMON_H
+#ifndef HPP_GUARD_TESTS_NODE_DISCOVERY_TEST_NODE_DISCOVERY_COMMON_H
+#define HPP_GUARD_TESTS_NODE_DISCOVERY_TEST_NODE_DISCOVERY_COMMON_H
 
 #include "plexus/node.h"
 #include "plexus/node_options.h"

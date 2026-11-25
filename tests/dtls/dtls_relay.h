@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_RELAY_H
-#define HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_RELAY_H
+#ifndef HPP_GUARD_TESTS_DTLS_DTLS_RELAY_H
+#define HPP_GUARD_TESTS_DTLS_DTLS_RELAY_H
 
 #include <asio/buffer.hpp>
 #include <asio/io_context.hpp>

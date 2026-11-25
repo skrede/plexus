@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_FUZZ_FUZZ_SINK_H
-#define HPP_GUARD_PLEXUS_TESTS_FUZZ_FUZZ_SINK_H
+#ifndef HPP_GUARD_TESTS_FUZZ_FUZZ_SINK_H
+#define HPP_GUARD_TESTS_FUZZ_FUZZ_SINK_H
 
 // A pure header-inline decode whose result is discarded gets dead-code-eliminated,
 // leaving the harness a single straight-line edge that fuzzes nothing. Escaping the

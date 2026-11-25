@@ -2,8 +2,8 @@
 // io_context). The selector composes locality (the tier) x reliability (the
 // scheme-encoded delivery class) FROM THE ENDPOINT ALONE — the dial(ep) reality,
 // where the scheme is the only routing discriminator the engine path carries.
-#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_SELECTOR_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_SELECTOR_COMMON_H
+#ifndef HPP_GUARD_TESTS_ASIO_TEST_UDP_SELECTOR_COMMON_H
+#define HPP_GUARD_TESTS_ASIO_TEST_UDP_SELECTOR_COMMON_H
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/reliability.h"

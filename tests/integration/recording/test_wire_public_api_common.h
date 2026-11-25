@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_WIRE_PUBLIC_API_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_WIRE_PUBLIC_API_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_WIRE_PUBLIC_API_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_WIRE_PUBLIC_API_COMMON_H
 
 // The construction-time per-transport wire-capture public-API oracle: using ONLY the public
 // node facade + node_options (no internal recording include in the opt-in path), a node

@@ -2,8 +2,8 @@
 // the move-only RAII contract and the ctor-canonical registration/retire of the publisher
 // and subscriber handles. Two nodes over a shared inproc bus + static_discovery,
 // eager-dialing so awareness converges to a live connection on a single drain.
-#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_HANDLES_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_HANDLES_COMMON_H
+#ifndef HPP_GUARD_TESTS_NODE_FACADE_TEST_HANDLES_COMMON_H
+#define HPP_GUARD_TESTS_NODE_FACADE_TEST_HANDLES_COMMON_H
 
 #include "plexus/node.h"
 #include "plexus/publisher.h"

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_FORWARD_SERIAL_E2E_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_FORWARD_SERIAL_E2E_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_SERIAL_TEST_FORWARD_SERIAL_E2E_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_SERIAL_TEST_FORWARD_SERIAL_E2E_COMMON_H
 
 // The two-live-transport relay acceptance substrate, driven entirely through the public node facade. A serial-attached
 // origin, a relay owning BOTH a serial and a TCP session, and a TCP-attached consumer stand up on ONE shared io_context

@@ -2,8 +2,8 @@
 // multicast, no wall-clock sleep): the deterministic (announce_period, TTL) grid cell runner the
 // recorded empirical sweep settles the locked default against, and the two-engine wired pair whose
 // announcer goes silent and ages out of the observer's known().
-#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_NODE_DISCOVERY_AGING_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_NODE_DISCOVERY_AGING_COMMON_H
+#ifndef HPP_GUARD_TESTS_NODE_DISCOVERY_TEST_NODE_DISCOVERY_AGING_COMMON_H
+#define HPP_GUARD_TESTS_NODE_DISCOVERY_TEST_NODE_DISCOVERY_AGING_COMMON_H
 
 #include "plexus/io/endpoint_id.h"
 #include "plexus/io/known_peers.h"

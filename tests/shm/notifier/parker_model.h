@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_PARKER_MODEL_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_PARKER_MODEL_H
+#ifndef HPP_GUARD_TESTS_SHM_NOTIFIER_PARKER_MODEL_H
+#define HPP_GUARD_TESTS_SHM_NOTIFIER_PARKER_MODEL_H
 
 #include "park_enumerator.h"
 #include "registered_waiters.h"

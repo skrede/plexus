@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_CHANNEL_UNIX_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_STREAM_CHANNEL_UNIX_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_STREAM_CHANNEL_UNIX_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_STREAM_CHANNEL_UNIX_COMMON_H
 
 // Gated real-AF_UNIX stream-channel hardening leg over a local socket. A raw client
 // socket writes hostile bytes into a live unix_channel (the accepted server end,

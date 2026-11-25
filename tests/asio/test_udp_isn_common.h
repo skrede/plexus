@@ -6,8 +6,8 @@
 // longer inject an accepted [kind=reliable-data][seq=0..] segment on the PLAINTEXT udpr
 // path (under AEAD the forged segment also dies at the tag check, so this is the
 // plaintext-path defense).
-#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_ISN_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_ISN_COMMON_H
+#ifndef HPP_GUARD_TESTS_ASIO_TEST_UDP_ISN_COMMON_H
+#define HPP_GUARD_TESTS_ASIO_TEST_UDP_ISN_COMMON_H
 
 #include "plexus/asio/udp_server.h"
 #include "plexus/asio/udp_channel.h"

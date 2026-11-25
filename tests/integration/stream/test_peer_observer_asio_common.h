@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_PEER_OBSERVER_ASIO_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_PEER_OBSERVER_ASIO_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_PEER_OBSERVER_ASIO_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_PEER_OBSERVER_ASIO_COMMON_H
 
 // The live-TCP peer-observer behavior oracle over asio loopback. A recording observer
 // (shared header) is registered on a real routing_engine driven over asio_transport

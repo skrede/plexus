@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_OUTOFBOX_MESSAGE_CEILING_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_OUTOFBOX_MESSAGE_CEILING_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_OUTOFBOX_MESSAGE_CEILING_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_OUTOFBOX_MESSAGE_CEILING_COMMON_H
 
 // The out-of-box message-ceiling guard: an 8 MiB message — the SHIPPED default per-message
 // ceiling (io::global_default_max_message_bytes) — round-trips byte-identically over every

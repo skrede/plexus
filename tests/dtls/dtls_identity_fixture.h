@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_IDENTITY_FIXTURE_H
-#define HPP_GUARD_PLEXUS_TESTS_DTLS_DTLS_IDENTITY_FIXTURE_H
+#ifndef HPP_GUARD_TESTS_DTLS_DTLS_IDENTITY_FIXTURE_H
+#define HPP_GUARD_TESTS_DTLS_DTLS_IDENTITY_FIXTURE_H
 
 #include "plexus/tls/tls_credential.h"
 #include "plexus/tls/spki_fingerprint.h"

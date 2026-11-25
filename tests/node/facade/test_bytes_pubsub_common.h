@@ -2,8 +2,8 @@
 // static_discovery (eager-dialing). It proves byte-identical delivery from a
 // publisher.publish to a subscriber callback, the 3-arg message_info path, and the
 // standing fan to a peer discovered after the subscriber registers.
-#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_BYTES_PUBSUB_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_BYTES_PUBSUB_COMMON_H
+#ifndef HPP_GUARD_TESTS_NODE_FACADE_TEST_BYTES_PUBSUB_COMMON_H
+#define HPP_GUARD_TESTS_NODE_FACADE_TEST_BYTES_PUBSUB_COMMON_H
 
 #include "plexus/node.h"
 #include "plexus/publisher.h"

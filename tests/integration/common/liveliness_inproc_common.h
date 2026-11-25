@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_LIVELINESS_INPROC_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_LIVELINESS_INPROC_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_COMMON_LIVELINESS_INPROC_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_COMMON_LIVELINESS_INPROC_COMMON_H
 
 // The shared inproc scaffold for the fused peer-liveliness verdict oracles on the deterministic
 // virtual clock: the manual_clock/manual_policy pair, the engine alias, the id/config helpers, and a

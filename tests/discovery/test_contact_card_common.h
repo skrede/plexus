@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_DISCOVERY_TEST_CONTACT_CARD_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_DISCOVERY_TEST_CONTACT_CARD_COMMON_H
+#ifndef HPP_GUARD_TESTS_DISCOVERY_TEST_CONTACT_CARD_COMMON_H
+#define HPP_GUARD_TESTS_DISCOVERY_TEST_CONTACT_CARD_COMMON_H
 
 // The contact-card oracle: the node-level discovery card is node_id + one port key
 // per listening transport + a schema version, and NOTHING else. It proves the exact

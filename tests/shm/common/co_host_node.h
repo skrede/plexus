@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_CO_HOST_NODE_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_CO_HOST_NODE_H
+#ifndef HPP_GUARD_TESTS_SHM_COMMON_CO_HOST_NODE_H
+#define HPP_GUARD_TESTS_SHM_COMMON_CO_HOST_NODE_H
 
 #include "plexus/asio/asio_policy.h"
 #include "plexus/asio/asio_transport.h"

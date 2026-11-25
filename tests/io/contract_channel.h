@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_IO_CONTRACT_CHANNEL_H
-#define HPP_GUARD_PLEXUS_TESTS_IO_CONTRACT_CHANNEL_H
+#ifndef HPP_GUARD_TESTS_IO_CONTRACT_CHANNEL_H
+#define HPP_GUARD_TESTS_IO_CONTRACT_CHANNEL_H
 
 #include "plexus/io/endpoint.h"
 #include "plexus/io/io_error.h"

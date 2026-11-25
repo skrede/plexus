@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_SELF_DESCRIBING_CAPTURE_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_SELF_DESCRIBING_CAPTURE_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_SELF_DESCRIBING_CAPTURE_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_SELF_DESCRIBING_CAPTURE_COMMON_H
 
 // The self-describing capture oracle: a single-process inproc session whose producer
 // declares a topic with a known producer type_id and attaches a recorder carrying a public

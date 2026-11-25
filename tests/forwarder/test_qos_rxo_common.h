@@ -5,8 +5,8 @@
 // and permissive mode yielding a degraded verdict with a NON-EMPTY bitmask naming the
 // right soft field (the non-silent guarantee at the pure level). Driven directly
 // against the relations — no I/O, no registry.
-#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_QOS_RXO_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_QOS_RXO_COMMON_H
+#ifndef HPP_GUARD_TESTS_FORWARDER_TEST_QOS_RXO_COMMON_H
+#define HPP_GUARD_TESTS_FORWARDER_TEST_QOS_RXO_COMMON_H
 
 #include "plexus/io/qos_rxo.h"
 #include "plexus/io/reliability.h"

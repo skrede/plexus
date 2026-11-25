@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_IO_TEST_STREAM_SEND_QUEUE_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_IO_TEST_STREAM_SEND_QUEUE_COMMON_H
+#ifndef HPP_GUARD_TESTS_IO_TEST_STREAM_SEND_QUEUE_COMMON_H
+#define HPP_GUARD_TESTS_IO_TEST_STREAM_SEND_QUEUE_COMMON_H
 
 // The stream_send_queue block oracle: a pure sans-IO drive of the endpoint-less serial
 // outbound discipline with a recording stub send-sink (capturing the gathered bytes + a

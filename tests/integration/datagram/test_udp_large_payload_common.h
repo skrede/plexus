@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_UDP_LARGE_PAYLOAD_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_UDP_LARGE_PAYLOAD_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_UDP_LARGE_PAYLOAD_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_UDP_LARGE_PAYLOAD_COMMON_H
 
 // Large-payload datagram capability over real loopback sockets: a 1 MB and a 4 MB
 // message round-trip byte-identically through the existing fragmenter + per-channel

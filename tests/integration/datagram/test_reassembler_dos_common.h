@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_REASSEMBLER_DOS_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_REASSEMBLER_DOS_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_REASSEMBLER_DOS_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_DATAGRAM_TEST_REASSEMBLER_DOS_COMMON_H
 
 // The reassembly-DoS bound: the reassembler stays bounded under a forged/partial-fragment
 // flood. Each of its four bounds is FORCED, looped, and the in-flight state is

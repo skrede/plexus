@@ -5,8 +5,8 @@
 // path with encode invoked AT MOST ONCE per publish; a latched topic forces exactly
 // one encode even when every live subscriber fast-paths; the caller's slot reference
 // is balanced on every path.
-#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
+#ifndef HPP_GUARD_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
+#define HPP_GUARD_TESTS_FORWARDER_TEST_PUBLISH_OBJECT_COMMON_H
 
 #include "plexus/io/object_carrier.h"
 #include "plexus/io/message_forwarder.h"

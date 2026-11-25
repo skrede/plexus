@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SEAM_TEST_RELIABILITY_ENFORCEMENT_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_SEAM_TEST_RELIABILITY_ENFORCEMENT_COMMON_H
+#ifndef HPP_GUARD_TESTS_SEAM_TEST_RELIABILITY_ENFORCEMENT_COMMON_H
+#define HPP_GUARD_TESTS_SEAM_TEST_RELIABILITY_ENFORCEMENT_COMMON_H
 
 // The permissive/strict reliability enforcement gate on the routing_engine subscribe
 // demand path, as a deterministic seam test over the inproc backend. The gate is a

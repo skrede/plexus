@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_HOST_SINK_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_HOST_SINK_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORDING_HOST_SINK_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_RECORDING_TEST_RECORDING_HOST_SINK_COMMON_H
 
 // Shared fixture for the host recording-sink oracle: a deterministic capture (fixed clock + fixed
 // sample sequence) fed to any byte_sink, plus file/stream helpers. The sink-behavior cases and the

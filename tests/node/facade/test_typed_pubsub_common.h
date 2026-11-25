@@ -4,8 +4,8 @@
 // T&) convenience form, the decode-failure default + opt-in escape, the strict/lenient
 // posture, and atomic retire. The codec is a hand-rolled trivial struct codec defined here
 // — plexus never names a serializer library.
-#ifndef HPP_GUARD_PLEXUS_TESTS_NODE_TEST_TYPED_PUBSUB_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_NODE_TEST_TYPED_PUBSUB_COMMON_H
+#ifndef HPP_GUARD_TESTS_NODE_FACADE_TEST_TYPED_PUBSUB_COMMON_H
+#define HPP_GUARD_TESTS_NODE_FACADE_TEST_TYPED_PUBSUB_COMMON_H
 
 #include "plexus/node.h"
 #include "plexus/expected.h"

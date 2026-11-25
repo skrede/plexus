@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_DEADLINE_LIVELINESS_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_DEADLINE_LIVELINESS_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_QOS_TEST_DEADLINE_LIVELINESS_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_QOS_TEST_DEADLINE_LIVELINESS_COMMON_H
 
 // The end-to-end deadline/liveliness behavioral gate on the deterministic virtual
 // clock: two engines (a subscriber A, a publisher B) over one inproc bus. The

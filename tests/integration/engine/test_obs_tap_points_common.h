@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_OBS_TAP_POINTS_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_OBS_TAP_POINTS_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_ENGINE_TEST_OBS_TAP_POINTS_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_ENGINE_TEST_OBS_TAP_POINTS_COMMON_H
 
 // The deterministic data-path tap-point oracle on the manual virtual clock. A recording
 // observer is registered on a publishing routing_engine and the message-fan-out taps are

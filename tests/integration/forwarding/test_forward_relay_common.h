@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_FORWARD_RELAY_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_FORWARD_RELAY_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_FORWARDING_TEST_FORWARD_RELAY_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_FORWARDING_TEST_FORWARD_RELAY_COMMON_H
 
 // A deterministic relayed request/response substrate over one inproc bus: leaf nodes with NO direct
 // session to each other exchange a request and its response entirely through an intermediary that holds

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_SERIAL_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_SERIAL_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_SERIAL_TEST_SERIAL_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_SERIAL_TEST_SERIAL_COMMON_H
 
 // The hardware-free host serial loopback oracle. openpty(3) gives a master/slave pty pair the
 // kernel wires together exactly like a serial cable — a byte written to one end appears on the

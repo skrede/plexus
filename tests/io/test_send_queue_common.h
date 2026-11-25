@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_IO_TEST_SEND_QUEUE_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_IO_TEST_SEND_QUEUE_COMMON_H
+#ifndef HPP_GUARD_TESTS_IO_TEST_SEND_QUEUE_COMMON_H
+#define HPP_GUARD_TESTS_IO_TEST_SEND_QUEUE_COMMON_H
 
 // The send_queue block oracle: a pure sans-IO drive of the generic serial outbound
 // discipline with a recording stub send-sink (capturing the owned bytes + a manual

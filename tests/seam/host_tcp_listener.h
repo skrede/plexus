@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_LISTENER_H
-#define HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_TCP_LISTENER_H
+#ifndef HPP_GUARD_TESTS_SEAM_HOST_TCP_LISTENER_H
+#define HPP_GUARD_TESTS_SEAM_HOST_TCP_LISTENER_H
 
 // The test-side acceptor: a GENUINE POSIX listener over loopback, mirroring the seam of the
 // on-target lwIP acceptor (bind_and_listen / accept_one / close) so the transport templates over

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_DRIVE_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_HOLD_DRIVE_H
+#ifndef HPP_GUARD_TESTS_SHM_COMMON_HOLD_DRIVE_H
+#define HPP_GUARD_TESTS_SHM_COMMON_HOLD_DRIVE_H
 
 #include "hold_tally.h"
 #include "hold_drivers.h"

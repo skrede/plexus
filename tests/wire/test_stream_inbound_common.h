@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_WIRE_TEST_STREAM_INBOUND_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_WIRE_TEST_STREAM_INBOUND_COMMON_H
+#ifndef HPP_GUARD_TESTS_WIRE_TEST_STREAM_INBOUND_COMMON_H
+#define HPP_GUARD_TESTS_WIRE_TEST_STREAM_INBOUND_COMMON_H
 
 // The deterministic stream_inbound detection oracle on the manual virtual clock:
 // it proves the shared byte-stream framing-hardening component in isolation — no

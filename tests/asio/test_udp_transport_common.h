@@ -4,8 +4,8 @@
 // accepting channel's on_data posts the IDENTICAL bytes. The two concept gates
 // (byte_channel<udp_channel>, transport_backend<udp_transport, udp_policy>) are restated
 // in the base TU so it is self-evidently the proof.
-#ifndef HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_TRANSPORT_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_ASIO_TEST_UDP_TRANSPORT_COMMON_H
+#ifndef HPP_GUARD_TESTS_ASIO_TEST_UDP_TRANSPORT_COMMON_H
+#define HPP_GUARD_TESTS_ASIO_TEST_UDP_TRANSPORT_COMMON_H
 
 #include "plexus/asio/udp_policy.h"
 #include "plexus/asio/udp_server.h"

@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_TESTS_INTEGRATION_MULTIPEER_RECONNECT_ASIO_COMMON_H
-#define HPP_GUARD_TESTS_INTEGRATION_MULTIPEER_RECONNECT_ASIO_COMMON_H
+#ifndef HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_MULTIPEER_RECONNECT_ASIO_COMMON_H
+#define HPP_GUARD_TESTS_INTEGRATION_STREAM_TEST_MULTIPEER_RECONNECT_ASIO_COMMON_H
 
 // Gated real-TCP N>=3-peer concurrent-drop oracle over asio loopback. One dialer
 // engine (routing_engine over asio_transport) holds N established peer sessions; the

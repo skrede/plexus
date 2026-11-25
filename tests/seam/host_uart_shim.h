@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_UART_SHIM_H
-#define HPP_GUARD_PLEXUS_TESTS_SEAM_HOST_UART_SHIM_H
+#ifndef HPP_GUARD_TESTS_SEAM_HOST_UART_SHIM_H
+#define HPP_GUARD_TESTS_SEAM_HOST_UART_SHIM_H
 
 // Host stand-in for the ESP-IDF UART driver surface that uart_channel names. NET-NEW
 // scaffolding: the existing freertos_host_shim.h shims only the FreeRTOS kernel

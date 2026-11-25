@@ -6,8 +6,8 @@
 // invariant, and the zero-allocation steady-state stamp. Every timing assertion is
 // looped for reproducibility, and every period is pinned >= k_tick_granularity so an
 // advance actually crosses a tick expiry.
-#ifndef HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_LIVELINESS_MONITOR_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_FORWARDER_TEST_LIVELINESS_MONITOR_COMMON_H
+#ifndef HPP_GUARD_TESTS_FORWARDER_TEST_LIVELINESS_MONITOR_COMMON_H
+#define HPP_GUARD_TESTS_FORWARDER_TEST_LIVELINESS_MONITOR_COMMON_H
 
 #include "plexus/io/liveness_event.h"
 #include "plexus/io/liveliness_monitor.h"

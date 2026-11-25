@@ -1,8 +1,8 @@
 // A deterministic fake datagram_socket + host policy for the multicast_discovery unit cases:
 // the fake captures every send_multicast payload and lets a test inject an inbound (from, bytes)
 // into the stored on_datagram handler, the unit injection point with no real socket or loop.
-#ifndef HPP_GUARD_PLEXUS_TESTS_DISCOVERY_TEST_MULTICAST_DISCOVERY_COMMON_H
-#define HPP_GUARD_PLEXUS_TESTS_DISCOVERY_TEST_MULTICAST_DISCOVERY_COMMON_H
+#ifndef HPP_GUARD_TESTS_DISCOVERY_TEST_MULTICAST_DISCOVERY_COMMON_H
+#define HPP_GUARD_TESTS_DISCOVERY_TEST_MULTICAST_DISCOVERY_COMMON_H
 
 #include "plexus/discovery/multicast_discovery.h"
 

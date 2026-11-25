@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_NOOP_NOTIFIER_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_NOOP_NOTIFIER_H
+#ifndef HPP_GUARD_TESTS_SHM_COMMON_NOOP_NOTIFIER_H
+#define HPP_GUARD_TESTS_SHM_COMMON_NOOP_NOTIFIER_H
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/notifier_concept.h"

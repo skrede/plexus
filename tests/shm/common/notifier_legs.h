@@ -1,5 +1,5 @@
-#ifndef HPP_GUARD_PLEXUS_TESTS_SHM_NOTIFIER_LEGS_H
-#define HPP_GUARD_PLEXUS_TESTS_SHM_NOTIFIER_LEGS_H
+#ifndef HPP_GUARD_TESTS_SHM_COMMON_NOTIFIER_LEGS_H
+#define HPP_GUARD_TESTS_SHM_COMMON_NOTIFIER_LEGS_H
 
 #include "plexus/shm/arm_status.h"
 #include "plexus/shm/ring_layout.h"
