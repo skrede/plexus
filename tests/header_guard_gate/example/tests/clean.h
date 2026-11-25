@@ -1,0 +1,4 @@
+#ifndef HPP_GUARD_TESTS_CLEAN_H
+#define HPP_GUARD_TESTS_CLEAN_H
+
+#endif

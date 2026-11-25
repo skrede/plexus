@@ -1,0 +1,1 @@
+struct missing_fixture;
