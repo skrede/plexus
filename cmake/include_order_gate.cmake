@@ -1,11 +1,8 @@
 # Checks the CONVENTIONS.md include order in every C++ source and header under lib, backends, tests, examples, tools
 # and benchmarks; a root holding none of those directories, such as a negative-fixture directory, is scanned whole. A
-# block is a run of include and blank lines ended by any other line, and within each block the groups go project,
-# third-party, standard, each group holds one directory, the file's own directory leads the project groups, a directory
-# forms one group, names sort by length and then byte-wise, and one blank line separates two groups. A quoted include
-# is project when it names a scanned file, and an angle include is standard when it names a C++ standard header.
-# Included from the build, this file registers an ALL target that re-runs it through -P with INCLUDE_GATE_FATAL=ON, so
-# any violation fails the build; a -P run without INCLUDE_GATE_FATAL only warns.
+# quoted include is project when it names a scanned file, and an angle include is standard when it names a C++
+# standard header. Included from the build, this file registers an ALL target that re-runs it through -P with
+# INCLUDE_GATE_FATAL=ON, so any violation fails the build; a -P run without INCLUDE_GATE_FATAL only warns.
 
 if(NOT INCLUDE_GATE_SCAN)
     add_custom_target(include_order_gate ALL
