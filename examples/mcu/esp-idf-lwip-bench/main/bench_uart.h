@@ -127,6 +127,14 @@ public:
     static constexpr plexus::io::transport_kind mux_tier = plexus::io::transport_kind::local;
 
 private:
+    plexus::freertos::freertos_executor &m_ex;
+    bool m_installed{false};
+    plexus::freertos::uart_channel *m_channel{nullptr};
+    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+
     std::unique_ptr<plexus::freertos::uart_channel> mint_channel()
     {
         auto ch   = std::make_unique<plexus::freertos::uart_channel>(k_link_uart, m_ex, k_bench_link_max_payload, k_uart_rx_ring);
@@ -153,14 +161,6 @@ private:
         uart_driver_install(k_link_uart, k_uart_rx_ring, 0, 0, nullptr, 0);
         m_installed = true;
     }
-
-    plexus::freertos::freertos_executor &m_ex;
-    bool m_installed{false};
-    plexus::freertos::uart_channel *m_channel{nullptr};
-    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
 };
 
 static_assert(plexus::io::transport_backend<example::bench_uart_transport, example::bench_uart_policy>,

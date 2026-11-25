@@ -154,6 +154,19 @@ public:
     }
 
 private:
+    // m_on_error precedes m_egress: the egress borrows it by reference (block backpressure surfaces
+    // through it), so it must be constructed first.
+    detail::on_data_cb m_on_data;
+    detail::close_state m_close;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+    detail::on_protocol_close_cb m_on_protocol_close;
+    S m_socket;
+    plexus::io::endpoint m_remote;
+    std::vector<std::byte> m_read_buffer;
+    plexus::stream::stream_inbound<freertos_timer, freertos_executor &> m_inbound;
+    detail::lwip_channel_egress<S> m_egress;
+    rx_type m_rx;
+
     template<typename Buffer>
     std::size_t recv_step(Buffer &buffer)
     {
@@ -176,19 +189,6 @@ private:
     {
         detail::lwip_wire_inbound(m_inbound, m_on_data, m_on_protocol_close, [this] { close(); });
     }
-
-    // m_on_error precedes m_egress: the egress borrows it by reference (block backpressure surfaces
-    // through it), so it must be constructed first.
-    detail::on_data_cb m_on_data;
-    detail::close_state m_close;
-    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
-    detail::on_protocol_close_cb m_on_protocol_close;
-    S m_socket;
-    plexus::io::endpoint m_remote;
-    std::vector<std::byte> m_read_buffer;
-    plexus::stream::stream_inbound<freertos_timer, freertos_executor &> m_inbound;
-    detail::lwip_channel_egress<S> m_egress;
-    rx_type m_rx;
 };
 
 static_assert(plexus::io::byte_channel<lwip_channel<detail::null_stream_socket>>, "lwip_channel must satisfy byte_channel — check the seven verbs");

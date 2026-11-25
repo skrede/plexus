@@ -149,6 +149,11 @@ public:
     }
 
 private:
+    int m_fd;
+    std::atomic<bool> m_closed;
+    bool m_blocking;
+    std::optional<std::error_code> m_connect_outcome;
+
     void set_nonblocking()
     {
         set_fd_blocking(m_fd, false);
@@ -165,11 +170,6 @@ private:
             m_closed.store(true);
         return 0;
     }
-
-    int m_fd;
-    std::atomic<bool> m_closed;
-    bool m_blocking;
-    std::optional<std::error_code> m_connect_outcome;
 };
 
 }

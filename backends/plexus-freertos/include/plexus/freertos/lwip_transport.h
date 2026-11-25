@@ -129,6 +129,17 @@ public:
     }
 
 private:
+    freertos_executor &m_executor;
+    Acceptor m_acceptor;
+    detail::lwip_channel_views<channel_type, MaxClients> m_views;
+    detail::lwip_dialer<Socket, MaxClients> m_dialer;
+    std::optional<rx_task_options> m_rx_task;
+    bool m_listening;
+    detail::lwip_channel_settings m_channel_settings;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const plexus::io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error_cb;
+
     // Mint an accepted channel and hand ownership to the engine through on_accepted — refused (the socket dropped, the
     // set never grows) when the cap is reached, the bound enforced by construction, or when adopt cannot set it up.
     void accept_pending()
@@ -177,17 +188,6 @@ private:
         ch->on_shutdown([this, view] { m_views.remove(view); });
         return ch;
     }
-
-    freertos_executor &m_executor;
-    Acceptor m_acceptor;
-    detail::lwip_channel_views<channel_type, MaxClients> m_views;
-    detail::lwip_dialer<Socket, MaxClients> m_dialer;
-    std::optional<rx_task_options> m_rx_task;
-    bool m_listening;
-    detail::lwip_channel_settings m_channel_settings;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>)> m_on_accepted_cb;
-    plexus::detail::move_only_function<void(std::unique_ptr<channel_type>, const plexus::io::endpoint &)> m_on_dialed_cb;
-    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error_cb;
 };
 
 }

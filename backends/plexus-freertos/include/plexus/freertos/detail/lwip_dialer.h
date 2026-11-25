@@ -116,6 +116,12 @@ public:
     }
 
 private:
+    freertos_executor &m_executor;
+    std::array<pending, N> m_pending;
+    std::size_t m_count;
+    TickType_t m_timeout;
+    failed_cb m_on_failed_cb;
+
     // FreeRTOS's pdMS_TO_TICKS multiplies in TickType_t, so the count is capped where a 1000 Hz tick still fits 32 bits.
     static TickType_t to_ticks(std::chrono::nanoseconds timeout) noexcept
     {
@@ -140,12 +146,6 @@ private:
             m_pending[i] = std::move(m_pending[m_count]);
         return done;
     }
-
-    freertos_executor &m_executor;
-    std::array<pending, N> m_pending;
-    std::size_t m_count;
-    TickType_t m_timeout;
-    failed_cb m_on_failed_cb;
 };
 
 }

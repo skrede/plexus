@@ -71,15 +71,15 @@ public:
     }
 
 private:
+    static constexpr int k_backlog = 4;
+
+    int m_fd;
+
     void set_nonblocking()
     {
         const int flags = lwip_fcntl(m_fd, F_GETFL, 0);
         lwip_fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
     }
-
-    static constexpr int k_backlog = 4;
-
-    int m_fd;
 };
 
 }

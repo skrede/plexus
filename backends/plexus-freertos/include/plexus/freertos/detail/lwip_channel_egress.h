@@ -84,6 +84,17 @@ public:
     }
 
 private:
+    S &m_socket;
+    error_cb &m_on_error;
+    error_cb m_fail_cb;
+    buffer_seq m_views{};
+    completion m_done{};
+    plexus::io::congestion m_congestion;
+    std::size_t m_dropped{0};
+    std::size_t m_sent{0};
+    bool m_pending{false};
+    plexus::stream::detail::send_queue m_send_queue;
+
     // A soft short or zero send must not call done(): the send_queue re-issues the same front nodes each turn and its
     // completion pops them whatever the bool says, so the unsent tail would be lost. The gather and completion are
     // stashed and poll_egress() resumes past m_sent; only a fully flushed gather resets it and calls done(true).
@@ -124,17 +135,6 @@ private:
         m_done    = std::move(done);
         m_pending = true;
     }
-
-    S &m_socket;
-    error_cb &m_on_error;
-    error_cb m_fail_cb;
-    buffer_seq m_views{};
-    completion m_done{};
-    plexus::io::congestion m_congestion;
-    std::size_t m_dropped{0};
-    std::size_t m_sent{0};
-    bool m_pending{false};
-    plexus::stream::detail::send_queue m_send_queue;
 };
 
 }

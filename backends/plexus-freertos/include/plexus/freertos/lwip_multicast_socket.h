@@ -115,6 +115,16 @@ public:
     }
 
 private:
+    freertos_executor &m_executor;
+    std::string m_group;
+    std::string m_egress;
+    std::array<std::byte, 1500> m_recv_buf;
+    ::plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram_cb;
+    std::uint16_t m_port;
+    std::uint8_t m_ttl;
+    int m_fd;
+    bool m_open;
+
 #if defined(ESP_PLATFORM)
     void set_nonblocking()
     {
@@ -131,16 +141,6 @@ private:
         return endpoint_type{std::string{dotted}};
     }
 #endif
-
-    freertos_executor &m_executor;
-    std::string m_group;
-    std::string m_egress;
-    std::array<std::byte, 1500> m_recv_buf;
-    ::plexus::detail::move_only_function<void(const endpoint_type &, std::span<const std::byte>)> m_on_datagram_cb;
-    std::uint16_t m_port;
-    std::uint8_t m_ttl;
-    int m_fd;
-    bool m_open;
 };
 
 #if defined(ESP_PLATFORM)

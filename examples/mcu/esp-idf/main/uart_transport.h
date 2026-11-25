@@ -139,6 +139,15 @@ public:
     static constexpr plexus::io::transport_kind mux_tier = plexus::io::transport_kind::local;
 
 private:
+    plexus::freertos::freertos_executor &m_ex;
+    uart_port_t m_port;
+    bool m_installed{false};
+    plexus::freertos::uart_channel *m_channel{nullptr}; // non-owning poll handle; engine owns it
+    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> m_on_accepted;
+    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;
+    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed;
+    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
+
     // Construct the one channel, record a non-owning handle for poll(), then hand ownership to
     // the caller (the engine moves it into a session). The raw handle never owns.
     std::unique_ptr<plexus::freertos::uart_channel> mint_channel()
@@ -170,15 +179,6 @@ private:
         uart_driver_install(m_port, k_rx_ring_bytes, 0, 0, nullptr, 0);
         m_installed = true;
     }
-
-    plexus::freertos::freertos_executor &m_ex;
-    uart_port_t m_port;
-    bool m_installed{false};
-    plexus::freertos::uart_channel *m_channel{nullptr}; // non-owning poll handle; engine owns it
-    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>)> m_on_accepted;
-    plexus::detail::move_only_function<void(std::unique_ptr<plexus::freertos::uart_channel>, const plexus::io::endpoint &)> m_on_dialed;
-    plexus::detail::move_only_function<void(const plexus::io::endpoint &, plexus::io::io_error)> m_on_dial_failed;
-    plexus::detail::move_only_function<void(plexus::io::io_error)> m_on_error;
 };
 
 static_assert(plexus::io::transport_backend<example::uart_transport, example::uart_policy>, "uart_transport must satisfy transport_backend — check listen/dial/on_* surface");

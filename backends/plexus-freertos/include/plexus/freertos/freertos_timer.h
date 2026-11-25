@@ -81,6 +81,11 @@ public:
     }
 
 private:
+    freertos_executor &m_exec;
+    TickType_t m_expiry{};
+    plexus::detail::move_only_function<void(std::error_code)> m_handler;
+    bool m_active{false};
+
     void complete_pending(std::error_code ec)
     {
         if(m_handler)
@@ -89,11 +94,6 @@ private:
             h(ec);
         }
     }
-
-    freertos_executor &m_exec;
-    TickType_t m_expiry{};
-    plexus::detail::move_only_function<void(std::error_code)> m_handler;
-    bool m_active{false};
 };
 
 inline bool freertos_executor::fire_due_timer()
