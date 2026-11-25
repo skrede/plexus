@@ -108,7 +108,6 @@ public:
     }
 
     template<typename F, std::enable_if_t<!std::is_same_v<std::remove_cvref_t<F>, move_only_function> && std::is_invocable_r_v<R, F &, Args...>, int> = 0>
-    // NOLINTNEXTLINE(google-explicit-constructor)
     move_only_function(F f)
     {
         emplace<std::decay_t<F>>(std::move(f));

@@ -33,20 +33,17 @@ class expected
     std::variant<T, unexpected<E>> m_storage;
 
 public:
-    // NOLINTNEXTLINE(google-explicit-constructor)
     constexpr expected(T val)
             : m_storage(std::move(val))
     {
     }
 
     template<typename U, std::enable_if_t<std::is_constructible_v<T, U> && !std::is_same_v<std::remove_cvref_t<U>, expected>, int> = 0>
-    // NOLINTNEXTLINE(google-explicit-constructor)
     constexpr expected(U &&val)
             : m_storage(T(std::forward<U>(val)))
     {
     }
 
-    // NOLINTNEXTLINE(google-explicit-constructor)
     constexpr expected(unexpected<E> err)
             : m_storage(std::move(err))
     {
@@ -151,7 +148,6 @@ public:
     {
     }
 
-    // NOLINTNEXTLINE(google-explicit-constructor)
     constexpr expected(unexpected<E> err)
             : m_storage(std::move(err))
     {
