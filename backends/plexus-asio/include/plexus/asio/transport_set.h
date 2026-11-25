@@ -138,14 +138,14 @@ private:
         }
     };
 
+    ::asio::io_context &m_io;
+    detail::leaf_storage<Transports...> m_storage;
+
     template<typename Policy, std::size_t... Is>
     basic_node<Policy, Transports...> make_node_impl(discovery::discovery &disc, const plexus::node_id &id, const node_options &opts, std::index_sequence<Is...>)
     {
         return basic_node<Policy, Transports...>{m_io, disc, id, detail::leaf_at<Is>(m_storage)..., opts};
     }
-
-    ::asio::io_context &m_io;
-    detail::leaf_storage<Transports...> m_storage;
 };
 
 }

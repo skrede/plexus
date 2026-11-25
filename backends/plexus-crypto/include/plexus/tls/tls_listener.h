@@ -112,6 +112,20 @@ public:
     }
 
 private:
+    ::asio::io_context &m_io;
+    ::asio::ip::tcp::acceptor m_acceptor;
+    plexus::asio::detail::accept_backoff m_backoff;
+    const tls_credential &m_cred;
+    stream::stream_inbound_options m_cfg;
+    bool m_no_delay;
+    io::congestion m_congestion;
+    io::egress_capacity m_egress_capacity;
+    plexus::asio::stream_socket_options m_socket_options;
+    io::pending_dial_registry<tls_channel> m_accepting; // accepted-table owner
+    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    bool m_running;
+
     // The closure and an accept backoff wait capture the listener, which its owner stops and drains before destroying, so
     // a success or an expiry queued before stop() finds it alive and stopped and drops the socket or the retry.
     void do_accept()
@@ -169,20 +183,6 @@ private:
         if(m_on_error_cb)
             m_on_error_cb(plexus::asio::detail::map_error(ec));
     }
-
-    ::asio::io_context &m_io;
-    ::asio::ip::tcp::acceptor m_acceptor;
-    plexus::asio::detail::accept_backoff m_backoff;
-    const tls_credential &m_cred;
-    stream::stream_inbound_options m_cfg;
-    bool m_no_delay;
-    io::congestion m_congestion;
-    io::egress_capacity m_egress_capacity;
-    plexus::asio::stream_socket_options m_socket_options;
-    io::pending_dial_registry<tls_channel> m_accepting; // accepted-table owner
-    plexus::detail::move_only_function<void(std::unique_ptr<tls_channel>)> m_on_accepted_cb;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
-    bool m_running;
 };
 
 }

@@ -58,17 +58,17 @@ public:
 private:
     friend class posix_shm_region_broker;
 
-    region_handle(int fd, void *base, std::size_t length, std::string name) noexcept;
-
-    // noexcept + idempotent: nulls the members so a second invocation (the
-    // move-assign path) does nothing.
-    void reclaim() noexcept;
-
     int m_fd;
     void *m_base;
     std::string m_name;
     std::size_t m_length;
     mutable detail::sidecar_lock_file m_sidecar;
+
+    region_handle(int fd, void *base, std::size_t length, std::string name) noexcept;
+
+    // noexcept + idempotent: nulls the members so a second invocation (the
+    // move-assign path) does nothing.
+    void reclaim() noexcept;
 };
 
 }

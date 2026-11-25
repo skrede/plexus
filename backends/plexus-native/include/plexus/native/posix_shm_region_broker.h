@@ -44,13 +44,13 @@ public:
     void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy);
 
 private:
+    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view) { return true; }};
+
     // finish_create closes the fd on failure and removes the name only when the sizing failed, while the object is still
     // zero length; a mapping failure leaves the name. finish_attach never unlinks, and attaches a zero-length object
     // without a mapping.
     static plexus::shm::region_status finish_create(int fd, std::size_t length, std::string canonical, region_handle &out);
     static plexus::shm::region_status finish_attach(int fd, std::string canonical, region_handle &out);
-
-    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view) { return true; }};
 };
 
 }

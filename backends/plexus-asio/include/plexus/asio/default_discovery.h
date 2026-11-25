@@ -74,6 +74,21 @@ public:
     }
 
 private:
+    static constexpr std::size_t k_send_queue_bytes = 65536;
+    // A conservative self-echo window: several announce periods, far above the sub-millisecond
+    // loopback echo latency, so a node that is genuinely pumping its loop is never falsely read
+    // no_self_echo on a slow or loaded host.
+    static constexpr int k_probe_window_periods = 5;
+
+    options_type m_options;
+    log::null_logger m_default_logger;
+    udp_multicast_socket m_socket;
+    leaf_type m_leaf;
+    log::logger &m_log;
+    std::error_code m_resolve_ec;
+    std::chrono::milliseconds m_window;
+    mutable bool m_warned;
+
     default_discovery(::asio::io_context &io, options_type options, log::logger *log)
             : m_options(std::move(options))
             , m_default_logger()
@@ -109,21 +124,6 @@ private:
                                                         : "plexus: discovery saw no self-echo (multicast loopback disabled?)");
         m_warned = true;
     }
-
-    static constexpr std::size_t k_send_queue_bytes = 65536;
-    // A conservative self-echo window: several announce periods, far above the sub-millisecond
-    // loopback echo latency, so a node that is genuinely pumping its loop is never falsely read
-    // no_self_echo on a slow or loaded host.
-    static constexpr int k_probe_window_periods = 5;
-
-    options_type m_options;
-    log::null_logger m_default_logger;
-    udp_multicast_socket m_socket;
-    leaf_type m_leaf;
-    log::logger &m_log;
-    std::error_code m_resolve_ec;
-    std::chrono::milliseconds m_window;
-    mutable bool m_warned;
 };
 
 }

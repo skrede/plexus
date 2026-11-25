@@ -32,16 +32,16 @@ public:
     }
 
 protected:
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
+    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+
     stream_consumer_hooks()
             : m_on_error_cb()
             , m_on_protocol_close_cb()
             , m_on_data_cb()
     {
     }
-
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
-    plexus::detail::move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
-    plexus::detail::move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
 };
 
 }

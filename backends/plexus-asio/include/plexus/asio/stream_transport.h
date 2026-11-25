@@ -102,6 +102,22 @@ public:
         m_listener.stop();
     }
 
+private:
+    ::asio::io_context &m_io;
+    Listener m_listener;
+    stream::stream_inbound_options m_cfg;
+    bool m_no_delay;
+    io::congestion m_congestion;
+    io::egress_capacity m_egress_capacity;
+    stream_socket_options m_socket_options;
+    io::pending_dial_registry<Channel> m_pending;
+    std::chrono::nanoseconds m_dial_timeout;
+    detail::dial_deadline<Channel> m_deadline;
+    plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+
 protected:
     template<typename... ListenerArgs>
     stream_transport(::asio::io_context &io, stream::stream_inbound_options cfg, bool no_delay, io::congestion congestion, io::egress_capacity egress,
@@ -160,21 +176,6 @@ private:
         if(m_on_dial_failed_cb)
             m_on_dial_failed_cb(ep, e);
     }
-
-    ::asio::io_context &m_io;
-    Listener m_listener;
-    stream::stream_inbound_options m_cfg;
-    bool m_no_delay;
-    io::congestion m_congestion;
-    io::egress_capacity m_egress_capacity;
-    stream_socket_options m_socket_options;
-    io::pending_dial_registry<Channel> m_pending;
-    std::chrono::nanoseconds m_dial_timeout;
-    detail::dial_deadline<Channel> m_deadline;
-    plexus::detail::move_only_function<void(std::unique_ptr<Channel>)> m_on_accepted_cb;
-    plexus::detail::move_only_function<void(std::unique_ptr<Channel>, const io::endpoint &)> m_on_dialed_cb;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
 };
 
 }

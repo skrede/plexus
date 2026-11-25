@@ -118,6 +118,11 @@ public:
     }
 
 private:
+    ::asio::ssl::context m_ssl_ctx;
+    io::detail::handshake_gate m_gate; // open-before-data outbound buffer
+    io::detail::handshake_gate::drain_fn m_drain_cb;
+    plexus::detail::move_only_function<void()> m_on_ready_cb;
+
     template<typename Channel>
     void do_handshake(Channel &c, ::asio::ssl::stream_base::handshake_type mode)
     {
@@ -134,11 +139,6 @@ private:
                                            m_on_ready_cb();
                                    });
     }
-
-    ::asio::ssl::context m_ssl_ctx;
-    io::detail::handshake_gate m_gate; // open-before-data outbound buffer
-    io::detail::handshake_gate::drain_fn m_drain_cb;
-    plexus::detail::move_only_function<void()> m_on_ready_cb;
 };
 
 }

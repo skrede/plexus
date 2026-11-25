@@ -257,16 +257,6 @@ public:
     }
 
 protected:
-    Bootstrap &bootstrap() noexcept
-    {
-        return m_bootstrap;
-    }
-
-    std::vector<std::byte> &read_buffer() noexcept
-    {
-        return m_read_buf;
-    }
-
     // The single read-arm latch for this channel's lifetime. serial_channel reuses it (its own
     // start_read arms serial_do_read), so stream_shutdown_socket's reset clears the guard for both.
     bool m_reading{false};
@@ -295,12 +285,6 @@ private:
     template<typename Ch>
     friend void detail::stream_shutdown_socket(Ch &);
 
-    void bind_bootstrap()
-    {
-        if constexpr(requires(Bootstrap &b) { b.bind_drain([](std::span<const std::byte>) {}); })
-            m_bootstrap.bind_drain([this](std::span<const std::byte> b) { enqueue_egress(b); });
-    }
-
     ::asio::io_context &m_io;
     Bootstrap m_bootstrap;
     Stream m_stream;
@@ -315,6 +299,24 @@ private:
     io::detail::pending_ops m_ops;
     io::detail::close_notification m_closed;
     bool m_open;
+
+protected:
+    Bootstrap &bootstrap() noexcept
+    {
+        return m_bootstrap;
+    }
+
+    std::vector<std::byte> &read_buffer() noexcept
+    {
+        return m_read_buf;
+    }
+
+private:
+    void bind_bootstrap()
+    {
+        if constexpr(requires(Bootstrap &b) { b.bind_drain([](std::span<const std::byte>) {}); })
+            m_bootstrap.bind_drain([this](std::span<const std::byte> b) { enqueue_egress(b); });
+    }
 };
 
 }

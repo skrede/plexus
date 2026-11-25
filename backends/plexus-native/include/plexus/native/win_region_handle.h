@@ -57,17 +57,17 @@ public:
 private:
     friend class win_shm_region_broker;
 
-    win_region_handle(void *mapping, void *base, std::size_t length, std::string name) noexcept;
-
-    // noexcept + idempotent: nulls the members so a second invocation (the
-    // move-assign path) does nothing.
-    void reclaim() noexcept;
-
     void *m_base;
     void *m_mapping;
     std::string m_name;
     std::size_t m_length;
     std::array<void *, plexus::shm::k_liveness_slots> m_slots;
+
+    win_region_handle(void *mapping, void *base, std::size_t length, std::string name) noexcept;
+
+    // noexcept + idempotent: nulls the members so a second invocation (the
+    // move-assign path) does nothing.
+    void reclaim() noexcept;
 };
 
 }

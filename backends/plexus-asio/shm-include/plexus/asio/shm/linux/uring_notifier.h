@@ -115,6 +115,8 @@ public:
     }
 
 private:
+    std::shared_ptr<state> m_state;
+
     // A publish since the snapshot clears the word, so the wait completes at registration (the kernel compares the
     // word against PARKED) and the handler runs another drain instead of blocking. FUTEX_BITSET_MATCH_ANY plus
     // FUTEX2_SIZE_U32 match the SHARED 32-bit word the producer wakes. A wait that cannot be queued leaves no PARKED
@@ -172,8 +174,6 @@ private:
                              demotion(reason);
                      });
     }
-
-    std::shared_ptr<state> m_state;
 };
 
 }

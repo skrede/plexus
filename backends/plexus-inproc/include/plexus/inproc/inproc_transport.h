@@ -94,6 +94,15 @@ public:
     }
 
 private:
+    inproc_executor<Clock> &m_exec;
+    inproc_bus<Clock> &m_bus;
+    io::detail::retiring_table<inproc_channel<Clock>> m_retiring;
+    std::vector<std::uint64_t> m_listen_ids;
+    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> m_on_accepted_cb;
+    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>, const io::endpoint &)> m_on_dialed_cb;
+    detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    detail::move_only_function<void(io::io_error)> m_on_error_cb;
+
     template<typename Sink>
     std::unique_ptr<inproc_channel<Clock>> connect_pair(Sink &on_accepted)
     {
@@ -116,15 +125,6 @@ private:
         if(m_on_error_cb)
             m_on_error_cb(e);
     }
-
-    inproc_executor<Clock> &m_exec;
-    inproc_bus<Clock> &m_bus;
-    io::detail::retiring_table<inproc_channel<Clock>> m_retiring;
-    std::vector<std::uint64_t> m_listen_ids;
-    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>)> m_on_accepted_cb;
-    detail::move_only_function<void(std::unique_ptr<inproc_channel<Clock>>, const io::endpoint &)> m_on_dialed_cb;
-    detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
-    detail::move_only_function<void(io::io_error)> m_on_error_cb;
 };
 
 }

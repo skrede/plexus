@@ -47,6 +47,12 @@ public:
     }
 
 protected:
+    move_only_function<void(io::io_error)> m_on_error_cb;
+    move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
+    move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
+    move_only_function<void(const io::object_carrier &)> m_on_object_cb;
+    move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
+
     inproc_channel_hooks()
             : m_on_error_cb()
             , m_on_data_cb()
@@ -55,12 +61,6 @@ protected:
             , m_on_drop_cb()
     {
     }
-
-    move_only_function<void(io::io_error)> m_on_error_cb;
-    move_only_function<void(std::span<const std::byte>)> m_on_data_cb;
-    move_only_function<void(wire::close_cause)> m_on_protocol_close_cb;
-    move_only_function<void(const io::object_carrier &)> m_on_object_cb;
-    move_only_function<void(const io::detail::drop_event &)> m_on_drop_cb;
 
     void clear_hooks() noexcept
     {

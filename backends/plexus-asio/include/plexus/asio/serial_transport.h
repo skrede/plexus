@@ -97,6 +97,14 @@ public:
     static constexpr io::transport_kind mux_tier = io::transport_kind::remote;
 
 private:
+    ::asio::io_context &m_io;
+    io::detail::retiring_table<serial_channel> m_retiring;
+    serial_channel_options m_opts;
+    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> m_on_dialed_cb;
+    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+
     // The line discipline is applied HERE (on the open port, before adoption) rather than through
     // the channel's socket-options hook, so serial_traits::apply_socket_options stays a no-op.
     std::unique_ptr<serial_channel> open_channel(const io::endpoint &ep, std::error_code &ec)
@@ -145,14 +153,6 @@ private:
         if(m_on_error_cb)
             m_on_error_cb(e);
     }
-
-    ::asio::io_context &m_io;
-    io::detail::retiring_table<serial_channel> m_retiring;
-    serial_channel_options m_opts;
-    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>)> m_on_accepted_cb;
-    plexus::detail::move_only_function<void(std::unique_ptr<serial_channel>, const io::endpoint &)> m_on_dialed_cb;
-    plexus::detail::move_only_function<void(const io::endpoint &, io::io_error)> m_on_dial_failed_cb;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
 };
 
 }

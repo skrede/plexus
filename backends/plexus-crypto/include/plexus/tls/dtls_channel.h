@@ -184,36 +184,6 @@ public:
     }
 
 private:
-    long dtls_mtu() const noexcept
-    {
-        return static_cast<long>(m_record_mtu);
-    }
-
-    void secure_send(std::span<const std::byte> bytes);
-    // The post-handshake encrypted per-record budget (DTLS_get_data_mtu, capped by the logical
-    // ceiling); the fragmenter splits against THIS so each fragment rides one DTLS record.
-    std::size_t record_budget() const noexcept;
-    // Split an oversize-but-fragmentable frame across numbered records (each one FRAGMENTED-bit
-    // envelope); a frame beyond the bounded max-message size is rejected, not fragmented.
-    void send_large(std::span<const std::byte> bytes);
-    // A decrypted inbound FRAGMENTED record: decode its sub-header (fail-closed) and feed the
-    // bounded reassembler; a completed message posts on_data.
-    void feed_fragment(std::span<const std::byte> frame);
-    void ensure_reassembler();
-    void drain_outbound();
-    std::size_t pack_record(std::size_t packed);
-    std::size_t send_datagram(std::size_t length);
-    void drain_inbound();
-    void try_complete();
-    void arm_retransmit();
-    void on_retransmit();
-    void fail(io::io_error e);
-    void shut_down();
-    void notify_closed();
-    void post_on_data(std::span<const std::byte> frame);
-    void publish_cookie_ex_data();
-    void capture_peer_identity();
-
     ::asio::io_context &m_io;
     plexus::asio::udp_server &m_server;
     ::asio::ip::udp::endpoint m_dest;
@@ -259,6 +229,36 @@ private:
     io::detail::close_notification m_closed;
     bool m_open;
     bool m_complete_fired;
+
+    long dtls_mtu() const noexcept
+    {
+        return static_cast<long>(m_record_mtu);
+    }
+
+    void secure_send(std::span<const std::byte> bytes);
+    // The post-handshake encrypted per-record budget (DTLS_get_data_mtu, capped by the logical
+    // ceiling); the fragmenter splits against THIS so each fragment rides one DTLS record.
+    std::size_t record_budget() const noexcept;
+    // Split an oversize-but-fragmentable frame across numbered records (each one FRAGMENTED-bit
+    // envelope); a frame beyond the bounded max-message size is rejected, not fragmented.
+    void send_large(std::span<const std::byte> bytes);
+    // A decrypted inbound FRAGMENTED record: decode its sub-header (fail-closed) and feed the
+    // bounded reassembler; a completed message posts on_data.
+    void feed_fragment(std::span<const std::byte> frame);
+    void ensure_reassembler();
+    void drain_outbound();
+    std::size_t pack_record(std::size_t packed);
+    std::size_t send_datagram(std::size_t length);
+    void drain_inbound();
+    void try_complete();
+    void arm_retransmit();
+    void on_retransmit();
+    void fail(io::io_error e);
+    void shut_down();
+    void notify_closed();
+    void post_on_data(std::span<const std::byte> frame);
+    void publish_cookie_ex_data();
+    void capture_peer_identity();
 };
 
 }

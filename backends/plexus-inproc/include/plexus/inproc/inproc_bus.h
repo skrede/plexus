@@ -131,14 +131,6 @@ private:
     template<typename B, typename P>
     friend void detail::dispatch_packet(B &, P &);
 
-    // The sender is addressed by its key like any target: one that deregistered since it sent is a miss.
-    void report_unroutable(std::uint64_t from_key)
-    {
-        auto it = std::ranges::find(m_channels, from_key, &channel_entry::key);
-        if(it != m_channels.end())
-            it->chan->report_unroutable();
-    }
-
     struct channel_entry
     {
         inproc_channel<Clock> *chan;
@@ -150,6 +142,14 @@ private:
     detail::inproc_listener_set<Clock> m_listeners;
     detail::inproc_packet_ring m_ring;
     std::uint64_t m_next_addr{1}; // key 0 stays unconnected, matching no registration
+
+    // The sender is addressed by its key like any target: one that deregistered since it sent is a miss.
+    void report_unroutable(std::uint64_t from_key)
+    {
+        auto it = std::ranges::find(m_channels, from_key, &channel_entry::key);
+        if(it != m_channels.end())
+            it->chan->report_unroutable();
+    }
 };
 
 }

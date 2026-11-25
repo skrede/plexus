@@ -68,10 +68,10 @@ public:
     static int ex_data_index() noexcept;
 
 private:
-    void stitch() noexcept;
-
     std::unique_ptr<ssl_ctx_st, void (*)(ssl_ctx_st *)> m_ssl_ctx{nullptr, nullptr};
     std::shared_ptr<const io::security::verify_policy> m_policy;
+
+    void stitch() noexcept;
 };
 
 // Mint a mutual-auth credential from a PEM cert + key on disk, pinning the given

@@ -43,12 +43,12 @@ public:
     void set_attach_policy(plexus::detail::move_only_function<bool(std::string_view)> policy);
 
 private:
+    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view) { return true; }};
+
     // The native mapping HANDLE is passed as void* so <windows.h> stays out of
     // this header; both helpers construct the friended win_region_handle.
     static plexus::shm::region_status finish_create_map(void *mapping, std::size_t length, std::string canonical, region_handle &out);
     static plexus::shm::region_status finish_attach_map(void *mapping, std::string canonical, region_handle &out);
-
-    plexus::detail::move_only_function<bool(std::string_view)> m_attach_policy{[](std::string_view) { return true; }};
 };
 
 }

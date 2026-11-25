@@ -76,6 +76,11 @@ public:
     }
 
 private:
+    inproc_executor<Clock> *m_exec;
+    typename Clock::time_point m_expiry{};
+    detail::move_only_function<void(std::error_code)> m_handler_cb;
+    bool m_active{false};
+
     void complete_pending(std::error_code ec)
     {
         if(m_handler_cb)
@@ -84,11 +89,6 @@ private:
             h(ec);
         }
     }
-
-    inproc_executor<Clock> *m_exec;
-    typename Clock::time_point m_expiry{};
-    detail::move_only_function<void(std::error_code)> m_handler_cb;
-    bool m_active{false};
 };
 
 }

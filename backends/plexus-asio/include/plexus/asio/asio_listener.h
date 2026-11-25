@@ -99,6 +99,19 @@ public:
     }
 
 private:
+    ::asio::io_context &m_io;
+    io::detail::retiring_table<asio_channel> m_retiring;
+    ::asio::ip::tcp::acceptor m_acceptor;
+    detail::accept_backoff m_backoff;
+    stream::stream_inbound_options m_cfg;
+    bool m_no_delay;
+    io::congestion m_congestion;
+    io::egress_capacity m_egress_capacity;
+    stream_socket_options m_socket_options;
+    plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted_cb;
+    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
+    bool m_running{false};
+
     // The closure and an accept backoff wait capture the listener, which its owner stops and drains before destroying, so
     // a success or an expiry queued before stop() finds it alive and stopped and drops the socket or the retry.
     void do_accept()
@@ -135,19 +148,6 @@ private:
         if(m_on_error_cb)
             m_on_error_cb(detail::map_error(ec));
     }
-
-    ::asio::io_context &m_io;
-    io::detail::retiring_table<asio_channel> m_retiring;
-    ::asio::ip::tcp::acceptor m_acceptor;
-    detail::accept_backoff m_backoff;
-    stream::stream_inbound_options m_cfg;
-    bool m_no_delay;
-    io::congestion m_congestion;
-    io::egress_capacity m_egress_capacity;
-    stream_socket_options m_socket_options;
-    plexus::detail::move_only_function<void(std::unique_ptr<asio_channel>)> m_on_accepted_cb;
-    plexus::detail::move_only_function<void(io::io_error)> m_on_error_cb;
-    bool m_running{false};
 };
 
 }

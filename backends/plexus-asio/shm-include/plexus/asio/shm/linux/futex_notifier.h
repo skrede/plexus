@@ -102,6 +102,9 @@ public:
     }
 
 private:
+    std::thread m_waiter;
+    std::shared_ptr<state> m_state;
+
     // A thread the system refuses (std::system_error) is an exhausted resource the caller can fall back from.
     bool start_waiter(state &s)
     {
@@ -131,9 +134,6 @@ private:
             snapshot = ::plexus::shm::park_snapshot(s.header);
         }
     }
-
-    std::thread m_waiter;
-    std::shared_ptr<state> m_state;
 };
 
 }
