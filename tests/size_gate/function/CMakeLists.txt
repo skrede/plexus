@@ -105,4 +105,30 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND RUN_CLANG_TIDY)
                     -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
         set_tests_properties(function_size_gate.${_case}_run_rejected PROPERTIES PASS_REGULAR_EXPRESSION "function size gate: ${_verdict}")
     endforeach()
+
+    # A source whose clang-tidy dies is rerun once, and the rerun decides: the source is clean, it holds an overage, or
+    # its clang-tidy dies again. The wrapper dies on a crash_ source once per stamp, or every time; a run starts unstamped.
+    set(_crash_dir ${CMAKE_CURRENT_BINARY_DIR}/crash)
+    set(_reran "function size gate: reran 1 source\\(s\\) clang-tidy crashed on:[^\n]*\n *[^ ]*/")
+    set(_crash_cases crash_once_clean_accepted crash_once_overage_rejected crash_twice_rejected)
+    set(_crash_sources clean overage twice)
+    set(_crash_modes once once always)
+    set(_crash_verdicts "${_reran}crash_clean\\.cpp.*function size gate: clean"
+        "${_reran}crash_overage\\.cpp.*function size gate: 1 unsuppressed library function overage\\(s\\):[^/]*- [^ ]*/crash_overage\\.cpp:5:15: warning: function 'crash_overage' exceeds [^\n]* -- 26 lines on screen"
+        "function size gate: clang-tidy did not finish a source:[^/]*[^ ]*/crash_twice\\.cpp: terminated by signal [0-9]+")
+    add_test(NAME function_size_gate.crash_stamps_cleared
+        COMMAND ${CMAKE_COMMAND} -E rm -f ${_crash_dir}/clean.stamp ${_crash_dir}/overage.stamp ${_crash_dir}/twice.stamp)
+    set_tests_properties(function_size_gate.crash_stamps_cleared PROPERTIES FIXTURES_SETUP function_size_gate_crash)
+    foreach(_case _source _mode _verdict IN ZIP_LISTS _crash_cases _crash_sources _crash_modes _crash_verdicts)
+        set(_file ${CMAKE_CURRENT_SOURCE_DIR}/crash/backends/plexus-demo/src/crash_${_source}.cpp)
+        file(WRITE ${_crash_dir}/${_source}/compile_commands.json
+            "[{\"directory\": \"${_crash_dir}/${_source}\", \"command\": \"c++ -std=c++20 -c ${_file}\", \"file\": \"${_file}\"}]\n")
+        add_test(NAME function_size_gate.${_case}
+            COMMAND ${CMAKE_COMMAND} -DFUNC_GATE_SCAN=ON -DFUNC_GATE_FATAL=ON -DFUNC_GATE_BUILD_DIR=${_crash_dir}/${_source}
+                    -DFUNC_GATE_TIDY_BINARY=${CMAKE_CURRENT_SOURCE_DIR}/crash/crash_tidy.sh
+                    -P ${PROJECT_SOURCE_DIR}/cmake/function_size_gate.cmake)
+        set_tests_properties(function_size_gate.${_case} PROPERTIES
+            PASS_REGULAR_EXPRESSION "${_verdict}" FIXTURES_REQUIRED function_size_gate_crash
+            ENVIRONMENT "CRASH_TIDY_REAL=clang-tidy;CRASH_TIDY_MODE=${_mode};CRASH_TIDY_STAMP=${_crash_dir}/${_source}.stamp")
+    endforeach()
 endif()

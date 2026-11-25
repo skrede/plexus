@@ -28,13 +28,18 @@ endfunction()
 # line threshold reports every body's length for the screen count; -config replaces .clang-tidy, hence the
 # restated limits. The log keeps only the lines the gate reads, each once: a header's diagnostics repeat in every TU
 # that includes it, which made the raw output hundreds of megabytes. The filters run in the C locale so a source
-# line's non-UTF-8 byte cannot make grep treat the stream as binary.
+# line's non-UTF-8 byte cannot make grep treat the stream as binary. FUNC_GATE_TIDY_BINARY replaces clang-tidy, so a
+# test can make it crash.
 function(function_size_gate_tidy name rc_out)
+    set(_binary "")
+    if(FUNC_GATE_TIDY_BINARY)
+        set(_binary -clang-tidy-binary "${FUNC_GATE_TIDY_BINARY}")
+    endif()
     string(CONCAT _tidy_config "{CheckOptions: {"
         "readability-function-size.LineThreshold: 0, readability-function-size.StatementThreshold: -1, "
         "readability-function-cognitive-complexity.Threshold: 25, readability-function-cognitive-complexity.IgnoreMacros: true}}")
     execute_process(
-        COMMAND ${RUN_CLANG_TIDY}
+        COMMAND ${RUN_CLANG_TIDY} ${_binary}
                 -p ${FUNC_GATE_BUILD_DIR}
                 -quiet
                 -checks=-*,readability-function-size,readability-function-cognitive-complexity
