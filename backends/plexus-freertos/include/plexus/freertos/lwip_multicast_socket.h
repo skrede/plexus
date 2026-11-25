@@ -30,8 +30,8 @@ class freertos_executor;
 // The on-target counterpart of the asio udp_multicast_socket: the same member surface
 // (bind/send_multicast/on_datagram/close + endpoint_type) so the hoisted multicast_discovery binds
 // to it verbatim. It names the lwIP BSD socket calls, isolates the IGMP join in a detail unit, and
-// drains inbound in the executor's poll() step (P1) rather than a dedicated RX task — discovery is
-// sparse small datagrams and an extra thread is INV friction. The leaf body exists ONLY on-target;
+// drains inbound in the executor's poll() step rather than in a dedicated RX task: discovery traffic
+// is sparse small datagrams, so an extra thread is not worth it. The leaf body exists ONLY on-target;
 // the host build reaches the endpoint wrapper alone (its seam TU proves the endpoint contract).
 class lwip_multicast_socket
 {
