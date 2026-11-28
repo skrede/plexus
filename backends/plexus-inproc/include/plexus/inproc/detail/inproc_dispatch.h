@@ -40,9 +40,6 @@ void dispatch_packet(Bus &bus, Packet &pkt)
         io::release(pkt.carrier);
     if(pkt.kind == packet_kind::data && !delivered && pkt.from_key != 0)
         bus.report_unroutable(pkt.from_key);
-    // drop the slot's carrier so a re-read never re-releases
-    pkt.carrier  = {};
-    pkt.from_key = 0;
 }
 
 }

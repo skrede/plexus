@@ -32,13 +32,16 @@ struct inproc_packet
 
 // The FIFO rides a grown-once ring of reusable packet slots so the steady publish loop is
 // alloc-free: the ring doubles only on overflow (never shrinks) and each slot reuses its data
-// vector's capacity via assign.
+// vector's capacity via assign. The head packet leaves its slot by move and its buffer returns as
+// the ring's one spare, so a send from the delivery callback never touches the packet being
+// delivered and the steady state stays alloc-free.
 class inproc_packet_ring
 {
 public:
     inproc_packet_ring()
             : m_head(0)
             , m_size(0)
+            , m_spare()
             , m_ring()
     {
     }
@@ -57,17 +60,25 @@ public:
         return m_ring[tail];
     }
 
-    inproc_packet &pop_front()
+    inproc_packet take_front()
     {
-        inproc_packet &pkt = m_ring[m_head];
-        m_head             = (m_head + 1) % m_ring.size();
+        inproc_packet &slot = m_ring[m_head];
+        inproc_packet pkt   = std::move(slot);
+        slot.data           = std::exchange(m_spare, {});
+        m_head              = (m_head + 1) % m_ring.size();
         --m_size;
         return pkt;
+    }
+
+    void recycle(std::vector<std::byte> &&buffer) noexcept
+    {
+        m_spare = std::move(buffer);
     }
 
 private:
     std::size_t m_head;
     std::size_t m_size;
+    std::vector<std::byte> m_spare;
     std::vector<inproc_packet> m_ring;
 
     void grow()

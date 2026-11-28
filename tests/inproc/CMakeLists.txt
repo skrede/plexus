@@ -26,3 +26,7 @@ plexus_add_catch_test(test_inproc_listen_set
 plexus_add_catch_test(test_inproc_accept_reentry
     SOURCES test_inproc_accept_reentry.cpp
     LINKS plexus::core plexus::inproc)
+
+plexus_add_catch_test(test_inproc_reentrant_send
+    SOURCES test_inproc_reentrant_send.cpp
+    LINKS plexus::core plexus::inproc)

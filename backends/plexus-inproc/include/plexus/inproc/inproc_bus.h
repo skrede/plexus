@@ -118,7 +118,9 @@ public:
     {
         if(m_ring.empty())
             return false;
-        detail::dispatch_packet(*this, m_ring.pop_front());
+        detail::inproc_packet pkt = m_ring.take_front();
+        detail::dispatch_packet(*this, pkt);
+        m_ring.recycle(std::move(pkt.data));
         return true;
     }
 
