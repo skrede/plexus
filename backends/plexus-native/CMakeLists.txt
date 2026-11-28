@@ -16,6 +16,7 @@ if(WIN32)
     target_sources(plexus-native PRIVATE
         src/win_slot_mutex.cpp
         src/win_region_handle.cpp
+        src/win_shm_status.cpp
         src/win_shm_region_broker.cpp)
 else()
     target_sources(plexus-native PRIVATE
