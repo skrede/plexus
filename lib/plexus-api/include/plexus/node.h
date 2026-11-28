@@ -9,7 +9,6 @@
 #include "plexus/node_options.h"
 #include "plexus/relay_posture.h"
 #include "plexus/target_profile.h"
-#include "plexus/transport_priority.h"
 #include "plexus/graph_change_handle.h"
 #include "plexus/typed_publisher_options.h"
 
