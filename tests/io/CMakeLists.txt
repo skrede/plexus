@@ -29,7 +29,8 @@ set(PLEXUS_IO_TESTS
     test_executor_affinity
     test_driver_record
     test_session_gate_classify
-    test_warn_line)
+    test_warn_line
+    test_expected)
 
 plexus_add_catch_test(test_peer_liveliness
     SOURCES test_peer_liveliness.cpp test_peer_liveliness_arbitration.cpp

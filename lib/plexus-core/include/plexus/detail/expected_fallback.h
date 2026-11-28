@@ -39,7 +39,7 @@ public:
     }
 
     template<typename U, std::enable_if_t<std::is_constructible_v<T, U> && !std::is_same_v<std::remove_cvref_t<U>, expected>, int> = 0>
-    constexpr expected(U &&val)
+    constexpr explicit(!std::is_convertible_v<U, T>) expected(U &&val)
             : m_storage(T(std::forward<U>(val)))
     {
     }
