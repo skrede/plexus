@@ -21,6 +21,23 @@ std::wstring widen(const std::string &narrow)
     return std::wstring(narrow.begin(), narrow.end());
 }
 
+shm_error create_section(const std::string &canonical, std::size_t length, HANDLE &out_mapping)
+{
+    const std::wstring wname = widen(canonical);
+    detail::win_owner_only_security security;
+    const auto wide = static_cast<std::uint64_t>(length);
+    HANDLE h        = ::CreateFileMappingW(INVALID_HANDLE_VALUE, security.get(), PAGE_READWRITE, static_cast<DWORD>(wide >> 32), static_cast<DWORD>(wide & 0xFFFFFFFFu), wname.c_str());
+    if(h == nullptr)
+        return detail::map_last_error(::GetLastError());
+    if(::GetLastError() == ERROR_ALREADY_EXISTS)
+    {
+        ::CloseHandle(h);
+        return shm_error::already_exists;
+    }
+    out_mapping = h;
+    return shm_error::ok;
+}
+
 // The view length VirtualQuery reports at attach then equals the length the creator records in the ring header.
 std::size_t granularity_round_up(std::size_t n)
 {
@@ -82,18 +99,10 @@ plexus::shm::region_status win_shm_region_broker::create(std::string_view name, 
     if(const auto status = detail::sanitize_region_name(name, canonical); status != shm_error::ok)
         return detail::to_status(status);
 
-    const std::wstring wname = widen(canonical);
-    detail::win_owner_only_security security;
     const std::size_t length = granularity_round_up(bytes);
-    const auto wide          = static_cast<std::uint64_t>(length);
-    HANDLE h = ::CreateFileMappingW(INVALID_HANDLE_VALUE, security.get(), PAGE_READWRITE, static_cast<DWORD>(wide >> 32), static_cast<DWORD>(wide & 0xFFFFFFFFu), wname.c_str());
-    if(h == nullptr)
-        return detail::to_status(detail::map_last_error(::GetLastError()));
-    if(::GetLastError() == ERROR_ALREADY_EXISTS)
-    {
-        ::CloseHandle(h);
-        return plexus::shm::region_status::already_exists;
-    }
+    HANDLE h                 = nullptr;
+    if(const auto status = create_section(canonical, length, h); status != shm_error::ok)
+        return detail::to_status(status);
     return finish_create_map(h, length, std::move(canonical), out);
 }
 
